@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Helper 阅读器</title>
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="brand">
+        <strong>PDF Helper</strong>
+        <span>增强阅读器</span>
+      </div>
+
+      <label class="button file-button">
+        打开PDF
+        <input id="file-input" type="file" accept="application/pdf,.pdf" />
+      </label>
+
+      <div id="document-name" class="document-name" title="尚未打开文件">尚未打开文件</div>
+
+      <div class="toolbar-group annotation-tools" aria-label="批注工具">
+        <button type="button" data-editor-mode="select" title="选择文字；选择批注后可移动或编辑">移动/选择</button>
+        <button type="button" data-editor-mode="highlight" title="选中文字并高亮">高亮</button>
+        <label class="highlight-color-control" title="高亮颜色">
+          <span>颜色</span>
+          <input id="highlight-color" type="color" value="#fff066" />
+        </label>
+        <button type="button" data-editor-mode="ink" title="自由绘制">画笔</button>
+        <button type="button" data-editor-mode="text" title="在页面上添加文本">文本</button>
+        <button id="undo-annotation" type="button" title="撤销批注">撤销</button>
+        <button id="redo-annotation" type="button" title="重做批注">重做</button>
+        <button id="smart-copy" type="button" title="保留普通复制；此按钮额外清理换行和断词">整理复制</button>
+        <button id="save-annotated-pdf" class="primary-button" type="button">导出批注PDF</button>
+      </div>
+
+      <div class="toolbar-group page-controls">
+        <button id="previous-page" type="button" title="上一页">‹</button>
+        <input id="page-number" type="number" min="1" value="0" aria-label="当前页" />
+        <span>/ <span id="page-count">0</span></span>
+        <button id="next-page" type="button" title="下一页">›</button>
+      </div>
+
+      <div class="toolbar-group zoom-controls">
+        <button id="zoom-out" type="button" title="缩小">−</button>
+        <span id="zoom-value">100%</span>
+        <button id="zoom-in" type="button" title="放大">＋</button>
+      </div>
+
+    </header>
+
+    <div id="status-bar" class="status-bar">
+      <span id="status-text">请选择PDF文件。</span>
+      <span id="text-status">文字层尚未加载</span>
+    </div>
+
+    <div id="viewer-container" role="main" tabindex="0">
+      <div id="viewer" class="pdfViewer"></div>
+    </div>
+
+    <div id="selection-context-menu" class="selection-context-menu" hidden>
+      <button id="context-copy" class="context-menu-item" type="button">复制</button>
+      <button id="context-clean-copy" class="context-menu-item" type="button">整理后复制</button>
+      <button id="context-quick-highlight" class="context-menu-item" type="button">
+        <span>快速高亮</span><span id="context-current-color" class="context-color-dot"></span>
+      </button>
+      <button id="context-create-note" class="context-menu-item" type="button">添加笔记</button>
+      <div id="context-colors" class="quick-colors" aria-label="高亮颜色">
+        <button type="button" data-quick-highlight-color="#fff066" title="黄色"></button>
+        <button type="button" data-quick-highlight-color="#9be7a5" title="绿色"></button>
+        <button type="button" data-quick-highlight-color="#8ec5ff" title="蓝色"></button>
+        <button type="button" data-quick-highlight-color="#ff9fc9" title="粉色"></button>
+        <button type="button" data-quick-highlight-color="#ffc078" title="橙色"></button>
+      </div>
+      <div id="highlight-context-actions" class="highlight-context-actions" hidden>
+        <hr />
+        <button id="context-note" class="context-menu-item" type="button">添加笔记</button>
+        <button id="context-delete-highlight" class="context-menu-item danger" type="button">
+          删除高亮
+        </button>
+      </div>
+    </div>
+
+    <aside id="highlight-note-popover" class="highlight-note-popover" hidden>
+      <header>
+        <strong id="highlight-note-title">高亮笔记</strong>
+        <button id="close-highlight-note" type="button" aria-label="关闭">×</button>
+      </header>
+      <p id="highlight-note-quote"></p>
+      <textarea id="highlight-note-text" rows="5" placeholder="记录你的理解、疑问或联想…"></textarea>
+      <footer>
+        <button id="delete-highlight-note" type="button">删除笔记</button>
+        <button id="save-highlight-note" class="primary-button" type="button">保存笔记</button>
+      </footer>
+    </aside>
+
+    <div id="annotation-action-bar" class="annotation-action-bar" hidden>
+      <span id="annotation-type-label">批注</span>
+      <button id="delete-annotation" type="button" title="删除批注（Delete）">删除</button>
+    </div>
+
+    <form id="find-bar" class="find-bar" hidden>
+      <input id="find-input" type="search" placeholder="在PDF中查找" autocomplete="off" />
+      <span id="find-count" aria-live="polite">0/0</span>
+      <button id="find-previous" type="button" title="上一个">↑</button>
+      <button id="find-next" type="button" title="下一个">↓</button>
+      <button id="find-close" type="button" title="关闭">×</button>
+    </form>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
