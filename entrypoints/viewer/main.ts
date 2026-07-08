@@ -201,7 +201,7 @@ function mergeSelectionRects(rects: SelectionRect[]): SelectionRect[] {
       Math.abs(previous.top + previous.height / 2 - (rect.top + rect.height / 2)) <=
         Math.max(previous.height, rect.height) * 0.45;
     const closeEnough =
-      previous && rect.left <= previous.right + Math.max(previous.height, rect.height) * 0.4;
+      previous && rect.left <= previous.right + Math.max(previous.height, rect.height) * 0.9;
 
     if (previous && sameLine && closeEnough) {
       const right = Math.max(previous.right, rect.right);
@@ -279,6 +279,61 @@ function scheduleCustomSelectionRender() {
   selectionRenderFrame = requestAnimationFrame(renderCustomSelection);
 }
 
+function mergeHighlightBoxes<T extends { x: number; y: number; width: number; height: number }>(
+  boxes: T[],
+): T[] {
+  const sorted = [...boxes]
+    .filter((box) => box.width > 0 && box.height > 0)
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+
+  const merged: T[] = [];
+
+  for (const box of sorted) {
+    const previous = merged.at(-1);
+
+    if (!previous) {
+      merged.push({ ...box });
+      continue;
+    }
+
+    const previousCenterY = previous.y + previous.height / 2;
+    const boxCenterY = box.y + box.height / 2;
+
+    const sameLine =
+      Math.abs(previousCenterY - boxCenterY) <=
+      Math.max(previous.height, box.height) * 0.65;
+
+    const gap = box.x - (previous.x + previous.width);
+
+    const closeEnough =
+      gap <= Math.max(previous.height, box.height) * 0.9;
+
+    if (sameLine && closeEnough) {
+      const left = Math.min(previous.x, box.x);
+      const top = Math.min(previous.y, box.y);
+      const right = Math.max(previous.x + previous.width, box.x + box.width);
+      const bottom = Math.max(previous.y + previous.height, box.y + box.height);
+
+      previous.x = left;
+      previous.y = top;
+      previous.width = right - left;
+      previous.height = bottom - top;
+    } else {
+      merged.push({ ...box });
+    }
+  }
+
+  return merged.map((box) => {
+    const padding = box.height * 0.08;
+
+    return {
+      ...box,
+      x: Math.max(0, box.x - padding),
+      width: box.width + padding * 2,
+    };
+  });
+}
+
 function installHighlightGeometry(uiManager: AnnotationEditorUIManager) {
   const getOriginalBoxes = uiManager.getSelectionBoxes.bind(uiManager);
 
@@ -290,7 +345,7 @@ function installHighlightGeometry(uiManager: AnnotationEditorUIManager) {
     const rotation = textLayer?.getAttribute('data-main-rotation') ?? '0';
     const usesHorizontalHeight = rotation === '90' || rotation === '270';
 
-    return boxes.map((box) => {
+    const adjustedBoxes = boxes.map((box) => {
       if (usesHorizontalHeight) {
         const width = box.width * ratio;
         return { ...box, x: box.x + (box.width - width) / 2, width };
@@ -299,6 +354,12 @@ function installHighlightGeometry(uiManager: AnnotationEditorUIManager) {
       const height = box.height * ratio;
       return { ...box, y: box.y + (box.height - height) / 2, height };
     });
+
+    if (usesHorizontalHeight) {
+      return adjustedBoxes;
+    }
+
+    return mergeHighlightBoxes(adjustedBoxes);
   };
 }
 
