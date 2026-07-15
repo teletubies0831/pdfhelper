@@ -6,65 +6,170 @@
     <title>PDF Helper 阅读器</title>
   </head>
   <body>
-    <header class="toolbar">
-      <div class="brand">
-        <strong>PDF Helper</strong>
-        <span>增强阅读器</span>
-      </div>
+    <div class="app-frame">
+      <header class="toolbar">
+        <div class="brand">
+          <strong>PDF Helper</strong>
+        </div>
 
-      <label class="button file-button">
-        打开PDF
-        <input id="file-input" type="file" accept="application/pdf,.pdf" />
-      </label>
+        <button id="recent-files-button" class="toolbar-icon-button" type="button" title="最近打开">
+          最近
+        </button>
 
-      <div id="document-name" class="document-name" title="尚未打开文件">尚未打开文件</div>
-
-      <div class="toolbar-group annotation-tools" aria-label="批注工具">
-        <button type="button" data-editor-mode="select" title="选择文字；选择批注后可移动或编辑">移动/选择</button>
-        <button type="button" data-editor-mode="highlight" title="选中文字并高亮">高亮</button>
-        <label class="highlight-color-control" title="高亮颜色">
-          <span>颜色</span>
-          <input id="highlight-color" type="color" value="#fff066" />
+        <label id="open-file" class="toolbar-pill" for="file-input" role="button" tabindex="0">
+          <svg class="toolbar-icon open-pdf-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6.5 3.5h7l4 4v13h-11z" />
+            <path d="M13.5 3.5v4h4" />
+            <path d="M8.8 14.8h6.4" />
+            <path d="M8.8 17.2h4.6" />
+            <path d="M8.8 10.6h2.1a1.5 1.5 0 0 1 0 3H8.8z" />
+          </svg>
+          打开PDF
         </label>
-        <button type="button" data-editor-mode="ink" title="自由绘制">画笔</button>
-        <button type="button" data-editor-mode="text" title="在页面上添加文本">文本</button>
-        <button id="undo-annotation" type="button" title="撤销批注">撤销</button>
-        <button id="redo-annotation" type="button" title="重做批注">重做</button>
-        <button id="smart-copy" type="button" title="保留普通复制；此按钮额外清理换行和断词">整理复制</button>
-        <button id="save-annotated-pdf" class="primary-button" type="button">导出批注PDF</button>
+        <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" />
+
+        <button id="outline-toggle" class="toolbar-pill" type="button" title="左侧目录面板">
+          <span class="toolbar-icon">☰</span>
+          目录
+        </button>
+
+        <div class="toolbar-group annotation-tools" aria-label="批注工具">
+          <button type="button" data-editor-mode="select" title="选择文字；选择批注后可移动或编辑">
+            移动/选择
+          </button>
+          <button type="button" data-editor-mode="highlight" title="选中文字并高亮">
+            ✎ 高亮
+          </button>
+          <label class="highlight-color-control" title="高亮颜色">
+            <span>颜色</span>
+            <input id="highlight-color" type="color" value="#fff066" />
+          </label>
+          <button type="button" data-editor-mode="ink" title="自由绘制">画笔</button>
+          <button type="button" data-editor-mode="text" title="在页面上添加文本">批注</button>
+          <button id="undo-annotation" type="button" title="撤销批注">撤销</button>
+          <button id="redo-annotation" type="button" title="重做批注">重做</button>
+          <button id="smart-copy" type="button" title="整理复制选中文本">整理复制</button>
+          <button id="toggle-notes" type="button" title="隐藏/显示所有笔记标记">隐藏笔记</button>
+          <button id="save-annotated-pdf" class="primary-button" type="button">保存批注</button>
+        </div>
+
+        <button id="ai-panel-toggle" class="toolbar-pill ai-entry active" type="button">
+          ✦ AI阅读助手
+        </button>
+        <button class="toolbar-pill" type="button">生成论文卡片</button>
+        <button class="toolbar-pill" type="button">知识库</button>
+
+        <div id="document-name" class="document-name" title="尚未打开文件">尚未打开文件</div>
+      </header>
+
+      <div class="workspace">
+        <aside class="left-panel" aria-label="左侧目录 / 缩略图">
+          <div class="panel-header">
+            <strong>左侧目录 / 缩略图</strong>
+            <button id="collapse-left-panel" type="button">收起</button>
+          </div>
+
+          <div class="side-tabs">
+            <button class="active" type="button">目录</button>
+            <button type="button">缩略图</button>
+          </div>
+
+          <nav class="outline-list" aria-label="PDF 目录">
+            <button class="active" type="button"><span>1</span> Abstract</button>
+            <button type="button"><span>2</span> Introduction</button>
+            <button type="button"><span>3</span> Method</button>
+            <button class="nested" type="button"><span>3.1</span> Model</button>
+            <button class="nested" type="button"><span>3.2</span> Training</button>
+            <button type="button"><span>4</span> Experiments</button>
+            <button type="button"><span>5</span> Results</button>
+            <button type="button"><span>6</span> Conclusion</button>
+          </nav>
+
+          <div class="quick-location">
+            <strong>快速定位</strong>
+            <button type="button">◎ 当前位置：第 3 页</button>
+            <button type="button">◷ 上次阅读：第 5 页</button>
+          </div>
+        </aside>
+
+        <main class="reading-panel">
+          <section class="reader-card">
+            <div class="reader-header">
+              <strong>PDF 正文阅读区</strong>
+              <div id="status-bar" class="status-bar">
+                <span id="status-text">请选择PDF文件。</span>
+                <span id="text-status">文字层尚未加载</span>
+              </div>
+            </div>
+
+            <div id="viewer-container" role="main" tabindex="0">
+              <div id="viewer" class="pdfViewer"></div>
+            </div>
+
+            <footer class="reader-footer">
+              <div class="toolbar-group zoom-controls">
+                <span id="zoom-value">100%</span>
+                <button id="zoom-out" type="button" title="缩小">−</button>
+                <button id="zoom-in" type="button" title="放大">＋</button>
+              </div>
+
+              <div class="toolbar-group page-controls">
+                <button id="previous-page" type="button" title="上一页">‹ 上一页</button>
+                <input id="page-number" type="number" min="1" value="0" aria-label="当前页" />
+                <span>/ <span id="page-count">0</span></span>
+                <button id="next-page" type="button" title="下一页">下一页 ›</button>
+              </div>
+
+              <button class="layout-button" type="button" title="视图布局">▦</button>
+            </footer>
+          </section>
+        </main>
+
+        <aside class="right-panel" aria-label="右侧 AI 阅读助手面板">
+          <div class="right-panel-card">
+            <h2>右侧 AI 阅读助手面板</h2>
+
+            <div class="ai-tabs">
+              <button class="active" type="button">解释 · 翻译</button>
+              <button type="button">总结</button>
+              <button type="button">保存卡片</button>
+            </div>
+
+            <section class="ai-section">
+              <h3>1. 选中内容</h3>
+              <div class="selected-snippet">用户选中的英文段落 / 句子内容</div>
+            </section>
+
+            <section class="ai-section">
+              <h3>2. 中文翻译</h3>
+              <div class="ai-result-box">
+                这是段落的中文翻译内容，准确传达原文的核心意思，并保持学术表达的规范性与严谨性。
+              </div>
+            </section>
+
+            <section class="ai-section">
+              <h3>3. 解释结果</h3>
+              <div class="ai-result-box">
+                <ul>
+                  <li>本段首先介绍了研究的背景与问题动机。</li>
+                  <li>作者指出现有方法存在局限性，因此提出新的思路。</li>
+                  <li>该内容与研究目标及后续方法设计紧密相关。</li>
+                </ul>
+              </div>
+            </section>
+
+            <div class="ai-actions">
+              <button type="button">保存为笔记</button>
+              <button class="primary-button" type="button">复制结果</button>
+            </div>
+          </div>
+        </aside>
       </div>
-
-      <div class="toolbar-group page-controls">
-        <button id="previous-page" type="button" title="上一页">‹</button>
-        <input id="page-number" type="number" min="1" value="0" aria-label="当前页" />
-        <span>/ <span id="page-count">0</span></span>
-        <button id="next-page" type="button" title="下一页">›</button>
-      </div>
-
-      <div class="toolbar-group zoom-controls">
-        <button id="zoom-out" type="button" title="缩小">−</button>
-        <span id="zoom-value">100%</span>
-        <button id="zoom-in" type="button" title="放大">＋</button>
-      </div>
-
-    </header>
-
-    <div id="status-bar" class="status-bar">
-      <span id="status-text">请选择PDF文件。</span>
-      <span id="text-status">文字层尚未加载</span>
-    </div>
-
-    <div id="viewer-container" role="main" tabindex="0">
-      <div id="viewer" class="pdfViewer"></div>
     </div>
 
     <div id="selection-context-menu" class="selection-context-menu" hidden>
       <button id="context-copy" class="context-menu-item" type="button">复制</button>
       <button id="context-clean-copy" class="context-menu-item" type="button">整理后复制</button>
-      <button id="context-quick-highlight" class="context-menu-item" type="button">
-        <span>快速高亮</span><span id="context-current-color" class="context-color-dot"></span>
-      </button>
-      <button id="context-create-note" class="context-menu-item" type="button">添加笔记</button>
       <div id="context-colors" class="quick-colors" aria-label="高亮颜色">
         <button type="button" data-quick-highlight-color="#fff066" title="黄色"></button>
         <button type="button" data-quick-highlight-color="#9be7a5" title="绿色"></button>
@@ -73,12 +178,22 @@
         <button type="button" data-quick-highlight-color="#ffc078" title="橙色"></button>
       </div>
       <div id="highlight-context-actions" class="highlight-context-actions" hidden>
-        <hr />
         <button id="context-note" class="context-menu-item" type="button">添加笔记</button>
-        <button id="context-delete-highlight" class="context-menu-item danger" type="button">
-          删除高亮
-        </button>
+        <button id="context-delete-highlight" class="context-menu-item danger" type="button">删除高亮</button>
       </div>
+    </div>
+
+    <div id="recent-files-dialog" class="modal-backdrop" hidden>
+      <section class="recent-files-panel" role="dialog" aria-modal="true" aria-labelledby="recent-files-title">
+        <header>
+          <strong id="recent-files-title">最近打开</strong>
+          <button id="close-recent-files" type="button" aria-label="关闭">×</button>
+        </header>
+        <div id="recent-files-list" class="recent-files-list"></div>
+        <footer>
+          <button id="clear-recent-files" type="button">清空记录</button>
+        </footer>
+      </section>
     </div>
 
     <aside id="highlight-note-popover" class="highlight-note-popover" hidden>
@@ -96,6 +211,13 @@
 
     <div id="annotation-action-bar" class="annotation-action-bar" hidden>
       <span id="annotation-type-label">批注</span>
+      <label id="free-text-size-control" class="free-text-size-control" title="文本字号" hidden>
+        <span>字号</span>
+        <button id="free-text-size-down" type="button" title="缩小文本">A-</button>
+        <input id="free-text-size" type="number" min="4" max="72" step="1" value="16" />
+        <button id="free-text-size-up" type="button" title="放大文本">A+</button>
+        <input id="free-text-color" class="free-text-color-input" type="color" value="#000000" title="文本颜色" />
+      </label>
       <button id="delete-annotation" type="button" title="删除批注（Delete）">删除</button>
     </div>
 

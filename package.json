@@ -10,6 +10,7 @@
     "zip": "wxt zip -b edge"
   },
   "dependencies": {
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.624"
   },
   "devDependencies": {

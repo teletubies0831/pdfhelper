@@ -1,4 +1,5 @@
 import {
+  AnnotationMode,
   AnnotationEditorParamsType,
   AnnotationEditorType,
   GlobalWorkerOptions,
@@ -17,9 +18,49 @@ import 'pdfjs-dist/web/pdf_viewer.css';
 
 import './style.css';
 
+type WritableFileStreamLike = {
+  write(data: Blob | BufferSource | string): Promise<void>;
+  close(): Promise<void>;
+};
+
+type FileHandlePermissionDescriptor = {
+  mode?: 'read' | 'readwrite';
+};
+
+type FileHandlePermissionState = 'granted' | 'denied' | 'prompt';
+
+type FileHandleLike = {
+  name: string;
+  getFile(): Promise<File>;
+  createWritable(): Promise<WritableFileStreamLike>;
+  isSameEntry?: (other: FileHandleLike) => Promise<boolean>;
+  queryPermission?: (
+    descriptor?: FileHandlePermissionDescriptor,
+  ) => Promise<FileHandlePermissionState>;
+  requestPermission?: (
+    descriptor?: FileHandlePermissionDescriptor,
+  ) => Promise<FileHandlePermissionState>;
+};
+
+type FilePickerWindow = Window & {
+  showOpenFilePicker?: (options?: {
+    multiple?: boolean;
+    types?: Array<{
+      description?: string;
+      accept: Record<string, string[]>;
+    }>;
+  }) => Promise<FileHandleLike[]>;
+};
+
 GlobalWorkerOptions.workerSrc = workerUrl;
 
+const openFileButton = requiredElement<HTMLElement>('open-file');
 const fileInput = requiredElement<HTMLInputElement>('file-input');
+const recentFilesButton = requiredElement<HTMLButtonElement>('recent-files-button');
+const recentFilesDialog = requiredElement<HTMLElement>('recent-files-dialog');
+const recentFilesList = requiredElement<HTMLElement>('recent-files-list');
+const closeRecentFilesButton = requiredElement<HTMLButtonElement>('close-recent-files');
+const clearRecentFilesButton = requiredElement<HTMLButtonElement>('clear-recent-files');
 const documentNameElement = requiredElement<HTMLElement>('document-name');
 const previousButton = requiredElement<HTMLButtonElement>('previous-page');
 const nextButton = requiredElement<HTMLButtonElement>('next-page');
@@ -42,13 +83,16 @@ const undoAnnotationButton = requiredElement<HTMLButtonElement>('undo-annotation
 const redoAnnotationButton = requiredElement<HTMLButtonElement>('redo-annotation');
 const smartCopyButton = requiredElement<HTMLButtonElement>('smart-copy');
 const saveAnnotatedPdfButton = requiredElement<HTMLButtonElement>('save-annotated-pdf');
+const toggleNotesButton = requiredElement<HTMLButtonElement>('toggle-notes');
 const highlightColorInput = requiredElement<HTMLInputElement>('highlight-color');
+const freeTextSizeInput = requiredElement<HTMLInputElement>('free-text-size');
+const freeTextColorInput = requiredElement<HTMLInputElement>('free-text-color');
+const freeTextSizeDownButton = requiredElement<HTMLButtonElement>('free-text-size-down');
+const freeTextSizeUpButton = requiredElement<HTMLButtonElement>('free-text-size-up');
 const selectionContextMenu = requiredElement<HTMLElement>('selection-context-menu');
 const contextCopyButton = requiredElement<HTMLButtonElement>('context-copy');
 const contextCleanCopyButton = requiredElement<HTMLButtonElement>('context-clean-copy');
-const contextQuickHighlightButton = requiredElement<HTMLButtonElement>('context-quick-highlight');
-const contextCreateNoteButton = requiredElement<HTMLButtonElement>('context-create-note');
-const contextCurrentColor = requiredElement<HTMLElement>('context-current-color');
+const contextColors = requiredElement<HTMLElement>('context-colors');
 const highlightContextActions = requiredElement<HTMLElement>('highlight-context-actions');
 const contextNoteButton = requiredElement<HTMLButtonElement>('context-note');
 const contextDeleteHighlightButton = requiredElement<HTMLButtonElement>('context-delete-highlight');
@@ -62,12 +106,19 @@ const saveHighlightNoteButton = requiredElement<HTMLButtonElement>('save-highlig
 const annotationActionBar = requiredElement<HTMLElement>('annotation-action-bar');
 const annotationTypeLabel = requiredElement<HTMLElement>('annotation-type-label');
 const deleteAnnotationButton = requiredElement<HTMLButtonElement>('delete-annotation');
+const freeTextSizeControl = requiredElement<HTMLElement>('free-text-size-control');
 const quickHighlightButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-quick-highlight-color]'),
 );
 const editorModeButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-editor-mode]'),
 );
+const appFrame = document.querySelector<HTMLElement>('.app-frame');
+const outlineToggleButton = document.getElementById('outline-toggle');
+const collapseLeftPanelButton = document.getElementById('collapse-left-panel');
+const aiPanelToggleButton = document.getElementById('ai-panel-toggle');
+const aiTabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.ai-tabs button'));
+const outlineList = document.querySelector<HTMLElement>('.outline-list');
 
 const eventBus = new EventBus();
 const linkService = new PDFLinkService({ eventBus });
@@ -78,6 +129,9 @@ const pdfViewer = new PDFViewer({
   eventBus,
   linkService,
   findController,
+  annotationMode: AnnotationMode.DISABLE,
+  annotationEditorHighlightColors:
+    'yellow=#FFF066,green=#9BE7A5,blue=#8EC5FF,pink=#FF9FC9,orange=#FFC078',
   removePageBorders: false,
   enableAutoLinking: true,
 });
@@ -90,12 +144,37 @@ let annotationEditor: AnnotationEditorUIManager | null = null;
 let activeEditorMode = AnnotationEditorType.NONE;
 let canUndoAnnotation = false;
 let canRedoAnnotation = false;
+let hasUnsavedChanges = false;
+let savedAnnotationSnapshot = '';
+let unsavedChangesCheckHandle: number | null = null;
+let isOpeningDocument = false;
+let isSavingAnnotatedPdf = false;
+let restoredAnnotationWarmUpPending = false;
+let annotationEditorWarmUpInFlight = false;
+let currentFileHandle: FileHandleLike | null = null;
+let currentRecentEntryId: string | null = null;
+let pendingReadingPosition: ReadingPosition | null = null;
+let readingPositionSaveHandle: number | null = null;
+let isRestoringReadingPosition = false;
+let areNoteIndicatorsHidden = false;
+let sourcePdfBytes: Uint8Array | null = null;
 let selectionRenderFrame = 0;
 let contextSelectionRanges: Range[] = [];
 let contextSelectionText = '';
 let selectedAnnotationEditor: any | null = null;
 let selectedHighlightEditor: any | null = null;
 let contextHighlightEditor: any | null = null;
+let openHighlightNoteEditor: any | null = null;
+const nativeAnnotationNotes = new Map<string, string>();
+const restoredHelperNotesBySignature = new Map<string, string>();
+const restoredHelperNotesByStorageKey = new Map<string, string>();
+let lastPointerDown:
+  | {
+      x: number;
+      y: number;
+      button: number;
+    }
+  | null = null;
 
 function requiredElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -106,6 +185,1028 @@ function requiredElement<T extends HTMLElement>(id: string): T {
 function setStatus(message: string, isError = false) {
   statusText.textContent = message;
   statusText.classList.toggle('error', isError);
+}
+
+function idbRequestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed.'));
+  });
+}
+
+function idbTransactionDone(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed.'));
+    transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted.'));
+  });
+}
+
+function openRecentFilesDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(RECENT_FILES_DB_NAME, RECENT_FILES_DB_VERSION);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(RECENT_FILES_STORE_NAME)) {
+        db.createObjectStore(RECENT_FILES_STORE_NAME, { keyPath: 'id' });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error('无法打开最近文件数据库。'));
+  });
+}
+
+async function readRecentFiles(): Promise<RecentPdfEntry[]> {
+  if (!('indexedDB' in window)) return [];
+  const db = await openRecentFilesDb();
+
+  try {
+    const transaction = db.transaction(RECENT_FILES_STORE_NAME, 'readonly');
+    const store = transaction.objectStore(RECENT_FILES_STORE_NAME);
+    const entries = await idbRequestToPromise<RecentPdfEntry[]>(store.getAll());
+    return entries
+      .filter((entry) => entry && entry.name && entry.id)
+      .sort((left, right) => right.lastOpenedAt - left.lastOpenedAt);
+  } finally {
+    db.close();
+  }
+}
+
+async function writeRecentFiles(entries: RecentPdfEntry[]) {
+  if (!('indexedDB' in window)) return;
+  const db = await openRecentFilesDb();
+
+  try {
+    const transaction = db.transaction(RECENT_FILES_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(RECENT_FILES_STORE_NAME);
+    store.clear();
+
+    for (const entry of entries.slice(0, RECENT_FILES_LIMIT)) {
+      store.put(entry);
+    }
+
+    await idbTransactionDone(transaction);
+  } finally {
+    db.close();
+  }
+}
+
+function createRecentEntryId(kind: RecentPdfEntry['kind'], name: string): string {
+  const suffix = typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${kind}:${name}:${suffix}`;
+}
+
+async function findSameRecentLocalEntry(
+  fileHandle: FileHandleLike,
+  entries: RecentPdfEntry[],
+  name: string,
+): Promise<RecentPdfEntry | null> {
+  for (const entry of entries) {
+    if (entry.kind !== 'local' || !entry.fileHandle) continue;
+    try {
+      if (fileHandle.isSameEntry && (await fileHandle.isSameEntry(entry.fileHandle))) {
+        return entry;
+      }
+    } catch {
+      // Some browsers can throw if an old handle is no longer available.
+    }
+  }
+
+  return entries.find((entry) => entry.kind === 'local' && entry.name === name) ?? null;
+}
+
+async function rememberRecentPdf(
+  name: string,
+  fileHandle: FileHandleLike | null,
+  url?: string,
+): Promise<RecentPdfEntry | null> {
+  try {
+    const entries = await readRecentFiles();
+    let entry: RecentPdfEntry | null = null;
+
+    if (fileHandle) {
+      const existingEntry = await findSameRecentLocalEntry(fileHandle, entries, name);
+      entry = {
+        ...existingEntry,
+        id: existingEntry?.id ?? createRecentEntryId('local', name),
+        name,
+        kind: 'local',
+        lastOpenedAt: Date.now(),
+        fileHandle,
+      };
+    } else if (url) {
+      const existingEntry = entries.find((item) => item.id === `remote:${url}`);
+      entry = {
+        ...existingEntry,
+        id: `remote:${url}`,
+        name,
+        kind: 'remote',
+        lastOpenedAt: Date.now(),
+        url,
+      };
+    }
+
+    if (!entry) return null;
+
+    const nextEntries = [entry, ...entries.filter((item) => item.id !== entry.id)].slice(
+      0,
+      RECENT_FILES_LIMIT,
+    );
+    await writeRecentFiles(nextEntries);
+    if (!recentFilesDialog.hidden) void renderRecentFiles();
+    return entry;
+  } catch (error) {
+    console.warn('PDF Helper failed to remember recent PDF.', error);
+    return null;
+  }
+}
+
+async function removeRecentFile(id: string) {
+  const entries = await readRecentFiles();
+  await writeRecentFiles(entries.filter((entry) => entry.id !== id));
+}
+
+function formatRecentTime(timestamp: number): string {
+  if (!timestamp) return '';
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(timestamp));
+}
+
+function getCurrentReadingPosition(): ReadingPosition | null {
+  if (!pdfDocument) return null;
+
+  return {
+    pageNumber: Math.min(
+      pdfDocument.numPages,
+      Math.max(1, Math.round(pdfViewer.currentPageNumber || 1)),
+    ),
+    scrollTop: Math.max(0, Math.round(viewerContainer.scrollTop)),
+    scrollLeft: Math.max(0, Math.round(viewerContainer.scrollLeft)),
+    scale: Math.max(0.1, Math.min(10, Number(pdfViewer.currentScale) || 1)),
+    updatedAt: Date.now(),
+  };
+}
+
+function cancelReadingPositionSave() {
+  if (readingPositionSaveHandle === null) return;
+  window.clearTimeout(readingPositionSaveHandle);
+  readingPositionSaveHandle = null;
+}
+
+async function persistCurrentReadingPosition() {
+  readingPositionSaveHandle = null;
+  if (!pdfDocument || !currentRecentEntryId || isOpeningDocument || isRestoringReadingPosition) return;
+
+  const readingPosition = getCurrentReadingPosition();
+  if (!readingPosition) return;
+
+  try {
+    const entries = await readRecentFiles();
+    const entry = entries.find((item) => item.id === currentRecentEntryId);
+    if (!entry) return;
+
+    const updatedEntry: RecentPdfEntry = {
+      ...entry,
+      lastOpenedAt: Date.now(),
+      readingPosition,
+    };
+    await writeRecentFiles([
+      updatedEntry,
+      ...entries.filter((item) => item.id !== currentRecentEntryId),
+    ]);
+  } catch (error) {
+    console.warn('PDF Helper failed to persist reading position.', error);
+  }
+}
+
+function scheduleReadingPositionSave() {
+  if (!pdfDocument || !currentRecentEntryId || isOpeningDocument || isRestoringReadingPosition) return;
+  cancelReadingPositionSave();
+  readingPositionSaveHandle = window.setTimeout(() => {
+    void persistCurrentReadingPosition();
+  }, 600);
+}
+
+function restoreReadingPositionAfterPagesInit() {
+  const position = pendingReadingPosition;
+  pendingReadingPosition = null;
+
+  if (!pdfDocument || !position) {
+    pdfViewer.currentScaleValue = 'page-width';
+    return;
+  }
+
+  isRestoringReadingPosition = true;
+  const pageNumber = Math.min(pdfDocument.numPages, Math.max(1, Math.round(position.pageNumber || 1)));
+  const scale = Number(position.scale);
+
+  if (Number.isFinite(scale) && scale > 0) {
+    pdfViewer.currentScale = Math.max(0.1, Math.min(10, scale));
+  } else {
+    pdfViewer.currentScaleValue = 'page-width';
+  }
+
+  pdfViewer.currentPageNumber = pageNumber;
+
+  const applyPosition = () => {
+    viewerContainer.scrollTop = Math.max(
+      0,
+      Number.isFinite(position.scrollTop) ? position.scrollTop : viewerContainer.scrollTop,
+    );
+    viewerContainer.scrollLeft = Math.max(
+      0,
+      Number.isFinite(position.scrollLeft) ? position.scrollLeft : 0,
+    );
+    updateControls();
+  };
+
+  requestAnimationFrame(() => {
+    applyPosition();
+    window.setTimeout(() => {
+      applyPosition();
+      isRestoringReadingPosition = false;
+    }, 250);
+  });
+}
+
+async function requestFileReadPermission(fileHandle: FileHandleLike): Promise<boolean> {
+  const descriptor = { mode: 'read' as const };
+  const currentPermission = await fileHandle.queryPermission?.(descriptor);
+  if (!currentPermission || currentPermission === 'granted') return true;
+  if (!fileHandle.requestPermission) return false;
+  return (await fileHandle.requestPermission(descriptor)) === 'granted';
+}
+
+async function openRecentFile(entry: RecentPdfEntry) {
+  if (pdfDocument && !confirmDiscardUnsavedChanges()) return;
+  hideRecentFilesDialog();
+
+  try {
+    if (entry.kind === 'local') {
+      if (!entry.fileHandle) throw new Error('这条最近记录没有可用的文件句柄，请重新打开一次 PDF。');
+      const hasPermission = await requestFileReadPermission(entry.fileHandle);
+      if (!hasPermission) throw new Error('没有获得读取该 PDF 的权限。');
+      const file = await entry.fileHandle.getFile();
+      await openPdf(await file.arrayBuffer(), file.name, entry.fileHandle, false);
+      return;
+    }
+
+    if (entry.kind === 'remote' && entry.url) {
+      await openRemotePdf(entry.url);
+      return;
+    }
+
+    throw new Error('最近记录无效。');
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), true);
+  }
+}
+
+async function renderRecentFiles() {
+  recentFilesList.textContent = '';
+
+  try {
+    const entries = await readRecentFiles();
+
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'recent-files-empty';
+      empty.textContent = '暂无最近打开记录。用“打开PDF”打开一次文件后，这里会自动记录。';
+      recentFilesList.append(empty);
+      return;
+    }
+
+    for (const entry of entries) {
+      const item = document.createElement('div');
+      item.className = 'recent-file-item';
+
+      const openButton = document.createElement('button');
+      openButton.className = 'recent-file-open';
+      openButton.type = 'button';
+      openButton.title = entry.name;
+
+      const name = document.createElement('span');
+      name.className = 'recent-file-name';
+      name.textContent = getDisplayFileName(entry.name);
+
+      const meta = document.createElement('span');
+      meta.className = 'recent-file-meta';
+      const positionText = entry.readingPosition?.pageNumber
+        ? ` · 上次读到第 ${entry.readingPosition.pageNumber} 页`
+        : '';
+      meta.textContent = `${entry.kind === 'local' ? '本地文件' : '远程 PDF'} · ${formatRecentTime(
+        entry.lastOpenedAt,
+      )}${positionText}`;
+
+      openButton.append(name, meta);
+      openButton.addEventListener('click', () => {
+        void openRecentFile(entry);
+      });
+
+      const removeButton = document.createElement('button');
+      removeButton.className = 'recent-file-remove';
+      removeButton.type = 'button';
+      removeButton.title = '移除记录';
+      removeButton.textContent = '×';
+      removeButton.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        await removeRecentFile(entry.id);
+        await renderRecentFiles();
+      });
+
+      item.append(openButton, removeButton);
+      recentFilesList.append(item);
+    }
+  } catch (error) {
+    const empty = document.createElement('div');
+    empty.className = 'recent-files-empty';
+    empty.textContent = error instanceof Error ? error.message : String(error);
+    recentFilesList.append(empty);
+  }
+}
+
+function showRecentFilesDialog() {
+  recentFilesDialog.hidden = false;
+  void renderRecentFiles();
+}
+
+function hideRecentFilesDialog() {
+  recentFilesDialog.hidden = true;
+}
+
+function getCurrentAnnotationSnapshot(): string {
+  if (!pdfDocument) return '';
+
+  try {
+    const entries = getSerializableAnnotationEntries().sort(([leftKey], [rightKey]) =>
+      String(leftKey).localeCompare(String(rightKey)),
+    );
+    return JSON.stringify(entries);
+  } catch (error) {
+    console.warn('PDF Helper annotation snapshot failed.', error);
+    return '';
+  }
+}
+
+function updateUnsavedChangesFromSnapshot() {
+  if (!pdfDocument || isSavingAnnotatedPdf || isOpeningDocument) return;
+  hasUnsavedChanges = getCurrentAnnotationSnapshot() !== savedAnnotationSnapshot;
+}
+
+function markUnsavedChanges() {
+  updateUnsavedChangesFromSnapshot();
+}
+
+function scheduleUnsavedChangesCheck() {
+  if (unsavedChangesCheckHandle !== null) {
+    window.clearTimeout(unsavedChangesCheckHandle);
+  }
+
+  unsavedChangesCheckHandle = window.setTimeout(() => {
+    unsavedChangesCheckHandle = null;
+    updateUnsavedChangesFromSnapshot();
+    updateControls();
+  }, 0);
+}
+
+function markSavedChanges() {
+  if (unsavedChangesCheckHandle !== null) {
+    window.clearTimeout(unsavedChangesCheckHandle);
+    unsavedChangesCheckHandle = null;
+  }
+
+  savedAnnotationSnapshot = getCurrentAnnotationSnapshot();
+  hasUnsavedChanges = false;
+}
+
+type EmbeddedHelperAnnotations = {
+  format: 'pdf-helper.annotations';
+  version: 1;
+  app: 'PDF Helper';
+  sourceName: string;
+  fingerprint: string;
+  savedAt: string;
+  entries: Array<[string, unknown]>;
+  notes?: EmbeddedHelperNote[];
+};
+
+type EmbeddedHelperNote = {
+  key?: string;
+  signature?: string;
+  note: string;
+};
+
+const PDF_HELPER_ATTACHMENT_NAME = 'pdfhelper.json';
+const PDF_HELPER_ATTACHMENT_DESCRIPTION =
+  'PDF Helper internal annotation data. Open with PDF Helper to restore enhanced reading notes.';
+const DEFAULT_HIGHLIGHT_RGB = [255, 240, 102] as const;
+const FREE_TEXT_MIN_SIZE = 4;
+const FREE_TEXT_MAX_SIZE = 72;
+const FREE_TEXT_DEFAULT_SIZE = 16;
+const RECENT_FILES_DB_NAME = 'pdf-helper-recent-files';
+const RECENT_FILES_DB_VERSION = 1;
+const RECENT_FILES_STORE_NAME = 'recent-files';
+const RECENT_FILES_LIMIT = 12;
+
+type RecentPdfEntry = {
+  id: string;
+  name: string;
+  kind: 'local' | 'remote';
+  lastOpenedAt: number;
+  readingPosition?: ReadingPosition;
+  fileHandle?: FileHandleLike;
+  url?: string;
+};
+
+type ReadingPosition = {
+  pageNumber: number;
+  scrollTop: number;
+  scrollLeft: number;
+  scale: number;
+  updatedAt: number;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getPdfFingerprint(documentProxy: PDFDocumentProxy | null = pdfDocument): string {
+  return (
+    documentProxy?.fingerprints?.find((fingerprint): fingerprint is string => Boolean(fingerprint)) ||
+    ''
+  );
+}
+
+function normalizeStorageKey(key: string): string {
+  return key.replace(/^(pdf-helper-)+/, '');
+}
+
+function getEditorTypeValue(editor: any): unknown {
+  return (
+    editor?.editorType ??
+    editor?._type ??
+    editor?.annotationEditorType ??
+    editor?._initialData?.annotationEditorType ??
+    editor?._initialData?.annotationType ??
+    editor?.data?.annotationEditorType ??
+    editor?.data?.annotationType
+  );
+}
+
+function hasEditorClass(editor: any, className: string): boolean {
+  return Boolean((editor?.div as HTMLElement | null)?.classList?.contains(className));
+}
+
+function isHighlightEditor(editor: any): boolean {
+  const type = getEditorTypeValue(editor);
+  return (
+    type === 'highlight' ||
+    type === AnnotationEditorType.HIGHLIGHT ||
+    editor?.constructor?._type === 'highlight' ||
+    editor?.constructor?._editorType === AnnotationEditorType.HIGHLIGHT ||
+    hasEditorClass(editor, 'highlightEditor')
+  );
+}
+
+function isFreeTextEditor(editor: any): boolean {
+  const type = getEditorTypeValue(editor);
+  return (
+    type === 'freeText' ||
+    type === AnnotationEditorType.FREETEXT ||
+    editor?.constructor?._type === 'freeText' ||
+    editor?.constructor?._editorType === AnnotationEditorType.FREETEXT ||
+    hasEditorClass(editor, 'freeTextEditor')
+  );
+}
+
+function isInkEditor(editor: any): boolean {
+  const type = getEditorTypeValue(editor);
+  return (
+    type === 'ink' ||
+    type === AnnotationEditorType.INK ||
+    editor?.constructor?._type === 'ink' ||
+    editor?.constructor?._editorType === AnnotationEditorType.INK ||
+    hasEditorClass(editor, 'inkEditor')
+  );
+}
+
+function isStoredHighlightValue(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return (
+    value.annotationType === AnnotationEditorType.HIGHLIGHT ||
+    value.annotationEditorType === AnnotationEditorType.HIGHLIGHT
+  );
+}
+
+function hexColorToRgb(color: string): number[] | null {
+  const normalized = color.trim().replace(/^#/, '');
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return null;
+
+  return [
+    Number.parseInt(normalized.slice(0, 2), 16),
+    Number.parseInt(normalized.slice(2, 4), 16),
+    Number.parseInt(normalized.slice(4, 6), 16),
+  ];
+}
+
+function normalizeRgbColor(value: unknown): number[] | null {
+  if (typeof value === 'string') return hexColorToRgb(value);
+
+  const numbers = flattenFiniteNumbers(value);
+  if (numbers.length < 3) return null;
+
+  return numbers.slice(0, 3).map((channel) => Math.min(255, Math.max(0, Math.round(channel))));
+}
+
+function rgbColorToHex(value: unknown): string | null {
+  const rgb = normalizeRgbColor(value);
+  if (!rgb) return null;
+  return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function sanitizeAnnotationStorageValue(value: Record<string, unknown>): Record<string, unknown> {
+  const output = { ...value };
+
+  // Runtime/UI fields must not be serialized back into pdf.js. They are valid
+  // while an editor is alive, but stale copies can break deserialization after
+  // reopening a PDF.
+  for (const key of [
+    '_uiManager',
+    'uiManager',
+    'parent',
+    'div',
+    'editor',
+    'colorManager',
+    'colorName',
+    'hcmColor',
+    'hcmColorName',
+    'nonHCMColorName',
+  ]) {
+    delete output[key];
+  }
+
+  if (isStoredHighlightValue(output)) {
+    const color = normalizeRgbColor(output.color) ?? DEFAULT_HIGHLIGHT_RGB.slice();
+    output.color = color;
+    if (output.highlightColor !== undefined) delete output.highlightColor;
+  }
+
+  return output;
+}
+
+function flattenFiniteNumbers(value: unknown, output: number[] = []): number[] {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    output.push(value);
+  } else if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
+    for (const item of Array.from(value as unknown as ArrayLike<number>)) {
+      if (typeof item === 'number' && Number.isFinite(item)) output.push(item);
+    }
+  } else if (Array.isArray(value)) {
+    for (const item of value) flattenFiniteNumbers(item, output);
+  }
+  return output;
+}
+
+function getNumberArraySignature(value: unknown): string {
+  return flattenFiniteNumbers(value)
+    .map((number) => number.toFixed(3))
+    .join(',');
+}
+
+function getAnnotationGeometrySignature(value: unknown): string {
+  if (!isRecord(value) || !Number.isInteger(value.pageIndex)) return '';
+
+  const annotationType = value.annotationType ?? value.annotationEditorType ?? '';
+  const rect = getNumberArraySignature(value.rect);
+  const quadPoints = getNumberArraySignature(value.quadPoints);
+  const outlines = isRecord(value.outlines) ? getNumberArraySignature(value.outlines.points) : '';
+
+  return [value.pageIndex, annotationType, rect, quadPoints, outlines].join('|');
+}
+
+function getEditorSerializedValue(editor: any): unknown {
+  try {
+    const serialized = editor?.serialize?.(false);
+    if (serialized) return serialized;
+  } catch {
+    // Fall back to initial/internal data below.
+  }
+
+  return editor?._initialData ?? editor?.data ?? null;
+}
+
+function getEditorStorageKeys(editor: any): string[] {
+  const serialized = getEditorSerializedValue(editor);
+  const keys = [
+    editor?.id,
+    editor?.uid,
+    editor?.annotationElementId,
+    editor?._initialData?.id,
+    editor?._initialData?.annotationElementId,
+    editor?.data?.id,
+    editor?.data?.annotationElementId,
+    isRecord(serialized) ? serialized.id : undefined,
+    isRecord(serialized) ? serialized.annotationElementId : undefined,
+  ];
+
+  return Array.from(
+    new Set(
+      keys
+        .filter((key): key is string => typeof key === 'string' && key.length > 0)
+        .map(normalizeStorageKey),
+    ),
+  );
+}
+
+function rememberHelperNote(key: string | undefined, signature: string | undefined, note: string) {
+  const normalizedNote = note.trim();
+  if (!normalizedNote) return;
+
+  if (key) restoredHelperNotesByStorageKey.set(normalizeStorageKey(key), normalizedNote);
+  if (signature) restoredHelperNotesBySignature.set(signature, normalizedNote);
+}
+
+function forgetHelperNote(key: string | undefined, signature: string | undefined) {
+  if (key) restoredHelperNotesByStorageKey.delete(normalizeStorageKey(key));
+  if (signature) restoredHelperNotesBySignature.delete(signature);
+}
+
+function getRememberedHelperNote(keys: string[], signature: string): string {
+  for (const key of keys) {
+    const note = restoredHelperNotesByStorageKey.get(normalizeStorageKey(key))?.trim();
+    if (note) return note;
+  }
+
+  return (signature ? restoredHelperNotesBySignature.get(signature)?.trim() : '') || '';
+}
+
+function toJsonSafeAnnotationValue(value: unknown): unknown {
+  if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
+    const typedArray = value as unknown as ArrayLike<number> & { constructor: { name: string } };
+    return {
+      __pdfHelperTypedArray: typedArray.constructor.name,
+      values: Array.from(typedArray),
+    };
+  }
+
+  if (Array.isArray(value)) return value.map(toJsonSafeAnnotationValue);
+
+  if (isRecord(value)) {
+    const output: Record<string, unknown> = {};
+    for (const [key, nestedValue] of Object.entries(value)) {
+      output[key] = toJsonSafeAnnotationValue(nestedValue);
+    }
+    return output;
+  }
+
+  return value;
+}
+
+function fromJsonSafeAnnotationValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(fromJsonSafeAnnotationValue);
+
+  if (isRecord(value)) {
+    if (typeof value.__pdfHelperTypedArray === 'string' && Array.isArray(value.values)) {
+      const values = value.values as number[];
+      switch (value.__pdfHelperTypedArray) {
+        case 'Float32Array':
+          return new Float32Array(values);
+        case 'Float64Array':
+          return new Float64Array(values);
+        case 'Uint8Array':
+          return new Uint8Array(values);
+        case 'Uint8ClampedArray':
+          return new Uint8ClampedArray(values);
+        case 'Uint16Array':
+          return new Uint16Array(values);
+        case 'Uint32Array':
+          return new Uint32Array(values);
+        case 'Int8Array':
+          return new Int8Array(values);
+        case 'Int16Array':
+          return new Int16Array(values);
+        case 'Int32Array':
+          return new Int32Array(values);
+        default:
+          return values;
+      }
+    }
+
+    const output: Record<string, unknown> = {};
+    for (const [key, nestedValue] of Object.entries(value)) {
+      output[key] = fromJsonSafeAnnotationValue(nestedValue);
+    }
+    return output;
+  }
+
+  return value;
+}
+
+function getSerializableAnnotationEntries(): Array<[string, unknown]> {
+  if (!pdfDocument) return [];
+  const serializable = (pdfDocument as any).annotationStorage?.serializable;
+  const map = serializable?.map;
+  if (!(map instanceof Map)) return [];
+
+  return Array.from(map.entries())
+    .filter(([, value]) => {
+      if (!isRecord(value) || value.deleted === true) return false;
+      return (
+        Number.isInteger(value.pageIndex) &&
+        (value.annotationType !== undefined || value.annotationEditorType !== undefined)
+      );
+    })
+    .map(([key, value]) => {
+      const normalizedKey = String(key);
+      const note = getStoredOrLiveAnnotationNote(normalizedKey, value);
+      const output = { ...value };
+
+      if (note) {
+        output.pdfHelperNote = note;
+        if (isStoredHighlightValue(output)) {
+          output.comment = note;
+        }
+      }
+
+      return [normalizedKey, toJsonSafeAnnotationValue(sanitizeAnnotationStorageValue(output))];
+    });
+}
+
+function getSerializableHelperNotes(): EmbeddedHelperNote[] {
+  if (!pdfDocument) return [];
+
+  const notes = new Map<string, EmbeddedHelperNote>();
+  const addNote = (key: string | undefined, signature: string | undefined, note: string) => {
+    const normalizedNote = note.trim();
+    if (!normalizedNote) return;
+    const normalizedKey = key ? normalizeStorageKey(key) : undefined;
+    const id = `${normalizedKey || ''}|${signature || ''}|${normalizedNote}`;
+    notes.set(id, {
+      ...(normalizedKey ? { key: normalizedKey } : {}),
+      ...(signature ? { signature } : {}),
+      note: normalizedNote,
+    });
+  };
+
+  const serializable = (pdfDocument as any).annotationStorage?.serializable;
+  const map = serializable?.map;
+  if (map instanceof Map) {
+    for (const [key, value] of map.entries()) {
+      if (!isRecord(value)) continue;
+      const note = getStoredOrLiveAnnotationNote(String(key), value);
+      addNote(String(key), getAnnotationGeometrySignature(value), note);
+    }
+  }
+
+  if (annotationEditor) {
+    for (let pageIndex = 0; pageIndex < (pdfDocument?.numPages ?? 0); pageIndex += 1) {
+      for (const editor of annotationEditor.getEditors(pageIndex)) {
+        if (!isHighlightEditor(editor)) continue;
+        const note = getHighlightNote(editor);
+        if (!note) continue;
+        const signature = getAnnotationGeometrySignature(getEditorSerializedValue(editor));
+        const keys = getEditorStorageKeys(editor);
+        if (keys.length === 0) {
+          addNote(undefined, signature, note);
+        } else {
+          for (const key of keys) addNote(key, signature, note);
+        }
+      }
+    }
+  }
+
+  return Array.from(notes.values());
+}
+
+function createEmbeddedHelperPayload(): EmbeddedHelperAnnotations {
+  if (!pdfDocument) throw new Error('PDF 尚未打开。');
+  const entries = getSerializableAnnotationEntries();
+  return {
+    format: 'pdf-helper.annotations',
+    version: 1,
+    app: 'PDF Helper',
+    sourceName,
+    fingerprint: getPdfFingerprint(pdfDocument),
+    savedAt: new Date().toISOString(),
+    entries,
+    notes: getSerializableHelperNotes(),
+  };
+}
+
+function parseEmbeddedHelperPayload(rawJson: string): EmbeddedHelperAnnotations | null {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawJson);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(payload)) return null;
+  if (payload.format !== 'pdf-helper.annotations') return null;
+  if (payload.version !== 1) return null;
+  if (!Array.isArray(payload.entries)) return null;
+
+  return payload as EmbeddedHelperAnnotations;
+}
+
+function decodeAttachmentContent(content: unknown): string | null {
+  if (content instanceof Uint8Array) return new TextDecoder().decode(content);
+  if (content instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(content));
+  if (Array.isArray(content)) return new TextDecoder().decode(new Uint8Array(content));
+  if (typeof content === 'string') return content;
+  return null;
+}
+
+async function readEmbeddedHelperPayload(
+  documentProxy: PDFDocumentProxy,
+): Promise<EmbeddedHelperAnnotations | null> {
+  const attachments = (await documentProxy.getAttachments()) as
+    | Record<string, { content?: unknown; filename?: string }>
+    | null;
+  if (!attachments) return null;
+
+  const candidates: EmbeddedHelperAnnotations[] = [];
+  for (const [name, attachment] of Object.entries(attachments)) {
+    const filename = attachment.filename || name;
+    if (filename !== PDF_HELPER_ATTACHMENT_NAME && name !== PDF_HELPER_ATTACHMENT_NAME) continue;
+    const rawJson = decodeAttachmentContent(attachment.content);
+    if (!rawJson) continue;
+    const payload = parseEmbeddedHelperPayload(rawJson);
+    if (payload) candidates.push(payload);
+  }
+
+  return candidates.sort((a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt))[0] ?? null;
+}
+
+async function embedHelperAnnotationsIntoPdf(): Promise<{ bytes: Uint8Array; count: number }> {
+  if (!pdfDocument || !sourcePdfBytes) throw new Error('PDF 尚未打开，无法保存批注。');
+  const payload = createEmbeddedHelperPayload();
+  const jsonBytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
+  const { PDFDocument: PdfLibDocument } = await import('pdf-lib');
+  const pdfDoc = await PdfLibDocument.load(sourcePdfBytes, { ignoreEncryption: true });
+  const now = new Date();
+
+  await pdfDoc.attach(jsonBytes, PDF_HELPER_ATTACHMENT_NAME, {
+    mimeType: 'application/json',
+    description: PDF_HELPER_ATTACHMENT_DESCRIPTION,
+    creationDate: now,
+    modificationDate: now,
+  });
+
+  const bytes = await pdfDoc.save();
+  (pdfDocument as any).annotationStorage?.resetModified?.();
+  return { bytes, count: payload.entries.length };
+}
+
+async function requestFileWritePermission(fileHandle: FileHandleLike): Promise<boolean> {
+  const descriptor: FileHandlePermissionDescriptor = { mode: 'readwrite' };
+
+  try {
+    const currentPermission = await fileHandle.queryPermission?.(descriptor);
+    if (currentPermission === 'granted') return true;
+
+    if (fileHandle.requestPermission) {
+      const requestedPermission = await fileHandle.requestPermission(descriptor);
+      return requestedPermission === 'granted';
+    }
+
+    return currentPermission !== 'denied';
+  } catch {
+    // Some browser/extension combinations do not expose permission helpers but
+    // still prompt from createWritable(). Let that path decide.
+    return true;
+  }
+}
+
+function downloadEmbeddedPdfBytes(blob: Blob) {
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const baseName = sourceName.split('/').pop()?.replace(/\.pdf$/i, '') || 'document';
+  link.href = blobUrl;
+  link.download = `${safeDecodeURIComponent(baseName)}-pdfhelper.pdf`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+}
+
+async function writeEmbeddedPdfBytes(
+  bytes: Uint8Array,
+): Promise<'overwritten' | 'downloaded' | 'permission-denied-downloaded'> {
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+
+  if (currentFileHandle) {
+    const hasWritePermission = await requestFileWritePermission(currentFileHandle);
+    if (!hasWritePermission) {
+      downloadEmbeddedPdfBytes(blob);
+      return 'permission-denied-downloaded';
+    }
+
+    try {
+      const writable = await currentFileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return 'overwritten';
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'NotAllowedError')) throw error;
+      downloadEmbeddedPdfBytes(blob);
+      return 'permission-denied-downloaded';
+    }
+  }
+
+  downloadEmbeddedPdfBytes(blob);
+  return 'downloaded';
+}
+
+function restoreHelperNoteIndexes(notes: unknown) {
+  if (!Array.isArray(notes)) return;
+
+  for (const item of notes) {
+    if (!isRecord(item)) continue;
+    const note = extractCommentText(item.note);
+    if (!note) continue;
+    const key = typeof item.key === 'string' ? item.key : undefined;
+    const signature = typeof item.signature === 'string' ? item.signature : undefined;
+    rememberHelperNote(key, signature, note);
+  }
+}
+
+function restoreEmbeddedHelperPayload(payload: EmbeddedHelperAnnotations | null): number {
+  if (!payload) return 0;
+
+  // Fingerprint is kept as metadata only. Embedding pdfhelper.json changes the PDF
+  // bytes and can change pdf.js' calculated fingerprint, so it must not block
+  // restoring data that is already inside the currently opened PDF.
+
+  let restoredCount = 0;
+  const annotationStorage = (pdfDocument as any)?.annotationStorage;
+  if (!annotationStorage) return 0;
+  restoreHelperNoteIndexes(payload.notes);
+
+  for (const [key, storedValue] of payload.entries) {
+    const value = fromJsonSafeAnnotationValue(storedValue);
+    if (!isRecord(value)) continue;
+    if (
+      !Number.isInteger(value.pageIndex) ||
+      (value.annotationType === undefined && value.annotationEditorType === undefined)
+    ) {
+      continue;
+    }
+
+    const normalizedKey = normalizeStorageKey(String(key));
+    const signature = getAnnotationGeometrySignature(value);
+    const note =
+      getAnnotationNoteFromValue(value) ||
+      getRememberedHelperNote([normalizedKey, `pdf-helper-${normalizedKey}`], signature);
+    if (note) {
+      value.pdfHelperNote = note;
+      if (isStoredHighlightValue(value)) {
+        value.comment = note;
+      }
+
+      rememberHelperNote(normalizedKey, signature, note);
+    }
+
+    const restoredValue = sanitizeAnnotationStorageValue(value);
+    annotationStorage.setValue(`pdf-helper-${normalizedKey}`, {
+      ...restoredValue,
+      isClone: true,
+    });
+    restoredCount += 1;
+  }
+
+  annotationStorage.resetModified?.();
+  return restoredCount;
+}
+
+async function restoreHelperAnnotations(documentProxy: PDFDocumentProxy): Promise<number> {
+  const payload = await readEmbeddedHelperPayload(documentProxy);
+  return restoreEmbeddedHelperPayload(payload);
+}
+
+function safeDecodeURIComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function updateNoteIndicatorsVisibility() {
+  viewerElement.classList.toggle('pdf-helper-notes-hidden', areNoteIndicatorsHidden);
+  toggleNotesButton.textContent = areNoteIndicatorsHidden ? '显示笔记' : '隐藏笔记';
+  if (areNoteIndicatorsHidden) hideHighlightNote();
+}
+
+function confirmDiscardUnsavedChanges(): boolean {
+  if (!hasUnsavedChanges) return true;
+  return window.confirm('当前 PDF 有未保存的批注或笔记。是否放弃这些更改并继续？');
 }
 
 function updateControls() {
@@ -130,6 +1231,11 @@ function updateControls() {
     findNextButton,
     smartCopyButton,
     saveAnnotatedPdfButton,
+    toggleNotesButton,
+    freeTextSizeInput,
+    freeTextColorInput,
+    freeTextSizeDownButton,
+    freeTextSizeUpButton,
     ...editorModeButtons,
   ]) {
     control.disabled = !hasDocument;
@@ -139,6 +1245,138 @@ function updateControls() {
   nextButton.disabled = !hasDocument || page >= pages;
   undoAnnotationButton.disabled = !hasDocument || !canUndoAnnotation;
   redoAnnotationButton.disabled = !hasDocument || !canRedoAnnotation;
+  updateOutlineActivePage();
+}
+
+function setLeftPanelCollapsed(collapsed: boolean) {
+  appFrame?.classList.toggle('left-panel-collapsed', collapsed);
+  outlineToggleButton?.classList.toggle('active', !collapsed);
+}
+
+function updateOutlineActivePage() {
+  if (!outlineList) return;
+  const currentPage = String(pdfViewer.currentPageNumber || '');
+  for (const button of Array.from(outlineList.querySelectorAll<HTMLButtonElement>('button'))) {
+    button.classList.toggle('active', button.dataset.outlinePage === currentPage);
+  }
+}
+
+function clearOutlineList(message: string) {
+  if (!outlineList) return;
+  outlineList.textContent = '';
+  const placeholder = document.createElement('div');
+  placeholder.className = 'outline-empty';
+  placeholder.textContent = message;
+  outlineList.appendChild(placeholder);
+}
+
+async function getDestinationPageNumber(
+  documentProxy: PDFDocumentProxy,
+  dest: unknown,
+): Promise<number | null> {
+  try {
+    const explicitDest = typeof dest === 'string' ? await documentProxy.getDestination(dest) : await dest;
+    if (!Array.isArray(explicitDest)) return null;
+
+    const [destRef] = explicitDest;
+    if (destRef && typeof destRef === 'object') {
+      const cachedPageNumber = (documentProxy as any).cachedPageNumber?.(destRef);
+      if (Number.isInteger(cachedPageNumber)) return cachedPageNumber;
+      return (await documentProxy.getPageIndex(destRef)) + 1;
+    }
+
+    if (Number.isInteger(destRef)) return (destRef as number) + 1;
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function appendOutlineButton({
+  label,
+  depth,
+  pageNumber,
+  onClick,
+}: {
+  label: string;
+  depth: number;
+  pageNumber?: number;
+  onClick: () => void;
+}) {
+  if (!outlineList) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.style.paddingLeft = `${12 + depth * 18}px`;
+  if (pageNumber) button.dataset.outlinePage = String(pageNumber);
+  button.addEventListener('click', onClick);
+  outlineList.appendChild(button);
+}
+
+async function renderOutlineItems(
+  documentProxy: PDFDocumentProxy,
+  items: Array<{ title?: string; dest?: unknown; items?: unknown[] }>,
+  depth = 0,
+) {
+  for (const item of items) {
+    const title = item.title?.trim() || '未命名目录项';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = title;
+    button.style.paddingLeft = `${12 + depth * 18}px`;
+    button.addEventListener('click', () => {
+      if (item.dest) void linkService.goToDestination(item.dest as any);
+    });
+    outlineList?.appendChild(button);
+
+    if (item.dest) {
+      void getDestinationPageNumber(documentProxy, item.dest).then((pageNumber) => {
+        if (!pageNumber || pdfDocument !== documentProxy) return;
+        button.dataset.outlinePage = String(pageNumber);
+        updateOutlineActivePage();
+      });
+    }
+
+    if (Array.isArray(item.items) && item.items.length > 0) {
+      await renderOutlineItems(documentProxy, item.items as any, depth + 1);
+    }
+  }
+}
+
+async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
+  if (!outlineList) return;
+  outlineList.textContent = '';
+
+  try {
+    const outline = (await documentProxy.getOutline()) as
+      | Array<{ title?: string; dest?: unknown; items?: unknown[] }>
+      | null;
+    if (pdfDocument !== documentProxy) return;
+
+    if (outline && outline.length > 0) {
+      await renderOutlineItems(documentProxy, outline);
+      updateOutlineActivePage();
+      return;
+    }
+  } catch (error) {
+    console.warn('PDF Helper outline load failed.', error);
+  }
+
+  if (pdfDocument !== documentProxy) return;
+  outlineList.textContent = '';
+  const pageCount = documentProxy.numPages;
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    appendOutlineButton({
+      label: `第 ${pageNumber} 页`,
+      depth: 0,
+      pageNumber,
+      onClick: () => {
+        pdfViewer.currentPageNumber = pageNumber;
+      },
+    });
+  }
+  updateOutlineActivePage();
 }
 
 function normalizeCopiedText(text: string): string {
@@ -219,6 +1457,65 @@ function mergeSelectionRects(rects: SelectionRect[]): SelectionRect[] {
   return merged;
 }
 
+function getTextNodeSelectionOffsets(range: Range, textNode: Text): { start: number; end: number } | null {
+  const textLength = textNode.data.length;
+  if (textLength === 0 || !range.intersectsNode(textNode)) return null;
+
+  let start = 0;
+  let end = textLength;
+
+  if (range.startContainer === textNode) {
+    start = Math.min(textLength, Math.max(0, range.startOffset));
+  }
+  if (range.endContainer === textNode) {
+    end = Math.min(textLength, Math.max(0, range.endOffset));
+  }
+
+  if (start >= end) return null;
+  return { start, end };
+}
+
+function collectSelectionRectsFromTextLayer(range: Range, textLayer: HTMLElement) {
+  const page = textLayer.closest<HTMLElement>('.pdfViewer .page');
+  if (!page) return [];
+
+  const pageRect = page.getBoundingClientRect();
+  const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      if (!node.textContent?.trim()) return NodeFilter.FILTER_REJECT;
+      return range.intersectsNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const rects: SelectionRect[] = [];
+
+  while (walker.nextNode()) {
+    const textNode = walker.currentNode as Text;
+    const offsets = getTextNodeSelectionOffsets(range, textNode);
+    if (!offsets) continue;
+
+    const textRange = document.createRange();
+    textRange.setStart(textNode, offsets.start);
+    textRange.setEnd(textNode, offsets.end);
+
+    for (const rect of Array.from(textRange.getClientRects())) {
+      if (rect.width <= 0 || rect.height <= 0) continue;
+
+      rects.push({
+        left: rect.left - pageRect.left,
+        top: rect.top - pageRect.top,
+        right: rect.right - pageRect.left,
+        bottom: rect.bottom - pageRect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+    }
+
+    textRange.detach();
+  }
+
+  return rects;
+}
+
 function renderCustomSelection() {
   clearCustomSelection();
 
@@ -232,26 +1529,15 @@ function renderCustomSelection() {
     const range = selection.getRangeAt(rangeIndex);
     if (range.collapsed) continue;
 
-    for (const rect of range.getClientRects()) {
-      if (rect.width <= 0 || rect.height <= 0) continue;
-      const hit = document.elementFromPoint(
-        Math.min(rect.right - 1, rect.left + Math.max(1, rect.width / 2)),
-        rect.top + rect.height / 2,
-      );
-      const page = hit?.closest<HTMLElement>('.pdfViewer .page');
+    for (const textLayer of Array.from(viewerElement.querySelectorAll<HTMLElement>('.textLayer'))) {
+      if (!range.intersectsNode(textLayer)) continue;
+      const page = textLayer.closest<HTMLElement>('.pdfViewer .page');
       if (!page) continue;
 
-      const pageRect = page.getBoundingClientRect();
-      const localRect: SelectionRect = {
-        left: rect.left - pageRect.left,
-        top: rect.top - pageRect.top,
-        right: rect.right - pageRect.left,
-        bottom: rect.bottom - pageRect.top,
-        width: rect.width,
-        height: rect.height,
-      };
+      const selectedRects = collectSelectionRectsFromTextLayer(range, textLayer);
+      if (selectedRects.length === 0) continue;
       const pageRects = rectsByPage.get(page) ?? [];
-      pageRects.push(localRect);
+      pageRects.push(...selectedRects);
       rectsByPage.set(page, pageRects);
     }
   }
@@ -365,12 +1651,112 @@ function installHighlightGeometry(uiManager: AnnotationEditorUIManager) {
 
 function setHighlightColor(color: string) {
   highlightColorInput.value = color;
-  contextCurrentColor.style.backgroundColor = color;
   annotationEditor?.updateParams(AnnotationEditorParamsType.HIGHLIGHT_COLOR, color);
 }
 
-function findAnnotationEditor(target: EventTarget | null): any | null {
+function getFreeTextSize(): number {
+  const value = Number.parseInt(freeTextSizeInput.value, 10);
+  return Math.min(
+    FREE_TEXT_MAX_SIZE,
+    Math.max(FREE_TEXT_MIN_SIZE, Number.isFinite(value) ? value : FREE_TEXT_DEFAULT_SIZE),
+  );
+}
+
+function setFreeTextSize(size: number) {
+  const normalizedSize = Math.min(
+    FREE_TEXT_MAX_SIZE,
+    Math.max(FREE_TEXT_MIN_SIZE, Math.round(size)),
+  );
+  freeTextSizeInput.value = String(normalizedSize);
+  annotationEditor?.updateParams(AnnotationEditorParamsType.FREETEXT_SIZE, normalizedSize);
+  if (isFreeTextEditor(selectedAnnotationEditor)) markUnsavedChanges();
+}
+
+function setFreeTextColor(color: string) {
+  freeTextColorInput.value = color;
+  annotationEditor?.updateParams(AnnotationEditorParamsType.FREETEXT_COLOR, color);
+  if (isFreeTextEditor(selectedAnnotationEditor)) markUnsavedChanges();
+}
+
+function getEditorParamValue(editor: any, type: number): unknown {
+  const properties = editor?.propertiesToUpdate;
+  if (!Array.isArray(properties)) return null;
+  const pair = properties.find((entry) => Array.isArray(entry) && entry[0] === type);
+  return pair?.[1] ?? null;
+}
+
+function syncFreeTextControls(editor: any) {
+  if (!isFreeTextEditor(editor)) return;
+
+  const size = Number(getEditorParamValue(editor, AnnotationEditorParamsType.FREETEXT_SIZE));
+  if (Number.isFinite(size)) {
+    freeTextSizeInput.value = String(
+      Math.min(FREE_TEXT_MAX_SIZE, Math.max(FREE_TEXT_MIN_SIZE, Math.round(size))),
+    );
+  }
+
+  const color = rgbColorToHex(
+    getEditorParamValue(editor, AnnotationEditorParamsType.FREETEXT_COLOR) ?? editor?.color,
+  );
+  if (color) freeTextColorInput.value = color;
+}
+
+async function warmUpAnnotationEditorManager(uiManager: AnnotationEditorUIManager) {
+  if (!pdfDocument) return;
+  const documentAtStart = pdfDocument;
+
+  try {
+    await uiManager.updateMode(AnnotationEditorType.HIGHLIGHT, null, false);
+    await uiManager.updateMode(AnnotationEditorType.NONE, null, false);
+  } catch (error) {
+    console.warn('PDF Helper annotation editor warm-up failed.', error);
+  } finally {
+    if (pdfDocument !== documentAtStart) return;
+    activeEditorMode = AnnotationEditorType.NONE;
+    viewerElement.classList.toggle('pdf-helper-ink-mode', false);
+    scheduleHighlightNoteIndicatorRefresh();
+    if (isOpeningDocument) markSavedChanges();
+    updateControls();
+  }
+}
+
+function hasAnyAnnotationEditor(): boolean {
+  if (!annotationEditor || !pdfDocument) return false;
+
+  for (let pageIndex = 0; pageIndex < pdfDocument.numPages; pageIndex += 1) {
+    for (const _editor of annotationEditor.getEditors(pageIndex)) return true;
+  }
+
+  return false;
+}
+
+function scheduleRestoredAnnotationEditorWarmUp() {
+  if (!restoredAnnotationWarmUpPending || !annotationEditor || annotationEditorWarmUpInFlight) {
+    return;
+  }
+
+  annotationEditorWarmUpInFlight = true;
+  window.setTimeout(() => {
+    void (async () => {
+      try {
+        if (!annotationEditor) return;
+        await warmUpAnnotationEditorManager(annotationEditor);
+        if (hasAnyAnnotationEditor()) {
+          restoredAnnotationWarmUpPending = false;
+        }
+      } finally {
+        annotationEditorWarmUpInFlight = false;
+      }
+    })();
+  }, 50);
+}
+
+function findAnnotationEditor(
+  target: EventTarget | null,
+  options: { includeHighlight?: boolean } = {},
+): any | null {
   if (!(target instanceof Element) || !annotationEditor) return null;
+  const includeHighlight = options.includeHighlight ?? true;
   const editorElement = target.closest<HTMLDivElement>(
     '.highlightEditor, .freeTextEditor, .inkEditor, .stampEditor, .signatureEditor',
   );
@@ -379,22 +1765,503 @@ function findAnnotationEditor(target: EventTarget | null): any | null {
   if (!editorElement || !Number.isInteger(pageNumber) || pageNumber < 1) return null;
 
   for (const editor of annotationEditor.getEditors(pageNumber - 1)) {
+    if (!includeHighlight && isHighlightEditor(editor)) continue;
     if (editor.div === editorElement || editor.div?.contains(target)) return editor;
   }
   return null;
 }
 
+function isPointInRect(clientX: number, clientY: number, rect: DOMRect, padding = 0): boolean {
+  return (
+    clientX >= rect.left - padding &&
+    clientX <= rect.right + padding &&
+    clientY >= rect.top - padding &&
+    clientY <= rect.bottom + padding
+  );
+}
+
+function isPointInsideHighlightShape(editorElement: HTMLElement, clientX: number, clientY: number): boolean {
+  if (isPointInsideHighlightClipPath(editorElement, clientX, clientY)) return true;
+
+  const internal = editorElement.querySelector<HTMLElement>('.internal');
+  if (!internal) return false;
+
+  const editorPointerEvents = {
+    value: editorElement.style.getPropertyValue('pointer-events'),
+    priority: editorElement.style.getPropertyPriority('pointer-events'),
+  };
+  const internalPointerEvents = {
+    value: internal.style.getPropertyValue('pointer-events'),
+    priority: internal.style.getPropertyPriority('pointer-events'),
+  };
+
+  try {
+    editorElement.style.setProperty('pointer-events', 'auto', 'important');
+    internal.style.setProperty('pointer-events', 'auto', 'important');
+    const hit = document.elementFromPoint(clientX, clientY);
+    return hit === internal || internal.contains(hit);
+  } finally {
+    editorElement.style.setProperty(
+      'pointer-events',
+      editorPointerEvents.value,
+      editorPointerEvents.priority,
+    );
+    internal.style.setProperty(
+      'pointer-events',
+      internalPointerEvents.value,
+      internalPointerEvents.priority,
+    );
+  }
+}
+
+function isPointInsideHighlightClipPath(
+  editorElement: HTMLElement,
+  clientX: number,
+  clientY: number,
+): boolean {
+  const rect = editorElement.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0 || !isPointInRect(clientX, clientY, rect)) return false;
+
+  const path = getHighlightClipPath(editorElement);
+  const d = path?.getAttribute('d');
+  if (!d || typeof Path2D === 'undefined') return false;
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext('2d');
+    if (!context) return false;
+
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    return context.isPointInPath(new Path2D(d), x, y);
+  } catch {
+    return false;
+  }
+}
+
+function isPointInsideHighlightNoteIndicator(
+  editorElement: HTMLElement,
+  clientX: number,
+  clientY: number,
+): boolean {
+  const indicator = editorElement.querySelector<HTMLElement>('.pdf-helper-note-indicator');
+  if (!indicator) return false;
+
+  const rect = indicator.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 && isPointInRect(clientX, clientY, rect, 2);
+}
+
+function extractUrlFragmentId(value: string): string {
+  const urlMatch = value.match(/url\((["']?)(.*?)\1\)/);
+  const rawUrl = urlMatch?.[2] ?? value;
+  const hashIndex = rawUrl.lastIndexOf('#');
+  return hashIndex >= 0 ? rawUrl.slice(hashIndex + 1) : rawUrl.replace(/^#/, '');
+}
+
+function getHighlightClipPath(editorElement: HTMLElement): SVGPathElement | null {
+  const internal = editorElement.querySelector<HTMLElement>('.internal');
+  if (!internal) return null;
+
+  const clipPathValue = internal.style.clipPath || getComputedStyle(internal).clipPath;
+  const clipPathId = extractUrlFragmentId(clipPathValue);
+  if (!clipPathId) return null;
+
+  const clipPath = document.getElementById(clipPathId);
+  const href = clipPath?.querySelector<SVGUseElement>('use')?.getAttribute('href');
+  if (!href) return null;
+
+  return document.getElementById(extractUrlFragmentId(href)) as SVGPathElement | null;
+}
+
+function getHighlightPathPoints(editorElement: HTMLElement): Array<{ x: number; y: number }> {
+  const path = getHighlightClipPath(editorElement);
+  const d = path?.getAttribute('d');
+  if (!d) return [];
+
+  const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? [];
+  const points: Array<{ x: number; y: number }> = [];
+  let command = '';
+  let index = 0;
+  let x = 0;
+  let y = 0;
+  let subpathStartX = 0;
+  let subpathStartY = 0;
+
+  const isCommandToken = (token: string) => /^[a-zA-Z]$/.test(token);
+  const readNumber = () => {
+    const value = Number(tokens[index]);
+    index += 1;
+    return value;
+  };
+  const hasNumber = () => index < tokens.length && !isCommandToken(tokens[index]);
+  const addPoint = (nextX: number, nextY: number) => {
+    if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return;
+    x = nextX;
+    y = nextY;
+    points.push({ x, y });
+  };
+
+  while (index < tokens.length) {
+    if (isCommandToken(tokens[index])) {
+      command = tokens[index];
+      index += 1;
+    }
+
+    const relative = command === command.toLowerCase();
+    const normalizedCommand = command.toUpperCase();
+    const absoluteX = (value: number) => (relative ? x + value : value);
+    const absoluteY = (value: number) => (relative ? y + value : value);
+
+    if (normalizedCommand === 'M') {
+      if (!hasNumber()) continue;
+      const nextX = absoluteX(readNumber());
+      const nextY = absoluteY(readNumber());
+      addPoint(nextX, nextY);
+      subpathStartX = x;
+      subpathStartY = y;
+      command = relative ? 'l' : 'L';
+      continue;
+    }
+
+    if (normalizedCommand === 'L') {
+      while (hasNumber()) addPoint(absoluteX(readNumber()), absoluteY(readNumber()));
+      continue;
+    }
+
+    if (normalizedCommand === 'H') {
+      while (hasNumber()) addPoint(absoluteX(readNumber()), y);
+      continue;
+    }
+
+    if (normalizedCommand === 'V') {
+      while (hasNumber()) addPoint(x, absoluteY(readNumber()));
+      continue;
+    }
+
+    if (normalizedCommand === 'C') {
+      while (hasNumber()) {
+        // Control points are useful for bounding/anchoring too, so keep them.
+        addPoint(absoluteX(readNumber()), absoluteY(readNumber()));
+        addPoint(absoluteX(readNumber()), absoluteY(readNumber()));
+        addPoint(absoluteX(readNumber()), absoluteY(readNumber()));
+      }
+      continue;
+    }
+
+    if (normalizedCommand === 'S' || normalizedCommand === 'Q') {
+      while (hasNumber()) {
+        addPoint(absoluteX(readNumber()), absoluteY(readNumber()));
+        addPoint(absoluteX(readNumber()), absoluteY(readNumber()));
+      }
+      continue;
+    }
+
+    if (normalizedCommand === 'T') {
+      while (hasNumber()) addPoint(absoluteX(readNumber()), absoluteY(readNumber()));
+      continue;
+    }
+
+    if (normalizedCommand === 'Z') {
+      addPoint(subpathStartX, subpathStartY);
+      continue;
+    }
+
+    // Unknown command. Skip following numbers to avoid an infinite loop.
+    while (hasNumber()) index += 1;
+  }
+
+  return points;
+}
+
+function findHighlightNoteAnchor(editorElement: HTMLElement): { x: number; y: number } | null {
+  const rect = editorElement.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+
+  const points = getHighlightPathPoints(editorElement);
+  if (points.length > 0) {
+    const minY = Math.min(...points.map((point) => point.y));
+    const lineTolerance = Math.max(0.01, Math.min(0.08, 18 / Math.max(rect.height, 1)));
+    const topLinePoints = points.filter((point) => point.y <= minY + lineTolerance);
+    const topRightPoint = topLinePoints.reduce(
+      (best, point) => (point.x > best.x ? point : best),
+      topLinePoints[0] ?? points[0],
+    );
+
+    if (topRightPoint) {
+      return {
+        x: Math.max(0, Math.min(rect.width, topRightPoint.x * rect.width)),
+        y: Math.max(0, Math.min(rect.height, topRightPoint.y * rect.height)),
+      };
+    }
+  }
+
+  return { x: rect.width, y: 0 };
+}
+
+function isPointInsideEditor(editor: any, clientX: number, clientY: number): boolean {
+  const editorElement = editor?.div as HTMLElement | null;
+  if (!editorElement) return false;
+
+  if (isHighlightEditor(editor)) {
+    return (
+      isPointInsideHighlightNoteIndicator(editorElement, clientX, clientY) ||
+      isPointInsideHighlightShape(editorElement, clientX, clientY)
+    );
+  }
+
+  if (isInkEditor(editor)) {
+    return false;
+  }
+
+  if (isFreeTextEditor(editor)) {
+    const contentElements = Array.from(
+      editorElement.querySelectorAll<HTMLElement>('[contenteditable="true"], .internal'),
+    );
+    const candidates = contentElements.length > 0 ? contentElements : [editorElement];
+    return candidates.some((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && isPointInRect(clientX, clientY, rect, 1);
+    });
+  }
+
+  const rect = editorElement.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 && isPointInRect(clientX, clientY, rect, 1);
+}
+
+function findAnnotationEditorAtPoint(
+  clientX: number,
+  clientY: number,
+  options: { highlightOnly?: boolean; includeHighlight?: boolean } = {},
+): any | null {
+  if (!annotationEditor) return null;
+  const includeHighlight = options.includeHighlight ?? true;
+
+  const hit = document.elementFromPoint(clientX, clientY);
+  const pageElement = hit?.closest<HTMLElement>('.pdfViewer .page');
+  const pageNumber = Number(pageElement?.dataset.pageNumber);
+  if (!Number.isInteger(pageNumber) || pageNumber < 1) return null;
+
+  const editors = [...annotationEditor.getEditors(pageNumber - 1)].reverse();
+  for (const editor of editors) {
+    if (!includeHighlight && isHighlightEditor(editor)) continue;
+    if (options.highlightOnly && !isHighlightEditor(editor)) continue;
+    if (isPointInsideEditor(editor, clientX, clientY)) return editor;
+  }
+  return null;
+}
+
+function isPointInsideSavedSelection(clientX: number, clientY: number): boolean {
+  for (const range of contextSelectionRanges) {
+    for (const rect of range.getClientRects()) {
+      if (rect.width > 0 && rect.height > 0 && isPointInRect(clientX, clientY, rect, 2)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isEditableOrControl(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLButtonElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && Boolean(target.closest('button, input, textarea, select, [contenteditable="true"]')))
+  );
+}
+
+function isTextSelectionMode(): boolean {
+  return (
+    activeEditorMode === AnnotationEditorType.NONE ||
+    activeEditorMode === AnnotationEditorType.HIGHLIGHT
+  );
+}
+
+function isInkMode(): boolean {
+  return activeEditorMode === AnnotationEditorType.INK;
+}
+
+function findTextLayerAtPoint(clientX: number, clientY: number): HTMLElement | null {
+  const elements = document.elementsFromPoint(clientX, clientY);
+  return (
+    elements.find((element) => element instanceof HTMLElement && element.classList.contains('textLayer')) as
+      | HTMLElement
+      | undefined
+  ) ?? null;
+}
+
+function isPointInsideTextGlyph(clientX: number, clientY: number): boolean {
+  const textLayer = findTextLayerAtPoint(clientX, clientY);
+  if (!textLayer) return false;
+
+  const textItems = Array.from(textLayer.querySelectorAll<HTMLElement>('span[role="presentation"], span'));
+  for (const item of textItems) {
+    if (!item.textContent?.trim()) continue;
+    for (const rect of Array.from(item.getClientRects())) {
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      const paddingX = Math.min(18, Math.max(8, rect.height * 0.35));
+      const paddingY = Math.min(5, Math.max(2, rect.height * 0.12));
+      const forgivingRect = new DOMRect(
+        rect.left - paddingX,
+        rect.top - paddingY,
+        rect.width + paddingX * 2,
+        rect.height + paddingY * 2,
+      );
+      if (isPointInRect(clientX, clientY, forgivingRect)) return true;
+    }
+  }
+
+  return false;
+}
+
+function clearDomSelection() {
+  window.getSelection()?.removeAllRanges();
+  clearCustomSelection();
+}
+
+function clearSelectedAnnotationState() {
+  annotationEditor?.unselectAll();
+  selectedAnnotationEditor = null;
+  selectedHighlightEditor = null;
+  contextHighlightEditor = null;
+  hideSelectionContextMenu();
+  hideHighlightNote();
+  hideAnnotationActionBar();
+}
+
 function findHighlightEditor(target: EventTarget | null): any | null {
-  const editor = findAnnotationEditor(target);
-  return editor?.editorType === 'highlight' ? editor : null;
+  const editor = findAnnotationEditor(target, { includeHighlight: true });
+  return isHighlightEditor(editor) ? editor : null;
 }
 
 function getHighlightText(editor: any): string {
   return editor?.div?.getAttribute('aria-label')?.trim() || '';
 }
 
+function getEditorAnnotationId(editor: any): string {
+  return (
+    (typeof editor?.id === 'string' && editor.id) ||
+    (typeof editor?.uid === 'string' && editor.uid) ||
+    (typeof editor?.annotationElementId === 'string' && editor.annotationElementId) ||
+    (typeof editor?._initialData?.annotationElementId === 'string' && editor._initialData.annotationElementId) ||
+    (typeof editor?._initialData?.id === 'string' && editor._initialData.id) ||
+    ''
+  );
+}
+
+function extractCommentText(value: any): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value.text === 'string') return value.text.trim();
+  if (typeof value.contents === 'string') return value.contents.trim();
+  if (typeof value.str === 'string') return value.str.trim();
+  if (typeof value.richText?.str === 'string') return value.richText.str.trim();
+  if (typeof value.contentsObj?.str === 'string') return value.contentsObj.str.trim();
+  return '';
+}
+
+function getAnnotationNoteFromValue(value: unknown): string {
+  if (!isRecord(value)) return '';
+  return (
+    extractCommentText(value.pdfHelperNote) ||
+    extractCommentText(value.comment) ||
+    extractCommentText(value.popup) ||
+    extractCommentText(value.contentsObj) ||
+    extractCommentText(value.richText) ||
+    ''
+  );
+}
+
+function findLiveEditorForSerializedEntry(key: string, value: Record<string, unknown>): any | null {
+  if (!annotationEditor || !Number.isInteger(value.pageIndex)) return null;
+
+  const normalizedKey = normalizeStorageKey(key);
+  const signature = getAnnotationGeometrySignature(value);
+  const pageIndex = value.pageIndex as number;
+
+  for (const editor of annotationEditor.getEditors(pageIndex)) {
+    if (isStoredHighlightValue(value) && !isHighlightEditor(editor)) continue;
+
+    if (getEditorStorageKeys(editor).includes(normalizedKey)) return editor;
+
+    const editorSignature = getAnnotationGeometrySignature(getEditorSerializedValue(editor));
+    if (signature && editorSignature === signature) return editor;
+  }
+
+  return null;
+}
+
+function getStoredOrLiveAnnotationNote(key: string, value: Record<string, unknown>): string {
+  const storedNote = getAnnotationNoteFromValue(value);
+  if (storedNote) return storedNote;
+
+  const liveEditor = findLiveEditorForSerializedEntry(key, value);
+  if (!liveEditor) return '';
+
+  return getHighlightNote(liveEditor);
+}
+
 function getHighlightNote(editor: any): string {
-  return editor?.comment?.text?.trim() || '';
+  const annotationId = getEditorAnnotationId(editor);
+  const geometrySignature = getAnnotationGeometrySignature(getEditorSerializedValue(editor));
+  const storageKeys = getEditorStorageKeys(editor);
+  const note =
+    extractCommentText(editor?.pdfHelperNote) ||
+    extractCommentText(editor?._pdfHelperNote) ||
+    extractCommentText(editor?.comment) ||
+    extractCommentText(editor?._initialData?.pdfHelperNote) ||
+    extractCommentText(editor?._initialData?.comment) ||
+    extractCommentText(editor?._initialData?.contentsObj) ||
+    extractCommentText(editor?._initialData?.richText) ||
+    extractCommentText(editor?.data?.pdfHelperNote) ||
+    extractCommentText(editor?.data?.contentsObj) ||
+    getRememberedHelperNote(storageKeys, geometrySignature) ||
+    (geometrySignature ? restoredHelperNotesBySignature.get(geometrySignature)?.trim() : '') ||
+    (annotationId ? nativeAnnotationNotes.get(annotationId)?.trim() : '') ||
+    '';
+
+  if (note) {
+    editor.pdfHelperNote = note;
+    editor._pdfHelperNote = note;
+    for (const key of storageKeys) rememberHelperNote(key, geometrySignature, note);
+  }
+
+  return note;
+}
+
+function collectNativeAnnotationNotes(pageNumber?: number) {
+  const pageSelector =
+    typeof pageNumber === 'number'
+      ? `.page[data-page-number="${pageNumber}"]`
+      : '.page';
+
+  for (const page of Array.from(viewerElement.querySelectorAll<HTMLElement>(pageSelector))) {
+    const highlightAnnotations = page.querySelectorAll<HTMLElement>(
+      '.annotationLayer .highlightAnnotation[data-annotation-id]',
+    );
+
+    for (const highlightAnnotation of Array.from(highlightAnnotations)) {
+      const annotationId = highlightAnnotation.dataset.annotationId;
+      if (!annotationId) continue;
+
+      const ownPopupText = highlightAnnotation
+        .querySelector<HTMLElement>('.popupContent')
+        ?.textContent
+        ?.trim();
+      const nextPopup = highlightAnnotation.nextElementSibling;
+      const siblingPopupText = nextPopup?.classList.contains('popupAnnotation')
+        ? nextPopup.querySelector<HTMLElement>('.popupContent')?.textContent?.trim()
+        : '';
+      const note = ownPopupText || siblingPopupText || '';
+
+      if (note) {
+        nativeAnnotationNotes.set(annotationId, note);
+      }
+    }
+  }
 }
 
 function updateHighlightNoteIndicator(editor: any) {
@@ -414,21 +2281,59 @@ function updateHighlightNoteIndicator(editor: any) {
     indicator.setAttribute('aria-label', '此高亮有笔记');
     container.append(indicator);
   }
+
+  const anchor = findHighlightNoteAnchor(container);
+  if (anchor) {
+    indicator.style.left = `${anchor.x}px`;
+    indicator.style.top = `${anchor.y}px`;
+  } else {
+    indicator.style.left = '';
+    indicator.style.top = '';
+  }
+}
+
+function refreshHighlightNoteIndicators(pageNumber?: number) {
+  if (!annotationEditor) return;
+  collectNativeAnnotationNotes(pageNumber);
+
+  const pageIndexes =
+    typeof pageNumber === 'number'
+      ? [pageNumber - 1]
+      : Array.from({ length: pdfDocument?.numPages ?? 0 }, (_, index) => index);
+
+  for (const pageIndex of pageIndexes) {
+    if (pageIndex < 0) continue;
+    for (const editor of annotationEditor.getEditors(pageIndex)) {
+      if (isHighlightEditor(editor)) updateHighlightNoteIndicator(editor);
+    }
+  }
+}
+
+function scheduleHighlightNoteIndicatorRefresh(pageNumber?: number) {
+  requestAnimationFrame(() => {
+    refreshHighlightNoteIndicators(pageNumber);
+    window.setTimeout(() => refreshHighlightNoteIndicators(pageNumber), 0);
+  });
 }
 
 function getAnnotationTypeName(editor: any): string {
-  if (editor?.editorType === 'highlight') return '高亮';
-  if (editor?.editorType === 'freeText') return '文本';
-  if (editor?.editorType === 'ink') return '画笔';
+  if (isHighlightEditor(editor)) return '高亮';
+  if (isFreeTextEditor(editor)) return '文本';
+  if (isInkEditor(editor)) return '画笔';
   return '批注';
 }
 
 function hideAnnotationActionBar() {
   annotationActionBar.hidden = true;
+  freeTextSizeControl.hidden = true;
 }
 
 function showAnnotationActionBar(editor: any) {
   if (!editor?.div) return;
+  const isTextEditor = isFreeTextEditor(editor);
+  annotationTypeLabel.hidden = true;
+  freeTextSizeControl.hidden = !isTextEditor;
+  if (isTextEditor) syncFreeTextControls(editor);
   annotationTypeLabel.textContent = `${getAnnotationTypeName(editor)}批注`;
   annotationActionBar.hidden = false;
   const anchor = editor.div.getBoundingClientRect();
@@ -444,7 +2349,7 @@ function selectAnnotation(editor: any, showActions = true) {
   if (!annotationEditor || !editor) return;
   annotationEditor.setSelected(editor);
   selectedAnnotationEditor = editor;
-  selectedHighlightEditor = editor.editorType === 'highlight' ? editor : null;
+  selectedHighlightEditor = isHighlightEditor(editor) ? editor : null;
   if (selectedHighlightEditor) updateHighlightNoteIndicator(editor);
   if (showActions) showAnnotationActionBar(editor);
 }
@@ -466,6 +2371,7 @@ function showHighlightNote(editor: any, focusEditor = false) {
   if (!editor?.div) return;
   selectHighlight(editor);
   const note = getHighlightNote(editor);
+  openHighlightNoteEditor = editor;
   highlightNoteTitle.textContent = note ? '高亮笔记' : '添加笔记';
   highlightNoteQuote.textContent = getHighlightText(editor);
   highlightNoteText.value = note;
@@ -476,16 +2382,47 @@ function showHighlightNote(editor: any, focusEditor = false) {
 
 function hideHighlightNote() {
   highlightNotePopover.hidden = true;
+  openHighlightNoteEditor = null;
+}
+
+function toggleHighlightNote(editor: any) {
+  if (openHighlightNoteEditor === editor && !highlightNotePopover.hidden) {
+    hideHighlightNote();
+    return;
+  }
+  showHighlightNote(editor);
 }
 
 function saveHighlightNote() {
   if (!selectedHighlightEditor) return;
   const text = highlightNoteText.value.trim();
-  selectedHighlightEditor.comment = text
-    ? { text, richText: null, date: new Date(), deleted: false }
-    : null;
+  selectedHighlightEditor.comment = text || null;
+  selectedHighlightEditor.pdfHelperNote = text || '';
+  selectedHighlightEditor._pdfHelperNote = text || '';
+  const annotationId = getEditorAnnotationId(selectedHighlightEditor);
+  const signature = getAnnotationGeometrySignature(getEditorSerializedValue(selectedHighlightEditor));
+  const storageKeys = getEditorStorageKeys(selectedHighlightEditor);
+  if (annotationId) {
+    if (text) {
+      nativeAnnotationNotes.set(annotationId, text);
+    } else {
+      nativeAnnotationNotes.delete(annotationId);
+    }
+  }
+  for (const key of storageKeys) {
+    if (text) {
+      rememberHelperNote(key, signature, text);
+    } else {
+      forgetHelperNote(key, signature);
+    }
+  }
+  if (storageKeys.length === 0 && signature) {
+    if (text) rememberHelperNote(undefined, signature, text);
+    else forgetHelperNote(undefined, signature);
+  }
   selectedHighlightEditor.addToAnnotationStorage?.();
   updateHighlightNoteIndicator(selectedHighlightEditor);
+  markUnsavedChanges();
   setStatus(text ? '高亮笔记已保存。' : '高亮笔记已删除。');
   hideHighlightNote();
 }
@@ -501,6 +2438,7 @@ function deleteSelectedAnnotation() {
   hideHighlightNote();
   hideSelectionContextMenu();
   hideAnnotationActionBar();
+  markUnsavedChanges();
   setStatus(`${typeName}批注已删除，可使用撤销恢复。`);
 }
 
@@ -534,17 +2472,16 @@ function hideSelectionContextMenu() {
 
 function showSelectionContextMenuAt(clientX: number, clientY: number, editor: any | null) {
   contextHighlightEditor = editor;
-  highlightContextActions.hidden = !editor;
-  contextQuickHighlightButton.hidden = Boolean(editor);
-  contextCreateNoteButton.hidden = Boolean(editor);
+  const isHighlightMenu = Boolean(editor);
+  contextCopyButton.hidden = isHighlightMenu;
+  contextCleanCopyButton.hidden = isHighlightMenu;
+  contextColors.hidden = isHighlightMenu;
+  highlightContextActions.hidden = false;
+  contextDeleteHighlightButton.hidden = !isHighlightMenu;
   contextNoteButton.textContent = editor && getHighlightNote(editor) ? '编辑笔记' : '添加笔记';
 
   if (editor) {
     contextSelectionText = getHighlightText(editor);
-    const color = typeof editor.color === 'string' ? editor.color : highlightColorInput.value;
-    contextCurrentColor.style.backgroundColor = color;
-  } else {
-    contextCurrentColor.style.backgroundColor = highlightColorInput.value;
   }
 
   selectionContextMenu.hidden = false;
@@ -584,11 +2521,11 @@ async function createQuickHighlight(color: string): Promise<any | null> {
   } finally {
     await annotationEditor.updateMode(AnnotationEditorType.NONE, null, true);
     setEditorMode(AnnotationEditorType.NONE);
-    clearCustomSelection();
+    clearDomSelection();
   }
 
   const createdEditor = [...annotationEditor.getEditors(pageIndex)].find(
-    (editor) => !editorsBefore.has(editor) && editor.editorType === 'highlight',
+    (editor) => !editorsBefore.has(editor) && isHighlightEditor(editor),
   );
 
   if (!createdEditor) {
@@ -597,13 +2534,27 @@ async function createQuickHighlight(color: string): Promise<any | null> {
   }
 
   setStatus('高亮已创建，当前仍为移动/选择模式。');
+  markUnsavedChanges();
   return createdEditor;
+}
+
+async function highlightCurrentSelectionFromToolbar() {
+  saveContextSelection();
+
+  if (!contextSelectionText.trim()) {
+    setEditorMode(AnnotationEditorType.NONE);
+    setStatus('请先用鼠标选中文字，再点击“高亮”。', true);
+    return;
+  }
+
+  await createQuickHighlight(highlightColorInput.value);
 }
 
 function setEditorMode(mode: number) {
   if (!pdfDocument) return;
   pdfViewer.annotationEditorMode = { mode };
   activeEditorMode = mode;
+  viewerElement.classList.toggle('pdf-helper-ink-mode', mode === AnnotationEditorType.INK);
 
   const modeNames: Record<string, number> = {
     select: AnnotationEditorType.NONE,
@@ -627,7 +2578,19 @@ function setEditorMode(mode: number) {
   }
 }
 
-async function openPdf(data: ArrayBuffer | Uint8Array, name: string) {
+async function openPdf(
+  data: ArrayBuffer | Uint8Array,
+  name: string,
+  fileHandle: FileHandleLike | null = null,
+  shouldConfirmUnsavedChanges = true,
+) {
+  if (shouldConfirmUnsavedChanges && pdfDocument && !confirmDiscardUnsavedChanges()) return;
+  isOpeningDocument = true;
+  cancelReadingPositionSave();
+  currentRecentEntryId = null;
+  pendingReadingPosition = null;
+  isRestoringReadingPosition = false;
+
   setStatus(`正在解析 ${name}…`);
   textStatus.textContent = '正在建立文字层…';
 
@@ -637,10 +2600,13 @@ async function openPdf(data: ArrayBuffer | Uint8Array, name: string) {
       pdfDocument = null;
     }
 
-    const loadingTask = getDocument({ data });
+    const rawPdfBytes = data instanceof Uint8Array ? new Uint8Array(data) : new Uint8Array(data);
+    sourcePdfBytes = rawPdfBytes;
+    const loadingTask = getDocument({ data: new Uint8Array(rawPdfBytes) });
     const documentProxy = await loadingTask.promise;
     pdfDocument = documentProxy;
     sourceName = name;
+    currentFileHandle = fileHandle;
     const displayName = getDisplayFileName(name);
     documentNameElement.textContent = displayName;
     documentNameElement.title = name;
@@ -648,13 +2614,47 @@ async function openPdf(data: ArrayBuffer | Uint8Array, name: string) {
     activeEditorMode = AnnotationEditorType.NONE;
     canUndoAnnotation = false;
     canRedoAnnotation = false;
+    nativeAnnotationNotes.clear();
+    restoredHelperNotesBySignature.clear();
+    restoredHelperNotesByStorageKey.clear();
+    restoredAnnotationWarmUpPending = false;
+    annotationEditorWarmUpInFlight = false;
+    const restoredAnnotations = await restoreHelperAnnotations(documentProxy);
+    restoredAnnotationWarmUpPending = restoredAnnotations > 0;
+    const recentEntry = await rememberRecentPdf(
+      name,
+      fileHandle,
+      fileHandle ? undefined : name.startsWith('http://') || name.startsWith('https://') ? name : undefined,
+    );
+    currentRecentEntryId = recentEntry?.id ?? null;
+    pendingReadingPosition = recentEntry?.readingPosition ?? null;
 
     pdfViewer.setDocument(documentProxy);
     linkService.setDocument(documentProxy);
     findController.setDocument(documentProxy);
+    void renderDocumentOutline(documentProxy);
+    markSavedChanges();
+    window.setTimeout(() => {
+      if (pdfDocument !== documentProxy) return;
+      markSavedChanges();
+      isOpeningDocument = false;
+      updateControls();
+    }, 500);
+    if (restoredAnnotations > 0) {
+      setStatus(`已载入 PDF 内嵌 PDF Helper 批注：${restoredAnnotations} 条。`);
+    }
     updateControls();
   } catch (error) {
+    isOpeningDocument = false;
     pdfDocument = null;
+    currentFileHandle = null;
+    currentRecentEntryId = null;
+    pendingReadingPosition = null;
+    isRestoringReadingPosition = false;
+    sourcePdfBytes = null;
+    restoredAnnotationWarmUpPending = false;
+    annotationEditorWarmUpInFlight = false;
+    clearOutlineList('打开 PDF 后显示目录');
     documentNameElement.textContent = '打开失败';
     documentNameElement.title = '';
     updateControls();
@@ -718,14 +2718,21 @@ function closeFindBar() {
 }
 
 eventBus.on('pagesinit', () => {
-  pdfViewer.currentScaleValue = 'page-width';
+  restoreReadingPositionAfterPagesInit();
   setStatus(`${getDisplayFileName(sourceName)} · ${pdfDocument?.numPages ?? 0} 页`);
   setEditorMode(AnnotationEditorType.NONE);
+  scheduleHighlightNoteIndicatorRefresh();
   updateControls();
 });
 
-eventBus.on('pagechanging', updateControls);
-eventBus.on('scalechanging', updateControls);
+eventBus.on('pagechanging', () => {
+  updateControls();
+  scheduleReadingPositionSave();
+});
+eventBus.on('scalechanging', () => {
+  updateControls();
+  scheduleReadingPositionSave();
+});
 eventBus.on(
   'updatefindmatchescount',
   ({ matchesCount }: { matchesCount?: { current?: number; total?: number } }) => {
@@ -736,31 +2743,112 @@ eventBus.on('annotationeditoruimanager', ({ uiManager }: { uiManager: Annotation
   annotationEditor = uiManager;
   installHighlightGeometry(uiManager);
   setHighlightColor(highlightColorInput.value);
+  setFreeTextSize(getFreeTextSize());
+  setFreeTextColor(freeTextColorInput.value);
+  scheduleRestoredAnnotationEditorWarmUp();
   updateControls();
 });
 eventBus.on('annotationeditormodechanged', ({ mode }: { mode: number }) => {
   activeEditorMode = mode;
+  viewerElement.classList.toggle('pdf-helper-ink-mode', mode === AnnotationEditorType.INK);
+  scheduleHighlightNoteIndicatorRefresh();
   updateControls();
 });
 eventBus.on('editorsrendered', ({ pageNumber }: { pageNumber: number }) => {
-  if (!annotationEditor) return;
-  for (const editor of annotationEditor.getEditors(pageNumber - 1)) {
-    if (editor.editorType === 'highlight') updateHighlightNoteIndicator(editor);
-  }
+  scheduleHighlightNoteIndicatorRefresh(pageNumber);
+  scheduleRestoredAnnotationEditorWarmUp();
+});
+eventBus.on('annotationeditorlayerrendered', ({ pageNumber }: { pageNumber: number }) => {
+  scheduleHighlightNoteIndicatorRefresh(pageNumber);
+  scheduleRestoredAnnotationEditorWarmUp();
+});
+eventBus.on('annotationlayerrendered', ({ pageNumber }: { pageNumber: number }) => {
+  scheduleHighlightNoteIndicatorRefresh(pageNumber);
+  scheduleRestoredAnnotationEditorWarmUp();
 });
 eventBus.on(
   'editingstateschanged',
   ({ details }: { details: { hasSomethingToUndo?: boolean; hasSomethingToRedo?: boolean } }) => {
     canUndoAnnotation = Boolean(details.hasSomethingToUndo);
     canRedoAnnotation = Boolean(details.hasSomethingToRedo);
+    scheduleUnsavedChangesCheck();
     updateControls();
   },
 );
 
+outlineToggleButton?.addEventListener('click', () => {
+  setLeftPanelCollapsed(!appFrame?.classList.contains('left-panel-collapsed'));
+});
+
+collapseLeftPanelButton?.addEventListener('click', () => {
+  setLeftPanelCollapsed(true);
+});
+
+aiPanelToggleButton?.addEventListener('click', () => {
+  appFrame?.classList.toggle('right-panel-collapsed');
+});
+
+for (const button of aiTabButtons) {
+  button.addEventListener('click', () => {
+    for (const tab of aiTabButtons) tab.classList.remove('active');
+    button.classList.add('active');
+  });
+}
+
+recentFilesButton.addEventListener('click', () => {
+  showRecentFilesDialog();
+});
+
+closeRecentFilesButton.addEventListener('click', () => {
+  hideRecentFilesDialog();
+});
+
+recentFilesDialog.addEventListener('pointerdown', (event) => {
+  if (event.target === recentFilesDialog) hideRecentFilesDialog();
+});
+
+clearRecentFilesButton.addEventListener('click', async () => {
+  await writeRecentFiles([]);
+  await renderRecentFiles();
+});
+
+openFileButton.addEventListener('click', async (event) => {
+  event.preventDefault();
+  if (pdfDocument && !confirmDiscardUnsavedChanges()) return;
+
+  const pickerWindow = window as FilePickerWindow;
+  if (typeof pickerWindow.showOpenFilePicker === 'function') {
+    try {
+      const [fileHandle] = await pickerWindow.showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: 'PDF 文件',
+            accept: {
+              'application/pdf': ['.pdf'],
+            },
+          },
+        ],
+      });
+
+      if (!fileHandle) return;
+      const file = await fileHandle.getFile();
+      await openPdf(await file.arrayBuffer(), file.name, fileHandle, false);
+      return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      console.warn('File System Access API 打开失败，降级到普通文件选择。', error);
+    }
+  }
+
+  fileInput.click();
+});
+
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0];
   if (!file) return;
-  await openPdf(await file.arrayBuffer(), file.name);
+  await openPdf(await file.arrayBuffer(), file.name, null, false);
+  fileInput.value = '';
 });
 
 previousButton.addEventListener('click', () => {
@@ -801,10 +2889,17 @@ findNextButton.addEventListener('click', () => runSearch(false, true));
 findCloseButton.addEventListener('click', closeFindBar);
 
 for (const button of editorModeButtons) {
+  button.addEventListener('pointerdown', () => {
+    if (button.dataset.editorMode === 'highlight') saveContextSelection();
+  });
+
   button.addEventListener('click', () => {
     const mode = button.dataset.editorMode;
     if (mode === 'select') setEditorMode(AnnotationEditorType.NONE);
-    if (mode === 'highlight') setEditorMode(AnnotationEditorType.HIGHLIGHT);
+    if (mode === 'highlight') {
+      void highlightCurrentSelectionFromToolbar();
+      return;
+    }
     if (mode === 'ink') setEditorMode(AnnotationEditorType.INK);
     if (mode === 'text') setEditorMode(AnnotationEditorType.FREETEXT);
   });
@@ -812,6 +2907,22 @@ for (const button of editorModeButtons) {
 
 highlightColorInput.addEventListener('input', () => {
   setHighlightColor(highlightColorInput.value);
+});
+
+freeTextColorInput.addEventListener('input', () => {
+  setFreeTextColor(freeTextColorInput.value);
+});
+
+freeTextSizeInput.addEventListener('change', () => {
+  setFreeTextSize(getFreeTextSize());
+});
+
+freeTextSizeDownButton.addEventListener('click', () => {
+  setFreeTextSize(getFreeTextSize() - 2);
+});
+
+freeTextSizeUpButton.addEventListener('click', () => {
+  setFreeTextSize(getFreeTextSize() + 2);
 });
 
 selectionContextMenu.addEventListener('mousedown', (event) => {
@@ -848,19 +2959,18 @@ contextCleanCopyButton.addEventListener('click', async () => {
   hideSelectionContextMenu();
 });
 
-contextQuickHighlightButton.addEventListener('click', () => {
-  void createQuickHighlight(highlightColorInput.value);
-});
-
-contextCreateNoteButton.addEventListener('click', async () => {
-  const editor = await createQuickHighlight(highlightColorInput.value);
-  if (editor) showHighlightNote(editor, true);
-});
-
 contextNoteButton.addEventListener('click', () => {
-  if (!contextHighlightEditor) return;
-  showHighlightNote(contextHighlightEditor, true);
   hideSelectionContextMenu();
+
+  if (contextHighlightEditor) {
+    showHighlightNote(contextHighlightEditor, true);
+    return;
+  }
+
+  void (async () => {
+    const createdEditor = await createQuickHighlight(highlightColorInput.value);
+    if (createdEditor) showHighlightNote(createdEditor, true);
+  })();
 });
 
 contextDeleteHighlightButton.addEventListener('click', () => {
@@ -869,15 +2979,59 @@ contextDeleteHighlightButton.addEventListener('click', () => {
   deleteSelectedHighlight();
 });
 
+viewerElement.addEventListener(
+  'pointerdown',
+  (event) => {
+    if (
+      event.button !== 0 ||
+      !pdfDocument ||
+      !isTextSelectionMode() ||
+      isEditableOrControl(event.target)
+    ) {
+      return;
+    }
+
+    const directAnnotation = findAnnotationEditor(event.target, { includeHighlight: false });
+    if (directAnnotation && !isHighlightEditor(directAnnotation)) return;
+
+    const pointHighlight = findAnnotationEditorAtPoint(event.clientX, event.clientY, {
+      highlightOnly: true,
+    });
+    if (pointHighlight) return;
+
+    if (isPointInsideTextGlyph(event.clientX, event.clientY)) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    clearDomSelection();
+    clearSelectedAnnotationState();
+  },
+  { capture: true },
+);
+
 viewerElement.addEventListener('contextmenu', (event) => {
-  const annotation = findAnnotationEditor(event.target);
-  const highlightEditor = annotation?.editorType === 'highlight' ? annotation : null;
+  if (isInkMode()) return;
+
+  saveContextSelection();
+  if (contextSelectionText && annotationEditor && isPointInsideSavedSelection(event.clientX, event.clientY)) {
+    event.preventDefault();
+    showSelectionContextMenuAt(event.clientX, event.clientY, null);
+    return;
+  }
+
+  const highlightEditor = findAnnotationEditorAtPoint(event.clientX, event.clientY, {
+    highlightOnly: true,
+  });
   if (highlightEditor) {
     event.preventDefault();
     selectHighlight(highlightEditor);
     showSelectionContextMenuAt(event.clientX, event.clientY, highlightEditor);
     return;
   }
+
+  const annotation =
+    findAnnotationEditor(event.target, { includeHighlight: false }) ??
+    findAnnotationEditorAtPoint(event.clientX, event.clientY, { includeHighlight: false });
 
   if (annotation) {
     event.preventDefault();
@@ -886,7 +3040,6 @@ viewerElement.addEventListener('contextmenu', (event) => {
     return;
   }
 
-  saveContextSelection();
   if (!contextSelectionText || !annotationEditor) return;
 
   event.preventDefault();
@@ -894,41 +3047,72 @@ viewerElement.addEventListener('contextmenu', (event) => {
 });
 
 viewerElement.addEventListener('pointerdown', (event) => {
-  const editor = findAnnotationEditor(event.target);
+  if (isInkMode()) return;
+
+  lastPointerDown = {
+    x: event.clientX,
+    y: event.clientY,
+    button: event.button,
+  };
+
+  const editor = findAnnotationEditor(event.target, { includeHighlight: false });
   if (editor) {
     selectAnnotation(editor, false);
     hideAnnotationActionBar();
     return;
   }
-  annotationEditor?.unselectAll();
-  selectedAnnotationEditor = null;
-  selectedHighlightEditor = null;
-  contextHighlightEditor = null;
-  hideSelectionContextMenu();
-  hideHighlightNote();
-  hideAnnotationActionBar();
+
+  const pointHighlight =
+    event.button === 0
+      ? findAnnotationEditorAtPoint(event.clientX, event.clientY, { highlightOnly: true })
+      : null;
+  if (pointHighlight) return;
+
+  clearSelectedAnnotationState();
 });
 
 viewerElement.addEventListener('click', (event) => {
-  const editor = findAnnotationEditor(event.target);
-  if (!editor) return;
+  if (isInkMode()) return;
+
+  if (lastPointerDown?.button !== 0) return;
+  const moved =
+    !lastPointerDown ||
+    Math.hypot(event.clientX - lastPointerDown.x, event.clientY - lastPointerDown.y) > 4;
+  if (moved) return;
+
+  const editor =
+    findAnnotationEditorAtPoint(event.clientX, event.clientY, { highlightOnly: true }) ??
+    findAnnotationEditor(event.target, { includeHighlight: false }) ??
+    findAnnotationEditorAtPoint(event.clientX, event.clientY, { includeHighlight: false });
+  if (!editor) {
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;
+    return;
+  }
+
+  clearDomSelection();
   selectAnnotation(editor);
-  if (editor.editorType === 'highlight' && getHighlightNote(editor)) showHighlightNote(editor);
+  if (isHighlightEditor(editor) && getHighlightNote(editor)) toggleHighlightNote(editor);
 });
 
 document.addEventListener('pointerdown', (event) => {
+  if (isInkMode()) return;
+
+  const annotationAtPoint =
+    event instanceof PointerEvent
+      ? findAnnotationEditorAtPoint(event.clientX, event.clientY, { highlightOnly: true })
+      : null;
   if (!selectionContextMenu.contains(event.target as Node)) hideSelectionContextMenu();
   if (
     !highlightNotePopover.contains(event.target as Node) &&
-    !(event.target as Element | null)?.closest?.('.highlightEditor')
+    !isHighlightEditor(annotationAtPoint)
   ) {
     hideHighlightNote();
   }
   if (
     !annotationActionBar.contains(event.target as Node) &&
-    !(event.target as Element | null)?.closest?.(
-      '.highlightEditor, .freeTextEditor, .inkEditor, .stampEditor, .signatureEditor',
-    )
+    !annotationAtPoint &&
+    !findAnnotationEditor(event.target, { includeHighlight: false })
   ) {
     hideAnnotationActionBar();
   }
@@ -937,6 +3121,7 @@ document.addEventListener('pointerdown', (event) => {
 annotationActionBar.addEventListener('pointerdown', (event) => event.stopPropagation());
 deleteAnnotationButton.addEventListener('click', deleteSelectedAnnotation);
 
+highlightNotePopover.addEventListener('pointerdown', (event) => event.stopPropagation());
 closeHighlightNoteButton.addEventListener('click', hideHighlightNote);
 saveHighlightNoteButton.addEventListener('click', saveHighlightNote);
 deleteHighlightNoteButton.addEventListener('click', () => {
@@ -950,10 +3135,21 @@ document.addEventListener('keydown', (event) => {
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
     Boolean(target?.isContentEditable);
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && pdfDocument) {
+    event.preventDefault();
+    event.stopPropagation();
+    void saveAnnotatedPdf();
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && pdfDocument) {
     event.preventDefault();
     event.stopPropagation();
     openFindBar();
+    return;
+  }
+  if (event.key === 'Escape' && !recentFilesDialog.hidden) {
+    event.preventDefault();
+    hideRecentFilesDialog();
     return;
   }
   if (event.key === 'Escape' && !findBar.hidden) {
@@ -1008,6 +3204,7 @@ viewerContainer.addEventListener('scroll', scheduleCustomSelectionRender, { pass
 viewerContainer.addEventListener(
   'scroll',
   () => {
+    scheduleReadingPositionSave();
     hideSelectionContextMenu();
     hideHighlightNote();
     hideAnnotationActionBar();
@@ -1015,27 +3212,60 @@ viewerContainer.addEventListener(
   { passive: true },
 );
 window.addEventListener('resize', scheduleCustomSelectionRender);
-
-saveAnnotatedPdfButton.addEventListener('click', async () => {
-  if (!pdfDocument) return;
-
-  try {
-    setStatus('正在写入批注并生成PDF…');
-    const data = await pdfDocument.saveDocument();
-    const blobUrl = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
-    const link = document.createElement('a');
-    const baseName = sourceName.split('/').pop()?.replace(/\.pdf$/i, '') || 'document';
-    link.href = blobUrl;
-    link.download = `${decodeURIComponent(baseName)}-批注版.pdf`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
-    setStatus('批注PDF已生成。');
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error), true);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    cancelReadingPositionSave();
+    void persistCurrentReadingPosition();
   }
 });
+window.addEventListener('beforeunload', (event) => {
+  cancelReadingPositionSave();
+  void persistCurrentReadingPosition();
+  if (!hasUnsavedChanges) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
 
+async function saveAnnotatedPdf(): Promise<boolean> {
+  if (!pdfDocument || isSavingAnnotatedPdf) return false;
+  isSavingAnnotatedPdf = true;
+
+  try {
+    setStatus('正在把 PDF Helper 批注嵌入 PDF…');
+    const { bytes, count } = await embedHelperAnnotationsIntoPdf();
+    const result = await writeEmbeddedPdfBytes(bytes);
+    sourcePdfBytes = new Uint8Array(bytes);
+    markSavedChanges();
+    if (result === 'overwritten') {
+      setStatus(`批注已嵌入当前 PDF（${count} 条）。`);
+    } else if (result === 'permission-denied-downloaded') {
+      setStatus(`未获得覆盖原文件的写入权限，已下载带 PDF Helper 数据的新 PDF（${count} 条）。`);
+    } else {
+      setStatus(`当前打开方式不能覆盖原文件，已下载带 PDF Helper 数据的新 PDF（${count} 条）。`);
+    }
+    return true;
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), true);
+    return false;
+  } finally {
+    isSavingAnnotatedPdf = false;
+  }
+}
+
+saveAnnotatedPdfButton.addEventListener('click', () => {
+  void saveAnnotatedPdf();
+});
+
+toggleNotesButton.addEventListener('click', () => {
+  areNoteIndicatorsHidden = !areNoteIndicatorsHidden;
+  updateNoteIndicatorsVisibility();
+});
+
+updateNoteIndicatorsVisibility();
+clearOutlineList('打开 PDF 后显示目录');
+setLeftPanelCollapsed(false);
 updateControls();
+textStatus.textContent = '交互已就绪';
 
 const source = new URLSearchParams(window.location.search).get('src');
 if (source?.startsWith('http://') || source?.startsWith('https://')) {
