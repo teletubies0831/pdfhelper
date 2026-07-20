@@ -48,38 +48,32 @@ async function saveSelection(
   await browser.storage.local.set({ [SELECTION_STORAGE_KEY]: request });
 }
 
-async function configureSidePanel(tabId: number, tabUrl?: string) {
-  const isEnhancedViewer = tabUrl?.startsWith(browser.runtime.getURL('/viewer.html'));
-  const enabled = Boolean(extractPdfSource(tabUrl) || isEnhancedViewer);
+async function openEnhancedViewer() {
+  const viewerUrl = browser.runtime.getURL('/viewer.html');
+  const tabs = await browser.tabs.query({});
+  const existingTab = tabs.find((tab) => tab.url?.startsWith(viewerUrl));
 
-  await browser.sidePanel.setOptions({
-    tabId,
-    enabled,
-    path: '/sidepanel.html',
-  });
+  if (existingTab?.id !== undefined) {
+    await browser.tabs.update(existingTab.id, { active: true });
+    if (existingTab.windowId !== undefined) {
+      await browser.windows.update(existingTab.windowId, { focused: true });
+    }
+    return;
+  }
+
+  await browser.tabs.create({ url: viewerUrl });
+}
+
+async function openHelperPanelPage() {
+  await browser.tabs.create({ url: browser.runtime.getURL('/helper-panel.html') });
 }
 
 export default defineBackground(() => {
   void registerContextMenus();
 
-  void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-
-  browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.url || changeInfo.status === 'complete') {
-      void configureSidePanel(tabId, tab.url);
-    }
+  browser.action.onClicked.addListener(() => {
+    void openEnhancedViewer();
   });
-
-  browser.tabs.onActivated.addListener(async ({ tabId }) => {
-    const tab = await browser.tabs.get(tabId);
-    await configureSidePanel(tabId, tab.url);
-  });
-
-  void browser.tabs
-    .query({ active: true, currentWindow: true })
-    .then(([tab]) => {
-      if (tab?.id !== undefined) return configureSidePanel(tab.id, tab.url);
-    });
 
   browser.contextMenus.onClicked.addListener(async (info, tab) => {
     if (
@@ -100,8 +94,6 @@ export default defineBackground(() => {
 
     await saveSelection(action, info.selectionText, tab);
 
-    if (tab?.id !== undefined) {
-      await browser.sidePanel.open({ tabId: tab.id });
-    }
+    await openHelperPanelPage();
   });
 });
