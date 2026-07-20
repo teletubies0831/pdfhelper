@@ -117,7 +117,63 @@ const appFrame = document.querySelector<HTMLElement>('.app-frame');
 const outlineToggleButton = document.getElementById('outline-toggle');
 const collapseLeftPanelButton = document.getElementById('collapse-left-panel');
 const aiPanelToggleButton = document.getElementById('ai-panel-toggle');
+const paperCardEntryButton = document.getElementById('paper-card-entry');
+const paperCardPageElement = requiredElement<HTMLElement>('paper-card-page');
+const paperCardBackButton = requiredElement<HTMLButtonElement>('paper-card-back');
+const returnToPdfButton = requiredElement<HTMLButtonElement>('return-to-pdf');
+const regeneratePaperCardButton = requiredElement<HTMLButtonElement>('regenerate-paper-card');
+const savePaperCardPageButton = requiredElement<HTMLButtonElement>('save-paper-card-page');
+const exportPaperCardButton = requiredElement<HTMLButtonElement>('export-paper-card');
+const paperCardDocumentNameElement = requiredElement<HTMLElement>('paper-card-document-name');
+const paperCardPageStatusElement = requiredElement<HTMLElement>('paper-card-page-status');
+const paperCardFormElement = requiredElement<HTMLFormElement>('paper-card-form');
+const paperTitleInput = requiredElement<HTMLInputElement>('paper-title');
+const paperAuthorsInput = requiredElement<HTMLInputElement>('paper-authors');
+const paperVenueYearInput = requiredElement<HTMLInputElement>('paper-venue-year');
+const paperResearchAreaInput = requiredElement<HTMLInputElement>('paper-research-area');
+const paperOneSentenceSummaryInput = requiredElement<HTMLTextAreaElement>('paper-one-sentence-summary');
+const paperResearchProblemInput = requiredElement<HTMLTextAreaElement>('paper-research-problem');
+const paperCoreInnovationInput = requiredElement<HTMLTextAreaElement>('paper-core-innovation');
+const paperMethodOverviewInput = requiredElement<HTMLTextAreaElement>('paper-method-overview');
+const paperDatasetsInput = requiredElement<HTMLTextAreaElement>('paper-datasets');
+const paperMetricsInput = requiredElement<HTMLTextAreaElement>('paper-metrics');
+const paperMainFindingsInput = requiredElement<HTMLTextAreaElement>('paper-main-findings');
+const paperLimitationsInput = requiredElement<HTMLTextAreaElement>('paper-limitations');
+const paperReadingStatusInput = requiredElement<HTMLSelectElement>('paper-reading-status');
+const paperRecommendDeepReadingInput = requiredElement<HTMLSelectElement>('paper-recommend-deep-reading');
+const paperCitationPointsInput = requiredElement<HTMLTextAreaElement>('paper-citation-points');
+const paperPersonalNotesInput = requiredElement<HTMLTextAreaElement>('paper-personal-notes');
 const aiTabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.ai-tabs button'));
+const aiTabPanels = Array.from(document.querySelectorAll<HTMLElement>('[data-ai-panel]'));
+const selectedSnippetElement = requiredElement<HTMLElement>('selected-snippet');
+const translationResultElement = requiredElement<HTMLElement>('translation-result');
+const explanationResultElement = requiredElement<HTMLElement>('explanation-result');
+const copyTranslationButton = requiredElement<HTMLButtonElement>('copy-translation');
+const summaryPanelElement = requiredElement<HTMLElement>('summary-panel');
+const summaryRangeElement = requiredElement<HTMLElement>('summary-range');
+const summarySourceElement = requiredElement<HTMLElement>('summary-source');
+const summaryPositionElement = requiredElement<HTMLElement>('summary-position');
+const summaryResultElement = requiredElement<HTMLElement>('summary-result');
+const summaryScopeButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-summary-scope]'),
+);
+const copySummaryButton = requiredElement<HTMLButtonElement>('copy-summary');
+const saveSummaryNoteButton = requiredElement<HTMLButtonElement>('save-summary-note');
+const cardsPanelElement = requiredElement<HTMLElement>('cards-panel');
+const cardSourceSnippetElement = requiredElement<HTMLElement>('card-source-snippet');
+const cardGenerationStatusElement = requiredElement<HTMLElement>('card-generation-status');
+const cardGeneratedContentElement = requiredElement<HTMLElement>('card-generated-content');
+const cardTitleElement = requiredElement<HTMLElement>('card-title');
+const cardExplanationElement = requiredElement<HTMLElement>('card-explanation');
+const cardKeyPointsElement = requiredElement<HTMLUListElement>('card-key-points');
+const cardPurposeElement = requiredElement<HTMLElement>('card-purpose');
+const cardUnderstandingElement = requiredElement<HTMLElement>('card-understanding');
+const cardSourceLocationElement = requiredElement<HTMLElement>('card-source-location');
+const cardTypeButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-card-type]'),
+);
+const copyCardButton = requiredElement<HTMLButtonElement>('copy-card');
+const saveCardButton = requiredElement<HTMLButtonElement>('save-card');
 const outlineList = document.querySelector<HTMLElement>('.outline-list');
 
 const eventBus = new EventBus();
@@ -1232,6 +1288,12 @@ function updateControls() {
     smartCopyButton,
     saveAnnotatedPdfButton,
     toggleNotesButton,
+    copySummaryButton,
+    saveSummaryNoteButton,
+    copyCardButton,
+    saveCardButton,
+    ...summaryScopeButtons,
+    ...cardTypeButtons,
     freeTextSizeInput,
     freeTextColorInput,
     freeTextSizeDownButton,
@@ -1335,6 +1397,7 @@ async function renderOutlineItems(
         if (!pageNumber || pdfDocument !== documentProxy) return;
         button.dataset.outlinePage = String(pageNumber);
         updateOutlineActivePage();
+        updateSummaryMetadata();
       });
     }
 
@@ -1357,6 +1420,7 @@ async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
     if (outline && outline.length > 0) {
       await renderOutlineItems(documentProxy, outline);
       updateOutlineActivePage();
+      updateSummaryMetadata();
       return;
     }
   } catch (error) {
@@ -1377,6 +1441,7 @@ async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
     });
   }
   updateOutlineActivePage();
+  updateSummaryMetadata();
 }
 
 function normalizeCopiedText(text: string): string {
@@ -1406,6 +1471,1337 @@ function getViewerSelectionRawText(): string {
 
 function getViewerSelectionText(): string {
   return normalizeCopiedText(getViewerSelectionRawText());
+}
+
+const TRANSLATION_API_URL = 'http://127.0.0.1:8000/api/translate';
+const EXPLANATION_API_URL = 'http://127.0.0.1:8000/api/explain';
+const SUMMARY_API_URL = 'http://127.0.0.1:8000/api/summarize';
+const CARD_API_URL = 'http://127.0.0.1:8000/api/generate-card';
+const PAPER_CARD_API_URL = 'http://127.0.0.1:8000/api/generate-paper-card';
+const AUTO_TRANSLATE_DELAY_MS = 700;
+const MAX_SUMMARY_SOURCE_LENGTH = 18_000;
+const MAX_CARD_SOURCE_LENGTH = 18_000;
+const MAX_PAPER_CARD_SOURCE_LENGTH = 55_000;
+const SUMMARY_NOTES_STORAGE_KEY = 'pdf-helper-summary-notes-v1';
+const SAVED_CARDS_STORAGE_KEY = 'pdf-helper-saved-cards-v1';
+const SAVED_PAPER_OVERVIEWS_STORAGE_KEY = 'pdf-helper-paper-overviews-v1';
+
+type SummaryScope = 'selection' | 'page' | 'chapter';
+type CardType = 'concept' | 'method' | 'experiment' | 'viewpoint';
+
+interface TranslationApiResponse {
+  translation?: unknown;
+  detail?: unknown;
+}
+
+interface ExplanationApiResponse {
+  explanation?: unknown;
+  detail?: unknown;
+}
+
+interface SummaryApiResponse {
+  summary?: unknown;
+  detail?: unknown;
+}
+
+interface CardApiResponse {
+  title?: unknown;
+  explanation?: unknown;
+  key_points?: unknown;
+  purpose?: unknown;
+  understanding?: unknown;
+  detail?: unknown;
+}
+
+interface SummaryContext {
+  scope: SummaryScope;
+  rangeLabel: string;
+  sourceLabel: string;
+  positionLabel: string;
+  text: string;
+}
+
+interface SavedSummaryNote {
+  id: string;
+  documentName: string;
+  scope: SummaryScope;
+  rangeLabel: string;
+  sourceLabel: string;
+  positionLabel: string;
+  points: string[];
+  createdAt: string;
+}
+
+interface CardContext {
+  cardType: CardType;
+  text: string;
+  documentName: string;
+  pageNumber: number;
+  positionLabel: string;
+  sourceLocation: string;
+}
+
+interface GeneratedCardContent {
+  title: string;
+  explanation: string;
+  keyPoints: string[];
+  purpose: string;
+  understanding: string;
+}
+
+interface SavedPaperCard extends GeneratedCardContent, CardContext {
+  id: string;
+  createdAt: string;
+}
+
+interface PaperOverviewApiResponse {
+  title?: unknown;
+  authors?: unknown;
+  venue_year?: unknown;
+  research_area?: unknown;
+  one_sentence_summary?: unknown;
+  research_problem?: unknown;
+  core_innovation?: unknown;
+  method_overview?: unknown;
+  datasets?: unknown;
+  metrics?: unknown;
+  main_findings?: unknown;
+  limitations?: unknown;
+  reading_status?: unknown;
+  recommend_deep_reading?: unknown;
+  citation_points?: unknown;
+  detail?: unknown;
+}
+
+interface PaperCardFormData {
+  title: string;
+  authors: string;
+  venueYear: string;
+  researchArea: string;
+  oneSentenceSummary: string;
+  researchProblem: string;
+  coreInnovation: string;
+  methodOverview: string;
+  datasets: string;
+  metrics: string;
+  mainFindings: string;
+  limitations: string;
+  readingStatus: string;
+  recommendDeepReading: string;
+  citationPoints: string;
+  personalNotes: string;
+}
+
+interface SavedPaperOverview extends PaperCardFormData {
+  id: string;
+  documentName: string;
+  createdAt: string;
+}
+
+let aiSelectionUpdateFrame = 0;
+let selectedTextForAi = '';
+let selectedTextPageNumber = 0;
+let lastTranslatedText = '';
+let lastExplainedText = '';
+let autoTranslateTimer: ReturnType<typeof setTimeout> | null = null;
+let translationAbortController: AbortController | null = null;
+let explanationAbortController: AbortController | null = null;
+let summaryAbortController: AbortController | null = null;
+let activeSummaryScope: SummaryScope = 'selection';
+let lastSummaryRequestKey = '';
+let lastSummaryPoints: string[] = [];
+let currentSummaryContext: SummaryContext | null = null;
+let summaryGenerationTimer: ReturnType<typeof setTimeout> | null = null;
+let cardAbortController: AbortController | null = null;
+let activeCardType: CardType = 'method';
+let lastCardRequestKey = '';
+let currentCardContext: CardContext | null = null;
+let currentGeneratedCard: GeneratedCardContent | null = null;
+let cardGenerationTimer: ReturnType<typeof setTimeout> | null = null;
+let paperCardPageAbortController: AbortController | null = null;
+let paperCardPageDocumentKey = '';
+let paperCardPageSourceCache: { document: PDFDocumentProxy; text: string } | null = null;
+
+function setTranslationState(message: string, isError = false): void {
+  translationResultElement.textContent = message;
+  translationResultElement.classList.toggle('error', isError);
+}
+
+function setExplanationState(message: string, isError = false): void {
+  explanationResultElement.textContent = message;
+  explanationResultElement.classList.toggle('error', isError);
+}
+
+function renderExplanationPoints(points: string[]): void {
+  const list = document.createElement('ul');
+
+  for (const point of points) {
+    const item = document.createElement('li');
+    item.textContent = point;
+    list.append(item);
+  }
+
+  explanationResultElement.replaceChildren(list);
+  explanationResultElement.classList.remove('error');
+}
+
+function setSummaryState(message: string, isError = false, clearPoints = true): void {
+  if (clearPoints) lastSummaryPoints = [];
+  summaryResultElement.textContent = message;
+  summaryResultElement.classList.toggle('error', isError);
+}
+
+function renderSummaryPoints(points: string[]): void {
+  const list = document.createElement('ul');
+
+  for (const point of points) {
+    const item = document.createElement('li');
+    item.textContent = point;
+    list.append(item);
+  }
+
+  lastSummaryPoints = points;
+  summaryResultElement.replaceChildren(list);
+  summaryResultElement.classList.remove('error');
+}
+
+function getOutlinePageItems(): Array<{ pageNumber: number; title: string }> {
+  if (!outlineList) return [];
+
+  return Array.from(outlineList.querySelectorAll<HTMLButtonElement>('button[data-outline-page]'))
+    .map((button) => ({
+      pageNumber: Number(button.dataset.outlinePage),
+      title: button.textContent?.trim() || '未命名章节',
+    }))
+    .filter((item) => Number.isInteger(item.pageNumber) && item.pageNumber > 0)
+    .sort((left, right) => left.pageNumber - right.pageNumber);
+}
+
+function getCurrentChapterContext(pageNumber: number): {
+  title: string;
+  startPage: number;
+  endPage: number;
+} {
+  const items = getOutlinePageItems();
+  let currentItem: { pageNumber: number; title: string } | null = null;
+
+  for (const item of items) {
+    if (item.pageNumber > pageNumber) break;
+    currentItem = item;
+  }
+
+  if (!currentItem) {
+    return {
+      title: `第 ${pageNumber} 页`,
+      startPage: pageNumber,
+      endPage: pageNumber,
+    };
+  }
+
+  const nextItem = items.find((item) => item.pageNumber > currentItem.pageNumber);
+  return {
+    title: currentItem.title,
+    startPage: currentItem.pageNumber,
+    endPage: Math.max(
+      currentItem.pageNumber,
+      Math.min(pdfDocument?.numPages ?? pageNumber, (nextItem?.pageNumber ?? (pdfDocument?.numPages ?? pageNumber) + 1) - 1),
+    ),
+  };
+}
+
+function getSummaryLabels(scope: SummaryScope): Omit<SummaryContext, 'text'> {
+  const pageNumber = pdfDocument ? Math.max(1, pdfViewer.currentPageNumber || 1) : 0;
+  const chapter = pageNumber > 0
+    ? getCurrentChapterContext(pageNumber)
+    : { title: '未定位', startPage: 0, endPage: 0 };
+
+  if (scope === 'chapter') {
+    return {
+      scope,
+      rangeLabel: '当前章节',
+      sourceLabel: chapter.startPage === chapter.endPage
+        ? `第 ${chapter.startPage} 页`
+        : `第 ${chapter.startPage}–${chapter.endPage} 页`,
+      positionLabel: chapter.title,
+    };
+  }
+
+  return {
+    scope,
+    rangeLabel: scope === 'page' ? '当前页' : '当前选中文本',
+    sourceLabel: pageNumber > 0 ? `第 ${pageNumber} 页` : '未打开 PDF',
+    positionLabel: chapter.title,
+  };
+}
+
+function updateSummaryMetadata(context?: Omit<SummaryContext, 'text'>): void {
+  const metadata = context ?? getSummaryLabels(activeSummaryScope);
+  summaryRangeElement.textContent = metadata.rangeLabel;
+  summarySourceElement.textContent = metadata.sourceLabel;
+  summaryPositionElement.textContent = metadata.positionLabel;
+}
+
+async function extractPageText(documentProxy: PDFDocumentProxy, pageNumber: number): Promise<string> {
+  const page = await documentProxy.getPage(pageNumber);
+  const textContent = await page.getTextContent();
+  const rawText = textContent.items
+    .map((item) => {
+      if (!('str' in item) || typeof item.str !== 'string') return '';
+      return `${item.str}${'hasEOL' in item && item.hasEOL ? '\n' : ' '}`;
+    })
+    .join('');
+
+  return normalizeCopiedText(rawText);
+}
+
+async function buildSummaryContext(scope: SummaryScope): Promise<SummaryContext> {
+  if (!pdfDocument) throw new Error('请先打开 PDF。');
+
+  const documentAtStart = pdfDocument;
+  const pageNumber = Math.max(1, pdfViewer.currentPageNumber || 1);
+  const labels = getSummaryLabels(scope);
+  let text = '';
+
+  if (scope === 'selection') {
+    text = selectedTextForAi || getViewerSelectionText();
+    if (!text) throw new Error('请先在 PDF 中选中需要总结的文字。');
+  } else if (scope === 'page') {
+    text = await extractPageText(documentAtStart, pageNumber);
+  } else {
+    const chapter = getCurrentChapterContext(pageNumber);
+    const pages: string[] = [];
+    let currentLength = 0;
+
+    for (let currentPage = chapter.startPage; currentPage <= chapter.endPage; currentPage += 1) {
+      if (pdfDocument !== documentAtStart) throw new Error('PDF 已切换，请重新总结。');
+      const pageText = await extractPageText(documentAtStart, currentPage);
+      if (!pageText) continue;
+
+      const remainingLength = MAX_SUMMARY_SOURCE_LENGTH - currentLength;
+      if (remainingLength <= 0) break;
+      pages.push(pageText.slice(0, remainingLength));
+      currentLength += pageText.length;
+    }
+
+    text = pages.join('\n\n');
+  }
+
+  text = text.trim().slice(0, MAX_SUMMARY_SOURCE_LENGTH);
+  if (!text) throw new Error('当前范围没有可总结的文字内容。');
+
+  return { ...labels, text };
+}
+
+function cancelPendingSummaryGeneration(): void {
+  if (summaryGenerationTimer !== null) {
+    clearTimeout(summaryGenerationTimer);
+    summaryGenerationTimer = null;
+  }
+}
+
+function scheduleSummaryGeneration(delay = 350): void {
+  cancelPendingSummaryGeneration();
+  summaryGenerationTimer = setTimeout(() => {
+    summaryGenerationTimer = null;
+    if (!summaryPanelElement.hidden) void generateSummary();
+  }, delay);
+}
+
+function setActiveSummaryScope(scope: SummaryScope): void {
+  activeSummaryScope = scope;
+  lastSummaryRequestKey = '';
+  lastSummaryPoints = [];
+  currentSummaryContext = null;
+  summaryAbortController?.abort();
+
+  for (const button of summaryScopeButtons) {
+    button.classList.toggle('active', button.dataset.summaryScope === scope);
+  }
+
+  updateSummaryMetadata();
+  scheduleSummaryGeneration(0);
+}
+
+async function generateSummary(force = false): Promise<void> {
+  if (!pdfDocument) {
+    setSummaryState('请先打开 PDF。', true);
+    return;
+  }
+
+  summaryAbortController?.abort();
+  const controller = new AbortController();
+  summaryAbortController = controller;
+  const scopeAtStart = activeSummaryScope;
+  updateSummaryMetadata();
+  setSummaryState('正在读取总结对象，请稍候…', false, false);
+
+  try {
+    const context = await buildSummaryContext(scopeAtStart);
+    if (controller.signal.aborted || scopeAtStart !== activeSummaryScope) return;
+
+    currentSummaryContext = context;
+    updateSummaryMetadata(context);
+    const requestKey = [
+      context.scope,
+      context.sourceLabel,
+      context.positionLabel,
+      context.text,
+    ].join('\u0000');
+
+    if (!force && requestKey === lastSummaryRequestKey && lastSummaryPoints.length > 0) {
+      renderSummaryPoints(lastSummaryPoints);
+      return;
+    }
+
+    setSummaryState('正在生成核心要点，请稍候…');
+    const response = await fetch(SUMMARY_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: context.text,
+        scope: context.rangeLabel,
+        source: context.sourceLabel,
+        position: context.positionLabel,
+      }),
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload: SummaryApiResponse = {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText) as SummaryApiResponse;
+      } catch {
+        if (!response.ok) {
+          throw new Error(`总结后端返回了非 JSON 内容：${responseText.slice(0, 160)}`);
+        }
+      }
+    }
+
+    if (!response.ok) {
+      const detail = typeof payload.detail === 'string'
+        ? payload.detail
+        : `HTTP ${response.status}`;
+      throw new Error(detail);
+    }
+
+    if (
+      !Array.isArray(payload.summary)
+      || payload.summary.some((item) => typeof item !== 'string')
+    ) {
+      throw new Error('总结接口没有返回有效的要点列表。');
+    }
+
+    const points = payload.summary
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!points.length) throw new Error('模型没有返回总结内容。');
+    if (controller.signal.aborted || scopeAtStart !== activeSummaryScope) return;
+
+    lastSummaryRequestKey = requestKey;
+    renderSummaryPoints(points);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return;
+    if (controller.signal.aborted || scopeAtStart !== activeSummaryScope) return;
+
+    if (error instanceof TypeError) {
+      setSummaryState(
+        '无法连接本地总结后端。请确认 http://127.0.0.1:8000/health 可以打开。',
+        true,
+      );
+      return;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    setSummaryState(`总结失败：${message}`, true);
+  } finally {
+    if (summaryAbortController === controller) summaryAbortController = null;
+  }
+}
+
+function readSavedSummaryNotes(): SavedSummaryNote[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(SUMMARY_NOTES_STORAGE_KEY) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCurrentSummaryAsNote(): void {
+  if (!currentSummaryContext || lastSummaryPoints.length === 0) {
+    setStatus('当前没有可保存的总结要点。', true);
+    return;
+  }
+
+  const note: SavedSummaryNote = {
+    id: crypto.randomUUID(),
+    documentName: getDisplayFileName(sourceName),
+    scope: currentSummaryContext.scope,
+    rangeLabel: currentSummaryContext.rangeLabel,
+    sourceLabel: currentSummaryContext.sourceLabel,
+    positionLabel: currentSummaryContext.positionLabel,
+    points: [...lastSummaryPoints],
+    createdAt: new Date().toISOString(),
+  };
+  const notes = [note, ...readSavedSummaryNotes()].slice(0, 100);
+  localStorage.setItem(SUMMARY_NOTES_STORAGE_KEY, JSON.stringify(notes));
+  setStatus(`已将 ${lastSummaryPoints.length} 条总结要点保存为笔记。`);
+}
+
+function resetSummaryState(): void {
+  cancelPendingSummaryGeneration();
+  summaryAbortController?.abort();
+  summaryAbortController = null;
+  activeSummaryScope = 'selection';
+  currentSummaryContext = null;
+  lastSummaryRequestKey = '';
+  lastSummaryPoints = [];
+
+  for (const button of summaryScopeButtons) {
+    button.classList.toggle('active', button.dataset.summaryScope === 'selection');
+  }
+
+  updateSummaryMetadata();
+  setSummaryState('选择总结范围后，将自动生成核心要点。');
+}
+
+function getCardTypeLabel(cardType: CardType): string {
+  return {
+    concept: '概念',
+    method: '方法',
+    experiment: '实验',
+    viewpoint: '观点',
+  }[cardType];
+}
+
+function setCardState(message: string, isError = false, clearCard = true): void {
+  if (clearCard) {
+    currentGeneratedCard = null;
+    cardGeneratedContentElement.hidden = true;
+  }
+  cardGenerationStatusElement.textContent = message;
+  cardGenerationStatusElement.classList.toggle('error', isError);
+  cardGenerationStatusElement.hidden = false;
+}
+
+function renderGeneratedCard(content: GeneratedCardContent, context: CardContext): void {
+  cardTitleElement.textContent = content.title;
+  cardExplanationElement.textContent = content.explanation;
+  cardPurposeElement.textContent = content.purpose;
+  cardUnderstandingElement.textContent = content.understanding;
+  cardSourceLocationElement.textContent = context.sourceLocation;
+
+  const points = content.keyPoints.map((point) => {
+    const item = document.createElement('li');
+    item.textContent = point;
+    return item;
+  });
+  cardKeyPointsElement.replaceChildren(...points);
+
+  currentGeneratedCard = content;
+  currentCardContext = context;
+  cardGenerationStatusElement.hidden = true;
+  cardGenerationStatusElement.classList.remove('error');
+  cardGeneratedContentElement.hidden = false;
+}
+
+function updateCardSourceSnippet(): void {
+  const text = selectedTextForAi || getViewerSelectionText();
+  if (!text) {
+    cardSourceSnippetElement.textContent = '请在左侧 PDF 中选择需要制作卡片的论文原文。';
+    cardSourceSnippetElement.title = '';
+    return;
+  }
+
+  cardSourceSnippetElement.textContent = text;
+  cardSourceSnippetElement.title = text;
+}
+
+function buildCardContext(): CardContext {
+  if (!pdfDocument) throw new Error('请先打开 PDF。');
+
+  const text = (selectedTextForAi || getViewerSelectionText())
+    .trim()
+    .slice(0, MAX_CARD_SOURCE_LENGTH);
+  if (!text) throw new Error('请先在 PDF 中选中需要制作卡片的原文。');
+
+  const pageNumber = Math.max(1, selectedTextPageNumber || pdfViewer.currentPageNumber || 1);
+  const chapter = getCurrentChapterContext(pageNumber);
+  const documentName = getDisplayFileName(sourceName);
+  const positionLabel = chapter.title;
+
+  return {
+    cardType: activeCardType,
+    text,
+    documentName,
+    pageNumber,
+    positionLabel,
+    sourceLocation: `${positionLabel} · 第 ${pageNumber} 页`,
+  };
+}
+
+function cancelPendingCardGeneration(): void {
+  if (cardGenerationTimer !== null) {
+    clearTimeout(cardGenerationTimer);
+    cardGenerationTimer = null;
+  }
+}
+
+function scheduleCardGeneration(delay = 350): void {
+  cancelPendingCardGeneration();
+  cardGenerationTimer = setTimeout(() => {
+    cardGenerationTimer = null;
+    if (!cardsPanelElement.hidden) void generatePaperCard();
+  }, delay);
+}
+
+function setActiveCardType(cardType: CardType): void {
+  activeCardType = cardType;
+  lastCardRequestKey = '';
+  currentCardContext = null;
+  currentGeneratedCard = null;
+  cardAbortController?.abort();
+
+  for (const button of cardTypeButtons) {
+    button.classList.toggle('active', button.dataset.cardType === cardType);
+  }
+
+  updateCardSourceSnippet();
+  scheduleCardGeneration(0);
+}
+
+async function generatePaperCard(force = false): Promise<void> {
+  updateCardSourceSnippet();
+
+  if (!pdfDocument) {
+    setCardState('请先打开 PDF。', true);
+    return;
+  }
+
+  let context: CardContext;
+  try {
+    context = buildCardContext();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setCardState(message, true);
+    return;
+  }
+
+  const requestKey = [context.cardType, context.pageNumber, context.text].join('\u0000');
+  if (
+    !force
+    && requestKey === lastCardRequestKey
+    && currentGeneratedCard
+    && currentCardContext
+  ) {
+    renderGeneratedCard(currentGeneratedCard, currentCardContext);
+    return;
+  }
+
+  cardAbortController?.abort();
+  const controller = new AbortController();
+  cardAbortController = controller;
+  setCardState('正在读取原文并生成卡片，请稍候…');
+
+  try {
+    const response = await fetch(CARD_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: context.text,
+        card_type: getCardTypeLabel(context.cardType),
+        document_title: context.documentName,
+        page_number: context.pageNumber,
+        position: context.positionLabel,
+      }),
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload: CardApiResponse = {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText) as CardApiResponse;
+      } catch {
+        if (!response.ok) {
+          throw new Error(`卡片后端返回了非 JSON 内容：${responseText.slice(0, 160)}`);
+        }
+      }
+    }
+
+    if (!response.ok) {
+      const detail = typeof payload.detail === 'string'
+        ? payload.detail
+        : `HTTP ${response.status}`;
+      throw new Error(detail);
+    }
+
+    if (
+      typeof payload.title !== 'string'
+      || typeof payload.explanation !== 'string'
+      || !Array.isArray(payload.key_points)
+      || payload.key_points.some((item) => typeof item !== 'string')
+      || typeof payload.purpose !== 'string'
+      || typeof payload.understanding !== 'string'
+    ) {
+      throw new Error('卡片接口没有返回完整的结构化内容。');
+    }
+
+    const content: GeneratedCardContent = {
+      title: payload.title.trim(),
+      explanation: payload.explanation.trim(),
+      keyPoints: payload.key_points.map((item) => item.trim()).filter(Boolean),
+      purpose: payload.purpose.trim(),
+      understanding: payload.understanding.trim(),
+    };
+
+    if (
+      !content.title
+      || !content.explanation
+      || content.keyPoints.length === 0
+      || !content.purpose
+      || !content.understanding
+    ) {
+      throw new Error('模型返回的卡片内容不完整。');
+    }
+    if (controller.signal.aborted) return;
+
+    lastCardRequestKey = requestKey;
+    renderGeneratedCard(content, context);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return;
+    if (controller.signal.aborted) return;
+
+    if (error instanceof TypeError) {
+      setCardState(
+        '无法连接本地卡片后端。请确认 http://127.0.0.1:8000/health 可以打开。',
+        true,
+      );
+      return;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    setCardState(`卡片生成失败：${message}`, true);
+  } finally {
+    if (cardAbortController === controller) cardAbortController = null;
+  }
+}
+
+function formatGeneratedCardText(context: CardContext, content: GeneratedCardContent): string {
+  return [
+    `卡片类型：${getCardTypeLabel(context.cardType)}`,
+    `卡片标题：${content.title}`,
+    `核心解释：${content.explanation}`,
+    `关键要点：\n${content.keyPoints.map((point) => `• ${point}`).join('\n')}`,
+    `作用 / 解决的问题：${content.purpose}`,
+    `我的理解：${content.understanding}`,
+    `来源位置：${context.documentName} · ${context.sourceLocation}`,
+  ].join('\n\n');
+}
+
+function readSavedPaperCards(): SavedPaperCard[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(SAVED_CARDS_STORAGE_KEY) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCurrentPaperCard(): void {
+  if (!currentCardContext || !currentGeneratedCard) {
+    setStatus('当前没有可保存的论文卡片。', true);
+    return;
+  }
+
+  const card: SavedPaperCard = {
+    id: crypto.randomUUID(),
+    ...currentCardContext,
+    ...currentGeneratedCard,
+    createdAt: new Date().toISOString(),
+  };
+  const cards = [card, ...readSavedPaperCards()].slice(0, 100);
+  localStorage.setItem(SAVED_CARDS_STORAGE_KEY, JSON.stringify(cards));
+  setStatus(`已保存“${card.title}”论文卡片。`);
+}
+
+function resetCardState(): void {
+  cancelPendingCardGeneration();
+  cardAbortController?.abort();
+  cardAbortController = null;
+  activeCardType = 'method';
+  lastCardRequestKey = '';
+  currentCardContext = null;
+  currentGeneratedCard = null;
+
+  for (const button of cardTypeButtons) {
+    button.classList.toggle('active', button.dataset.cardType === 'method');
+  }
+
+  updateCardSourceSnippet();
+  setCardState('选择原文后，将自动生成论文卡片。');
+}
+
+function setPaperCardPageStatus(message = '', isError = false): void {
+  paperCardPageStatusElement.textContent = message;
+  paperCardPageStatusElement.classList.toggle('error', isError);
+  paperCardPageStatusElement.hidden = !message;
+}
+
+function setSelectValue(select: HTMLSelectElement, value: string): void {
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    select.value = '';
+    return;
+  }
+
+  const hasOption = Array.from(select.options).some((option) => option.value === normalizedValue);
+  if (!hasOption) {
+    const option = document.createElement('option');
+    option.value = normalizedValue;
+    option.textContent = normalizedValue;
+    select.append(option);
+  }
+  select.value = normalizedValue;
+}
+
+function collectPaperCardFormData(): PaperCardFormData {
+  return {
+    title: paperTitleInput.value.trim(),
+    authors: paperAuthorsInput.value.trim(),
+    venueYear: paperVenueYearInput.value.trim(),
+    researchArea: paperResearchAreaInput.value.trim(),
+    oneSentenceSummary: paperOneSentenceSummaryInput.value.trim(),
+    researchProblem: paperResearchProblemInput.value.trim(),
+    coreInnovation: paperCoreInnovationInput.value.trim(),
+    methodOverview: paperMethodOverviewInput.value.trim(),
+    datasets: paperDatasetsInput.value.trim(),
+    metrics: paperMetricsInput.value.trim(),
+    mainFindings: paperMainFindingsInput.value.trim(),
+    limitations: paperLimitationsInput.value.trim(),
+    readingStatus: paperReadingStatusInput.value.trim(),
+    recommendDeepReading: paperRecommendDeepReadingInput.value.trim(),
+    citationPoints: paperCitationPointsInput.value.trim(),
+    personalNotes: paperPersonalNotesInput.value.trim(),
+  };
+}
+
+function renderPaperCardForm(data: Omit<PaperCardFormData, 'personalNotes'>): void {
+  paperTitleInput.value = data.title;
+  paperAuthorsInput.value = data.authors;
+  paperVenueYearInput.value = data.venueYear;
+  paperResearchAreaInput.value = data.researchArea;
+  paperOneSentenceSummaryInput.value = data.oneSentenceSummary;
+  paperResearchProblemInput.value = data.researchProblem;
+  paperCoreInnovationInput.value = data.coreInnovation;
+  paperMethodOverviewInput.value = data.methodOverview;
+  paperDatasetsInput.value = data.datasets;
+  paperMetricsInput.value = data.metrics;
+  paperMainFindingsInput.value = data.mainFindings;
+  paperLimitationsInput.value = data.limitations;
+  setSelectValue(paperReadingStatusInput, data.readingStatus);
+  setSelectValue(paperRecommendDeepReadingInput, data.recommendDeepReading);
+  paperCitationPointsInput.value = data.citationPoints;
+}
+
+function updatePaperCardDocumentName(): void {
+  const name = sourceName ? getDisplayFileName(sourceName) : '尚未打开 PDF';
+  paperCardDocumentNameElement.textContent = name;
+  paperCardDocumentNameElement.title = sourceName || name;
+}
+
+function resetPaperCardPageState(): void {
+  paperCardPageAbortController?.abort();
+  paperCardPageAbortController = null;
+  paperCardPageDocumentKey = '';
+  paperCardPageSourceCache = null;
+  paperCardFormElement.reset();
+  paperCardFormElement.classList.remove('generating');
+  regeneratePaperCardButton.disabled = false;
+  setPaperCardPageStatus();
+  updatePaperCardDocumentName();
+}
+
+function getPaperOverviewPageNumbers(totalPages: number): number[] {
+  if (totalPages <= 18) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pageNumbers = new Set<number>();
+  for (let page = 1; page <= Math.min(6, totalPages); page += 1) pageNumbers.add(page);
+  for (let page = Math.max(1, totalPages - 4); page <= totalPages; page += 1) pageNumbers.add(page);
+
+  const middleStart = 7;
+  const middleEnd = Math.max(middleStart, totalPages - 5);
+  const middleSamples = 7;
+  for (let index = 0; index < middleSamples; index += 1) {
+    const ratio = index / (middleSamples - 1);
+    pageNumbers.add(Math.round(middleStart + (middleEnd - middleStart) * ratio));
+  }
+
+  return Array.from(pageNumbers)
+    .filter((pageNumber) => pageNumber >= 1 && pageNumber <= totalPages)
+    .sort((left, right) => left - right);
+}
+
+async function extractPaperOverviewText(documentProxy: PDFDocumentProxy): Promise<string> {
+  if (paperCardPageSourceCache?.document === documentProxy) {
+    return paperCardPageSourceCache.text;
+  }
+
+  const pageNumbers = getPaperOverviewPageNumbers(documentProxy.numPages);
+  const chunks: string[] = [];
+  let currentLength = 0;
+
+  for (const pageNumber of pageNumbers) {
+    if (pdfDocument !== documentProxy) throw new Error('PDF 已切换，请重新生成论文卡片。');
+    const pageText = await extractPageText(documentProxy, pageNumber);
+    if (!pageText) continue;
+
+    const pageHeader = `\n\n[第 ${pageNumber} 页]\n`;
+    const remainingLength = MAX_PAPER_CARD_SOURCE_LENGTH - currentLength - pageHeader.length;
+    if (remainingLength <= 0) break;
+
+    const clippedText = pageText.slice(0, remainingLength);
+    chunks.push(`${pageHeader}${clippedText}`);
+    currentLength += pageHeader.length + clippedText.length;
+  }
+
+  const text = chunks.join('').trim();
+  if (!text) throw new Error('当前 PDF 没有可读取的文字内容。');
+  paperCardPageSourceCache = { document: documentProxy, text };
+  return text;
+}
+
+function normalizePaperOverviewField(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : '原文未明确出现';
+}
+
+async function generatePaperOverviewCard(force = false): Promise<void> {
+  updatePaperCardDocumentName();
+  if (!pdfDocument) {
+    setPaperCardPageStatus('请先打开 PDF，再生成论文卡片。', true);
+    return;
+  }
+
+  const documentAtStart = pdfDocument;
+  const documentKey = `${sourceName}\u0000${documentAtStart.numPages}`;
+  if (!force && paperCardPageDocumentKey === documentKey && paperTitleInput.value.trim()) {
+    return;
+  }
+
+  paperCardPageAbortController?.abort();
+  const controller = new AbortController();
+  paperCardPageAbortController = controller;
+  regeneratePaperCardButton.disabled = true;
+  paperCardFormElement.classList.add('generating');
+  setPaperCardPageStatus('正在读取整篇论文并生成结构化卡片，请稍候…');
+
+  try {
+    const text = await extractPaperOverviewText(documentAtStart);
+    if (controller.signal.aborted) return;
+
+    const response = await fetch(PAPER_CARD_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        document_name: getDisplayFileName(sourceName),
+        page_count: documentAtStart.numPages,
+      }),
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload: PaperOverviewApiResponse = {};
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText) as PaperOverviewApiResponse;
+      } catch {
+        if (!response.ok) {
+          throw new Error(`论文卡片后端返回了非 JSON 内容：${responseText.slice(0, 160)}`);
+        }
+      }
+    }
+
+    if (!response.ok) {
+      const detail = typeof payload.detail === 'string' ? payload.detail : `HTTP ${response.status}`;
+      throw new Error(detail);
+    }
+    if (pdfDocument !== documentAtStart || controller.signal.aborted) return;
+
+    renderPaperCardForm({
+      title: normalizePaperOverviewField(payload.title),
+      authors: normalizePaperOverviewField(payload.authors),
+      venueYear: normalizePaperOverviewField(payload.venue_year),
+      researchArea: normalizePaperOverviewField(payload.research_area),
+      oneSentenceSummary: normalizePaperOverviewField(payload.one_sentence_summary),
+      researchProblem: normalizePaperOverviewField(payload.research_problem),
+      coreInnovation: normalizePaperOverviewField(payload.core_innovation),
+      methodOverview: normalizePaperOverviewField(payload.method_overview),
+      datasets: normalizePaperOverviewField(payload.datasets),
+      metrics: normalizePaperOverviewField(payload.metrics),
+      mainFindings: normalizePaperOverviewField(payload.main_findings),
+      limitations: normalizePaperOverviewField(payload.limitations),
+      readingStatus: normalizePaperOverviewField(payload.reading_status),
+      recommendDeepReading: normalizePaperOverviewField(payload.recommend_deep_reading),
+      citationPoints: normalizePaperOverviewField(payload.citation_points),
+    });
+
+    paperCardPageDocumentKey = documentKey;
+    const successMessage = '论文卡片已生成，可继续手动修改。';
+    setPaperCardPageStatus(successMessage);
+    window.setTimeout(() => {
+      if (paperCardPageStatusElement.textContent === successMessage) setPaperCardPageStatus();
+    }, 1800);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return;
+    if (controller.signal.aborted) return;
+
+    if (error instanceof TypeError) {
+      setPaperCardPageStatus(
+        '无法连接本地论文卡片后端。请确认 http://127.0.0.1:8000/health 可以打开。',
+        true,
+      );
+      return;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    setPaperCardPageStatus(`论文卡片生成失败：${message}`, true);
+  } finally {
+    if (paperCardPageAbortController === controller) paperCardPageAbortController = null;
+    regeneratePaperCardButton.disabled = false;
+    paperCardFormElement.classList.remove('generating');
+  }
+}
+
+function openPaperCardPage(): void {
+  paperCardPageElement.hidden = false;
+  appFrame?.classList.add('paper-card-page-open');
+  paperCardEntryButton?.classList.add('active');
+  aiPanelToggleButton?.classList.remove('active');
+  updatePaperCardDocumentName();
+  paperCardPageElement.scrollTop = 0;
+  void generatePaperOverviewCard();
+}
+
+function closePaperCardPage(): void {
+  paperCardPageAbortController?.abort();
+  paperCardPageElement.hidden = true;
+  appFrame?.classList.remove('paper-card-page-open');
+  paperCardEntryButton?.classList.remove('active');
+  aiPanelToggleButton?.classList.add('active');
+}
+
+function readSavedPaperOverviews(): SavedPaperOverview[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(SAVED_PAPER_OVERVIEWS_STORAGE_KEY) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePaperOverviewCard(): void {
+  const data = collectPaperCardFormData();
+  if (!data.title && !data.oneSentenceSummary) {
+    setPaperCardPageStatus('当前没有可保存的论文卡片内容。', true);
+    return;
+  }
+
+  const card: SavedPaperOverview = {
+    id: crypto.randomUUID(),
+    documentName: sourceName ? getDisplayFileName(sourceName) : '未命名论文',
+    ...data,
+    createdAt: new Date().toISOString(),
+  };
+  const cards = [card, ...readSavedPaperOverviews()].slice(0, 100);
+  localStorage.setItem(SAVED_PAPER_OVERVIEWS_STORAGE_KEY, JSON.stringify(cards));
+  setPaperCardPageStatus(`已保存“${data.title || card.documentName}”论文卡片。`);
+}
+
+function formatPaperOverviewMarkdown(data: PaperCardFormData): string {
+  return [
+    `# ${data.title || '论文卡片'}`,
+    '',
+    `- 作者：${data.authors || '原文未明确出现'}`,
+    `- 年份 / 会议 / 期刊：${data.venueYear || '原文未明确出现'}`,
+    `- 研究领域：${data.researchArea || '原文未明确出现'}`,
+    '',
+    '## 核心内容',
+    '',
+    `**一句话总结：** ${data.oneSentenceSummary}`,
+    '',
+    `**研究问题：** ${data.researchProblem}`,
+    '',
+    `**核心创新：** ${data.coreInnovation}`,
+    '',
+    `**方法概述：** ${data.methodOverview}`,
+    '',
+    '## 实验与结论',
+    '',
+    `**数据集：** ${data.datasets}`,
+    '',
+    `**评估指标：** ${data.metrics}`,
+    '',
+    `**主要实验结论：** ${data.mainFindings}`,
+    '',
+    `**局限性：** ${data.limitations}`,
+    '',
+    '## 我的判断',
+    '',
+    `- 阅读状态：${data.readingStatus}`,
+    `- 是否建议精读：${data.recommendDeepReading}`,
+    '',
+    `**适合引用的点：** ${data.citationPoints}`,
+    '',
+    `**我的备注：** ${data.personalNotes}`,
+  ].join('\n');
+}
+
+function exportPaperOverviewCard(): void {
+  const data = collectPaperCardFormData();
+  if (!data.title && !data.oneSentenceSummary) {
+    setPaperCardPageStatus('当前没有可导出的论文卡片内容。', true);
+    return;
+  }
+
+  const blob = new Blob([formatPaperOverviewMarkdown(data)], {
+    type: 'text/markdown;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  const baseName = (data.title || getDisplayFileName(sourceName) || '论文卡片')
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .slice(0, 80);
+  anchor.href = url;
+  anchor.download = `${baseName}-论文卡片.md`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  setPaperCardPageStatus('论文卡片已导出为 Markdown 文件。');
+}
+
+function cancelPendingAutomaticTranslation(): void {
+  if (autoTranslateTimer !== null) {
+    clearTimeout(autoTranslateTimer);
+    autoTranslateTimer = null;
+  }
+}
+
+function scheduleAutomaticTranslation(text: string): void {
+  cancelPendingAutomaticTranslation();
+
+  // 用户还在拖动选区时 selectionchange 会频繁触发。
+  // 等选区稳定 700ms 后再请求，避免每个字符都调用一次接口。
+  autoTranslateTimer = setTimeout(() => {
+    autoTranslateTimer = null;
+
+    if (text !== selectedTextForAi || text === lastTranslatedText) {
+      return;
+    }
+
+    void translateSelectedText(text);
+    void explainSelectedText(text);
+  }, AUTO_TRANSLATE_DELAY_MS);
+}
+
+function updateAiSelectedSnippet(): void {
+  const text = getViewerSelectionText();
+  if (!text || text === selectedTextForAi) return;
+
+  selectedTextForAi = text;
+  selectedTextPageNumber = Math.max(1, pdfViewer.currentPageNumber || 1);
+  selectedSnippetElement.textContent = text;
+  selectedSnippetElement.title = text;
+
+  // 新选区产生后，取消旧请求并等待新选区稳定。
+  translationAbortController?.abort();
+  explanationAbortController?.abort();
+  setTranslationState('选区已更新，正在准备自动翻译…');
+  setExplanationState('选区已更新，正在准备 AI 解释…');
+  scheduleAutomaticTranslation(text);
+
+  if (activeSummaryScope === 'selection') {
+    lastSummaryRequestKey = '';
+    lastSummaryPoints = [];
+    currentSummaryContext = null;
+    updateSummaryMetadata();
+    if (!summaryPanelElement.hidden) scheduleSummaryGeneration();
+  }
+
+  lastCardRequestKey = '';
+  currentCardContext = null;
+  currentGeneratedCard = null;
+  cardAbortController?.abort();
+  updateCardSourceSnippet();
+  if (!cardsPanelElement.hidden) scheduleCardGeneration();
+}
+
+function scheduleAiSelectedSnippetUpdate(): void {
+  cancelAnimationFrame(aiSelectionUpdateFrame);
+  aiSelectionUpdateFrame = requestAnimationFrame(updateAiSelectedSnippet);
+}
+
+async function translateSelectedText(text: string): Promise<void> {
+  if (!text || text !== selectedTextForAi) return;
+
+  translationAbortController?.abort();
+  const controller = new AbortController();
+  translationAbortController = controller;
+  setTranslationState('正在自动翻译，请稍候…');
+
+  try {
+    const response = await fetch(TRANSLATION_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        target_language: '简体中文',
+      }),
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload: TranslationApiResponse = {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText) as TranslationApiResponse;
+      } catch {
+        if (!response.ok) {
+          throw new Error(`翻译后端返回了非 JSON 内容：${responseText.slice(0, 160)}`);
+        }
+      }
+    }
+
+    if (!response.ok) {
+      const detail =
+        typeof payload.detail === 'string'
+          ? payload.detail
+          : `HTTP ${response.status}`;
+
+      throw new Error(detail);
+    }
+
+    if (typeof payload.translation !== 'string' || !payload.translation.trim()) {
+      throw new Error('翻译接口没有返回有效内容。');
+    }
+
+    // 只展示当前选区对应的结果，防止慢请求覆盖新选区。
+    if (text !== selectedTextForAi) return;
+
+    lastTranslatedText = text;
+    setTranslationState(payload.translation.trim());
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return;
+    if (text !== selectedTextForAi) return;
+
+    if (error instanceof TypeError) {
+      setTranslationState(
+        '无法连接本地翻译后端。请先启动 http://127.0.0.1:8000，'
+          + '并确认浏览器可以打开 /health。',
+        true,
+      );
+      return;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    setTranslationState(`翻译失败：${message}`, true);
+  } finally {
+    if (translationAbortController === controller) {
+      translationAbortController = null;
+    }
+  }
+}
+
+async function explainSelectedText(text: string): Promise<void> {
+  if (!text || text !== selectedTextForAi || text === lastExplainedText) return;
+
+  explanationAbortController?.abort();
+  const controller = new AbortController();
+  explanationAbortController = controller;
+  setExplanationState('正在生成 AI 解释，请稍候…');
+
+  try {
+    const response = await fetch(EXPLANATION_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload: ExplanationApiResponse = {};
+
+    if (responseText) {
+      try {
+        payload = JSON.parse(responseText) as ExplanationApiResponse;
+      } catch {
+        if (!response.ok) {
+          throw new Error(`解释后端返回了非 JSON 内容：${responseText.slice(0, 160)}`);
+        }
+      }
+    }
+
+    if (!response.ok) {
+      const detail =
+        typeof payload.detail === 'string'
+          ? payload.detail
+          : `HTTP ${response.status}`;
+
+      throw new Error(detail);
+    }
+
+    if (
+      !Array.isArray(payload.explanation)
+      || payload.explanation.some((item) => typeof item !== 'string')
+    ) {
+      throw new Error('解释接口没有返回有效的要点列表。');
+    }
+
+    const points = payload.explanation
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!points.length) {
+      throw new Error('模型没有返回解释内容。');
+    }
+
+    if (text !== selectedTextForAi) return;
+
+    lastExplainedText = text;
+    renderExplanationPoints(points);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return;
+    if (text !== selectedTextForAi) return;
+
+    if (error instanceof TypeError) {
+      setExplanationState(
+        '无法连接本地解释后端。请确认 http://127.0.0.1:8000/health 可以打开。',
+        true,
+      );
+      return;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    setExplanationState(`解释失败：${message}`, true);
+  } finally {
+    if (explanationAbortController === controller) {
+      explanationAbortController = null;
+    }
+  }
 }
 
 interface SelectionRect {
@@ -2586,6 +3982,13 @@ async function openPdf(
 ) {
   if (shouldConfirmUnsavedChanges && pdfDocument && !confirmDiscardUnsavedChanges()) return;
   isOpeningDocument = true;
+  cancelPendingAutomaticTranslation();
+  cancelPendingSummaryGeneration();
+  cancelPendingCardGeneration();
+  translationAbortController?.abort();
+  explanationAbortController?.abort();
+  summaryAbortController?.abort();
+  cardAbortController?.abort();
   cancelReadingPositionSave();
   currentRecentEntryId = null;
   pendingReadingPosition = null;
@@ -2632,7 +4035,19 @@ async function openPdf(
     pdfViewer.setDocument(documentProxy);
     linkService.setDocument(documentProxy);
     findController.setDocument(documentProxy);
+    selectedTextForAi = '';
+    selectedTextPageNumber = 0;
+    lastTranslatedText = '';
+    lastExplainedText = '';
+    selectedSnippetElement.textContent = '请在左侧 PDF 中选择文字';
+    selectedSnippetElement.title = '';
+    setTranslationState('选中英文后将自动翻译。');
+    setExplanationState('选中英文后将自动生成解释。');
+    resetSummaryState();
+    resetCardState();
+    resetPaperCardPageState();
     void renderDocumentOutline(documentProxy);
+    if (!paperCardPageElement.hidden) void generatePaperOverviewCard();
     markSavedChanges();
     window.setTimeout(() => {
       if (pdfDocument !== documentProxy) return;
@@ -2655,6 +4070,10 @@ async function openPdf(
     restoredAnnotationWarmUpPending = false;
     annotationEditorWarmUpInFlight = false;
     clearOutlineList('打开 PDF 后显示目录');
+    resetSummaryState();
+    resetCardState();
+    sourceName = '';
+    resetPaperCardPageState();
     documentNameElement.textContent = '打开失败';
     documentNameElement.title = '';
     updateControls();
@@ -2727,7 +4146,17 @@ eventBus.on('pagesinit', () => {
 
 eventBus.on('pagechanging', () => {
   updateControls();
+  updateSummaryMetadata();
   scheduleReadingPositionSave();
+
+  if (!summaryPanelElement.hidden && activeSummaryScope !== 'selection') {
+    lastSummaryRequestKey = '';
+    lastSummaryPoints = [];
+    currentSummaryContext = null;
+    scheduleSummaryGeneration();
+  }
+
+  if (!selectedTextForAi) updateCardSourceSnippet();
 });
 eventBus.on('scalechanging', () => {
   updateControls();
@@ -2785,13 +4214,58 @@ collapseLeftPanelButton?.addEventListener('click', () => {
 });
 
 aiPanelToggleButton?.addEventListener('click', () => {
+  if (!paperCardPageElement.hidden) {
+    closePaperCardPage();
+    return;
+  }
   appFrame?.classList.toggle('right-panel-collapsed');
 });
 
+function activateAiTab(tabName: string): void {
+  for (const tab of aiTabButtons) {
+    tab.classList.toggle('active', tab.dataset.aiTab === tabName);
+  }
+  for (const panel of aiTabPanels) {
+    panel.hidden = panel.dataset.aiPanel !== tabName;
+  }
+
+  if (tabName === 'summary') {
+    updateSummaryMetadata();
+    scheduleSummaryGeneration(0);
+  } else if (tabName === 'cards') {
+    updateCardSourceSnippet();
+    scheduleCardGeneration(0);
+  }
+}
+
 for (const button of aiTabButtons) {
   button.addEventListener('click', () => {
-    for (const tab of aiTabButtons) tab.classList.remove('active');
-    button.classList.add('active');
+    const tabName = button.dataset.aiTab;
+    if (tabName) activateAiTab(tabName);
+  });
+}
+
+paperCardEntryButton?.addEventListener('click', openPaperCardPage);
+paperCardBackButton.addEventListener('click', closePaperCardPage);
+returnToPdfButton.addEventListener('click', closePaperCardPage);
+regeneratePaperCardButton.addEventListener('click', () => {
+  paperCardPageDocumentKey = '';
+  void generatePaperOverviewCard(true);
+});
+savePaperCardPageButton.addEventListener('click', savePaperOverviewCard);
+exportPaperCardButton.addEventListener('click', exportPaperOverviewCard);
+
+for (const button of summaryScopeButtons) {
+  button.addEventListener('click', () => {
+    const scope = button.dataset.summaryScope as SummaryScope | undefined;
+    if (scope) setActiveSummaryScope(scope);
+  });
+}
+
+for (const button of cardTypeButtons) {
+  button.addEventListener('click', () => {
+    const cardType = button.dataset.cardType as CardType | undefined;
+    if (cardType) setActiveCardType(cardType);
   });
 }
 
@@ -3199,7 +4673,64 @@ document.addEventListener(
   { capture: true },
 );
 
-document.addEventListener('selectionchange', scheduleCustomSelectionRender);
+copyTranslationButton.addEventListener('click', async () => {
+  const translation = translationResultElement.textContent?.trim() ?? '';
+  if (!translation || translation.includes('自动翻译') || translation.startsWith('正在自动翻译')) {
+    setTranslationState('当前没有可复制的翻译结果。', true);
+    return;
+  }
+
+  await navigator.clipboard.writeText(translation);
+  setStatus(`已复制 ${translation.length.toLocaleString('zh-CN')} 个中文字符。`);
+});
+
+copySummaryButton.addEventListener('click', async () => {
+  if (lastSummaryPoints.length === 0) {
+    setStatus('当前没有可复制的总结要点。', true);
+    return;
+  }
+
+  const text = lastSummaryPoints.map((point) => `• ${point}`).join('\n');
+  await navigator.clipboard.writeText(text);
+  setStatus(`已复制 ${lastSummaryPoints.length} 条总结要点。`);
+});
+
+saveSummaryNoteButton.addEventListener('click', saveCurrentSummaryAsNote);
+
+copyCardButton.addEventListener('click', async () => {
+  if (!currentCardContext || !currentGeneratedCard) {
+    setStatus('当前没有可复制的论文卡片。', true);
+    return;
+  }
+
+  await navigator.clipboard.writeText(
+    formatGeneratedCardText(currentCardContext, currentGeneratedCard),
+  );
+  setStatus(`已复制“${currentGeneratedCard.title}”论文卡片。`);
+});
+
+saveCardButton.addEventListener('click', saveCurrentPaperCard);
+
+document.addEventListener('selectionchange', () => {
+  scheduleCustomSelectionRender();
+  scheduleAiSelectedSnippetUpdate();
+});
+
+viewerElement.addEventListener('pointerdown', () => {
+  // 开始新一轮拖选时，停止旧选区尚未发出的 AI 请求。
+  cancelPendingAutomaticTranslation();
+  translationAbortController?.abort();
+  explanationAbortController?.abort();
+  if (activeSummaryScope === 'selection') {
+    cancelPendingSummaryGeneration();
+    summaryAbortController?.abort();
+  }
+  cancelPendingCardGeneration();
+  cardAbortController?.abort();
+});
+
+viewerElement.addEventListener('pointerup', () => scheduleAiSelectedSnippetUpdate());
+viewerElement.addEventListener('keyup', () => scheduleAiSelectedSnippetUpdate());
 viewerContainer.addEventListener('scroll', scheduleCustomSelectionRender, { passive: true });
 viewerContainer.addEventListener(
   'scroll',

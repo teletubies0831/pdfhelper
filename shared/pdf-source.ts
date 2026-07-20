@@ -28,7 +28,7 @@ export function extractPdfSource(tabUrl?: string): string | null {
       }
     }
 
-    if (url.protocol === 'chrome-extension:' || url.protocol === 'edge-extension:') {
+    if (url.protocol === 'chrome-extension:') {
       const decoded = decodeURIComponent(url.href);
       for (const protocol of ['file:///', 'https://', 'http://']) {
         const start = decoded.indexOf(protocol);

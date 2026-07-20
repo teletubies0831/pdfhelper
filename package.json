@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "wxt -b edge",
+    "dev:chrome": "wxt -b chrome",
     "build": "wxt build -b edge",
     "build:chrome": "wxt build -b chrome",
-    "zip": "wxt zip -b edge"
+    "zip": "wxt zip -b edge",
+    "zip:chrome": "wxt zip -b chrome",
+    "postinstall": "wxt prepare"
   },
   "dependencies": {
     "pdf-lib": "^1.17.1",

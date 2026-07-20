@@ -56,11 +56,143 @@
         <button id="ai-panel-toggle" class="toolbar-pill ai-entry active" type="button">
           ✦ AI阅读助手
         </button>
-        <button class="toolbar-pill" type="button">生成论文卡片</button>
+        <button id="paper-card-entry" class="toolbar-pill" type="button">生成论文卡片</button>
         <button class="toolbar-pill" type="button">知识库</button>
 
         <div id="document-name" class="document-name" title="尚未打开文件">尚未打开文件</div>
       </header>
+
+      <section id="paper-card-page" class="paper-card-page" hidden aria-label="生成论文卡片页面">
+        <div class="paper-card-page-header">
+          <button id="paper-card-back" class="paper-card-back" type="button" aria-label="返回 PDF">←</button>
+          <div>
+            <h1>生成论文卡片页面</h1>
+            <p>提炼论文关键信息，结构化记录，便于后续写作与复用</p>
+          </div>
+        </div>
+
+        <div class="paper-card-page-body">
+          <div class="paper-card-command-bar">
+            <div class="paper-card-current-document">
+              <strong>当前论文：</strong>
+              <span id="paper-card-document-name">尚未打开 PDF</span>
+            </div>
+            <div class="paper-card-command-actions">
+              <button id="regenerate-paper-card" type="button">↻ 重新生成</button>
+              <button id="save-paper-card-page" type="button">▣ 保存卡片</button>
+              <button id="export-paper-card" type="button">↓ 导出</button>
+              <button id="return-to-pdf" type="button">◈ 回到PDF</button>
+            </div>
+          </div>
+
+          <div id="paper-card-page-status" class="paper-card-page-status" hidden aria-live="polite"></div>
+
+          <form id="paper-card-form" class="paper-card-form">
+            <section class="paper-card-form-section">
+              <h2><span aria-hidden="true">▱</span> 论文基本信息</h2>
+              <div class="paper-card-field-grid two-columns">
+                <label>
+                  <span>标题：</span>
+                  <input id="paper-title" name="title" type="text" placeholder="请输入论文标题" />
+                </label>
+                <label>
+                  <span>作者：</span>
+                  <input id="paper-authors" name="authors" type="text" placeholder="请输入作者" />
+                </label>
+                <label>
+                  <span>年份 / 会议 / 期刊：</span>
+                  <input id="paper-venue-year" name="venueYear" type="text" placeholder="请输入年份 / 会议 / 期刊" />
+                </label>
+                <label>
+                  <span>研究领域：</span>
+                  <input id="paper-research-area" name="researchArea" type="text" placeholder="请输入研究领域" />
+                </label>
+              </div>
+            </section>
+
+            <section class="paper-card-form-section">
+              <h2><span aria-hidden="true">♙</span> 核心内容</h2>
+              <div class="paper-card-field-grid">
+                <label>
+                  <span>一句话总结：</span>
+                  <textarea id="paper-one-sentence-summary" name="oneSentenceSummary" rows="2" placeholder="用一句话概括论文的核心内容"></textarea>
+                </label>
+                <label>
+                  <span>研究问题：</span>
+                  <textarea id="paper-research-problem" name="researchProblem" rows="2" placeholder="论文试图解决的关键问题是什么？"></textarea>
+                </label>
+                <label>
+                  <span>核心创新：</span>
+                  <textarea id="paper-core-innovation" name="coreInnovation" rows="2" placeholder="论文的主要创新有哪些？"></textarea>
+                </label>
+                <label>
+                  <span>方法概述：</span>
+                  <textarea id="paper-method-overview" name="methodOverview" rows="2" placeholder="论文采用了怎样的方法或技术路线？"></textarea>
+                </label>
+              </div>
+            </section>
+
+            <section class="paper-card-form-section">
+              <h2><span aria-hidden="true">♧</span> 实验与结论</h2>
+              <div class="paper-card-field-grid two-columns first-row-two-columns">
+                <label>
+                  <span>数据集：</span>
+                  <textarea id="paper-datasets" name="datasets" rows="2" placeholder="使用的数据集名称及规模"></textarea>
+                </label>
+                <label>
+                  <span>评估指标：</span>
+                  <textarea id="paper-metrics" name="metrics" rows="2" placeholder="用于评估的方法或指标"></textarea>
+                </label>
+                <label class="full-width">
+                  <span>主要实验结论：</span>
+                  <textarea id="paper-main-findings" name="mainFindings" rows="2" placeholder="实验得到的主要结论是什么？"></textarea>
+                </label>
+                <label class="full-width">
+                  <span>局限性：</span>
+                  <textarea id="paper-limitations" name="limitations" rows="2" placeholder="论文中提到的局限性或可能的不足"></textarea>
+                </label>
+              </div>
+            </section>
+
+            <section class="paper-card-form-section">
+              <h2><span aria-hidden="true">♙</span> 我的判断</h2>
+              <div class="paper-card-field-grid two-columns first-row-two-columns">
+                <label>
+                  <span>阅读状态：</span>
+                  <select id="paper-reading-status" name="readingStatus">
+                    <option value="">请选择阅读状态</option>
+                    <option value="待读">待读</option>
+                    <option value="略读完成">略读完成</option>
+                    <option value="精读中">精读中</option>
+                    <option value="精读完成">精读完成</option>
+                  </select>
+                </label>
+                <label>
+                  <span>是否建议精读：</span>
+                  <select id="paper-recommend-deep-reading" name="recommendDeepReading">
+                    <option value="">请选择</option>
+                    <option value="建议精读">建议精读</option>
+                    <option value="建议按需精读">建议按需精读</option>
+                    <option value="暂不建议精读">暂不建议精读</option>
+                  </select>
+                </label>
+                <label class="full-width">
+                  <span>适合引用的点：</span>
+                  <textarea id="paper-citation-points" name="citationPoints" rows="2" placeholder="论文中适合引用的结论、方法或亮点"></textarea>
+                </label>
+                <label class="full-width">
+                  <span>我的备注：</span>
+                  <textarea id="paper-personal-notes" name="personalNotes" rows="2" placeholder="补充想法、记录你的思考或规划应用计划"></textarea>
+                </label>
+              </div>
+            </section>
+          </form>
+
+          <div class="paper-card-privacy-note">
+            <strong>ⓘ 温馨提示：</strong> 隐私、实验数据和结论仅保留论文明确披露的信息；未出现的内容统一标记为“原文未明确出现”。
+          </div>
+        </div>
+      </section>
 
       <div class="workspace">
         <aside class="left-panel" aria-label="左侧目录 / 缩略图">
@@ -130,37 +262,128 @@
             <h2>右侧 AI 阅读助手面板</h2>
 
             <div class="ai-tabs">
-              <button class="active" type="button">解释 · 翻译</button>
-              <button type="button">总结</button>
-              <button type="button">保存卡片</button>
+              <button class="active" data-ai-tab="translate" type="button">解释 · 翻译</button>
+              <button data-ai-tab="summary" type="button">总结</button>
+              <button data-ai-tab="cards" type="button">保存卡片</button>
             </div>
 
-            <section class="ai-section">
-              <h3>1. 选中内容</h3>
-              <div class="selected-snippet">用户选中的英文段落 / 句子内容</div>
-            </section>
+            <div class="ai-tab-panel" data-ai-panel="translate">
+              <section class="ai-section">
+                <h3>1. 选中内容</h3>
+                <div id="selected-snippet" class="selected-snippet">请在左侧 PDF 中选择文字</div>
+              </section>
 
-            <section class="ai-section">
-              <h3>2. 中文翻译</h3>
-              <div class="ai-result-box">
-                这是段落的中文翻译内容，准确传达原文的核心意思，并保持学术表达的规范性与严谨性。
+              <section class="ai-section">
+                <h3>2. 中文翻译</h3>
+                <div id="translation-result" class="ai-result-box" aria-live="polite">
+                  选中英文后将自动翻译。
+                </div>
+              </section>
+
+              <section class="ai-section">
+                <h3>3. AI 解释</h3>
+                <div id="explanation-result" class="ai-result-box" aria-live="polite">
+                  选中英文后将自动生成解释。
+                </div>
+              </section>
+
+              <div class="ai-actions">
+                <button type="button">保存为笔记</button>
+                <button id="copy-translation" class="primary-button" type="button">复制翻译</button>
               </div>
-            </section>
+            </div>
 
-            <section class="ai-section">
-              <h3>3. 解释结果</h3>
-              <div class="ai-result-box">
-                <ul>
-                  <li>本段首先介绍了研究的背景与问题动机。</li>
-                  <li>作者指出现有方法存在局限性，因此提出新的思路。</li>
-                  <li>该内容与研究目标及后续方法设计紧密相关。</li>
-                </ul>
+            <div id="summary-panel" class="ai-tab-panel summary-panel" data-ai-panel="summary" hidden>
+              <section class="ai-section">
+                <h3>1. 总结对象</h3>
+                <div class="summary-target-card">
+                  <div class="summary-meta">
+                    <span><strong>范围：</strong><span id="summary-range">当前选中文本</span></span>
+                    <span class="summary-meta-divider" aria-hidden="true"></span>
+                    <span><strong>来源：</strong><span id="summary-source">第 0 页</span></span>
+                    <span class="summary-meta-divider" aria-hidden="true"></span>
+                    <span><strong>位置：</strong><span id="summary-position">未定位</span></span>
+                  </div>
+
+                  <div class="summary-scope-switch" role="group" aria-label="总结范围">
+                    <button class="active" data-summary-scope="selection" type="button">选中文本</button>
+                    <button data-summary-scope="page" type="button">当前页</button>
+                    <button data-summary-scope="chapter" type="button">当前章节</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="ai-section summary-result-section">
+                <h3>2. 核心要点</h3>
+                <div id="summary-result" class="summary-result-box" aria-live="polite">
+                  选择总结范围后，将自动生成核心要点。
+                </div>
+              </section>
+
+              <div class="ai-actions summary-actions">
+                <button id="save-summary-note" type="button">▧ 保存为笔记</button>
+                <button id="copy-summary" class="primary-button" type="button">▣ 复制要点</button>
               </div>
-            </section>
+            </div>
 
-            <div class="ai-actions">
-              <button type="button">保存为笔记</button>
-              <button class="primary-button" type="button">复制结果</button>
+            <div id="cards-panel" class="ai-tab-panel cards-panel" data-ai-panel="cards" hidden>
+              <section class="ai-section card-type-section">
+                <h3>1. 卡片类型</h3>
+                <div class="card-type-switch" role="group" aria-label="卡片类型">
+                  <button data-card-type="concept" type="button">概念</button>
+                  <button class="active" data-card-type="method" type="button">方法</button>
+                  <button data-card-type="experiment" type="button">实验</button>
+                  <button data-card-type="viewpoint" type="button">观点</button>
+                </div>
+              </section>
+
+              <section class="ai-section card-source-section">
+                <h3>2. 原文片段</h3>
+                <div id="card-source-snippet" class="card-source-snippet">
+                  请在左侧 PDF 中选择需要制作卡片的论文原文。
+                </div>
+              </section>
+
+              <section class="ai-section card-content-section">
+                <h3>3. AI 生成内容</h3>
+                <div id="card-result" class="card-result-box" aria-live="polite">
+                  <div id="card-generation-status" class="card-generation-status">
+                    选择原文后，将自动生成论文卡片。
+                  </div>
+
+                  <div id="card-generated-content" class="card-generated-content" hidden>
+                    <div class="card-field-row">
+                      <strong>卡片标题：</strong>
+                      <span id="card-title"></span>
+                    </div>
+                    <div class="card-field-row">
+                      <strong>核心解释：</strong>
+                      <span id="card-explanation"></span>
+                    </div>
+                    <div class="card-field-row card-points-row">
+                      <strong>关键要点：</strong>
+                      <ul id="card-key-points"></ul>
+                    </div>
+                    <div class="card-field-row">
+                      <strong>作用 / 解决的问题：</strong>
+                      <span id="card-purpose"></span>
+                    </div>
+                    <div class="card-field-row">
+                      <strong>我的理解：</strong>
+                      <span id="card-understanding"></span>
+                    </div>
+                    <div class="card-field-row">
+                      <strong>来源位置：</strong>
+                      <span id="card-source-location"></span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="ai-actions card-actions">
+                <button id="copy-card" type="button">▧ 复制内容</button>
+                <button id="save-card" class="primary-button" type="button">▣ 保存卡片</button>
+              </div>
             </div>
           </div>
         </aside>
