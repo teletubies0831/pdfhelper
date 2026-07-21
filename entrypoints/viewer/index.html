@@ -33,6 +33,18 @@
           目录
         </button>
 
+        <div class="reading-mode-control" aria-label="阅读模式">
+          <span>阅读模式</span>
+          <select id="reading-mode-select" title="选择当前 PDF 的阅读策略">
+            <option value="auto">AI 自动识别</option>
+            <option value="general">通用阅读</option>
+            <option value="paper">论文精读</option>
+            <option value="novel">小说阅读</option>
+          </select>
+          <button id="detect-reading-mode" type="button" title="使用当前 API Key 重新识别">重新识别</button>
+          <small id="reading-mode-status">AI自动 · 通用阅读</small>
+        </div>
+
         <div class="toolbar-group annotation-tools" aria-label="批注工具">
           <button type="button" data-editor-mode="select" title="选择文字；选择批注后可移动或编辑">
             移动/选择
@@ -54,12 +66,21 @@
         </div>
 
         <button id="ai-panel-toggle" class="toolbar-pill ai-entry active" type="button">
-          ✦ AI阅读助手
+          ✦ 聊天
         </button>
         <button id="paper-card-entry" class="toolbar-pill" type="button">生成论文卡片</button>
         <button class="toolbar-pill" type="button">知识库</button>
 
         <div id="document-name" class="document-name" title="尚未打开文件">尚未打开文件</div>
+        <button
+          id="ai-settings-button"
+          class="toolbar-icon-button toolbar-settings-button"
+          type="button"
+          title="AI 设置"
+          aria-label="打开 AI 设置"
+        >
+          ⚙ 设置
+        </button>
       </header>
 
       <section id="paper-card-page" class="paper-card-page" hidden aria-label="生成论文卡片页面">
@@ -196,11 +217,6 @@
 
       <div class="workspace">
         <aside class="left-panel" aria-label="左侧目录 / 缩略图">
-          <div class="panel-header">
-            <strong>左侧目录 / 缩略图</strong>
-            <button id="collapse-left-panel" type="button">收起</button>
-          </div>
-
           <div class="side-tabs">
             <button class="active" type="button">目录</button>
             <button type="button">缩略图</button>
@@ -234,6 +250,19 @@
               </div>
             </div>
 
+            <button
+              id="citation-return-button"
+              class="citation-return-button"
+              type="button"
+              aria-hidden="true"
+              tabindex="-1"
+              title="返回点击引用前的位置"
+            >
+              <span aria-hidden="true">↩</span>
+              <span>回到正文</span>
+              <small id="citation-return-position"></small>
+            </button>
+
             <div id="viewer-container" role="main" tabindex="0">
               <div id="viewer" class="pdfViewer"></div>
             </div>
@@ -259,7 +288,107 @@
 
         <aside class="right-panel" aria-label="右侧 AI 阅读助手面板">
           <div class="right-panel-card">
-            <h2>右侧 AI 阅读助手面板</h2>
+            <div class="assistant-tabs" role="tablist" aria-label="AI 阅读助手">
+              <button id="assistant-chat-tab" class="active" data-assistant-view="chat" type="button" role="tab" aria-selected="true">聊天</button>
+              <button data-assistant-view="translate" type="button" role="tab" aria-selected="false">翻译/解释</button>
+              <button data-assistant-view="summary" type="button" role="tab" aria-selected="false">总结</button>
+              <button data-assistant-view="cards" type="button" role="tab" aria-selected="false">保存卡片</button>
+            </div>
+
+            <section id="assistant-chat-panel" class="assistant-panel chat-panel" role="tabpanel">
+              <div class="chat-context-card">
+                <div class="chat-context-heading">
+                  <strong>当前上下文</strong>
+                  <button id="clear-chat" type="button">清空对话</button>
+                </div>
+                <div id="chat-context-preview" class="chat-context-preview">
+                  打开 PDF 后会自动携带当前页正文；选中文字时优先使用选区。
+                </div>
+              </div>
+
+              <div id="chat-messages" class="chat-messages" aria-live="polite">
+                <article class="chat-message assistant">
+                  <div class="chat-message-role">PDF Helper</div>
+                  <div class="chat-message-content">你好，我会根据阅读模式结合当前页与选区回答。首次使用 AI 工具时，请先在“设置”中配置 API Key。</div>
+                </article>
+              </div>
+
+              <form id="chat-form" class="chat-composer">
+                <textarea
+                  id="chat-input"
+                  rows="3"
+                  placeholder="询问当前 PDF；Enter 发送，Shift + Enter 换行"
+                  aria-label="聊天输入"
+                ></textarea>
+                <div class="chat-composer-footer">
+                  <span id="chat-provider-status">AI 尚未配置</span>
+                  <button id="chat-send" class="primary-button" type="submit">发送</button>
+                </div>
+              </form>
+            </section>
+
+            <section id="assistant-settings-panel" class="assistant-panel settings-panel settings-popover" role="dialog" aria-modal="false" aria-label="AI 设置" hidden>
+              <div class="settings-heading">
+                <div>
+                  <strong>AI 模型服务</strong>
+                  <p>由扩展直接请求所选模型供应商，不需要启动 Python 服务。</p>
+                </div>
+                <div class="settings-heading-actions">
+                  <span class="local-config-badge">本地配置</span>
+                  <button id="close-deepseek-settings" class="settings-close-button" type="button" aria-label="关闭设置">×</button>
+                </div>
+              </div>
+
+              <label class="settings-field">
+                <span>模型供应商</span>
+                <select id="ai-provider">
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openai-compatible" disabled>OpenAI 兼容接口（即将支持）</option>
+                  <option value="anthropic" disabled>Anthropic（即将支持）</option>
+                  <option value="gemini" disabled>Gemini（即将支持）</option>
+                </select>
+              </label>
+
+              <label class="settings-field">
+                <span>API Key</span>
+                <input id="deepseek-api-key" type="password" autocomplete="off" placeholder="sk-..." />
+              </label>
+
+              <label class="settings-field">
+                <span>模型</span>
+                <select id="deepseek-model">
+                  <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
+                  <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
+                </select>
+              </label>
+
+              <label class="settings-field">
+                <span>思考模式</span>
+                <select id="deepseek-thinking">
+                  <option value="disabled">关闭（响应更快）</option>
+                  <option value="enabled">开启（复杂问题）</option>
+                </select>
+              </label>
+
+              <details class="advanced-settings">
+                <summary>高级设置</summary>
+                <label class="settings-field">
+                  <span>API 地址</span>
+                  <input id="deepseek-base-url" type="url" value="https://api.deepseek.com" />
+                </label>
+              </details>
+
+              <p class="settings-privacy-note">
+                API Key 仅保存在当前浏览器扩展的本地存储中；自动识别、聊天、翻译、总结或卡片功能会直接请求所选供应商。
+              </p>
+              <div id="deepseek-settings-status" class="settings-status" aria-live="polite"></div>
+              <div class="settings-actions">
+                <button id="test-deepseek" type="button">测试连接</button>
+                <button id="save-deepseek-settings" class="primary-button" type="button">保存设置</button>
+              </div>
+            </section>
+
+            <div id="assistant-tools-runtime" class="legacy-ai-runtime" aria-hidden="true">
 
             <div class="ai-tabs">
               <button class="active" data-ai-tab="translate" type="button">解释 · 翻译</button>
@@ -384,6 +513,7 @@
                 <button id="copy-card" type="button">▧ 复制内容</button>
                 <button id="save-card" class="primary-button" type="button">▣ 保存卡片</button>
               </div>
+            </div>
             </div>
           </div>
         </aside>

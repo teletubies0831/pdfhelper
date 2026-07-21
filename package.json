@@ -13,6 +13,8 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "dompurify": "^3.2.7",
+    "marked": "^16.3.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.624"
   },

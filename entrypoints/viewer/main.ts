@@ -8,13 +8,40 @@ import {
   type PDFDocumentProxy,
 } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 import {
   EventBus,
   PDFFindController,
   PDFLinkService,
   PDFViewer,
 } from 'pdfjs-dist/web/pdf_viewer.mjs';
+import { browser } from 'wxt/browser';
 import 'pdfjs-dist/web/pdf_viewer.css';
+
+import {
+  AI_CONFIG_STORAGE_KEY,
+  AI_PROVIDERS,
+  AI_STREAM_PORT_NAME,
+  DEFAULT_AI_CONFIG,
+  LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
+  normalizeAiBaseUrl,
+  type AiConfig,
+  type AiConversationMessage,
+  type AiProviderId,
+  type AiReasoningMode,
+  type AiRuntimeResponse,
+  type AiStreamServerMessage,
+  type AiStreamStartMessage,
+} from '../../shared/ai';
+import {
+  READING_MODE_STORAGE_KEY,
+  getReadingModeLabel,
+  isReadingModePreference,
+  type ReadingModePreference,
+  type ReadingModeState,
+  type ResolvedReadingMode,
+} from '../../shared/reading-mode';
 
 import './style.css';
 
@@ -79,6 +106,8 @@ const statusText = requiredElement<HTMLElement>('status-text');
 const textStatus = requiredElement<HTMLElement>('text-status');
 const viewerContainer = requiredElement<HTMLDivElement>('viewer-container');
 const viewerElement = requiredElement<HTMLDivElement>('viewer');
+const citationReturnButton = requiredElement<HTMLButtonElement>('citation-return-button');
+const citationReturnPosition = requiredElement<HTMLElement>('citation-return-position');
 const undoAnnotationButton = requiredElement<HTMLButtonElement>('undo-annotation');
 const redoAnnotationButton = requiredElement<HTMLButtonElement>('redo-annotation');
 const smartCopyButton = requiredElement<HTMLButtonElement>('smart-copy');
@@ -115,8 +144,11 @@ const editorModeButtons = Array.from(
 );
 const appFrame = document.querySelector<HTMLElement>('.app-frame');
 const outlineToggleButton = document.getElementById('outline-toggle');
-const collapseLeftPanelButton = document.getElementById('collapse-left-panel');
 const aiPanelToggleButton = document.getElementById('ai-panel-toggle');
+const readingModeSelect = requiredElement<HTMLSelectElement>('reading-mode-select');
+const detectReadingModeButton = requiredElement<HTMLButtonElement>('detect-reading-mode');
+const readingModeStatus = requiredElement<HTMLElement>('reading-mode-status');
+const aiSettingsButton = requiredElement<HTMLButtonElement>('ai-settings-button');
 const paperCardEntryButton = document.getElementById('paper-card-entry');
 const paperCardPageElement = requiredElement<HTMLElement>('paper-card-page');
 const paperCardBackButton = requiredElement<HTMLButtonElement>('paper-card-back');
@@ -143,6 +175,28 @@ const paperReadingStatusInput = requiredElement<HTMLSelectElement>('paper-readin
 const paperRecommendDeepReadingInput = requiredElement<HTMLSelectElement>('paper-recommend-deep-reading');
 const paperCitationPointsInput = requiredElement<HTMLTextAreaElement>('paper-citation-points');
 const paperPersonalNotesInput = requiredElement<HTMLTextAreaElement>('paper-personal-notes');
+const assistantViewButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-assistant-view]'),
+);
+const assistantChatPanel = requiredElement<HTMLElement>('assistant-chat-panel');
+const assistantSettingsPanel = requiredElement<HTMLElement>('assistant-settings-panel');
+const assistantToolsRuntime = requiredElement<HTMLElement>('assistant-tools-runtime');
+const closeDeepSeekSettingsButton = requiredElement<HTMLButtonElement>('close-deepseek-settings');
+const chatContextPreview = requiredElement<HTMLElement>('chat-context-preview');
+const chatMessagesElement = requiredElement<HTMLElement>('chat-messages');
+const chatForm = requiredElement<HTMLFormElement>('chat-form');
+const chatInput = requiredElement<HTMLTextAreaElement>('chat-input');
+const chatSendButton = requiredElement<HTMLButtonElement>('chat-send');
+const clearChatButton = requiredElement<HTMLButtonElement>('clear-chat');
+const chatProviderStatus = requiredElement<HTMLElement>('chat-provider-status');
+const aiProviderSelect = requiredElement<HTMLSelectElement>('ai-provider');
+const deepSeekApiKeyInput = requiredElement<HTMLInputElement>('deepseek-api-key');
+const deepSeekModelSelect = requiredElement<HTMLSelectElement>('deepseek-model');
+const deepSeekThinkingSelect = requiredElement<HTMLSelectElement>('deepseek-thinking');
+const deepSeekBaseUrlInput = requiredElement<HTMLInputElement>('deepseek-base-url');
+const deepSeekSettingsStatus = requiredElement<HTMLElement>('deepseek-settings-status');
+const saveDeepSeekSettingsButton = requiredElement<HTMLButtonElement>('save-deepseek-settings');
+const testDeepSeekButton = requiredElement<HTMLButtonElement>('test-deepseek');
 const aiTabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.ai-tabs button'));
 const aiTabPanels = Array.from(document.querySelectorAll<HTMLElement>('[data-ai-panel]'));
 const selectedSnippetElement = requiredElement<HTMLElement>('selected-snippet');
@@ -185,7 +239,10 @@ const pdfViewer = new PDFViewer({
   eventBus,
   linkService,
   findController,
-  annotationMode: AnnotationMode.DISABLE,
+  // Keep the PDF annotation layer enabled so native internal citations and
+  // external links remain interactive. PDF Helper's own editor layer stays
+  // independent from it.
+  annotationMode: AnnotationMode.ENABLE,
   annotationEditorHighlightColors:
     'yellow=#FFF066,green=#9BE7A5,blue=#8EC5FF,pink=#FF9FC9,orange=#FFC078',
   removePageBorders: false,
@@ -212,6 +269,9 @@ let currentRecentEntryId: string | null = null;
 let pendingReadingPosition: ReadingPosition | null = null;
 let readingPositionSaveHandle: number | null = null;
 let isRestoringReadingPosition = false;
+let suppressInternalNavigationCapture = false;
+let isReturningFromInternalNavigation = false;
+const internalNavigationHistory: InternalNavigationEntry[] = [];
 let areNoteIndicatorsHidden = false;
 let sourcePdfBytes: Uint8Array | null = null;
 let selectionRenderFrame = 0;
@@ -690,6 +750,10 @@ type ReadingPosition = {
   updatedAt: number;
 };
 
+type InternalNavigationEntry = ReadingPosition & {
+  documentKey: string;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -1155,7 +1219,9 @@ function downloadEmbeddedPdfBytes(blob: Blob) {
 async function writeEmbeddedPdfBytes(
   bytes: Uint8Array,
 ): Promise<'overwritten' | 'downloaded' | 'permission-denied-downloaded'> {
-  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const blobBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(blobBuffer).set(bytes);
+  const blob = new Blob([blobBuffer], { type: 'application/pdf' });
 
   if (currentFileHandle) {
     const hasWritePermission = await requestFileWritePermission(currentFileHandle);
@@ -1388,7 +1454,7 @@ async function renderOutlineItems(
     button.textContent = title;
     button.style.paddingLeft = `${12 + depth * 18}px`;
     button.addEventListener('click', () => {
-      if (item.dest) void linkService.goToDestination(item.dest as any);
+      if (item.dest) void navigateToDestinationWithoutReturnHistory(item.dest);
     });
     outlineList?.appendChild(button);
 
@@ -1473,10 +1539,6 @@ function getViewerSelectionText(): string {
   return normalizeCopiedText(getViewerSelectionRawText());
 }
 
-const TRANSLATION_API_URL = 'http://127.0.0.1:8000/api/translate';
-const EXPLANATION_API_URL = 'http://127.0.0.1:8000/api/explain';
-const SUMMARY_API_URL = 'http://127.0.0.1:8000/api/summarize';
-const CARD_API_URL = 'http://127.0.0.1:8000/api/generate-card';
 const PAPER_CARD_API_URL = 'http://127.0.0.1:8000/api/generate-paper-card';
 const AUTO_TRANSLATE_DELAY_MS = 700;
 const MAX_SUMMARY_SOURCE_LENGTH = 18_000;
@@ -1488,30 +1550,6 @@ const SAVED_PAPER_OVERVIEWS_STORAGE_KEY = 'pdf-helper-paper-overviews-v1';
 
 type SummaryScope = 'selection' | 'page' | 'chapter';
 type CardType = 'concept' | 'method' | 'experiment' | 'viewpoint';
-
-interface TranslationApiResponse {
-  translation?: unknown;
-  detail?: unknown;
-}
-
-interface ExplanationApiResponse {
-  explanation?: unknown;
-  detail?: unknown;
-}
-
-interface SummaryApiResponse {
-  summary?: unknown;
-  detail?: unknown;
-}
-
-interface CardApiResponse {
-  title?: unknown;
-  explanation?: unknown;
-  key_points?: unknown;
-  purpose?: unknown;
-  understanding?: unknown;
-  detail?: unknown;
-}
 
 interface SummaryContext {
   scope: SummaryScope;
@@ -1621,6 +1659,666 @@ let cardGenerationTimer: ReturnType<typeof setTimeout> | null = null;
 let paperCardPageAbortController: AbortController | null = null;
 let paperCardPageDocumentKey = '';
 let paperCardPageSourceCache: { document: PDFDocumentProxy; text: string } | null = null;
+let aiConfig: AiConfig = { ...DEFAULT_AI_CONFIG };
+let aiConfigLoaded = false;
+let chatHistory: AiConversationMessage[] = [];
+let chatRequestPending = false;
+let readingModePreference: ReadingModePreference = 'auto';
+let resolvedReadingMode: ResolvedReadingMode = 'general';
+let readingModeDetectionPending = false;
+let readingModeDocumentKey = '';
+let readingModeRationale = '';
+let readingModeError = '';
+type AssistantView = 'chat' | 'translate' | 'summary' | 'cards';
+let activeAssistantView: AssistantView = 'chat';
+
+function setAssistantView(view: AssistantView): void {
+  activeAssistantView = view;
+  const showChat = view === 'chat';
+  for (const button of assistantViewButtons) {
+    const isActive = button.dataset.assistantView === view;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  }
+
+  assistantChatPanel.hidden = !showChat;
+  assistantToolsRuntime.classList.toggle('active', !showChat);
+  assistantToolsRuntime.setAttribute('aria-hidden', String(showChat));
+
+  if (view !== 'translate') cancelPendingAutomaticTranslation();
+  if (view !== 'summary') cancelPendingSummaryGeneration();
+  if (view !== 'cards') cancelPendingCardGeneration();
+
+  if (showChat) {
+    window.setTimeout(() => chatInput.focus(), 0);
+  } else {
+    activateAiTab(view);
+  }
+}
+
+function setDeepSeekSettingsOpen(open: boolean): void {
+  if (assistantSettingsPanel.parentElement !== document.body) {
+    document.body.append(assistantSettingsPanel);
+  }
+  assistantSettingsPanel.hidden = !open;
+  aiSettingsButton.classList.toggle('active', open);
+  aiSettingsButton.setAttribute('aria-expanded', String(open));
+  if (open) window.setTimeout(() => deepSeekApiKeyInput.focus(), 0);
+}
+
+async function requestAiContent(
+  messages: AiConversationMessage[],
+  context: AiStreamStartMessage['context'] = {},
+): Promise<string> {
+  if (!aiConfig.apiKey) {
+    setDeepSeekSettingsOpen(true);
+    deepSeekSettingsStatus.classList.add('error');
+    deepSeekSettingsStatus.textContent = '请先配置并保存模型供应商的 API Key。';
+    throw new Error('请先在右上角“设置”中配置 API Key。');
+  }
+
+  const response = await browser.runtime.sendMessage({
+    type: 'pdf-helper:ai-chat',
+    messages,
+    context: { ...context, readingMode: resolvedReadingMode },
+  }) as AiRuntimeResponse;
+
+  if (!response?.ok || !response.content?.trim()) {
+    throw new Error(response?.error || 'AI 模型没有返回有效内容。');
+  }
+  return response.content.trim();
+}
+
+function parseAiList(content: string): string[] {
+  const points = content
+    .replace(/^```(?:markdown|text)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)、])\s*/, '').trim())
+    .filter(Boolean);
+  return points.length > 1 ? points : [content.trim()].filter(Boolean);
+}
+
+function parseAiJson(content: string): Record<string, unknown> {
+  const cleaned = content
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('模型没有返回有效 JSON。');
+  return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+}
+
+function updateChatContextPreview(): void {
+  const documentLabel = sourceName ? getDisplayFileName(sourceName) : '尚未打开 PDF';
+  const pageNumber = Math.max(1, selectedTextPageNumber || pdfViewer.currentPageNumber || 1);
+  const selectedText = selectedTextForAi.trim();
+
+  if (selectedText) {
+    chatContextPreview.textContent = `${documentLabel} · 第 ${pageNumber} 页\n${selectedText.slice(0, 420)}${selectedText.length > 420 ? '…' : ''}`;
+    chatContextPreview.classList.add('has-selection');
+  } else {
+    chatContextPreview.textContent = sourceName
+      ? `${documentLabel} · 第 ${pageNumber} 页 · ${getReadingModeLabel(resolvedReadingMode)}（自动携带当前页正文）`
+      : '打开 PDF 后，助手会自动携带当前页正文；选中文字时优先使用选区。';
+    chatContextPreview.classList.remove('has-selection');
+  }
+}
+
+function renderChatMarkdown(container: HTMLElement, content: string): void {
+  const html = marked.parse(content, {
+    async: false,
+    breaks: true,
+    gfm: true,
+  }) as string;
+  container.innerHTML = DOMPurify.sanitize(html, {
+    FORBID_TAGS: ['img'],
+    USE_PROFILES: { html: true },
+  });
+  for (const link of container.querySelectorAll<HTMLAnchorElement>('a')) {
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+  }
+}
+
+function updateChatMessage(
+  message: HTMLElement,
+  content: string,
+  options: { pending?: boolean; streaming?: boolean; error?: boolean } = {},
+): void {
+  message.classList.toggle('pending', Boolean(options.pending));
+  message.classList.toggle('streaming', Boolean(options.streaming));
+  message.classList.toggle('error', Boolean(options.error));
+  const body = message.querySelector<HTMLElement>('.chat-message-content');
+  if (!body) return;
+
+  if (message.classList.contains('assistant') && !options.error) {
+    renderChatMarkdown(body, content);
+  } else {
+    body.textContent = content;
+  }
+  chatMessagesElement.scrollTop = chatMessagesElement.scrollHeight;
+}
+
+function appendChatMessage(
+  role: 'user' | 'assistant',
+  content: string,
+  options: { pending?: boolean; error?: boolean } = {},
+): HTMLElement {
+  const message = document.createElement('article');
+  message.className = `chat-message ${role}`;
+  message.classList.toggle('pending', Boolean(options.pending));
+  message.classList.toggle('error', Boolean(options.error));
+
+  const roleLabel = document.createElement('div');
+  roleLabel.className = 'chat-message-role';
+  roleLabel.textContent = role === 'user' ? '你' : 'PDF Helper';
+
+  const body = document.createElement('div');
+  body.className = 'chat-message-content';
+
+  message.append(roleLabel, body);
+  chatMessagesElement.append(message);
+  updateChatMessage(message, content, options);
+  return message;
+}
+
+function requestAiStream(
+  messages: AiConversationMessage[],
+  context: AiStreamStartMessage['context'],
+  onDelta: (content: string) => void,
+): Promise<string> {
+  const requestId = crypto.randomUUID();
+  const port = browser.runtime.connect({ name: AI_STREAM_PORT_NAME });
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let content = '';
+
+    const finish = (callback: () => void): void => {
+      if (settled) return;
+      settled = true;
+      callback();
+      try {
+        port.disconnect();
+      } catch {
+        // The background may already have closed the port.
+      }
+    };
+
+    port.onMessage.addListener((value: unknown) => {
+      const message = value as AiStreamServerMessage;
+      if (!message || message.requestId !== requestId) return;
+
+      if (message.type === 'delta') {
+        content += message.content;
+        onDelta(message.content);
+        return;
+      }
+      if (message.type === 'done') {
+        finish(() => resolve(content));
+        return;
+      }
+      if (message.type === 'error') {
+        finish(() => reject(new Error(message.error)));
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('AI 流式连接已中断，请重新加载扩展后再试。'));
+    });
+
+    const startMessage: AiStreamStartMessage = {
+      type: 'start',
+      requestId,
+      messages,
+      context: { ...context, readingMode: resolvedReadingMode },
+    };
+    port.postMessage(startMessage);
+  });
+}
+
+function resetChatConversation(): void {
+  chatHistory = [];
+  chatMessagesElement.replaceChildren();
+  appendChatMessage(
+    'assistant',
+    '你好，我可以结合当前 PDF 和你选中的文字回答问题。选中一段原文后，可以直接让我翻译、解释或总结。',
+  );
+}
+
+function updateDeepSeekProviderStatus(): void {
+  const modelLabel = deepSeekModelSelect.selectedOptions[0]?.textContent?.trim()
+    || aiConfig.model;
+  chatProviderStatus.textContent = aiConfig.apiKey
+    ? `${modelLabel} · 已配置`
+    : 'AI 尚未配置';
+  chatProviderStatus.classList.toggle('configured', Boolean(aiConfig.apiKey));
+}
+
+function readDeepSeekConfigFromForm(): AiConfig {
+  const providerId = aiProviderSelect.value as AiProviderId;
+  return {
+    providerId,
+    apiKey: deepSeekApiKeyInput.value.trim(),
+    baseUrl: normalizeAiBaseUrl(deepSeekBaseUrlInput.value, providerId),
+    model: deepSeekModelSelect.value,
+    reasoning: deepSeekThinkingSelect.value as AiReasoningMode,
+  };
+}
+
+function getInternalNavigationDocumentKey(): string {
+  const fingerprint = getPdfFingerprint();
+  return fingerprint ? `fingerprint:${fingerprint}` : `source:${sourceName}`;
+}
+
+function updateCitationReturnButton() {
+  const entry = internalNavigationHistory.at(-1);
+  const isAvailable = Boolean(entry && entry.documentKey === getInternalNavigationDocumentKey());
+
+  citationReturnButton.classList.toggle('visible', isAvailable);
+  citationReturnButton.setAttribute('aria-hidden', String(!isAvailable));
+  citationReturnButton.tabIndex = isAvailable ? 0 : -1;
+  citationReturnPosition.textContent = isAvailable && entry ? `第 ${entry.pageNumber} 页` : '';
+}
+
+function clearInternalNavigationHistory() {
+  internalNavigationHistory.length = 0;
+  updateCitationReturnButton();
+}
+
+function captureInternalNavigationOrigin() {
+  if (
+    suppressInternalNavigationCapture ||
+    isReturningFromInternalNavigation ||
+    isOpeningDocument ||
+    !pdfDocument
+  ) {
+    return;
+  }
+
+  const position = getCurrentReadingPosition();
+  if (!position) return;
+
+  const documentKey = getInternalNavigationDocumentKey();
+  const previous = internalNavigationHistory.at(-1);
+  if (
+    previous?.documentKey === documentKey &&
+    previous.pageNumber === position.pageNumber &&
+    Math.abs(previous.scrollTop - position.scrollTop) < 4 &&
+    Math.abs(previous.scrollLeft - position.scrollLeft) < 4
+  ) {
+    return;
+  }
+
+  internalNavigationHistory.push({ ...position, documentKey });
+  if (internalNavigationHistory.length > 20) internalNavigationHistory.shift();
+  updateCitationReturnButton();
+}
+
+function navigateToDestinationWithoutReturnHistory(destination: unknown) {
+  suppressInternalNavigationCapture = true;
+  try {
+    return linkService.goToDestination(destination as any);
+  } finally {
+    // The navigation-aware wrapper captures synchronously before PDF.js starts
+    // resolving an asynchronous named destination.
+    suppressInternalNavigationCapture = false;
+  }
+}
+
+function returnToPreviousInternalNavigationPosition() {
+  if (!pdfDocument || isReturningFromInternalNavigation) return;
+
+  const documentKey = getInternalNavigationDocumentKey();
+  let entry = internalNavigationHistory.pop();
+  while (entry && entry.documentKey !== documentKey) entry = internalNavigationHistory.pop();
+  updateCitationReturnButton();
+  if (!entry) return;
+
+  isReturningFromInternalNavigation = true;
+  isRestoringReadingPosition = true;
+
+  const pageNumber = Math.min(pdfDocument.numPages, Math.max(1, Math.round(entry.pageNumber)));
+  if (Number.isFinite(entry.scale) && entry.scale > 0) {
+    pdfViewer.currentScale = Math.max(0.1, Math.min(10, entry.scale));
+  }
+  pdfViewer.currentPageNumber = pageNumber;
+
+  const exactTop = Math.max(0, entry.scrollTop);
+  const exactLeft = Math.max(0, entry.scrollLeft);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      viewerContainer.scrollTo({
+        top: exactTop,
+        left: exactLeft,
+        behavior: 'smooth',
+      });
+      window.setTimeout(() => {
+        viewerContainer.scrollTop = exactTop;
+        viewerContainer.scrollLeft = exactLeft;
+        isReturningFromInternalNavigation = false;
+        isRestoringReadingPosition = false;
+        updateControls();
+        scheduleReadingPositionSave();
+      }, 450);
+    });
+  });
+}
+
+const goToPdfDestination = linkService.goToDestination.bind(linkService);
+linkService.goToDestination = async (destination: any) => {
+  captureInternalNavigationOrigin();
+  await goToPdfDestination(destination);
+};
+
+function populateDeepSeekConfigForm(config: AiConfig): void {
+  aiProviderSelect.value = config.providerId;
+  deepSeekApiKeyInput.value = config.apiKey;
+  deepSeekModelSelect.value = config.model;
+  deepSeekThinkingSelect.value = config.reasoning;
+  deepSeekBaseUrlInput.value = config.baseUrl;
+}
+
+async function loadDeepSeekConfig(): Promise<void> {
+  const stored = await browser.storage.local.get([
+    AI_CONFIG_STORAGE_KEY,
+    LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
+  ]);
+  const current = stored[AI_CONFIG_STORAGE_KEY] as Partial<AiConfig> | undefined;
+  const legacy = stored[LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY] as (Partial<AiConfig> & {
+    thinking?: AiReasoningMode;
+  }) | undefined;
+  const value = current || legacy;
+  const providerId = value?.providerId ?? DEFAULT_AI_CONFIG.providerId;
+  aiConfig = {
+    ...DEFAULT_AI_CONFIG,
+    ...value,
+    providerId,
+    apiKey: value?.apiKey?.trim() ?? '',
+    baseUrl: normalizeAiBaseUrl(value?.baseUrl ?? DEFAULT_AI_CONFIG.baseUrl, providerId),
+    reasoning: value?.reasoning ?? legacy?.thinking ?? DEFAULT_AI_CONFIG.reasoning,
+  };
+  if (!current && legacy) await browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: aiConfig });
+  aiConfigLoaded = true;
+  populateDeepSeekConfigForm(aiConfig);
+  updateDeepSeekProviderStatus();
+}
+
+async function saveDeepSeekConfig(showSuccess = true): Promise<boolean> {
+  const nextConfig = readDeepSeekConfigFromForm();
+
+  if (!nextConfig.apiKey) {
+    deepSeekSettingsStatus.textContent = '请输入 DeepSeek API Key。';
+    deepSeekSettingsStatus.classList.add('error');
+    return false;
+  }
+
+  aiConfig = nextConfig;
+  aiConfigLoaded = true;
+  await browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: nextConfig });
+  populateDeepSeekConfigForm(nextConfig);
+  updateDeepSeekProviderStatus();
+  deepSeekSettingsStatus.classList.remove('error');
+  deepSeekSettingsStatus.textContent = showSuccess ? '设置已保存到当前浏览器。' : '';
+  return true;
+}
+
+async function testDeepSeekConnection(): Promise<void> {
+  if (!(await saveDeepSeekConfig(false))) return;
+
+  testDeepSeekButton.disabled = true;
+  deepSeekSettingsStatus.classList.remove('error');
+  deepSeekSettingsStatus.textContent = '正在连接 DeepSeek…';
+
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: 'pdf-helper:ai-test',
+    }) as AiRuntimeResponse;
+
+    if (!response?.ok) throw new Error(response?.error || '连接测试失败。');
+    const modelCount = response.models?.length ?? 0;
+    deepSeekSettingsStatus.textContent = modelCount
+      ? `连接成功，可用模型 ${modelCount} 个。`
+      : '连接成功。';
+  } catch (error) {
+    deepSeekSettingsStatus.classList.add('error');
+    deepSeekSettingsStatus.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    testDeepSeekButton.disabled = false;
+  }
+}
+
+function getReadingModeDocumentKey(documentProxy: PDFDocumentProxy | null = pdfDocument): string {
+  const fingerprint = getPdfFingerprint(documentProxy);
+  if (fingerprint) return `fingerprint:${fingerprint}`;
+  const fileName = sourceName ? getDisplayFileName(sourceName) : '';
+  return fileName && documentProxy ? `file:${fileName}:${documentProxy.numPages}` : '';
+}
+
+function updateReadingModeUi(): void {
+  readingModeSelect.value = readingModePreference;
+  detectReadingModeButton.disabled = !pdfDocument || readingModeDetectionPending;
+  detectReadingModeButton.textContent = readingModeDetectionPending ? '识别中…' : '重新识别';
+  const prefix = readingModePreference === 'auto' ? 'AI自动' : '手动';
+  readingModeStatus.textContent = readingModeDetectionPending
+    ? '正在识别…'
+    : readingModeError || `${prefix} · ${getReadingModeLabel(resolvedReadingMode)}`;
+  readingModeStatus.title = readingModeError || readingModeRationale || (readingModePreference === 'auto'
+    ? '由 AI 根据文件名、目录与正文样本识别，可手动切换'
+    : '当前文档使用手动指定的阅读模式');
+  readingModeStatus.classList.toggle('error', Boolean(readingModeError));
+  updateChatContextPreview();
+}
+
+async function readReadingModeStore(): Promise<Record<string, ReadingModeState>> {
+  const stored = await browser.storage.local.get(READING_MODE_STORAGE_KEY);
+  const value = stored[READING_MODE_STORAGE_KEY];
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, ReadingModeState>
+    : {};
+}
+
+async function persistReadingMode(state: ReadingModeState): Promise<void> {
+  if (!readingModeDocumentKey) return;
+  const modes = await readReadingModeStore();
+  modes[readingModeDocumentKey] = state;
+  await browser.storage.local.set({ [READING_MODE_STORAGE_KEY]: modes });
+}
+
+function collectOutlineTitles(
+  items: Array<{ title?: string; items?: unknown[] }> | null,
+  target: string[] = [],
+): string[] {
+  for (const item of items ?? []) {
+    const title = item.title?.trim();
+    if (title) target.push(title);
+    if (Array.isArray(item.items)) {
+      collectOutlineTitles(item.items as Array<{ title?: string; items?: unknown[] }>, target);
+    }
+  }
+  return target;
+}
+
+async function buildReadingModeSample(documentProxy: PDFDocumentProxy): Promise<{
+  sampleText: string;
+  outlineTitles: string[];
+}> {
+  const pages: string[] = [];
+  const pageNumbers = Array.from(
+    new Set([1, 2, 3, Math.ceil(documentProxy.numPages / 2)].filter(
+      (pageNumber) => pageNumber >= 1 && pageNumber <= documentProxy.numPages,
+    )),
+  );
+  for (const pageNumber of pageNumbers) {
+    if (pdfDocument !== documentProxy) throw new Error('PDF 已切换，请重新识别。');
+    const text = await extractPageText(documentProxy, pageNumber).catch(() => '');
+    if (text) pages.push(`[第 ${pageNumber} 页]\n${text.slice(0, 7000)}`);
+  }
+  const outline = await documentProxy.getOutline().catch(() => null) as
+    | Array<{ title?: string; items?: unknown[] }>
+    | null;
+  return {
+    sampleText: pages.join('\n\n').slice(0, 24000),
+    outlineTitles: collectOutlineTitles(outline).slice(0, 80),
+  };
+}
+
+async function detectReadingMode(force = false): Promise<void> {
+  const documentAtStart = pdfDocument;
+  if (!documentAtStart || readingModeDetectionPending) return;
+  if (!aiConfigLoaded) await loadDeepSeekConfig();
+  if (!aiConfig.apiKey) {
+    setDeepSeekSettingsOpen(true);
+    deepSeekSettingsStatus.classList.add('error');
+    deepSeekSettingsStatus.textContent = '“AI 自动识别阅读模式”需要 API Key；也可以先手动选择阅读模式。';
+    readingModeError = '自动识别需配置 API Key';
+    updateReadingModeUi();
+    return;
+  }
+  if (!force && readingModePreference !== 'auto') return;
+
+  readingModeDetectionPending = true;
+  readingModeError = '';
+  updateReadingModeUi();
+  try {
+    const { sampleText, outlineTitles } = await buildReadingModeSample(documentAtStart);
+    const response = await browser.runtime.sendMessage({
+      type: 'pdf-helper:ai-detect-reading-mode',
+      documentName: getDisplayFileName(sourceName),
+      sampleText,
+      outlineTitles,
+    }) as AiRuntimeResponse;
+    if (pdfDocument !== documentAtStart) return;
+    if (!response?.ok || !response.readingMode) {
+      throw new Error(response?.error || '没有收到有效的阅读模式识别结果。');
+    }
+    readingModePreference = 'auto';
+    resolvedReadingMode = response.readingMode;
+    readingModeRationale = response.rationale || '';
+    await persistReadingMode({
+      preference: 'auto',
+      resolved: response.readingMode,
+      source: 'ai',
+      rationale: response.rationale,
+      updatedAt: Date.now(),
+    });
+  } catch (error) {
+    readingModeError = `识别失败：${error instanceof Error ? error.message : String(error)}`;
+  } finally {
+    readingModeDetectionPending = false;
+    updateReadingModeUi();
+  }
+}
+
+async function loadReadingModeForDocument(documentProxy: PDFDocumentProxy): Promise<void> {
+  readingModeDocumentKey = getReadingModeDocumentKey(documentProxy);
+  readingModePreference = 'auto';
+  resolvedReadingMode = 'general';
+  readingModeRationale = '';
+  readingModeError = '';
+  const modes = await readReadingModeStore();
+  if (pdfDocument !== documentProxy) return;
+  const saved = modes[readingModeDocumentKey];
+  if (saved && isReadingModePreference(saved.preference)) {
+    readingModePreference = saved.preference;
+    resolvedReadingMode = saved.resolved || 'general';
+    readingModeRationale = saved.rationale || '';
+    updateReadingModeUi();
+    if (saved.preference !== 'auto' || saved.source === 'ai') return;
+  }
+  updateReadingModeUi();
+  await detectReadingMode(false);
+}
+
+async function setReadingModePreference(preference: ReadingModePreference): Promise<void> {
+  readingModePreference = preference;
+  readingModeError = '';
+  readingModeRationale = '';
+  if (preference === 'auto') {
+    updateReadingModeUi();
+    await detectReadingMode(true);
+    return;
+  }
+  resolvedReadingMode = preference;
+  await persistReadingMode({
+    preference,
+    resolved: preference,
+    source: 'manual',
+    updatedAt: Date.now(),
+  });
+  updateReadingModeUi();
+}
+
+async function sendChatMessage(): Promise<void> {
+  const content = chatInput.value.trim();
+  if (!content || chatRequestPending) return;
+
+  if (!aiConfig.apiKey) {
+    setDeepSeekSettingsOpen(true);
+    deepSeekSettingsStatus.classList.add('error');
+    deepSeekSettingsStatus.textContent = '先配置并保存 API Key，之后即可聊天。';
+    return;
+  }
+
+  chatRequestPending = true;
+  chatInput.value = '';
+  chatInput.disabled = true;
+  chatSendButton.disabled = true;
+  chatHistory.push({ role: 'user', content });
+  appendChatMessage('user', content);
+  const assistantMessage = appendChatMessage('assistant', '', { pending: true });
+  let streamedContent = '';
+  let renderFrame = 0;
+
+  const flushStreamedContent = (): void => {
+    renderFrame = 0;
+    updateChatMessage(assistantMessage, streamedContent, { streaming: true });
+  };
+
+  try {
+    const pageNumber = Math.max(1, selectedTextPageNumber || pdfViewer.currentPageNumber || 1);
+    const pageText = pdfDocument
+      ? await extractPageText(pdfDocument, pageNumber).catch(() => '')
+      : '';
+    const responseContent = await requestAiStream(
+      chatHistory,
+      {
+        documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
+        pageNumber,
+        totalPages: pdfDocument?.numPages,
+        pageText: pageText || undefined,
+        selectedText: selectedTextForAi || undefined,
+      },
+      (delta) => {
+        streamedContent += delta;
+        if (!renderFrame) renderFrame = window.requestAnimationFrame(flushStreamedContent);
+      },
+    );
+
+    if (renderFrame) window.cancelAnimationFrame(renderFrame);
+    streamedContent = responseContent;
+    if (!streamedContent.trim()) throw new Error('AI 模型没有返回有效回答。');
+
+    updateChatMessage(assistantMessage, streamedContent, { streaming: false });
+    chatHistory.push({ role: 'assistant', content: streamedContent });
+  } catch (error) {
+    if (renderFrame) window.cancelAnimationFrame(renderFrame);
+    updateChatMessage(
+      assistantMessage,
+      `请求失败：${error instanceof Error ? error.message : String(error)}`,
+      { error: true },
+    );
+  } finally {
+    chatRequestPending = false;
+    chatInput.disabled = false;
+    chatSendButton.disabled = false;
+    chatInput.focus();
+  }
+}
 
 function setTranslationState(message: string, isError = false): void {
   translationResultElement.textContent = message;
@@ -1803,7 +2501,7 @@ function scheduleSummaryGeneration(delay = 350): void {
   cancelPendingSummaryGeneration();
   summaryGenerationTimer = setTimeout(() => {
     summaryGenerationTimer = null;
-    if (!summaryPanelElement.hidden) void generateSummary();
+    if (activeAssistantView === 'summary' && !summaryPanelElement.hidden) void generateSummary();
   }, delay);
 }
 
@@ -1854,50 +2552,22 @@ async function generateSummary(force = false): Promise<void> {
     }
 
     setSummaryState('正在生成核心要点，请稍候…');
-    const response = await fetch(SUMMARY_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const summaryContent = await requestAiContent(
+      [{
+        role: 'user',
+        content: [
+          `请总结下面的 PDF 内容。范围：${context.rangeLabel}；来源：${context.sourceLabel}；位置：${context.positionLabel}。`,
+          '请输出 4—6 条简体中文核心要点，每行一条，不要添加标题、前言或结尾。',
+          '',
+          context.text,
+        ].join('\n'),
+      }],
+      {
+        documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
+        pageNumber: Math.max(1, pdfViewer.currentPageNumber || 1),
       },
-      body: JSON.stringify({
-        text: context.text,
-        scope: context.rangeLabel,
-        source: context.sourceLabel,
-        position: context.positionLabel,
-      }),
-      signal: controller.signal,
-    });
-
-    const responseText = await response.text();
-    let payload: SummaryApiResponse = {};
-
-    if (responseText) {
-      try {
-        payload = JSON.parse(responseText) as SummaryApiResponse;
-      } catch {
-        if (!response.ok) {
-          throw new Error(`总结后端返回了非 JSON 内容：${responseText.slice(0, 160)}`);
-        }
-      }
-    }
-
-    if (!response.ok) {
-      const detail = typeof payload.detail === 'string'
-        ? payload.detail
-        : `HTTP ${response.status}`;
-      throw new Error(detail);
-    }
-
-    if (
-      !Array.isArray(payload.summary)
-      || payload.summary.some((item) => typeof item !== 'string')
-    ) {
-      throw new Error('总结接口没有返回有效的要点列表。');
-    }
-
-    const points = payload.summary
-      .map((item) => item.trim())
-      .filter(Boolean);
+    );
+    const points = parseAiList(summaryContent).slice(0, 8);
 
     if (!points.length) throw new Error('模型没有返回总结内容。');
     if (controller.signal.aborted || scopeAtStart !== activeSummaryScope) return;
@@ -1907,14 +2577,6 @@ async function generateSummary(force = false): Promise<void> {
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return;
     if (controller.signal.aborted || scopeAtStart !== activeSummaryScope) return;
-
-    if (error instanceof TypeError) {
-      setSummaryState(
-        '无法连接本地总结后端。请确认 http://127.0.0.1:8000/health 可以打开。',
-        true,
-      );
-      return;
-    }
 
     const message = error instanceof Error ? error.message : String(error);
     setSummaryState(`总结失败：${message}`, true);
@@ -2056,7 +2718,7 @@ function scheduleCardGeneration(delay = 350): void {
   cancelPendingCardGeneration();
   cardGenerationTimer = setTimeout(() => {
     cardGenerationTimer = null;
-    if (!cardsPanelElement.hidden) void generatePaperCard();
+    if (activeAssistantView === 'cards' && !cardsPanelElement.hidden) void generatePaperCard();
   }, delay);
 }
 
@@ -2109,40 +2771,24 @@ async function generatePaperCard(force = false): Promise<void> {
   setCardState('正在读取原文并生成卡片，请稍候…');
 
   try {
-    const response = await fetch(CARD_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const cardContent = await requestAiContent(
+      [{
+        role: 'user',
+        content: [
+          `请根据下面原文生成“${getCardTypeLabel(context.cardType)}”学习卡片。`,
+          `文档：${context.documentName}；页码：${context.pageNumber}；位置：${context.positionLabel}。`,
+          '必须只输出 JSON，不要使用 Markdown 代码块。JSON 字段固定为：',
+          '{"title":"卡片标题","explanation":"核心解释","key_points":["要点1","要点2","要点3"],"purpose":"作用或解决的问题","understanding":"便于学习者理解的通俗表述"}',
+          '',
+          context.text,
+        ].join('\n'),
+      }],
+      {
+        documentName: context.documentName,
+        pageNumber: context.pageNumber,
       },
-      body: JSON.stringify({
-        text: context.text,
-        card_type: getCardTypeLabel(context.cardType),
-        document_title: context.documentName,
-        page_number: context.pageNumber,
-        position: context.positionLabel,
-      }),
-      signal: controller.signal,
-    });
-
-    const responseText = await response.text();
-    let payload: CardApiResponse = {};
-
-    if (responseText) {
-      try {
-        payload = JSON.parse(responseText) as CardApiResponse;
-      } catch {
-        if (!response.ok) {
-          throw new Error(`卡片后端返回了非 JSON 内容：${responseText.slice(0, 160)}`);
-        }
-      }
-    }
-
-    if (!response.ok) {
-      const detail = typeof payload.detail === 'string'
-        ? payload.detail
-        : `HTTP ${response.status}`;
-      throw new Error(detail);
-    }
+    );
+    const payload = parseAiJson(cardContent);
 
     if (
       typeof payload.title !== 'string'
@@ -2179,14 +2825,6 @@ async function generatePaperCard(force = false): Promise<void> {
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return;
     if (controller.signal.aborted) return;
-
-    if (error instanceof TypeError) {
-      setCardState(
-        '无法连接本地卡片后端。请确认 http://127.0.0.1:8000/health 可以打开。',
-        true,
-      );
-      return;
-    }
 
     const message = error instanceof Error ? error.message : String(error);
     setCardState(`卡片生成失败：${message}`, true);
@@ -2615,26 +3253,33 @@ function scheduleAutomaticTranslation(text: string): void {
 
 function updateAiSelectedSnippet(): void {
   const text = getViewerSelectionText();
-  if (!text || text === selectedTextForAi) return;
+  const pageNumber = Math.max(1, pdfViewer.currentPageNumber || 1);
+  if (!text || (text === selectedTextForAi && pageNumber === selectedTextPageNumber)) return;
 
   selectedTextForAi = text;
-  selectedTextPageNumber = Math.max(1, pdfViewer.currentPageNumber || 1);
+  selectedTextPageNumber = pageNumber;
   selectedSnippetElement.textContent = text;
   selectedSnippetElement.title = text;
+  updateChatContextPreview();
 
-  // 新选区产生后，取消旧请求并等待新选区稳定。
   translationAbortController?.abort();
   explanationAbortController?.abort();
-  setTranslationState('选区已更新，正在准备自动翻译…');
-  setExplanationState('选区已更新，正在准备 AI 解释…');
-  scheduleAutomaticTranslation(text);
+  cancelPendingAutomaticTranslation();
+  lastTranslatedText = '';
+  lastExplainedText = '';
+  if (activeAssistantView === 'translate') {
+    scheduleAutomaticTranslation(text);
+  } else {
+    setTranslationState('切换到“翻译/解释”后将自动处理当前选区。');
+    setExplanationState('当前选区也已同步到聊天上下文。');
+  }
 
   if (activeSummaryScope === 'selection') {
     lastSummaryRequestKey = '';
     lastSummaryPoints = [];
     currentSummaryContext = null;
     updateSummaryMetadata();
-    if (!summaryPanelElement.hidden) scheduleSummaryGeneration();
+    if (activeAssistantView === 'summary') scheduleSummaryGeneration();
   }
 
   lastCardRequestKey = '';
@@ -2642,7 +3287,7 @@ function updateAiSelectedSnippet(): void {
   currentGeneratedCard = null;
   cardAbortController?.abort();
   updateCardSourceSnippet();
-  if (!cardsPanelElement.hidden) scheduleCardGeneration();
+  if (activeAssistantView === 'cards') scheduleCardGeneration();
 }
 
 function scheduleAiSelectedSnippetUpdate(): void {
@@ -2659,61 +3304,26 @@ async function translateSelectedText(text: string): Promise<void> {
   setTranslationState('正在自动翻译，请稍候…');
 
   try {
-    const response = await fetch(TRANSLATION_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const translation = await requestAiContent(
+      [{
+        role: 'user',
+        content: '请把当前选中的 PDF 原文准确翻译成简体中文。保留原意、术语和逻辑，只输出译文，不要添加说明。',
+      }],
+      {
+        documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
+        pageNumber: selectedTextPageNumber || pdfViewer.currentPageNumber || 1,
+        selectedText: text,
       },
-      body: JSON.stringify({
-        text,
-        target_language: '简体中文',
-      }),
-      signal: controller.signal,
-    });
-
-    const responseText = await response.text();
-    let payload: TranslationApiResponse = {};
-
-    if (responseText) {
-      try {
-        payload = JSON.parse(responseText) as TranslationApiResponse;
-      } catch {
-        if (!response.ok) {
-          throw new Error(`翻译后端返回了非 JSON 内容：${responseText.slice(0, 160)}`);
-        }
-      }
-    }
-
-    if (!response.ok) {
-      const detail =
-        typeof payload.detail === 'string'
-          ? payload.detail
-          : `HTTP ${response.status}`;
-
-      throw new Error(detail);
-    }
-
-    if (typeof payload.translation !== 'string' || !payload.translation.trim()) {
-      throw new Error('翻译接口没有返回有效内容。');
-    }
+    );
 
     // 只展示当前选区对应的结果，防止慢请求覆盖新选区。
-    if (text !== selectedTextForAi) return;
+    if (controller.signal.aborted || text !== selectedTextForAi) return;
 
     lastTranslatedText = text;
-    setTranslationState(payload.translation.trim());
+    setTranslationState(translation);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return;
-    if (text !== selectedTextForAi) return;
-
-    if (error instanceof TypeError) {
-      setTranslationState(
-        '无法连接本地翻译后端。请先启动 http://127.0.0.1:8000，'
-          + '并确认浏览器可以打开 /health。',
-        true,
-      );
-      return;
-    }
+    if (controller.signal.aborted || text !== selectedTextForAi) return;
 
     const message = error instanceof Error ? error.message : String(error);
     setTranslationState(`翻译失败：${message}`, true);
@@ -2733,67 +3343,30 @@ async function explainSelectedText(text: string): Promise<void> {
   setExplanationState('正在生成 AI 解释，请稍候…');
 
   try {
-    const response = await fetch(EXPLANATION_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const explanation = await requestAiContent(
+      [{
+        role: 'user',
+        content: '请用简体中文解释当前选中的 PDF 原文，给出 3—5 条便于学习的核心要点，每行一条，不要添加标题。',
+      }],
+      {
+        documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
+        pageNumber: selectedTextPageNumber || pdfViewer.currentPageNumber || 1,
+        selectedText: text,
       },
-      body: JSON.stringify({ text }),
-      signal: controller.signal,
-    });
-
-    const responseText = await response.text();
-    let payload: ExplanationApiResponse = {};
-
-    if (responseText) {
-      try {
-        payload = JSON.parse(responseText) as ExplanationApiResponse;
-      } catch {
-        if (!response.ok) {
-          throw new Error(`解释后端返回了非 JSON 内容：${responseText.slice(0, 160)}`);
-        }
-      }
-    }
-
-    if (!response.ok) {
-      const detail =
-        typeof payload.detail === 'string'
-          ? payload.detail
-          : `HTTP ${response.status}`;
-
-      throw new Error(detail);
-    }
-
-    if (
-      !Array.isArray(payload.explanation)
-      || payload.explanation.some((item) => typeof item !== 'string')
-    ) {
-      throw new Error('解释接口没有返回有效的要点列表。');
-    }
-
-    const points = payload.explanation
-      .map((item) => item.trim())
-      .filter(Boolean);
+    );
+    const points = parseAiList(explanation).slice(0, 6);
 
     if (!points.length) {
       throw new Error('模型没有返回解释内容。');
     }
 
-    if (text !== selectedTextForAi) return;
+    if (controller.signal.aborted || text !== selectedTextForAi) return;
 
     lastExplainedText = text;
     renderExplanationPoints(points);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return;
-    if (text !== selectedTextForAi) return;
-
-    if (error instanceof TypeError) {
-      setExplanationState(
-        '无法连接本地解释后端。请确认 http://127.0.0.1:8000/health 可以打开。',
-        true,
-      );
-      return;
-    }
+    if (controller.signal.aborted || text !== selectedTextForAi) return;
 
     const message = error instanceof Error ? error.message : String(error);
     setExplanationState(`解释失败：${message}`, true);
@@ -3291,7 +3864,10 @@ function getHighlightPathPoints(editorElement: HTMLElement): Array<{ x: number; 
     index += 1;
     return value;
   };
-  const hasNumber = () => index < tokens.length && !isCommandToken(tokens[index]);
+  const hasNumber = () => {
+    const token = tokens[index];
+    return token !== undefined && !isCommandToken(token);
+  };
   const addPoint = (nextX: number, nextY: number) => {
     if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return;
     x = nextX;
@@ -3300,8 +3876,10 @@ function getHighlightPathPoints(editorElement: HTMLElement): Array<{ x: number; 
   };
 
   while (index < tokens.length) {
-    if (isCommandToken(tokens[index])) {
-      command = tokens[index];
+    const token = tokens[index];
+    if (token === undefined) break;
+    if (isCommandToken(token)) {
+      command = token;
       index += 1;
     }
 
@@ -3380,10 +3958,10 @@ function findHighlightNoteAnchor(editorElement: HTMLElement): { x: number; y: nu
     const minY = Math.min(...points.map((point) => point.y));
     const lineTolerance = Math.max(0.01, Math.min(0.08, 18 / Math.max(rect.height, 1)));
     const topLinePoints = points.filter((point) => point.y <= minY + lineTolerance);
-    const topRightPoint = topLinePoints.reduce(
-      (best, point) => (point.x > best.x ? point : best),
-      topLinePoints[0] ?? points[0],
-    );
+    let topRightPoint = topLinePoints[0] ?? points[0];
+    for (const point of topLinePoints) {
+      if (!topRightPoint || point.x > topRightPoint.x) topRightPoint = point;
+    }
 
     if (topRightPoint) {
       return {
@@ -3993,6 +4571,7 @@ async function openPdf(
   currentRecentEntryId = null;
   pendingReadingPosition = null;
   isRestoringReadingPosition = false;
+  clearInternalNavigationHistory();
 
   setStatus(`正在解析 ${name}…`);
   textStatus.textContent = '正在建立文字层…';
@@ -4043,10 +4622,13 @@ async function openPdf(
     selectedSnippetElement.title = '';
     setTranslationState('选中英文后将自动翻译。');
     setExplanationState('选中英文后将自动生成解释。');
+    updateChatContextPreview();
+    resetChatConversation();
     resetSummaryState();
     resetCardState();
     resetPaperCardPageState();
     void renderDocumentOutline(documentProxy);
+    void loadReadingModeForDocument(documentProxy);
     if (!paperCardPageElement.hidden) void generatePaperOverviewCard();
     markSavedChanges();
     window.setTimeout(() => {
@@ -4070,6 +4652,12 @@ async function openPdf(
     restoredAnnotationWarmUpPending = false;
     annotationEditorWarmUpInFlight = false;
     clearOutlineList('打开 PDF 后显示目录');
+    readingModeDocumentKey = '';
+    readingModePreference = 'auto';
+    resolvedReadingMode = 'general';
+    readingModeRationale = '';
+    readingModeError = '';
+    updateReadingModeUi();
     resetSummaryState();
     resetCardState();
     sourceName = '';
@@ -4147,6 +4735,7 @@ eventBus.on('pagesinit', () => {
 eventBus.on('pagechanging', () => {
   updateControls();
   updateSummaryMetadata();
+  updateChatContextPreview();
   scheduleReadingPositionSave();
 
   if (!summaryPanelElement.hidden && activeSummaryScope !== 'selection') {
@@ -4209,17 +4798,77 @@ outlineToggleButton?.addEventListener('click', () => {
   setLeftPanelCollapsed(!appFrame?.classList.contains('left-panel-collapsed'));
 });
 
-collapseLeftPanelButton?.addEventListener('click', () => {
-  setLeftPanelCollapsed(true);
-});
-
 aiPanelToggleButton?.addEventListener('click', () => {
   if (!paperCardPageElement.hidden) {
     closePaperCardPage();
+    appFrame?.classList.remove('right-panel-collapsed');
+    setAssistantView('chat');
     return;
   }
+  const willOpen = appFrame?.classList.contains('right-panel-collapsed') ?? false;
   appFrame?.classList.toggle('right-panel-collapsed');
+  if (willOpen) setAssistantView('chat');
 });
+
+for (const button of assistantViewButtons) {
+  button.addEventListener('click', () => {
+    const view = button.dataset.assistantView as AssistantView | undefined;
+    if (view) setAssistantView(view);
+  });
+}
+
+aiSettingsButton.addEventListener('click', () => {
+  setDeepSeekSettingsOpen(assistantSettingsPanel.hidden);
+});
+
+readingModeSelect.addEventListener('change', () => {
+  const preference = readingModeSelect.value;
+  if (isReadingModePreference(preference)) void setReadingModePreference(preference);
+});
+
+detectReadingModeButton.addEventListener('click', () => {
+  readingModePreference = 'auto';
+  void detectReadingMode(true);
+});
+
+aiProviderSelect.addEventListener('change', () => {
+  const providerId = aiProviderSelect.value as AiProviderId;
+  const provider = AI_PROVIDERS.find((item) => item.id === providerId);
+  if (!provider?.available) {
+    aiProviderSelect.value = aiConfig.providerId;
+    deepSeekSettingsStatus.classList.add('error');
+    deepSeekSettingsStatus.textContent = '该模型供应商尚未接入。';
+    return;
+  }
+  deepSeekBaseUrlInput.value = provider.defaultBaseUrl;
+});
+
+closeDeepSeekSettingsButton.addEventListener('click', () => {
+  setDeepSeekSettingsOpen(false);
+});
+
+saveDeepSeekSettingsButton.addEventListener('click', () => {
+  void saveDeepSeekConfig().then((saved) => {
+    if (saved && pdfDocument && readingModePreference === 'auto') void detectReadingMode(true);
+  });
+});
+
+testDeepSeekButton.addEventListener('click', () => {
+  void testDeepSeekConnection();
+});
+
+chatForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void sendChatMessage();
+});
+
+chatInput.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  void sendChatMessage();
+});
+
+clearChatButton.addEventListener('click', resetChatConversation);
 
 function activateAiTab(tabName: string): void {
   for (const tab of aiTabButtons) {
@@ -4229,7 +4878,18 @@ function activateAiTab(tabName: string): void {
     panel.hidden = panel.dataset.aiPanel !== tabName;
   }
 
-  if (tabName === 'summary') {
+  if (tabName === 'translate') {
+    const text = selectedTextForAi || getViewerSelectionText();
+    if (text) {
+      selectedTextForAi = text;
+      selectedSnippetElement.textContent = text;
+      selectedSnippetElement.title = text;
+      scheduleAutomaticTranslation(text);
+    } else {
+      setTranslationState('请先在 PDF 中选中需要翻译的原文。');
+      setExplanationState('选中原文后将自动生成解释。');
+    }
+  } else if (tabName === 'summary') {
     updateSummaryMetadata();
     scheduleSummaryGeneration(0);
   } else if (tabName === 'cards') {
@@ -4731,6 +5391,7 @@ viewerElement.addEventListener('pointerdown', () => {
 
 viewerElement.addEventListener('pointerup', () => scheduleAiSelectedSnippetUpdate());
 viewerElement.addEventListener('keyup', () => scheduleAiSelectedSnippetUpdate());
+citationReturnButton.addEventListener('click', returnToPreviousInternalNavigationPosition);
 viewerContainer.addEventListener('scroll', scheduleCustomSelectionRender, { passive: true });
 viewerContainer.addEventListener(
   'scroll',
@@ -4796,6 +5457,9 @@ updateNoteIndicatorsVisibility();
 clearOutlineList('打开 PDF 后显示目录');
 setLeftPanelCollapsed(false);
 updateControls();
+updateChatContextPreview();
+updateReadingModeUi();
+void loadDeepSeekConfig();
 textStatus.textContent = '交互已就绪';
 
 const source = new URLSearchParams(window.location.search).get('src');
