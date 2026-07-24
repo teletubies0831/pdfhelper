@@ -1,0 +1,257 @@
+:root {
+  color: #172033;
+  background: #f4f7fb;
+  font-family:
+    Inter, "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 300px;
+}
+
+button {
+  font: inherit;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eyebrow,
+.section-label {
+  margin: 0 0 5px;
+  color: #65728a;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22a06b;
+  box-shadow: 0 0 0 5px rgb(34 160 107 / 12%);
+}
+
+.document-card,
+.reader-card,
+.selection-card,
+.result-card {
+  border: 1px solid #dfe5ef;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgb(28 42 69 / 5%);
+  padding: 15px;
+}
+
+.reader-badge {
+  border-radius: 999px;
+  background: #eef1f6;
+  color: #647187;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.reader-badge[data-state="loading"] {
+  background: #fff4d6;
+  color: #8a5b00;
+}
+
+.reader-badge[data-state="success"] {
+  background: #dcf7e9;
+  color: #14734b;
+}
+
+.reader-badge[data-state="error"] {
+  background: #fee4e2;
+  color: #b42318;
+}
+
+.reader-status {
+  margin: 8px 0 12px;
+  color: #56647b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.reader-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.reader-metrics div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border-radius: 9px;
+  background: #f5f7fb;
+  padding: 9px;
+}
+
+.reader-metrics strong {
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+}
+
+.reader-metrics span {
+  color: #718096;
+  font-size: 11px;
+}
+
+.reader-card details {
+  margin-bottom: 10px;
+  color: #536178;
+  font-size: 12px;
+}
+
+.reader-card details p {
+  max-height: 150px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #f7f9fc;
+  line-height: 1.6;
+  padding: 9px;
+  white-space: pre-wrap;
+}
+
+.reader-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.reader-actions button,
+.file-fallback {
+  display: inline-flex;
+  min-height: 36px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfd8e7;
+  border-radius: 9px;
+  background: #fff;
+  color: #26354d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reader-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.file-fallback input {
+  display: none;
+}
+
+.document-card strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-card p,
+footer p {
+  margin: 7px 0 0;
+  overflow: hidden;
+  color: #718096;
+  font-size: 12px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.action-badge {
+  border-radius: 999px;
+  background: #e9f0ff;
+  color: #295bb5;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.empty-copy,
+.result-card p {
+  margin: 8px 0 0;
+  color: #56647b;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+blockquote {
+  max-height: 220px;
+  margin: 9px 0 0;
+  overflow: auto;
+  border-left: 3px solid #3b73dc;
+  color: #2b3649;
+  font-size: 14px;
+  line-height: 1.65;
+  padding-left: 12px;
+  white-space: pre-wrap;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.actions button,
+.secondary-button {
+  min-height: 38px;
+  cursor: pointer;
+  border: 1px solid #cfd8e7;
+  border-radius: 10px;
+  background: #fff;
+  color: #26354d;
+  font-weight: 700;
+}
+
+.actions button:hover,
+.secondary-button:hover {
+  border-color: #3b73dc;
+  color: #245fc6;
+}
+
+footer {
+  margin-top: auto;
+}
+
+.secondary-button {
+  width: 100%;
+}

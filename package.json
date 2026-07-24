@@ -1,0 +1,26 @@
+{
+  "name": "pdf-read-helper-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wxt -b edge",
+    "dev:chrome": "wxt -b chrome",
+    "build": "wxt build -b edge",
+    "build:chrome": "wxt build -b chrome",
+    "zip": "wxt zip -b edge",
+    "zip:chrome": "wxt zip -b chrome",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "dompurify": "^3.2.7",
+    "marked": "^16.3.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.4.624"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "wxt": "^0.20.15"
+  },
+  "packageManager": "pnpm@11.7.0+sha512.19cc852c120c7125760f2443ee6be0ca5b40f9f50598de1a09a1f177503e010e57c23c77646e01e761de59bf874fb22a3398c33ab9691fc13eb946b6f0f4d620"
+}

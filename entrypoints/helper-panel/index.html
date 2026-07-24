@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Helper</title>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">原生 PDF 阅读伴侣</p>
+          <h1>PDF Helper</h1>
+        </div>
+        <span class="status-dot" title="扩展已运行"></span>
+      </header>
+
+      <section class="document-card">
+        <span class="section-label">当前页面</span>
+        <strong id="page-title">等待获取页面信息</strong>
+        <p id="page-url">请在浏览器中打开一个 PDF。</p>
+      </section>
+
+      <section class="reader-card">
+        <div class="section-heading">
+          <span class="section-label">完整PDF读取验证</span>
+          <span id="reader-badge" class="reader-badge">未验证</span>
+        </div>
+        <p id="reader-status" class="reader-status">
+          验证插件能否从当前原生PDF标签取得文件并提取每一页文字。
+        </p>
+        <div id="reader-metrics" class="reader-metrics" hidden>
+          <div><strong id="metric-pages">0</strong><span>总页数</span></div>
+          <div><strong id="metric-text-pages">0</strong><span>文字页</span></div>
+          <div><strong id="metric-characters">0</strong><span>字符数</span></div>
+        </div>
+        <details id="reader-preview-wrap" hidden>
+          <summary>查看提取文字预览</summary>
+          <p id="reader-preview"></p>
+        </details>
+        <div class="reader-actions">
+          <button id="analyze-current-pdf" type="button">读取当前PDF</button>
+          <label class="file-fallback">
+            手动选择PDF
+            <input id="analyze-file-input" type="file" accept="application/pdf,.pdf" />
+          </label>
+        </div>
+      </section>
+
+      <section class="selection-card">
+        <div class="section-heading">
+          <span class="section-label">选中的内容</span>
+          <span id="action-label" class="action-badge" hidden></span>
+        </div>
+        <p id="empty-selection" class="empty-copy">
+          在 PDF 中选中文字，右键选择“发送给 PDF Helper”。
+        </p>
+        <blockquote id="selection-text" hidden></blockquote>
+      </section>
+
+      <section class="actions" aria-label="文字处理操作">
+        <button type="button" data-action="explain">解释</button>
+        <button type="button" data-action="translate">翻译</button>
+        <button type="button" data-action="card">知识卡片</button>
+      </section>
+
+      <section id="result-card" class="result-card" hidden>
+        <span class="section-label">处理结果</span>
+        <p id="result-text"></p>
+      </section>
+
+      <footer>
+        <button id="open-enhanced-viewer" class="secondary-button" type="button">
+          打开增强阅读模式
+        </button>
+        <p>增强模式使用 PDF.js；原生模式保留浏览器的搜索、批注和阅读体验。</p>
+      </footer>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

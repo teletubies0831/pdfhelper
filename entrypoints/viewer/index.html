@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Helper 阅读器</title>
+  </head>
+  <body>
+    <div class="app-frame">
+<header class="toolbar">
+  <div class="brand">
+    <strong>PDF Helper</strong>
+  </div>
+
+  <div class="toolbar-menu" data-toolbar-menu>
+    <button
+      class="toolbar-pill toolbar-menu-trigger"
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded="false"
+    >
+      <span aria-hidden="true">▣</span>
+      文件
+      <span class="toolbar-menu-caret" aria-hidden="true">⌄</span>
+    </button>
+    <div class="toolbar-menu-panel" role="menu" hidden>
+      <div class="toolbar-menu-section">
+        <div class="toolbar-menu-heading">文件管理</div>
+        <button id="recent-files-button" class="toolbar-menu-item" type="button" role="menuitem">
+          <span aria-hidden="true">◷</span>
+          最近打开
+        </button>
+        <label
+          id="open-file"
+          class="toolbar-menu-item"
+          for="file-input"
+          role="menuitem"
+          tabindex="0"
+        >
+          <svg class="toolbar-icon open-pdf-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6.5 3.5h7l4 4v13h-11z" />
+            <path d="M13.5 3.5v4h4" />
+            <path d="M8.8 14.8h6.4" />
+            <path d="M8.8 17.2h4.6" />
+            <path d="M8.8 10.6h2.1a1.5 1.5 0 0 1 0 3H8.8z" />
+          </svg>
+          打开 PDF
+        </label>
+        <button id="save-annotated-pdf" class="toolbar-menu-item primary-button" type="button" role="menuitem">
+          <span aria-hidden="true">↓</span>
+          保存批注 PDF
+        </button>
+      </div>
+    </div>
+  </div>
+  <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" />
+
+  <button id="outline-toggle" class="toolbar-pill" type="button" title="左侧目录面板">
+    <span class="toolbar-icon">☰</span>
+    目录
+  </button>
+
+  <div class="reading-mode-control" aria-label="阅读模式">
+    <span>阅读模式</span>
+    <select id="reading-mode-select" title="选择当前 PDF 的阅读策略">
+      <option value="auto">AI 自动识别</option>
+      <option value="general">通用阅读</option>
+      <option value="paper">论文精读</option>
+      <option value="novel">小说阅读</option>
+    </select>
+    <button id="detect-reading-mode" type="button" title="使用当前 API Key 重新识别">重新识别</button>
+    <small id="reading-mode-status">AI自动 · 通用阅读</small>
+  </div>
+
+  <div class="toolbar-menu annotation-tools" data-toolbar-menu>
+    <button
+      class="toolbar-pill toolbar-menu-trigger"
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded="false"
+    >
+      <span aria-hidden="true">✎</span>
+      批注工具
+      <span class="toolbar-menu-caret" aria-hidden="true">⌄</span>
+    </button>
+    <div class="toolbar-menu-panel annotation-menu-panel" role="menu" hidden>
+      <div class="toolbar-menu-section">
+        <div class="toolbar-menu-heading">批注模式</div>
+        <div class="toolbar-menu-grid annotation-mode-grid">
+          <button class="toolbar-menu-item" type="button" data-editor-mode="select" role="menuitem" title="选择文字；选择批注后可移动或编辑">
+            移动 / 选择
+          </button>
+          <button class="toolbar-menu-item" type="button" data-editor-mode="highlight" role="menuitem" title="选中文字并高亮">
+            高亮
+          </button>
+          <button class="toolbar-menu-item" type="button" data-editor-mode="ink" role="menuitem" title="自由绘制">
+            画笔
+          </button>
+          <button class="toolbar-menu-item" type="button" data-editor-mode="text" role="menuitem" title="在页面上添加文本">
+            文字批注
+          </button>
+        </div>
+      </div>
+
+      <div class="toolbar-menu-section">
+        <div class="toolbar-menu-heading">样式</div>
+        <label class="highlight-color-control toolbar-menu-color" title="高亮颜色">
+          <span>高亮颜色</span>
+          <input id="highlight-color" type="color" value="#fff066" />
+        </label>
+      </div>
+
+      <div class="toolbar-menu-section">
+        <div class="toolbar-menu-heading">编辑与管理</div>
+        <div class="toolbar-menu-grid">
+          <button id="undo-annotation" class="toolbar-menu-item" type="button" role="menuitem" title="撤销批注">撤销</button>
+          <button id="redo-annotation" class="toolbar-menu-item" type="button" role="menuitem" title="重做批注">重做</button>
+          <button id="smart-copy" class="toolbar-menu-item" type="button" role="menuitem" title="整理复制选中文本">整理复制</button>
+          <button id="toggle-notes" class="toolbar-menu-item" type="button" role="menuitem" title="隐藏/显示所有笔记标记">隐藏笔记</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar-menu ai-tools-menu" data-toolbar-menu>
+    <button
+      class="toolbar-pill toolbar-menu-trigger"
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded="false"
+    >
+      <span aria-hidden="true">✦</span>
+      AI 工具
+      <span class="toolbar-menu-caret" aria-hidden="true">⌄</span>
+    </button>
+    <div class="toolbar-menu-panel" role="menu" hidden>
+      <div class="toolbar-menu-section">
+        <div class="toolbar-menu-heading">智能阅读</div>
+        <button id="ai-panel-toggle" class="toolbar-menu-item ai-entry active" type="button" role="menuitem">
+          <span aria-hidden="true">✦</span>
+          聊天与解释
+        </button>
+        <button id="paper-card-entry" class="toolbar-menu-item" type="button" role="menuitem">
+          <span aria-hidden="true">▤</span>
+          生成论文卡片
+        </button>
+        <button id="knowledge-base-entry" class="toolbar-menu-item" type="button" role="menuitem">
+          <span aria-hidden="true">▦</span>
+          知识库
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="document-name" class="document-name" title="尚未打开文件">尚未打开文件</div>
+  <button
+    id="ai-settings-button"
+    class="toolbar-icon-button toolbar-settings-button"
+    type="button"
+    title="AI 设置"
+    aria-label="打开 AI 设置"
+  >
+    ⚙ 设置
+  </button>
+</header>
+
+      <section id="paper-card-page" class="paper-card-page" hidden aria-label="生成论文卡片页面">
+        <div class="paper-card-page-header">
+          <button id="paper-card-back" class="paper-card-back" type="button" aria-label="返回 PDF">←</button>
+          <div>
+            <h1>生成论文卡片页面</h1>
+            <p>提炼论文关键信息，结构化记录，便于后续写作与复用</p>
+          </div>
+        </div>
+
+        <div class="paper-card-page-body">
+          <div class="paper-card-command-bar">
+            <div class="paper-card-current-document">
+              <strong>当前论文：</strong>
+              <span id="paper-card-document-name">尚未打开 PDF</span>
+            </div>
+            <div class="paper-card-command-actions">
+              <button id="regenerate-paper-card" type="button">↻ 重新生成</button>
+              <button id="save-paper-card-page" type="button">▣ 保存卡片</button>
+              <button id="export-paper-card" type="button">↓ 导出</button>
+              <button id="return-to-pdf" type="button">◈ 回到PDF</button>
+            </div>
+          </div>
+
+          <div id="paper-card-page-status" class="paper-card-page-status" hidden aria-live="polite"></div>
+
+          <form id="paper-card-form" class="paper-card-form">
+            <section class="paper-card-form-section">
+              <h2><span aria-hidden="true">▱</span> 论文基本信息</h2>
+              <div class="paper-card-field-grid two-columns">
+                <label>
+                  <span>标题：</span>
+                  <input id="paper-title" name="title" type="text" placeholder="请输入论文标题" />
+                </label>
+                <label>
+                  <span>作者：</span>
+                  <input id="paper-authors" name="authors" type="text" placeholder="请输入作者" />
+                </label>
+                <label>
+                  <span>年份 / 会议 / 期刊：</span>
+                  <input id="paper-venue-year" name="venueYear" type="text" placeholder="请输入年份 / 会议 / 期刊" />
+                </label>
+                <label>
+                  <span>研究领域：</span>
+                  <input id="paper-research-area" name="researchArea" type="text" placeholder="请输入研究领域" />
+                </label>
+              </div>
+            </section>
+
+            <section class="paper-card-form-section">
+              <h2><span aria-hidden="true">♙</span> 核心内容</h2>
+              <div class="paper-card-field-grid">
+                <label>
+                  <span>一句话总结：</span>
+                  <textarea id="paper-one-sentence-summary" name="oneSentenceSummary" rows="2" placeholder="用一句话概括论文的核心内容"></textarea>
+                </label>
+                <label>
+                  <span>研究问题：</span>
+                  <textarea id="paper-research-problem" name="researchProblem" rows="2" placeholder="论文试图解决的关键问题是什么？"></textarea>
+                </label>
+                <label>
+                  <span>核心创新：</span>
+                  <textarea id="paper-core-innovation" name="coreInnovation" rows="2" placeholder="论文的主要创新有哪些？"></textarea>
+                </label>
+                <label>
+                  <span>方法概述：</span>
+                  <textarea id="paper-method-overview" name="methodOverview" rows="2" placeholder="论文采用了怎样的方法或技术路线？"></textarea>
+                </label>
+              </div>
+            </section>
+
+            <section class="paper-card-form-section">
+              <h2><span aria-hidden="true">♧</span> 实验与结论</h2>
+              <div class="paper-card-field-grid two-columns first-row-two-columns">
+                <label>
+                  <span>数据集：</span>
+                  <textarea id="paper-datasets" name="datasets" rows="2" placeholder="使用的数据集名称及规模"></textarea>
+                </label>
+                <label>
+                  <span>评估指标：</span>
+                  <textarea id="paper-metrics" name="metrics" rows="2" placeholder="用于评估的方法或指标"></textarea>
+                </label>
+                <label class="full-width">
+                  <span>主要实验结论：</span>
+                  <textarea id="paper-main-findings" name="mainFindings" rows="2" placeholder="实验得到的主要结论是什么？"></textarea>
+                </label>
+                <label class="full-width">
+                  <span>局限性：</span>
+                  <textarea id="paper-limitations" name="limitations" rows="2" placeholder="论文中提到的局限性或可能的不足"></textarea>
+                </label>
+              </div>
+            </section>
+
+            <section class="paper-card-form-section">
+              <h2><span aria-hidden="true">♙</span> 我的判断</h2>
+              <div class="paper-card-field-grid two-columns first-row-two-columns">
+                <label>
+                  <span>阅读状态：</span>
+                  <select id="paper-reading-status" name="readingStatus">
+                    <option value="">请选择阅读状态</option>
+                    <option value="待读">待读</option>
+                    <option value="略读完成">略读完成</option>
+                    <option value="精读中">精读中</option>
+                    <option value="精读完成">精读完成</option>
+                  </select>
+                </label>
+                <label>
+                  <span>是否建议精读：</span>
+                  <select id="paper-recommend-deep-reading" name="recommendDeepReading">
+                    <option value="">请选择</option>
+                    <option value="建议精读">建议精读</option>
+                    <option value="建议按需精读">建议按需精读</option>
+                    <option value="暂不建议精读">暂不建议精读</option>
+                  </select>
+                </label>
+                <label class="full-width">
+                  <span>适合引用的点：</span>
+                  <textarea id="paper-citation-points" name="citationPoints" rows="2" placeholder="论文中适合引用的结论、方法或亮点"></textarea>
+                </label>
+                <label class="full-width">
+                  <span>我的备注：</span>
+                  <textarea id="paper-personal-notes" name="personalNotes" rows="2" placeholder="补充想法、记录你的思考或规划应用计划"></textarea>
+                </label>
+              </div>
+            </section>
+          </form>
+
+          <div class="paper-card-privacy-note">
+            <strong>ⓘ 温馨提示：</strong> 隐私、实验数据和结论仅保留论文明确披露的信息；未出现的内容统一标记为“原文未明确出现”。
+          </div>
+        </div>
+      </section>
+
+
+      <section id="knowledge-base-page" class="knowledge-base-page" hidden aria-label="知识库页面">
+        <div class="knowledge-base-shell">
+          <aside class="knowledge-sidebar" aria-label="知识库导航">
+            <div class="knowledge-sidebar-header">
+              <button id="knowledge-base-back" class="knowledge-back-button" type="button" aria-label="返回 PDF">←</button>
+              <div class="knowledge-brand-mark" aria-hidden="true">▣</div>
+              <div>
+                <strong>知识库</strong>
+                <p>集中管理 AI 笔记与卡片</p>
+              </div>
+            </div>
+
+            <nav class="knowledge-type-nav" aria-label="内容类型">
+              <button class="active" data-knowledge-filter="all" type="button">
+                <span>▤ 全部内容</span><strong id="knowledge-count-all">0</strong>
+              </button>
+              <button data-knowledge-filter="note" type="button">
+                <span>▧ 保存的笔记</span><strong id="knowledge-count-note">0</strong>
+              </button>
+              <button data-knowledge-filter="reading-card" type="button">
+                <span>◇ 阅读卡片</span><strong id="knowledge-count-reading-card">0</strong>
+              </button>
+              <button data-knowledge-filter="paper-card" type="button">
+                <span>▱ 论文卡片</span><strong id="knowledge-count-paper-card">0</strong>
+              </button>
+            </nav>
+
+            <section class="knowledge-sidebar-section">
+              <div class="knowledge-sidebar-section-heading">
+                <strong>分类</strong>
+              </div>
+              <div id="knowledge-category-list" class="knowledge-sidebar-list"></div>
+            </section>
+
+            <section class="knowledge-sidebar-section">
+              <div class="knowledge-sidebar-section-heading">
+                <strong>标签</strong>
+              </div>
+              <div id="knowledge-tag-list" class="knowledge-tag-cloud"></div>
+            </section>
+
+            <section class="knowledge-recent-card">
+              <span>◷</span>
+              <div>
+                <strong>最近保存</strong>
+                <p id="knowledge-recent-summary">还没有保存内容</p>
+              </div>
+            </section>
+          </aside>
+
+          <main class="knowledge-main">
+            <header class="knowledge-main-header">
+              <div>
+                <h1 id="knowledge-page-title">全部内容</h1>
+                <p>共 <strong id="knowledge-total-count">0</strong> 条内容，来自 <strong id="knowledge-document-count">0</strong> 篇文档</p>
+              </div>
+              <div class="knowledge-main-actions">
+                <button id="knowledge-refresh" type="button">↻ 刷新</button>
+                <button id="knowledge-import" type="button">⇧ 导入笔记</button>
+                <input id="knowledge-import-input" type="file" accept="application/json,.json" hidden />
+                <button id="knowledge-new-note" class="primary-button" type="button">＋ 新建笔记</button>
+              </div>
+            </header>
+
+            <div class="knowledge-workspace-tabs" role="tablist" aria-label="知识库工作模式">
+              <button class="active" data-knowledge-mode="library" type="button" role="tab" aria-selected="true">内容库</button>
+              <button data-knowledge-mode="qa" type="button" role="tab" aria-selected="false">✦ 跨文献问答</button>
+              <button data-knowledge-mode="insights" type="button" role="tab" aria-selected="false">◇ 研究洞察</button>
+            </div>
+
+            <div id="knowledge-library-view">
+            <div class="knowledge-search-row">
+              <label class="knowledge-search-box">
+                <span aria-hidden="true">⌕</span>
+                <input id="knowledge-search-input" type="search" placeholder="搜索笔记、卡片、论文标题、关键词…" />
+              </label>
+              <select id="knowledge-sort-select" aria-label="排序方式">
+                <option value="newest">最近保存</option>
+                <option value="oldest">最早保存</option>
+                <option value="title">按标题</option>
+              </select>
+              <select id="knowledge-group-select" aria-label="分组方式">
+                <option value="none">不分组</option>
+                <option value="source">按来源文档</option>
+                <option value="category">按分类</option>
+              </select>
+            </div>
+
+            <div class="knowledge-filter-tabs" role="tablist" aria-label="知识库筛选">
+              <button class="active" data-knowledge-filter="all" type="button">全部</button>
+              <button data-knowledge-filter="note" type="button">笔记</button>
+              <button data-knowledge-filter="reading-card" type="button">阅读卡片</button>
+              <button data-knowledge-filter="paper-card" type="button">论文卡片</button>
+            </div>
+
+            <div id="knowledge-page-status" class="knowledge-page-status" hidden aria-live="polite"></div>
+            <div id="knowledge-list" class="knowledge-card-grid" aria-live="polite"></div>
+            </div>
+
+            <section id="knowledge-research-view" class="knowledge-research-view" hidden aria-label="跨文献研究分析">
+              <div class="knowledge-research-hero">
+                <div>
+                  <span class="knowledge-research-eyebrow">KNOWLEDGE SYNTHESIS</span>
+                  <h2 id="knowledge-research-heading">跨文献问答</h2>
+                  <p id="knowledge-research-description">让 AI 综合你保存的论文卡片、阅读卡片和笔记，并用 [K1]、[K2] 标注依据。</p>
+                </div>
+                <div class="knowledge-research-scope-card">
+                  <label>
+                    <span>分析范围</span>
+                    <select id="knowledge-research-scope">
+                      <option value="selected">我勾选的内容</option>
+                      <option value="filtered">当前筛选结果</option>
+                      <option value="all">全部知识库</option>
+                    </select>
+                  </label>
+                  <strong id="knowledge-research-scope-summary">尚未选择材料</strong>
+                  <div>
+                    <button id="knowledge-select-visible" type="button">选择当前结果</button>
+                    <button id="knowledge-clear-selection" type="button">清空选择</button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="knowledge-qa-controls" class="knowledge-research-controls">
+                <div class="knowledge-prompt-presets" aria-label="常用问题">
+                  <button type="button" data-knowledge-question="这些材料共同支持什么结论？请同时指出证据强弱和相互矛盾之处。">共同结论</button>
+                  <button type="button" data-knowledge-question="比较这些材料使用的方法、假设和适用场景，指出各自优势与局限。">方法比较</button>
+                  <button type="button" data-knowledge-question="哪些观点或实验结果相互冲突？可能由哪些条件差异造成？">寻找冲突</button>
+                  <button type="button" data-knowledge-question="基于这些材料，我下一步最值得继续阅读或验证什么？">下一步建议</button>
+                </div>
+                <label class="knowledge-research-question">
+                  <span>你的研究问题</span>
+                  <textarea id="knowledge-research-question" rows="4" placeholder="例如：结合我读过的文献，这个方向目前最大的研究空白是什么？"></textarea>
+                </label>
+              </div>
+
+              <div id="knowledge-insight-controls" class="knowledge-research-controls" hidden>
+                <p class="knowledge-insight-intro">选择一种分析方向，也可以在文本框中补充你的研究主题或约束。</p>
+                <div class="knowledge-insight-presets" aria-label="研究洞察类型">
+                  <button class="active" type="button" data-knowledge-insight="请综合材料生成一份研究洞察报告，包含：文献共识、关键分歧、方法演进、尚未解决的问题、3 个有依据的新想法、每个想法的可检验假设与最小验证方案。">综合洞察</button>
+                  <button type="button" data-knowledge-insight="重点寻找现有材料没有覆盖、证据薄弱或结论不一致的研究空白，并按价值、可行性、风险排序。">研究空白</button>
+                  <button type="button" data-knowledge-insight="重点分析材料之间的观点冲突、方法差异和实验条件差异，提出能够解释冲突的候选机制。">观点冲突</button>
+                  <button type="button" data-knowledge-insight="重点提出 5 个可验证的新研究假设。每个假设说明来源依据、创新点、反例、变量和最小实验设计。">新假设</button>
+                </div>
+                <label class="knowledge-research-question">
+                  <span>补充研究主题或限制（可选）</span>
+                  <textarea id="knowledge-insight-question" rows="3" placeholder="例如：优先考虑能在硕士阶段完成、无需大规模算力的方向。"></textarea>
+                </label>
+              </div>
+
+              <div class="knowledge-research-actions">
+                <button id="knowledge-run-research" class="primary-button" type="button">✦ 开始分析</button>
+                <button id="knowledge-clear-research" type="button">清空结果</button>
+                <span id="knowledge-research-status" aria-live="polite"></span>
+              </div>
+
+              <article id="knowledge-research-result" class="knowledge-research-result" hidden>
+                <header>
+                  <div>
+                    <span id="knowledge-research-result-kind">跨文献分析</span>
+                    <h3 id="knowledge-research-result-title">分析结果</h3>
+                  </div>
+                  <button id="knowledge-save-research-result" type="button">保存为研究笔记</button>
+                </header>
+                <div id="knowledge-research-result-body" class="knowledge-research-result-body"></div>
+                <section class="knowledge-research-sources">
+                  <h4>本次使用的知识条目</h4>
+                  <div id="knowledge-research-source-list"></div>
+                </section>
+              </article>
+
+              <div class="knowledge-research-note">
+                <strong>提示：</strong>AI 只能看到知识库中已保存的摘要、卡片和笔记，不等同于读取了每篇论文全文。回答中的“新想法”应视为待验证假设。
+              </div>
+            </section>
+          </main>
+
+          <aside class="knowledge-detail-panel" aria-label="知识条目详情">
+            <header class="knowledge-detail-header">
+              <strong>内容详情</strong>
+              <button id="knowledge-detail-close" type="button" aria-label="关闭详情">×</button>
+            </header>
+
+            <div id="knowledge-detail-empty" class="knowledge-detail-empty">
+              <span aria-hidden="true">▧</span>
+              <strong>选择一条内容查看详情</strong>
+              <p>这里会显示来源、正文、标签及相关内容。</p>
+            </div>
+
+            <article id="knowledge-detail-content" class="knowledge-detail-content" hidden>
+              <div class="knowledge-detail-title-row">
+                <span id="knowledge-detail-type" class="knowledge-kind-badge"></span>
+                <span id="knowledge-detail-time" class="knowledge-detail-time"></span>
+              </div>
+              <h2 id="knowledge-detail-title"></h2>
+              <div id="knowledge-detail-tags" class="knowledge-detail-tags"></div>
+
+              <section class="knowledge-detail-section">
+                <h3>来源信息</h3>
+                <dl class="knowledge-source-grid">
+                  <div><dt>PDF 文件</dt><dd id="knowledge-detail-document">—</dd></div>
+                  <div><dt>位置</dt><dd id="knowledge-detail-position">—</dd></div>
+                  <div><dt>创建时间</dt><dd id="knowledge-detail-created">—</dd></div>
+                  <div><dt>最后更新</dt><dd id="knowledge-detail-updated">—</dd></div>
+                </dl>
+              </section>
+
+              <section class="knowledge-detail-section knowledge-content-preview-section">
+                <h3>内容预览</h3>
+                <div id="knowledge-detail-body" class="knowledge-detail-body"></div>
+              </section>
+
+              <section class="knowledge-detail-section">
+                <h3>关联内容</h3>
+                <div id="knowledge-related-summary" class="knowledge-related-summary">暂无关联内容</div>
+              </section>
+
+              <footer class="knowledge-detail-actions">
+                <button id="knowledge-open-source" type="button">打开原文</button>
+                <button id="knowledge-edit-item" class="primary-button" type="button">编辑内容</button>
+                <button id="knowledge-delete-item" class="danger-button" type="button">删除</button>
+              </footer>
+            </article>
+          </aside>
+        </div>
+      </section>
+
+      <div class="workspace">
+        <aside class="left-panel" aria-label="左侧目录 / 缩略图">
+          <div class="side-tabs">
+            <button class="active" type="button">目录</button>
+            <button type="button">缩略图</button>
+          </div>
+
+          <nav class="outline-list" aria-label="PDF 目录">
+            <button class="active" type="button"><span>1</span> Abstract</button>
+            <button type="button"><span>2</span> Introduction</button>
+            <button type="button"><span>3</span> Method</button>
+            <button class="nested" type="button"><span>3.1</span> Model</button>
+            <button class="nested" type="button"><span>3.2</span> Training</button>
+            <button type="button"><span>4</span> Experiments</button>
+            <button type="button"><span>5</span> Results</button>
+            <button type="button"><span>6</span> Conclusion</button>
+          </nav>
+
+          <div class="quick-location">
+            <strong>快速定位</strong>
+            <button type="button">◎ 当前位置：第 3 页</button>
+            <button type="button">◷ 上次阅读：第 5 页</button>
+          </div>
+        </aside>
+
+        <main class="reading-panel">
+          <section class="reader-card">
+            <div class="reader-header">
+              <strong>PDF 正文阅读区</strong>
+              <div id="status-bar" class="status-bar">
+                <span id="status-text">请选择PDF文件。</span>
+                <span id="text-status">文字层尚未加载</span>
+              </div>
+            </div>
+
+            <button
+              id="citation-return-button"
+              class="citation-return-button"
+              type="button"
+              aria-hidden="true"
+              tabindex="-1"
+              title="返回点击引用前的位置"
+            >
+              <span aria-hidden="true">↩</span>
+              <span>回到正文</span>
+              <small id="citation-return-position"></small>
+            </button>
+
+            <div id="viewer-container" role="main" tabindex="0">
+              <div id="viewer" class="pdfViewer"></div>
+            </div>
+
+            <footer class="reader-footer">
+              <div class="toolbar-group zoom-controls">
+                <span id="zoom-value">100%</span>
+                <button id="zoom-out" type="button" title="缩小">−</button>
+                <button id="zoom-in" type="button" title="放大">＋</button>
+              </div>
+
+              <div class="toolbar-group page-controls">
+                <button id="previous-page" type="button" title="上一页">‹ 上一页</button>
+                <input id="page-number" type="number" min="1" value="0" aria-label="当前页" />
+                <span>/ <span id="page-count">0</span></span>
+                <button id="next-page" type="button" title="下一页">下一页 ›</button>
+              </div>
+
+              <button class="layout-button" type="button" title="视图布局">▦</button>
+            </footer>
+          </section>
+        </main>
+
+        <aside class="right-panel" aria-label="右侧 AI 阅读助手面板">
+          <div class="right-panel-card">
+            <div class="assistant-tabs" role="tablist" aria-label="AI 阅读助手">
+              <button id="assistant-chat-tab" class="active" data-assistant-view="chat" type="button" role="tab" aria-selected="true">聊天</button>
+              <button data-assistant-view="translate" type="button" role="tab" aria-selected="false">翻译/解释</button>
+              <button data-assistant-view="summary" type="button" role="tab" aria-selected="false">总结</button>
+              <button data-assistant-view="cards" type="button" role="tab" aria-selected="false">保存卡片</button>
+            </div>
+
+            <section id="assistant-chat-panel" class="assistant-panel chat-panel" role="tabpanel">
+              <div class="chat-context-card">
+                <div class="chat-context-heading">
+                  <strong>当前上下文</strong>
+                  <button id="clear-chat" type="button">清空对话</button>
+                </div>
+                <div id="chat-context-preview" class="chat-context-preview">
+                  打开 PDF 后会自动携带当前页正文；选中文字时优先使用选区。
+                </div>
+              </div>
+
+              <div id="chat-messages" class="chat-messages" aria-live="polite">
+                <article class="chat-message assistant">
+                  <div class="chat-message-role">PDF Helper</div>
+                  <div class="chat-message-content">你好，我会根据阅读模式结合当前页与选区回答。首次使用 AI 工具时，请先在“设置”中配置 API Key。</div>
+                </article>
+              </div>
+
+              <form id="chat-form" class="chat-composer">
+                <textarea
+                  id="chat-input"
+                  rows="3"
+                  placeholder="询问当前 PDF；Enter 发送，Shift + Enter 换行"
+                  aria-label="聊天输入"
+                ></textarea>
+                <div class="chat-composer-footer">
+                  <span id="chat-provider-status">AI 尚未配置</span>
+                  <button id="chat-send" class="primary-button" type="submit">发送</button>
+                </div>
+              </form>
+            </section>
+
+            <section id="assistant-settings-panel" class="assistant-panel settings-panel settings-popover" role="dialog" aria-modal="false" aria-label="AI 设置" hidden>
+              <div class="settings-heading">
+                <div>
+                  <strong>AI 模型服务</strong>
+                  <p>由扩展直接请求所选模型供应商，不需要启动 Python 服务。</p>
+                </div>
+                <div class="settings-heading-actions">
+                  <span class="local-config-badge">本地配置</span>
+                  <button id="close-deepseek-settings" class="settings-close-button" type="button" aria-label="关闭设置">×</button>
+                </div>
+              </div>
+
+              <label class="settings-field">
+                <span>模型供应商</span>
+                <select id="ai-provider">
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openai-compatible" disabled>OpenAI 兼容接口（即将支持）</option>
+                  <option value="anthropic" disabled>Anthropic（即将支持）</option>
+                  <option value="gemini" disabled>Gemini（即将支持）</option>
+                </select>
+              </label>
+
+              <label class="settings-field">
+                <span>API Key</span>
+                <input id="deepseek-api-key" type="password" autocomplete="off" placeholder="sk-..." />
+              </label>
+
+              <label class="settings-field">
+                <span>模型</span>
+                <select id="deepseek-model">
+                  <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
+                  <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
+                </select>
+              </label>
+
+              <label class="settings-field">
+                <span>思考模式</span>
+                <select id="deepseek-thinking">
+                  <option value="disabled">关闭（响应更快）</option>
+                  <option value="enabled">开启（复杂问题）</option>
+                </select>
+              </label>
+
+              <details class="advanced-settings">
+                <summary>高级设置</summary>
+                <label class="settings-field">
+                  <span>API 地址</span>
+                  <input id="deepseek-base-url" type="url" value="https://api.deepseek.com" />
+                </label>
+              </details>
+
+              <p class="settings-privacy-note">
+                API Key 仅保存在当前浏览器扩展的本地存储中；自动识别、聊天、翻译、总结或卡片功能会直接请求所选供应商。
+              </p>
+              <div id="deepseek-settings-status" class="settings-status" aria-live="polite"></div>
+              <div class="settings-actions">
+                <button id="test-deepseek" type="button">测试连接</button>
+                <button id="save-deepseek-settings" class="primary-button" type="button">保存设置</button>
+              </div>
+            </section>
+
+            <div id="assistant-tools-runtime" class="legacy-ai-runtime" aria-hidden="true">
+
+            <div class="ai-tabs">
+              <button class="active" data-ai-tab="translate" type="button">解释 · 翻译</button>
+              <button data-ai-tab="summary" type="button">总结</button>
+              <button data-ai-tab="cards" type="button">保存卡片</button>
+            </div>
+
+            <div class="ai-tab-panel" data-ai-panel="translate">
+              <section class="ai-section">
+                <h3>1. 选中内容</h3>
+                <div id="selected-snippet" class="selected-snippet">请在左侧 PDF 中选择文字</div>
+              </section>
+
+              <section class="ai-section">
+                <h3>2. 中文翻译</h3>
+                <div id="translation-result" class="ai-result-box" aria-live="polite">
+                  选中英文后将自动翻译。
+                </div>
+              </section>
+
+              <section class="ai-section">
+                <h3>3. AI 解释</h3>
+                <div id="explanation-result" class="ai-result-box" aria-live="polite">
+                  选中英文后将自动生成解释。
+                </div>
+              </section>
+
+              <div class="ai-actions">
+                <button id="save-translation-note" type="button">保存为笔记</button>
+                <button id="copy-translation" class="primary-button" type="button">复制翻译</button>
+              </div>
+            </div>
+
+            <div id="summary-panel" class="ai-tab-panel summary-panel" data-ai-panel="summary" hidden>
+              <section class="ai-section">
+                <h3>1. 总结对象</h3>
+                <div class="summary-target-card">
+                  <div class="summary-meta">
+                    <span><strong>范围：</strong><span id="summary-range">当前选中文本</span></span>
+                    <span class="summary-meta-divider" aria-hidden="true"></span>
+                    <span><strong>来源：</strong><span id="summary-source">第 0 页</span></span>
+                    <span class="summary-meta-divider" aria-hidden="true"></span>
+                    <span><strong>位置：</strong><span id="summary-position">未定位</span></span>
+                  </div>
+
+                  <div class="summary-scope-switch" role="group" aria-label="总结范围">
+                    <button class="active" data-summary-scope="selection" type="button">选中文本</button>
+                    <button data-summary-scope="page" type="button">当前页</button>
+                    <button data-summary-scope="chapter" type="button">当前章节</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="ai-section summary-result-section">
+                <h3>2. 核心要点</h3>
+                <div id="summary-result" class="summary-result-box" aria-live="polite">
+                  选择总结范围后，将自动生成核心要点。
+                </div>
+              </section>
+
+              <div class="ai-actions summary-actions">
+                <button id="save-summary-note" type="button">▧ 保存为笔记</button>
+                <button id="copy-summary" class="primary-button" type="button">▣ 复制要点</button>
+              </div>
+            </div>
+
+            <div id="cards-panel" class="ai-tab-panel cards-panel" data-ai-panel="cards" hidden>
+              <section class="ai-section card-type-section">
+                <h3>1. 卡片类型</h3>
+                <div class="card-type-switch" role="group" aria-label="卡片类型">
+                  <button data-card-type="concept" type="button">概念</button>
+                  <button class="active" data-card-type="method" type="button">方法</button>
+                  <button data-card-type="experiment" type="button">实验</button>
+                  <button data-card-type="viewpoint" type="button">观点</button>
+                </div>
+              </section>
+
+              <section class="ai-section card-source-section">
+                <h3>2. 原文片段</h3>
+                <div id="card-source-snippet" class="card-source-snippet">
+                  请在左侧 PDF 中选择需要制作卡片的论文原文。
+                </div>
+              </section>
+
+              <section class="ai-section card-content-section">
+                <h3>3. AI 生成内容</h3>
+                <div id="card-result" class="card-result-box" aria-live="polite">
+                  <div id="card-generation-status" class="card-generation-status">
+                    选择原文后，将自动生成论文卡片。
+                  </div>
+
+                  <div id="card-generated-content" class="card-generated-content" hidden>
+                    <div class="card-field-row">
+                      <strong>卡片标题：</strong>
+                      <span id="card-title"></span>
+                    </div>
+                    <div class="card-field-row">
+                      <strong>核心解释：</strong>
+                      <span id="card-explanation"></span>
+                    </div>
+                    <div class="card-field-row card-points-row">
+                      <strong>关键要点：</strong>
+                      <ul id="card-key-points"></ul>
+                    </div>
+                    <div class="card-field-row">
+                      <strong>作用 / 解决的问题：</strong>
+                      <span id="card-purpose"></span>
+                    </div>
+                    <div class="card-field-row">
+                      <strong>我的理解：</strong>
+                      <span id="card-understanding"></span>
+                    </div>
+                    <div class="card-field-row">
+                      <strong>来源位置：</strong>
+                      <span id="card-source-location"></span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="ai-actions card-actions">
+                <button id="copy-card" type="button">▧ 复制内容</button>
+                <button id="save-card" class="primary-button" type="button">▣ 保存卡片</button>
+              </div>
+            </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div id="selection-context-menu" class="selection-context-menu" hidden>
+      <button id="context-copy" class="context-menu-item" type="button">复制</button>
+      <button id="context-clean-copy" class="context-menu-item" type="button">整理后复制</button>
+      <div id="context-colors" class="quick-colors" aria-label="高亮颜色">
+        <button type="button" data-quick-highlight-color="#fff066" title="黄色"></button>
+        <button type="button" data-quick-highlight-color="#9be7a5" title="绿色"></button>
+        <button type="button" data-quick-highlight-color="#8ec5ff" title="蓝色"></button>
+        <button type="button" data-quick-highlight-color="#ff9fc9" title="粉色"></button>
+        <button type="button" data-quick-highlight-color="#ffc078" title="橙色"></button>
+      </div>
+      <div id="highlight-context-actions" class="highlight-context-actions" hidden>
+        <button id="context-note" class="context-menu-item" type="button">添加笔记</button>
+        <button id="context-delete-highlight" class="context-menu-item danger" type="button">删除高亮</button>
+      </div>
+    </div>
+
+    <div id="recent-files-dialog" class="modal-backdrop" hidden>
+      <section class="recent-files-panel" role="dialog" aria-modal="true" aria-labelledby="recent-files-title">
+        <header>
+          <strong id="recent-files-title">最近打开</strong>
+          <button id="close-recent-files" type="button" aria-label="关闭">×</button>
+        </header>
+        <div id="recent-files-list" class="recent-files-list"></div>
+        <footer>
+          <button id="clear-recent-files" type="button">清空记录</button>
+        </footer>
+      </section>
+    </div>
+
+
+    <div id="knowledge-editor-dialog" class="modal-backdrop" hidden>
+      <form id="knowledge-editor-form" class="knowledge-editor-panel" role="dialog" aria-modal="true" aria-labelledby="knowledge-editor-heading">
+        <header>
+          <div>
+            <strong id="knowledge-editor-heading">新建笔记</strong>
+            <p id="knowledge-editor-source">保存到本地知识库</p>
+          </div>
+          <button id="knowledge-editor-close" type="button" aria-label="关闭">×</button>
+        </header>
+        <div class="knowledge-editor-fields">
+          <label>
+            <span>标题</span>
+            <input id="knowledge-editor-title" type="text" maxlength="160" placeholder="输入笔记标题" />
+          </label>
+          <div class="knowledge-editor-inline-fields">
+            <label>
+              <span>分类</span>
+              <input id="knowledge-editor-category" type="text" maxlength="60" placeholder="例如：深度学习" />
+            </label>
+            <label>
+              <span>标签</span>
+              <input id="knowledge-editor-tags" type="text" maxlength="240" placeholder="使用逗号分隔" />
+            </label>
+          </div>
+          <label>
+            <span>正文</span>
+            <textarea id="knowledge-editor-body" rows="14" placeholder="记录你的理解、问题、引用或后续计划…"></textarea>
+          </label>
+        </div>
+        <footer>
+          <button id="knowledge-editor-cancel" type="button">取消</button>
+          <button class="primary-button" type="submit">保存</button>
+        </footer>
+      </form>
+    </div>
+
+    <aside id="highlight-note-popover" class="highlight-note-popover" hidden>
+      <header>
+        <strong id="highlight-note-title">高亮笔记</strong>
+        <button id="close-highlight-note" type="button" aria-label="关闭">×</button>
+      </header>
+      <p id="highlight-note-quote"></p>
+      <textarea id="highlight-note-text" rows="5" placeholder="记录你的理解、疑问或联想…"></textarea>
+      <footer>
+        <button id="delete-highlight-note" type="button">删除笔记</button>
+        <button id="save-highlight-note" class="primary-button" type="button">保存笔记</button>
+      </footer>
+    </aside>
+
+    <div id="annotation-action-bar" class="annotation-action-bar" hidden>
+      <span id="annotation-type-label">批注</span>
+      <label id="free-text-size-control" class="free-text-size-control" title="文本字号" hidden>
+        <span>字号</span>
+        <button id="free-text-size-down" type="button" title="缩小文本">A-</button>
+        <input id="free-text-size" type="number" min="4" max="72" step="1" value="16" />
+        <button id="free-text-size-up" type="button" title="放大文本">A+</button>
+        <input id="free-text-color" class="free-text-color-input" type="color" value="#000000" title="文本颜色" />
+      </label>
+      <button id="delete-annotation" type="button" title="删除批注（Delete）">删除</button>
+    </div>
+
+    <form id="find-bar" class="find-bar" hidden>
+      <input id="find-input" type="search" placeholder="在PDF中查找" autocomplete="off" />
+      <span id="find-count" aria-live="polite">0/0</span>
+      <button id="find-previous" type="button" title="上一个">↑</button>
+      <button id="find-next" type="button" title="下一个">↓</button>
+      <button id="find-close" type="button" title="关闭">×</button>
+    </form>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

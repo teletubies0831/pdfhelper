@@ -1,0 +1,28 @@
+:root {
+  font-family:
+    Inter, "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #172033;
+  background: #ffffff;
+}
+
+body {
+  width: 220px;
+  margin: 0;
+}
+
+main {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+strong {
+  font-size: 14px;
+}
+
+span {
+  color: #65708a;
+  font-size: 12px;
+  line-height: 1.5;
+}
