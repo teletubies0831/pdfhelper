@@ -11,10 +11,14 @@ import { extractPdfSource } from '../shared/pdf-source';
 import {
   AI_CONFIG_STORAGE_KEY,
   AI_STREAM_PORT_NAME,
+  buildAiSystemContent,
   DEFAULT_AI_CONFIG,
+  DEFAULT_VISION_AI_CONFIG,
   LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
   isAiRuntimeRequest,
+  isMainAiVisionCapable,
   normalizeAiBaseUrl,
+  VISION_AI_CONFIG_STORAGE_KEY,
   type AiConfig,
   type AiConversationMessage,
   type AiDocumentContext,
@@ -22,9 +26,9 @@ import {
   type AiRuntimeResponse,
   type AiStreamServerMessage,
   type AiStreamStartMessage,
+  type VisionAiConfig,
 } from '../shared/ai';
 import {
-  getReadingModeStrategy,
   isResolvedReadingMode,
   type ResolvedReadingMode,
 } from '../shared/reading-mode';
@@ -115,6 +119,20 @@ async function getAiConfig(): Promise<AiConfig> {
   return config;
 }
 
+async function getVisionAiConfig(): Promise<VisionAiConfig> {
+  const stored = await browser.storage.local.get(VISION_AI_CONFIG_STORAGE_KEY);
+  const value = stored[VISION_AI_CONFIG_STORAGE_KEY] as Partial<VisionAiConfig> | undefined;
+  return {
+    ...DEFAULT_VISION_AI_CONFIG,
+    ...value,
+    mode: value?.mode === 'separate' ? 'separate' : 'disabled',
+    providerId: 'openai-compatible',
+    apiKey: value?.apiKey?.trim() ?? '',
+    baseUrl: value?.baseUrl?.trim().replace(/\/+$/, '') ?? '',
+    model: value?.model?.trim() ?? '',
+  };
+}
+
 function getProviderError(payload: unknown, fallback: string): string {
   if (!payload || typeof payload !== 'object') return fallback;
   const error = (payload as { error?: unknown }).error;
@@ -123,9 +141,84 @@ function getProviderError(payload: unknown, fallback: string): string {
   return typeof message === 'string' && message.trim() ? message.trim() : fallback;
 }
 
+function getVisionContent(payload: unknown): string {
+  const content = (payload as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  })?.choices?.[0]?.message?.content;
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => item && typeof item === 'object' && 'text' in item
+        ? String((item as { text?: unknown }).text ?? '')
+        : '')
+      .join('\n')
+      .trim();
+  }
+  return '';
+}
+
+async function requestVisionCompletion(
+  config: VisionAiConfig,
+  prompt: string,
+  imageDataUrl: string,
+  context?: AiDocumentContext,
+): Promise<ProviderChatResult> {
+  if (config.mode !== 'separate' || !config.apiKey || !config.baseUrl || !config.model) {
+    throw new Error('当前问题需要查看 PDF 图像。请在“设置 → 视觉模型”中完成配置。');
+  }
+  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [
+        {
+          role: 'system',
+          content: [
+            '你是 PDF Helper 的视觉阅读工具。请只分析图片中实际可见的 PDF 页面。',
+            '优先识别图表、公式、表格、流程图、页面结构以及文字抽取遗漏的信息。',
+            '不确定时明确说明，不要补写图片中不存在的内容。数学表达使用 LaTeX。',
+            context?.documentName ? `文档：${context.documentName}` : '',
+            context?.pageNumber ? `页码：第 ${context.pageNumber} 页` : '',
+          ].filter(Boolean).join('\n'),
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: imageDataUrl, detail: 'high' } },
+          ],
+        },
+      ],
+      stream: false,
+      max_tokens: 1600,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(getProviderError(payload, `视觉模型请求失败：HTTP ${response.status}`));
+  }
+  const content = getVisionContent(payload);
+  if (!content) throw new Error('视觉模型没有返回有效内容。');
+  console.info('[PDF Helper Vision] 页面视觉分析完成', {
+    model: config.model,
+    pageNumber: context?.pageNumber,
+    promptLength: prompt.length,
+  });
+  return { content, model: config.model };
+}
+
+type ProviderMessageContent = string | Array<
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string; detail: 'auto' | 'low' | 'high' } }
+>;
+
 type ProviderMessage = {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: ProviderMessageContent;
 };
 
 interface ProviderChatResult {
@@ -298,39 +391,49 @@ function getProviderAdapter(config: AiConfig): AiProviderAdapter {
   return adapter;
 }
 
-function buildSystemContent(context?: AiDocumentContext): string {
-  const readingMode = context?.readingMode ?? 'general';
-  const strategy = getReadingModeStrategy(readingMode);
-  const contextParts: string[] = [
-    strategy.systemInstruction,
-    strategy.contextInstruction(context?.pageNumber ?? 1, context?.totalPages),
-  ];
-  if (context?.documentName) contextParts.push(`当前文档：${context.documentName}`);
-  if (context?.pageNumber) contextParts.push(`当前页码：第 ${context.pageNumber} 页`);
-  if (context?.selectedText?.trim()) {
-    contextParts.push(`用户当前选中的 PDF 原文（回答时最高优先级）：\n${context.selectedText.trim().slice(0, 12000)}`);
-  }
-  if (context?.pageText?.trim()) {
-    contextParts.push(`当前页完整正文：\n${context.pageText.trim().slice(0, 24000)}`);
-  }
-
-  return [
-    '你是 PDF Helper 的阅读助手。请结合提供的 PDF 上下文，用清晰、准确、可核验的中文回答。',
-    '如果上下文不足，请明确说明，不要编造文档中不存在的内容。涉及翻译时忠实保留术语，涉及解释时优先给出直观含义。',
-    '请使用简洁的 Markdown 组织回答；不要给整个回答套一层 Markdown 代码围栏。',
-    ...contextParts,
-  ].join('\n\n');
-}
-
 function buildConversation(
   messages: AiConversationMessage[],
   context?: AiDocumentContext,
+  supportsVision = false,
 ): ProviderMessage[] {
   const conversation: ProviderMessage[] = messages
-    .filter((item) => item.content.trim())
+    .filter((item) => item.content.trim() || (supportsVision && item.images?.length))
     .slice(-16)
-    .map((item) => ({ role: item.role, content: item.content.trim().slice(0, 16000) }));
-  return [{ role: 'system', content: buildSystemContent(context) }, ...conversation];
+    .map((item) => {
+      const text = item.content.trim().slice(0, 16000);
+      if (!supportsVision || item.role !== 'user' || !item.images?.length) {
+        return { role: item.role, content: text };
+      }
+      return {
+        role: item.role,
+        content: [
+          { type: 'text' as const, text: text || '请分析这些截图。' },
+          ...item.images.slice(0, 3).map((image) => ({
+            type: 'image_url' as const,
+            image_url: { url: image.dataUrl, detail: 'high' as const },
+          })),
+        ],
+      };
+    });
+  const providerMessages: ProviderMessage[] = [
+    { role: 'system', content: buildAiSystemContent(context) },
+    ...conversation,
+  ];
+  console.groupCollapsed(`[PDF Helper AI] ${context?.task || '未命名请求'} · 最终发送内容`);
+  console.log('引用元数据', {
+    documentName: context?.documentName,
+    sourceScope: context?.sourceScope,
+    sourceLabel: context?.sourceLabel,
+    sourcePages: context?.sourcePages,
+    selectedTextLength: context?.selectedText?.length ?? 0,
+    contextLength: context?.pageText?.length ?? 0,
+    readingMode: context?.readingMode,
+    imageCount: messages.reduce((count, message) => count + (message.images?.length ?? 0), 0),
+    supportsVision,
+  });
+  console.log('最终 Provider Messages', providerMessages);
+  console.groupEnd();
+  return providerMessages;
 }
 
 type RuntimePort = ReturnType<typeof browser.runtime.connect>;
@@ -368,7 +471,7 @@ async function streamAiResponse(
   });
   const result = await adapter.stream(
     config,
-    buildConversation(request.messages, request.context),
+    buildConversation(request.messages, request.context, isMainAiVisionCapable(config)),
     2048,
     signal,
     (content) => {
@@ -409,6 +512,22 @@ function parseReadingModeDetection(content: string): {
 
 async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResponse> {
   try {
+    if (message.type === 'pdf-helper:ai-vision' || message.type === 'pdf-helper:ai-vision-test') {
+      const visionConfig = await getVisionAiConfig();
+      const result = await requestVisionCompletion(
+        visionConfig,
+        message.type === 'pdf-helper:ai-vision-test'
+          ? '这是连接测试图。请只回答“视觉连接成功”。'
+          : message.prompt,
+        message.type === 'pdf-helper:ai-vision-test'
+          ? message.imageDataUrl
+            || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZsgAAAABJRU5ErkJggg=='
+          : message.imageDataUrl,
+        message.type === 'pdf-helper:ai-vision' ? message.context : undefined,
+      );
+      return { ok: true, content: result.content, model: result.model };
+    }
+
     const config = await getAiConfig();
     const adapter = getProviderAdapter(config);
 
@@ -443,7 +562,7 @@ async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResp
 
     const result = await adapter.chat(
       config,
-      buildConversation(message.messages, message.context),
+      buildConversation(message.messages, message.context, isMainAiVisionCapable(config)),
       2048,
     );
     return {

@@ -9,6 +9,7 @@ import {
 } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import DOMPurify from 'dompurify';
+import katex from 'katex';
 import { marked } from 'marked';
 import {
   EventBus,
@@ -18,21 +19,30 @@ import {
 } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import { browser } from 'wxt/browser';
 import 'pdfjs-dist/web/pdf_viewer.css';
+import 'katex/dist/katex.min.css';
 
 import {
   AI_CONFIG_STORAGE_KEY,
   AI_PROVIDERS,
   AI_STREAM_PORT_NAME,
   DEFAULT_AI_CONFIG,
+  DEFAULT_VISION_AI_CONFIG,
   LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
+  VISION_AI_CONFIG_STORAGE_KEY,
+  buildAiSystemContent,
+  isMainAiVisionCapable,
+  isVisionAiConfigured,
   normalizeAiBaseUrl,
   type AiConfig,
   type AiConversationMessage,
+  type AiImageAttachment,
   type AiProviderId,
   type AiReasoningMode,
   type AiRuntimeResponse,
   type AiStreamServerMessage,
   type AiStreamStartMessage,
+  type VisionAiConfig,
+  type VisionAiMode,
 } from '../../shared/ai';
 import {
   READING_MODE_STORAGE_KEY,
@@ -42,6 +52,22 @@ import {
   type ReadingModeState,
   type ResolvedReadingMode,
 } from '../../shared/reading-mode';
+import {
+  createDocumentAgentId,
+  type DocumentAgentRecord,
+  type DocumentAgentSession,
+  type DocumentChunk,
+} from '../../shared/document-agent';
+import {
+  getDocumentVisionCacheEntry,
+  getLatestDocumentSession,
+  putDocumentVisionCacheEntry,
+  putDocumentSession,
+} from './document-agent-store';
+import {
+  buildDocumentRetrievalContext,
+  initializeDocumentKnowledge,
+} from './document-agent-runtime';
 
 import './style.css';
 
@@ -86,6 +112,7 @@ const fileInput = requiredElement<HTMLInputElement>('file-input');
 const recentFilesButton = requiredElement<HTMLButtonElement>('recent-files-button');
 const recentFilesDialog = requiredElement<HTMLElement>('recent-files-dialog');
 const recentFilesList = requiredElement<HTMLElement>('recent-files-list');
+const recentFilesPanelElement = recentFilesDialog.querySelector<HTMLElement>('.recent-files-panel');
 const closeRecentFilesButton = requiredElement<HTMLButtonElement>('close-recent-files');
 const clearRecentFilesButton = requiredElement<HTMLButtonElement>('clear-recent-files');
 const documentNameElement = requiredElement<HTMLElement>('document-name');
@@ -108,6 +135,8 @@ const viewerContainer = requiredElement<HTMLDivElement>('viewer-container');
 const viewerElement = requiredElement<HTMLDivElement>('viewer');
 const citationReturnButton = requiredElement<HTMLButtonElement>('citation-return-button');
 const citationReturnPosition = requiredElement<HTMLElement>('citation-return-position');
+const focusReadingToggleButton = requiredElement<HTMLButtonElement>('focus-reading-toggle');
+const focusReadingLabel = requiredElement<HTMLElement>('focus-reading-label');
 const undoAnnotationButton = requiredElement<HTMLButtonElement>('undo-annotation');
 const redoAnnotationButton = requiredElement<HTMLButtonElement>('redo-annotation');
 const smartCopyButton = requiredElement<HTMLButtonElement>('smart-copy');
@@ -178,6 +207,7 @@ const paperPersonalNotesInput = requiredElement<HTMLTextAreaElement>('paper-pers
 const assistantViewButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-assistant-view]'),
 );
+const assistantTabsElement = document.querySelector<HTMLElement>('.assistant-tabs');
 const assistantChatPanel = requiredElement<HTMLElement>('assistant-chat-panel');
 const assistantSettingsPanel = requiredElement<HTMLElement>('assistant-settings-panel');
 const assistantToolsRuntime = requiredElement<HTMLElement>('assistant-tools-runtime');
@@ -186,6 +216,9 @@ const chatContextPreview = requiredElement<HTMLElement>('chat-context-preview');
 const chatMessagesElement = requiredElement<HTMLElement>('chat-messages');
 const chatForm = requiredElement<HTMLFormElement>('chat-form');
 const chatInput = requiredElement<HTMLTextAreaElement>('chat-input');
+const chatAttachmentsElement = requiredElement<HTMLElement>('chat-attachments');
+const chatImageInput = requiredElement<HTMLInputElement>('chat-image-input');
+const chatImageButton = requiredElement<HTMLButtonElement>('chat-image-button');
 const chatSendButton = requiredElement<HTMLButtonElement>('chat-send');
 const clearChatButton = requiredElement<HTMLButtonElement>('clear-chat');
 const chatProviderStatus = requiredElement<HTMLElement>('chat-provider-status');
@@ -197,6 +230,13 @@ const deepSeekBaseUrlInput = requiredElement<HTMLInputElement>('deepseek-base-ur
 const deepSeekSettingsStatus = requiredElement<HTMLElement>('deepseek-settings-status');
 const saveDeepSeekSettingsButton = requiredElement<HTMLButtonElement>('save-deepseek-settings');
 const testDeepSeekButton = requiredElement<HTMLButtonElement>('test-deepseek');
+const visionAiModeSelect = requiredElement<HTMLSelectElement>('vision-ai-mode');
+const visionAiFields = requiredElement<HTMLElement>('vision-ai-fields');
+const visionApiKeyInput = requiredElement<HTMLInputElement>('vision-api-key');
+const visionModelInput = requiredElement<HTMLInputElement>('vision-model');
+const visionBaseUrlInput = requiredElement<HTMLInputElement>('vision-base-url');
+const visionSettingsStatus = requiredElement<HTMLElement>('vision-settings-status');
+const testVisionAiButton = requiredElement<HTMLButtonElement>('test-vision-ai');
 const aiTabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.ai-tabs button'));
 const aiTabPanels = Array.from(document.querySelectorAll<HTMLElement>('[data-ai-panel]'));
 const selectedSnippetElement = requiredElement<HTMLElement>('selected-snippet');
@@ -229,6 +269,7 @@ const cardTypeButtons = Array.from(
 const copyCardButton = requiredElement<HTMLButtonElement>('copy-card');
 const saveCardButton = requiredElement<HTMLButtonElement>('save-card');
 const outlineList = document.querySelector<HTMLElement>('.outline-list');
+const readerCardElement = document.querySelector<HTMLElement>('.reader-card');
 
 const eventBus = new EventBus();
 const linkService = new PDFLinkService({ eventBus });
@@ -271,7 +312,35 @@ let readingPositionSaveHandle: number | null = null;
 let isRestoringReadingPosition = false;
 let suppressInternalNavigationCapture = false;
 let isReturningFromInternalNavigation = false;
+let isInternalNavigationInProgress = false;
+let internalNavigationReturnCheckAvailableAt = 0;
+let internalNavigationReturnCheckTimer: number | null = null;
 const internalNavigationHistory: InternalNavigationEntry[] = [];
+const bibliographyBacklinkCache = new Map<
+  string,
+  Promise<PdfBodyCitationTarget | null>
+>();
+let focusReadingModeRequested = false;
+let focusReadingAnimation: Animation | null = null;
+let workspaceLayoutAnimation: Animation | null = null;
+let recentFilesTransitionToken = 0;
+let paperCardPageTransitionToken = 0;
+const activeUiAnimations = new WeakMap<HTMLElement, Animation>();
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const UI_MOTION_DURATION = 340;
+const UI_MOTION_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
+const outlineButtonsByPage = new Map<number, HTMLButtonElement[]>();
+let activeOutlineButtons: HTMLButtonElement[] = [];
+let activeOutlinePageNumber = 0;
+interface OutlinePageItem {
+  pageNumber: number;
+  title: string;
+  depth: number;
+  order: number;
+}
+
+let outlinePageItemsCache: OutlinePageItem[] | null = null;
+let outlineUsesPageFallback = false;
 let areNoteIndicatorsHidden = false;
 let sourcePdfBytes: Uint8Array | null = null;
 let selectionRenderFrame = 0;
@@ -296,6 +365,47 @@ function requiredElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) throw new Error(`缺少页面元素：${id}`);
   return element as T;
+}
+
+function playUiAnimation(
+  element: HTMLElement | null,
+  keyframes: Keyframe[],
+  options: KeyframeAnimationOptions = {},
+): Animation | null {
+  if (!element || prefersReducedMotion.matches) return null;
+
+  activeUiAnimations.get(element)?.cancel();
+  const animation = element.animate(keyframes, {
+    duration: UI_MOTION_DURATION,
+    easing: UI_MOTION_EASING,
+    ...options,
+  });
+  activeUiAnimations.set(element, animation);
+  const clearAnimation = () => {
+    if (activeUiAnimations.get(element) === animation) activeUiAnimations.delete(element);
+  };
+  animation.addEventListener('finish', clearAnimation, { once: true });
+  animation.addEventListener('cancel', clearAnimation, { once: true });
+  return animation;
+}
+
+function waitForUiAnimation(animation: Animation | null): Promise<void> {
+  if (!animation) return Promise.resolve();
+  return animation.finished.then(() => undefined).catch(() => undefined);
+}
+
+function revealUiElement(element: HTMLElement | null, direction = 1): Animation | null {
+  return playUiAnimation(
+    element,
+    [
+      {
+        opacity: 0.18,
+        transform: `translate3d(${direction * 12}px, 5px, 0) scale(0.985)`,
+      },
+      { opacity: 1, transform: 'translate3d(0, 0, 0) scale(1)' },
+    ],
+    { fill: 'none' },
+  );
 }
 
 function setStatus(message: string, isError = false) {
@@ -650,12 +760,51 @@ async function renderRecentFiles() {
 }
 
 function showRecentFilesDialog() {
+  const transitionToken = ++recentFilesTransitionToken;
   recentFilesDialog.hidden = false;
-  void renderRecentFiles();
+  recentFilesDialog.setAttribute('aria-hidden', 'false');
+  playUiAnimation(
+    recentFilesDialog,
+    [{ opacity: 0 }, { opacity: 1 }],
+    { duration: 220, easing: 'ease-out' },
+  );
+  revealUiElement(recentFilesPanelElement, 0);
+
+  void renderRecentFiles().then(() => {
+    if (transitionToken !== recentFilesTransitionToken || recentFilesDialog.hidden) return;
+    const items = Array.from(recentFilesList.querySelectorAll<HTMLElement>('.recent-file-item'));
+    for (const [index, item] of items.entries()) {
+      playUiAnimation(
+        item,
+        [
+          { opacity: 0, transform: 'translate3d(0, 8px, 0) scale(0.985)' },
+          { opacity: 1, transform: 'translate3d(0, 0, 0) scale(1)' },
+        ],
+        { duration: 280, delay: Math.min(index, 7) * 24 },
+      );
+    }
+  });
 }
 
-function hideRecentFilesDialog() {
-  recentFilesDialog.hidden = true;
+async function hideRecentFilesDialog() {
+  if (recentFilesDialog.hidden) return;
+  const transitionToken = ++recentFilesTransitionToken;
+  recentFilesDialog.setAttribute('aria-hidden', 'true');
+  const backdropAnimation = playUiAnimation(
+    recentFilesDialog,
+    [{ opacity: 1 }, { opacity: 0 }],
+    { duration: 170, easing: 'ease-in' },
+  );
+  const panelAnimation = playUiAnimation(
+    recentFilesPanelElement,
+    [
+      { opacity: 1, transform: 'translate3d(0, 0, 0) scale(1)' },
+      { opacity: 0, transform: 'translate3d(0, -8px, 0) scale(0.98)' },
+    ],
+    { duration: 180, easing: 'ease-in' },
+  );
+  await Promise.all([waitForUiAnimation(backdropAnimation), waitForUiAnimation(panelAnimation)]);
+  if (transitionToken === recentFilesTransitionToken) recentFilesDialog.hidden = true;
 }
 
 function getCurrentAnnotationSnapshot(): string {
@@ -752,6 +901,13 @@ type ReadingPosition = {
 
 type InternalNavigationEntry = ReadingPosition & {
   documentKey: string;
+  hasDepartedOrigin: boolean;
+};
+
+type PdfBodyCitationTarget = {
+  pageNumber: number;
+  rect: [number, number, number, number];
+  destinationName: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1376,21 +1532,201 @@ function updateControls() {
   updateOutlineActivePage();
 }
 
+function animateWorkspaceLayoutChange(mutateLayout: () => void): void {
+  if (!appFrame || !readerCardElement || prefersReducedMotion.matches) {
+    mutateLayout();
+    return;
+  }
+
+  focusReadingAnimation?.cancel();
+  focusReadingAnimation = null;
+  workspaceLayoutAnimation?.cancel();
+  workspaceLayoutAnimation = null;
+  readerCardElement.classList.remove('focus-layout-animating', 'workspace-layout-animating');
+  appFrame.classList.remove('focus-layout-changing', 'workspace-layout-changing');
+
+  const firstRect = readerCardElement.getBoundingClientRect();
+  appFrame.classList.add('workspace-layout-changing');
+  mutateLayout();
+  const lastRect = readerCardElement.getBoundingClientRect();
+
+  if (
+    firstRect.width <= 0
+    || firstRect.height <= 0
+    || lastRect.width <= 0
+    || lastRect.height <= 0
+  ) {
+    appFrame.classList.remove('workspace-layout-changing');
+    return;
+  }
+
+  const deltaX = firstRect.left - lastRect.left;
+  const deltaY = firstRect.top - lastRect.top;
+  const scaleX = firstRect.width / lastRect.width;
+  const scaleY = firstRect.height / lastRect.height;
+  if (
+    Math.abs(deltaX) < 0.5
+    && Math.abs(deltaY) < 0.5
+    && Math.abs(scaleX - 1) < 0.002
+    && Math.abs(scaleY - 1) < 0.002
+  ) {
+    appFrame.classList.remove('workspace-layout-changing');
+    return;
+  }
+
+  readerCardElement.classList.add('workspace-layout-animating');
+  const animation = readerCardElement.animate(
+    [
+      {
+        transform: `translate3d(${deltaX}px, ${deltaY}px, 0) scale(${scaleX}, ${scaleY})`,
+      },
+      { transform: 'translate3d(0, 0, 0) scale(1, 1)' },
+    ],
+    { duration: UI_MOTION_DURATION, easing: UI_MOTION_EASING },
+  );
+  workspaceLayoutAnimation = animation;
+
+  const finishLayoutChange = () => {
+    if (workspaceLayoutAnimation !== animation) return;
+    workspaceLayoutAnimation = null;
+    readerCardElement.classList.remove('workspace-layout-animating');
+    appFrame.classList.remove('workspace-layout-changing');
+    if (contextSelectionRanges.length > 0) scheduleCustomSelectionRender();
+  };
+  animation.addEventListener('finish', finishLayoutChange, { once: true });
+  animation.addEventListener('cancel', finishLayoutChange, { once: true });
+}
+
 function setLeftPanelCollapsed(collapsed: boolean) {
-  appFrame?.classList.toggle('left-panel-collapsed', collapsed);
+  const isCollapsed = appFrame?.classList.contains('left-panel-collapsed') ?? collapsed;
+  if (isCollapsed !== collapsed) {
+    animateWorkspaceLayoutChange(() => appFrame?.classList.toggle('left-panel-collapsed', collapsed));
+  }
   outlineToggleButton?.classList.toggle('active', !collapsed);
+}
+
+function setRightPanelCollapsed(collapsed: boolean) {
+  const isCollapsed = appFrame?.classList.contains('right-panel-collapsed') ?? collapsed;
+  if (isCollapsed !== collapsed) {
+    animateWorkspaceLayoutChange(() => appFrame?.classList.toggle('right-panel-collapsed', collapsed));
+  }
+  aiPanelToggleButton?.classList.toggle('active', !collapsed);
+}
+
+function setFocusReadingMode(enabled: boolean) {
+  if (!appFrame) return;
+
+  focusReadingModeRequested = enabled;
+  focusReadingToggleButton.setAttribute('aria-pressed', String(enabled));
+  focusReadingToggleButton.title = enabled
+    ? '退出专注阅读（Esc）'
+    : '收起顶部工具栏和左侧目录';
+  focusReadingLabel.textContent = enabled ? '退出专注' : '专注阅读';
+
+  // Finish an interrupted transition first, then use FLIP for the next one. The
+  // grid changes only once; the expensive PDF/text layers are animated by the
+  // compositor instead of being resized on every animation frame.
+  focusReadingAnimation?.cancel();
+  focusReadingAnimation = null;
+  workspaceLayoutAnimation?.cancel();
+  workspaceLayoutAnimation = null;
+  readerCardElement?.classList.remove('focus-layout-animating', 'workspace-layout-animating');
+  appFrame.classList.remove('focus-layout-changing', 'workspace-layout-changing');
+
+  const firstRect = readerCardElement?.getBoundingClientRect();
+  appFrame.classList.add('focus-layout-changing');
+  appFrame.classList.toggle('focus-reading-mode', enabled);
+
+  if (!readerCardElement || !firstRect || firstRect.width <= 0 || firstRect.height <= 0) {
+    appFrame.classList.remove('focus-layout-changing');
+    return;
+  }
+
+  const lastRect = readerCardElement.getBoundingClientRect();
+  if (lastRect.width <= 0 || lastRect.height <= 0) {
+    appFrame.classList.remove('focus-layout-changing');
+    return;
+  }
+
+  const deltaX = firstRect.left - lastRect.left;
+  const deltaY = firstRect.top - lastRect.top;
+  const scaleX = firstRect.width / lastRect.width;
+  const scaleY = firstRect.height / lastRect.height;
+
+  if (
+    Math.abs(deltaX) < 0.5
+    && Math.abs(deltaY) < 0.5
+    && Math.abs(scaleX - 1) < 0.002
+    && Math.abs(scaleY - 1) < 0.002
+  ) {
+    appFrame.classList.remove('focus-layout-changing');
+    return;
+  }
+
+  readerCardElement.classList.add('focus-layout-animating');
+  const animation = readerCardElement.animate(
+    [
+      {
+        transform: `translate3d(${deltaX}px, ${deltaY}px, 0) scale(${scaleX}, ${scaleY})`,
+      },
+      { transform: 'translate3d(0, 0, 0) scale(1, 1)' },
+    ],
+    {
+      duration: UI_MOTION_DURATION,
+      easing: UI_MOTION_EASING,
+    },
+  );
+  focusReadingAnimation = animation;
+
+  const finishLayoutChange = () => {
+    if (focusReadingAnimation !== animation) return;
+    focusReadingAnimation = null;
+    readerCardElement.classList.remove('focus-layout-animating');
+    appFrame.classList.remove('focus-layout-changing');
+    if (contextSelectionRanges.length > 0) scheduleCustomSelectionRender();
+  };
+
+  animation.addEventListener('finish', finishLayoutChange, { once: true });
+  animation.addEventListener('cancel', finishLayoutChange, { once: true });
+}
+
+function resetOutlineIndex() {
+  for (const button of activeOutlineButtons) button.classList.remove('active');
+  outlineButtonsByPage.clear();
+  activeOutlineButtons = [];
+  activeOutlinePageNumber = 0;
+  outlinePageItemsCache = null;
+}
+
+function registerOutlineButton(button: HTMLButtonElement, pageNumber: number) {
+  if (!Number.isInteger(pageNumber) || pageNumber <= 0) return;
+  button.dataset.outlinePage = String(pageNumber);
+  const pageButtons = outlineButtonsByPage.get(pageNumber) ?? [];
+  pageButtons.push(button);
+  outlineButtonsByPage.set(pageNumber, pageButtons);
+  outlinePageItemsCache = null;
+
+  if (pageNumber === (pdfViewer.currentPageNumber || 0)) {
+    button.classList.add('active');
+    activeOutlineButtons.push(button);
+    activeOutlinePageNumber = pageNumber;
+  }
 }
 
 function updateOutlineActivePage() {
   if (!outlineList) return;
-  const currentPage = String(pdfViewer.currentPageNumber || '');
-  for (const button of Array.from(outlineList.querySelectorAll<HTMLButtonElement>('button'))) {
-    button.classList.toggle('active', button.dataset.outlinePage === currentPage);
-  }
+  const currentPage = pdfViewer.currentPageNumber || 0;
+  if (currentPage === activeOutlinePageNumber) return;
+
+  for (const button of activeOutlineButtons) button.classList.remove('active');
+  activeOutlineButtons = outlineButtonsByPage.get(currentPage) ?? [];
+  for (const button of activeOutlineButtons) button.classList.add('active');
+  activeOutlinePageNumber = currentPage;
 }
 
 function clearOutlineList(message: string) {
   if (!outlineList) return;
+  resetOutlineIndex();
   outlineList.textContent = '';
   const placeholder = document.createElement('div');
   placeholder.className = 'outline-empty';
@@ -1437,7 +1773,8 @@ function appendOutlineButton({
   button.type = 'button';
   button.textContent = label;
   button.style.paddingLeft = `${12 + depth * 18}px`;
-  if (pageNumber) button.dataset.outlinePage = String(pageNumber);
+  button.dataset.outlineDepth = String(depth);
+  if (pageNumber) registerOutlineButton(button, pageNumber);
   button.addEventListener('click', onClick);
   outlineList.appendChild(button);
 }
@@ -1453,6 +1790,7 @@ async function renderOutlineItems(
     button.type = 'button';
     button.textContent = title;
     button.style.paddingLeft = `${12 + depth * 18}px`;
+    button.dataset.outlineDepth = String(depth);
     button.addEventListener('click', () => {
       if (item.dest) void navigateToDestinationWithoutReturnHistory(item.dest);
     });
@@ -1461,7 +1799,7 @@ async function renderOutlineItems(
     if (item.dest) {
       void getDestinationPageNumber(documentProxy, item.dest).then((pageNumber) => {
         if (!pageNumber || pdfDocument !== documentProxy) return;
-        button.dataset.outlinePage = String(pageNumber);
+        registerOutlineButton(button, pageNumber);
         updateOutlineActivePage();
         updateSummaryMetadata();
       });
@@ -1475,6 +1813,8 @@ async function renderOutlineItems(
 
 async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
   if (!outlineList) return;
+  resetOutlineIndex();
+  outlineUsesPageFallback = false;
   outlineList.textContent = '';
 
   try {
@@ -1494,6 +1834,8 @@ async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
   }
 
   if (pdfDocument !== documentProxy) return;
+  resetOutlineIndex();
+  outlineUsesPageFallback = true;
   outlineList.textContent = '';
   const pageCount = documentProxy.numPages;
   for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
@@ -1541,14 +1883,20 @@ function getViewerSelectionText(): string {
 
 const PAPER_CARD_API_URL = 'http://127.0.0.1:8000/api/generate-paper-card';
 const AUTO_TRANSLATE_DELAY_MS = 700;
-const MAX_SUMMARY_SOURCE_LENGTH = 18_000;
-const MAX_CARD_SOURCE_LENGTH = 18_000;
+// Provider messages are capped at 16,000 characters in the background adapter.
+// Keep the source below that limit so the page markers shown in the audit log
+// match the text that the model actually receives.
+const MAX_SUMMARY_SOURCE_LENGTH = 14_000;
+const MAX_CARD_SOURCE_LENGTH = 12_000;
+const MAX_PROVIDER_MESSAGE_LENGTH = 16_000;
+const MAX_PROVIDER_CONVERSATION_MESSAGES = 16;
 const MAX_PAPER_CARD_SOURCE_LENGTH = 55_000;
 const SUMMARY_NOTES_STORAGE_KEY = 'pdf-helper-summary-notes-v1';
 const SAVED_CARDS_STORAGE_KEY = 'pdf-helper-saved-cards-v1';
 const SAVED_PAPER_OVERVIEWS_STORAGE_KEY = 'pdf-helper-paper-overviews-v1';
 
 type SummaryScope = 'selection' | 'page' | 'chapter';
+type SelectionSummaryKind = 'fragment' | 'sentence' | 'paragraph';
 type CardType = 'concept' | 'method' | 'experiment' | 'viewpoint';
 
 interface SummaryContext {
@@ -1557,6 +1905,12 @@ interface SummaryContext {
   sourceLabel: string;
   positionLabel: string;
   text: string;
+  targetText?: string;
+  contextText?: string;
+  selectionKind?: SelectionSummaryKind;
+  sourcePages: number[];
+  sourceTruncated?: boolean;
+  chapterBoundaryMatched?: boolean;
 }
 
 interface SavedSummaryNote {
@@ -1639,6 +1993,8 @@ interface SavedPaperOverview extends PaperCardFormData {
 let aiSelectionUpdateFrame = 0;
 let selectedTextForAi = '';
 let selectedTextPageNumber = 0;
+let summarySelectionText = '';
+let summarySelectionPageNumber = 0;
 let lastTranslatedText = '';
 let lastExplainedText = '';
 let autoTranslateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1661,8 +2017,18 @@ let paperCardPageDocumentKey = '';
 let paperCardPageSourceCache: { document: PDFDocumentProxy; text: string } | null = null;
 let aiConfig: AiConfig = { ...DEFAULT_AI_CONFIG };
 let aiConfigLoaded = false;
+let visionAiConfig: VisionAiConfig = { ...DEFAULT_VISION_AI_CONFIG };
 let chatHistory: AiConversationMessage[] = [];
 let chatRequestPending = false;
+let pendingChatImages: AiImageAttachment[] = [];
+let activePdfCitationLayer: HTMLElement | null = null;
+let activePdfCitationTimer: number | null = null;
+let currentDocumentAgentId = '';
+let currentDocumentAgentRecord: DocumentAgentRecord | null = null;
+let currentDocumentChunks: DocumentChunk[] = [];
+let currentDocumentSessionCreatedAt = 0;
+let documentAgentStatusText = '';
+let documentAgentOperationToken = 0;
 let readingModePreference: ReadingModePreference = 'auto';
 let resolvedReadingMode: ResolvedReadingMode = 'general';
 let readingModeDetectionPending = false;
@@ -1670,10 +2036,23 @@ let readingModeDocumentKey = '';
 let readingModeRationale = '';
 let readingModeError = '';
 type AssistantView = 'chat' | 'translate' | 'summary' | 'cards';
+const ASSISTANT_VIEW_ORDER: AssistantView[] = ['chat', 'translate', 'summary', 'cards'];
 let activeAssistantView: AssistantView = 'chat';
+let assistantSettingsOpen = false;
+let assistantSettingsTransitionToken = 0;
 
 function setAssistantView(view: AssistantView): void {
+  const previousView = activeAssistantView;
+  const previousIndex = ASSISTANT_VIEW_ORDER.indexOf(previousView);
+  const nextIndex = ASSISTANT_VIEW_ORDER.indexOf(view);
+  const direction = nextIndex >= previousIndex ? 1 : -1;
+  const viewChanged = previousView !== view;
   activeAssistantView = view;
+  const indicatorIndex = Math.max(0, nextIndex);
+  assistantTabsElement?.style.setProperty(
+    '--assistant-indicator-x',
+    `calc(${indicatorIndex * 100}% + ${indicatorIndex * 4}px)`,
+  );
   const showChat = view === 'chat';
   for (const button of assistantViewButtons) {
     const isActive = button.dataset.assistantView === view;
@@ -1690,20 +2069,45 @@ function setAssistantView(view: AssistantView): void {
   if (view !== 'cards') cancelPendingCardGeneration();
 
   if (showChat) {
+    if (viewChanged) revealUiElement(assistantChatPanel, direction);
     window.setTimeout(() => chatInput.focus(), 0);
   } else {
-    activateAiTab(view);
+    const switchingWithinTools = previousView !== 'chat';
+    activateAiTab(view, viewChanged && switchingWithinTools);
+    if (viewChanged && !switchingWithinTools) revealUiElement(assistantToolsRuntime, direction);
   }
 }
 
 function setDeepSeekSettingsOpen(open: boolean): void {
+  assistantSettingsOpen = open;
+  const transitionToken = ++assistantSettingsTransitionToken;
   if (assistantSettingsPanel.parentElement !== document.body) {
     document.body.append(assistantSettingsPanel);
   }
-  assistantSettingsPanel.hidden = !open;
   aiSettingsButton.classList.toggle('active', open);
   aiSettingsButton.setAttribute('aria-expanded', String(open));
-  if (open) window.setTimeout(() => deepSeekApiKeyInput.focus(), 0);
+  if (open) {
+    assistantSettingsPanel.hidden = false;
+    assistantSettingsPanel.setAttribute('aria-hidden', 'false');
+    revealUiElement(assistantSettingsPanel, -1);
+    window.setTimeout(() => deepSeekApiKeyInput.focus(), 0);
+    return;
+  }
+
+  assistantSettingsPanel.setAttribute('aria-hidden', 'true');
+  const animation = playUiAnimation(
+    assistantSettingsPanel,
+    [
+      { opacity: 1, transform: 'translate3d(0, 0, 0) scale(1)' },
+      { opacity: 0, transform: 'translate3d(8px, -5px, 0) scale(0.98)' },
+    ],
+    { duration: 170, easing: 'ease-in' },
+  );
+  void waitForUiAnimation(animation).then(() => {
+    if (transitionToken === assistantSettingsTransitionToken && !assistantSettingsOpen) {
+      assistantSettingsPanel.hidden = true;
+    }
+  });
 }
 
 async function requestAiContent(
@@ -1717,16 +2121,55 @@ async function requestAiContent(
     throw new Error('请先在右上角“设置”中配置 API Key。');
   }
 
+  const resolvedContext = { ...context, readingMode: resolvedReadingMode };
+  logAiRequestDebug(messages, resolvedContext);
   const response = await browser.runtime.sendMessage({
     type: 'pdf-helper:ai-chat',
     messages,
-    context: { ...context, readingMode: resolvedReadingMode },
+    context: resolvedContext,
   }) as AiRuntimeResponse;
 
   if (!response?.ok || !response.content?.trim()) {
     throw new Error(response?.error || 'AI 模型没有返回有效内容。');
   }
   return response.content.trim();
+}
+
+function logAiRequestDebug(
+  messages: AiConversationMessage[],
+  context: AiStreamStartMessage['context'] = {},
+): void {
+  const systemPrompt = buildAiSystemContent(context);
+  const task = context.task || '未命名 AI 请求';
+  const providerConversation = messages
+    .filter((message) => message.content.trim())
+    .slice(-MAX_PROVIDER_CONVERSATION_MESSAGES)
+    .map((message) => ({
+      role: message.role,
+      content: message.content.trim().slice(0, MAX_PROVIDER_MESSAGE_LENGTH),
+    }));
+  const finalMessages = [
+    { role: 'system', content: systemPrompt },
+    ...providerConversation,
+  ];
+
+  console.groupCollapsed(`[PDF Helper AI] ${task} · 提示词与引用`);
+  console.log('引用审计', {
+    documentName: context.documentName,
+    scope: context.sourceScope,
+    sourceLabel: context.sourceLabel,
+    sourcePages: context.sourcePages,
+    contextNote: context.contextNote,
+    selectedTextLength: context.selectedText?.length ?? 0,
+    contextLength: context.pageText?.length ?? 0,
+    readingMode: context.readingMode,
+  });
+  console.log('System Prompt\n', systemPrompt);
+  providerConversation.forEach((message, index) => {
+    console.log(`${message.role === 'user' ? 'User' : 'Assistant'} Prompt #${index + 1}\n`, message.content);
+  });
+  console.log('最终发送消息（已应用供应商适配层的条数与字符上限）', finalMessages);
+  console.groupEnd();
 }
 
 function parseAiList(content: string): string[] {
@@ -1754,20 +2197,165 @@ function updateChatContextPreview(): void {
   const documentLabel = sourceName ? getDisplayFileName(sourceName) : '尚未打开 PDF';
   const pageNumber = Math.max(1, selectedTextPageNumber || pdfViewer.currentPageNumber || 1);
   const selectedText = selectedTextForAi.trim();
+  const agentLine = documentAgentStatusText ? `\n${documentAgentStatusText}` : '';
 
   if (selectedText) {
-    chatContextPreview.textContent = `${documentLabel} · 第 ${pageNumber} 页\n${selectedText.slice(0, 420)}${selectedText.length > 420 ? '…' : ''}`;
+    chatContextPreview.textContent = `${documentLabel} · 第 ${pageNumber} 页${agentLine}\n${selectedText.slice(0, 420)}${selectedText.length > 420 ? '…' : ''}`;
     chatContextPreview.classList.add('has-selection');
   } else {
     chatContextPreview.textContent = sourceName
-      ? `${documentLabel} · 第 ${pageNumber} 页 · ${getReadingModeLabel(resolvedReadingMode)}（自动携带当前页正文）`
+      ? `${documentLabel} · 第 ${pageNumber} 页 · ${getReadingModeLabel(resolvedReadingMode)}（自动携带当前页正文）${agentLine}`
       : '打开 PDF 后，助手会自动携带当前页正文；选中文字时优先使用选区。';
     chatContextPreview.classList.remove('has-selection');
   }
 }
 
+interface MarkdownMathToken {
+  expression: string;
+  displayMode: boolean;
+}
+
+interface MarkdownCitationToken {
+  pageNumber: number;
+  quote: string;
+}
+
+function protectMarkdownCitations(content: string): {
+  markdown: string;
+  tokens: MarkdownCitationToken[];
+} {
+  const tokens: MarkdownCitationToken[] = [];
+  const markdown = content.replace(
+    /\[\[PDF:P(\d{1,5})\|([^\]\r\n]{1,500})\]\]/g,
+    (_match, pageValue: string, quoteValue: string) => {
+      const pageNumber = Number(pageValue);
+      const quote = quoteValue.replace(/\s+/g, ' ').trim();
+      if (!Number.isInteger(pageNumber) || pageNumber < 1 || quote.length < 2) return _match;
+      const index = tokens.push({ pageNumber, quote }) - 1;
+      return `PDFHELPERCITATIONTOKEN${index}END`;
+    },
+  );
+  return { markdown, tokens };
+}
+
+function restoreMarkdownCitations(
+  container: HTMLElement,
+  tokens: MarkdownCitationToken[],
+): void {
+  if (tokens.length === 0) return;
+
+  const tokenPattern = /PDFHELPERCITATIONTOKEN(\d+)END/g;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+
+  for (const textNode of textNodes) {
+    const value = textNode.nodeValue ?? '';
+    tokenPattern.lastIndex = 0;
+    if (!tokenPattern.test(value)) continue;
+
+    tokenPattern.lastIndex = 0;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const match of value.matchAll(tokenPattern)) {
+      const start = match.index ?? 0;
+      if (start > cursor) fragment.append(value.slice(cursor, start));
+      const token = tokens[Number(match[1])];
+      if (token) {
+        const citation = document.createElement('button');
+        citation.type = 'button';
+        citation.className = 'pdf-source-citation';
+        citation.dataset.pdfPage = String(token.pageNumber);
+        citation.dataset.pdfQuote = token.quote;
+        citation.dataset.citationTooltip = `点击跳转到第 ${token.pageNumber} 页：${token.quote.slice(0, 88)}${token.quote.length > 88 ? '…' : ''}`;
+        citation.setAttribute('aria-label', citation.dataset.citationTooltip);
+        citation.textContent = `第 ${token.pageNumber} 页 · 查看原文`;
+        fragment.append(citation);
+      }
+      cursor = start + match[0].length;
+    }
+    if (cursor < value.length) fragment.append(value.slice(cursor));
+    textNode.replaceWith(fragment);
+  }
+}
+
+function normalizeBareLatexMath(content: string): string {
+  // Models occasionally ignore the delimiter instruction and emit a compact
+  // exponent such as 2^{-\gamma}. Wrap only this narrow, unambiguous pattern;
+  // broader guessing would risk treating normal prose as mathematics.
+  return content.replace(
+    /(^|[^$\\\w])(\d+(?:\.\d+)?\^\{[^{}\n]{1,80}\})(?![$])/g,
+    (_match, prefix: string, expression: string) => `${prefix}$${expression}$`,
+  );
+}
+
+function protectMarkdownMath(content: string): {
+  markdown: string;
+  tokens: MarkdownMathToken[];
+} {
+  const tokens: MarkdownMathToken[] = [];
+  const addToken = (expression: string, displayMode: boolean): string => {
+    const index = tokens.push({ expression: expression.trim(), displayMode }) - 1;
+    return `PDFHELPERMATHTOKEN${index}END`;
+  };
+
+  let markdown = normalizeBareLatexMath(content)
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_match, expression: string) => addToken(expression, true))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_match, expression: string) => addToken(expression, true))
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_match, expression: string) => addToken(expression, false));
+
+  markdown = markdown.replace(
+    /(^|[^\\$])\$([^$\n]+?)\$/gm,
+    (_match, prefix: string, expression: string) => `${prefix}${addToken(expression, false)}`,
+  );
+  return { markdown, tokens };
+}
+
+function restoreMarkdownMath(container: HTMLElement, tokens: MarkdownMathToken[]): void {
+  if (tokens.length === 0) return;
+
+  const tokenPattern = /PDFHELPERMATHTOKEN(\d+)END/g;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+
+  for (const textNode of textNodes) {
+    const value = textNode.nodeValue ?? '';
+    tokenPattern.lastIndex = 0;
+    if (!tokenPattern.test(value)) continue;
+
+    tokenPattern.lastIndex = 0;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const match of value.matchAll(tokenPattern)) {
+      const start = match.index ?? 0;
+      if (start > cursor) fragment.append(value.slice(cursor, start));
+
+      const token = tokens[Number(match[1])];
+      if (token) {
+        const math = document.createElement('span');
+        math.className = token.displayMode ? 'pdf-helper-math display' : 'pdf-helper-math inline';
+        math.setAttribute('aria-label', token.expression);
+        math.innerHTML = katex.renderToString(token.expression, {
+          displayMode: token.displayMode,
+          output: 'htmlAndMathml',
+          strict: false,
+          throwOnError: false,
+          trust: false,
+        });
+        fragment.append(math);
+      }
+      cursor = start + match[0].length;
+    }
+    if (cursor < value.length) fragment.append(value.slice(cursor));
+    textNode.replaceWith(fragment);
+  }
+}
+
 function renderChatMarkdown(container: HTMLElement, content: string): void {
-  const html = marked.parse(content, {
+  const citationResult = protectMarkdownCitations(content);
+  const mathResult = protectMarkdownMath(citationResult.markdown);
+  const html = marked.parse(mathResult.markdown, {
     async: false,
     breaks: true,
     gfm: true,
@@ -1780,6 +2368,30 @@ function renderChatMarkdown(container: HTMLElement, content: string): void {
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
   }
+  restoreMarkdownMath(container, mathResult.tokens);
+  restoreMarkdownCitations(container, citationResult.tokens);
+}
+
+function renderChatMessageImages(
+  message: HTMLElement,
+  images: AiImageAttachment[] | undefined,
+): void {
+  message.querySelector('.chat-message-images')?.remove();
+  if (!images?.length) return;
+
+  const gallery = document.createElement('div');
+  gallery.className = 'chat-message-images';
+  for (const attachment of images) {
+    const image = document.createElement('img');
+    image.className = 'chat-message-image';
+    image.src = attachment.dataUrl;
+    image.alt = attachment.name || '聊天截图';
+    image.title = attachment.name || '聊天截图';
+    gallery.append(image);
+  }
+  const body = message.querySelector('.chat-message-content');
+  if (body) message.insertBefore(gallery, body);
+  else message.append(gallery);
 }
 
 function updateChatMessage(
@@ -1804,7 +2416,7 @@ function updateChatMessage(
 function appendChatMessage(
   role: 'user' | 'assistant',
   content: string,
-  options: { pending?: boolean; error?: boolean } = {},
+  options: { pending?: boolean; error?: boolean; images?: AiImageAttachment[] } = {},
 ): HTMLElement {
   const message = document.createElement('article');
   message.className = `chat-message ${role}`;
@@ -1820,6 +2432,7 @@ function appendChatMessage(
 
   message.append(roleLabel, body);
   chatMessagesElement.append(message);
+  renderChatMessageImages(message, options.images);
   updateChatMessage(message, content, options);
   return message;
 }
@@ -1831,6 +2444,8 @@ function requestAiStream(
 ): Promise<string> {
   const requestId = crypto.randomUUID();
   const port = browser.runtime.connect({ name: AI_STREAM_PORT_NAME });
+  const resolvedContext = { ...context, readingMode: resolvedReadingMode };
+  logAiRequestDebug(messages, resolvedContext);
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -1875,19 +2490,181 @@ function requestAiStream(
       type: 'start',
       requestId,
       messages,
-      context: { ...context, readingMode: resolvedReadingMode },
+      context: resolvedContext,
     };
     port.postMessage(startMessage);
   });
 }
 
-function resetChatConversation(): void {
-  chatHistory = [];
+function renderChatConversation(messages: AiConversationMessage[]): void {
   chatMessagesElement.replaceChildren();
-  appendChatMessage(
-    'assistant',
-    '你好，我可以结合当前 PDF 和你选中的文字回答问题。选中一段原文后，可以直接让我翻译、解释或总结。',
-  );
+  if (messages.length === 0) {
+    appendChatMessage(
+      'assistant',
+      '你好，我可以结合当前 PDF 和你选中的文字回答问题。论文完成全文建档后，我还可以检索全文、论文档案和目录。',
+    );
+    return;
+  }
+  for (const message of messages) {
+    appendChatMessage(message.role, message.content, { images: message.images });
+  }
+}
+
+async function persistChatConversation(): Promise<void> {
+  const documentId = currentDocumentAgentId;
+  if (!documentId) return;
+  const now = Date.now();
+  if (!currentDocumentSessionCreatedAt) currentDocumentSessionCreatedAt = now;
+  const session: DocumentAgentSession = {
+    id: `${documentId}:session:default`,
+    documentId,
+    title: getDisplayFileName(sourceName) || 'PDF 会话',
+    messages: chatHistory.map((message) => ({ ...message })),
+    createdAt: currentDocumentSessionCreatedAt,
+    updatedAt: now,
+  };
+  await putDocumentSession(session);
+}
+
+async function restoreChatConversation(documentId: string): Promise<void> {
+  try {
+    const session = await getLatestDocumentSession(documentId);
+    if (currentDocumentAgentId !== documentId) return;
+    chatHistory = session?.messages?.map((message) => ({ ...message })) ?? [];
+    currentDocumentSessionCreatedAt = session?.createdAt ?? Date.now();
+    renderChatConversation(chatHistory);
+  } catch (error) {
+    console.warn('[PDF Helper Agent] 无法恢复历史会话', error);
+    if (currentDocumentAgentId !== documentId) return;
+    chatHistory = [];
+    currentDocumentSessionCreatedAt = Date.now();
+    renderChatConversation(chatHistory);
+  }
+}
+
+function resetChatConversation(options: { persist?: boolean } = {}): void {
+  chatHistory = [];
+  currentDocumentSessionCreatedAt = Date.now();
+  clearPendingChatImages();
+  renderChatConversation(chatHistory);
+  if (options.persist !== false) void persistChatConversation();
+}
+
+const MAX_CHAT_IMAGE_COUNT = 3;
+const MAX_CHAT_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_CHAT_IMAGE_EDGE = 1600;
+
+async function createChatImageAttachment(
+  blob: Blob,
+  fallbackName = 'screenshot.png',
+): Promise<AiImageAttachment> {
+  if (!blob.type.startsWith('image/')) throw new Error('只能添加图片文件。');
+  if (blob.size > MAX_CHAT_IMAGE_BYTES) throw new Error('单张图片不能超过 15 MB。');
+
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const scale = Math.min(1, MAX_CHAT_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) throw new Error('浏览器无法处理这张图片。');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.drawImage(bitmap, 0, 0, width, height);
+    return {
+      id: crypto.randomUUID(),
+      name: blob instanceof File && blob.name ? blob.name : fallbackName,
+      mediaType: 'image/jpeg',
+      dataUrl: canvas.toDataURL('image/jpeg', 0.88),
+      width,
+      height,
+    };
+  } finally {
+    bitmap.close();
+  }
+}
+
+function renderPendingChatImages(): void {
+  chatAttachmentsElement.replaceChildren();
+  chatAttachmentsElement.hidden = pendingChatImages.length === 0;
+  for (const attachment of pendingChatImages) {
+    const item = document.createElement('div');
+    item.className = 'chat-attachment';
+    const image = document.createElement('img');
+    image.src = attachment.dataUrl;
+    image.alt = attachment.name;
+    const label = document.createElement('span');
+    label.textContent = attachment.name;
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.textContent = '×';
+    removeButton.setAttribute('aria-label', `移除 ${attachment.name}`);
+    removeButton.addEventListener('click', () => {
+      pendingChatImages = pendingChatImages.filter((item) => item.id !== attachment.id);
+      renderPendingChatImages();
+    });
+    item.append(image, label, removeButton);
+    chatAttachmentsElement.append(item);
+  }
+}
+
+async function addChatImageFiles(files: Iterable<Blob>): Promise<void> {
+  const availableSlots = MAX_CHAT_IMAGE_COUNT - pendingChatImages.length;
+  if (availableSlots <= 0) {
+    setStatus(`一次最多添加 ${MAX_CHAT_IMAGE_COUNT} 张截图。`, true);
+    return;
+  }
+
+  const candidates = Array.from(files).slice(0, availableSlots);
+  for (const [index, file] of candidates.entries()) {
+    try {
+      pendingChatImages.push(await createChatImageAttachment(file, `screenshot-${index + 1}.png`));
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error), true);
+    }
+  }
+  renderPendingChatImages();
+  chatInput.focus();
+}
+
+function clearPendingChatImages(): void {
+  pendingChatImages = [];
+  chatImageInput.value = '';
+  renderPendingChatImages();
+}
+
+async function inspectChatImageWithVision(
+  attachment: AiImageAttachment,
+  question: string,
+  config: VisionAiConfig,
+  context: AiStreamStartMessage['context'],
+): Promise<string> {
+  if (!isVisionAiConfigured(config)) {
+    throw new Error('当前主模型不能看图。请先在“设置 → 视觉模型”中配置视觉模型。');
+  }
+  const response = await browser.runtime.sendMessage({
+    type: 'pdf-helper:ai-vision',
+    prompt: [
+      '这是用户随聊天消息附加的截图。',
+      question ? `用户问题：${question.slice(0, 2000)}` : '用户希望你分析这张截图。',
+      '请准确描述截图中的文字、公式、图表、界面状态和重要空间关系。',
+      '输出一份可直接交给主语言模型使用的中文事实说明；不确定的地方明确标注，不要猜测。',
+    ].join('\n'),
+    imageDataUrl: attachment.dataUrl,
+    context: {
+      ...context,
+      task: '聊天截图视觉分析',
+      sourceLabel: attachment.name,
+      contextNote: '这是用户本轮聊天消息附加的截图，不是 PDF 页面渲染图。',
+    },
+  }) as AiRuntimeResponse;
+  if (!response?.ok || !response.content?.trim()) {
+    throw new Error(response?.error || `视觉模型未能分析 ${attachment.name}。`);
+  }
+  return response.content.trim();
 }
 
 function updateDeepSeekProviderStatus(): void {
@@ -1910,6 +2687,59 @@ function readDeepSeekConfigFromForm(): AiConfig {
   };
 }
 
+function updateVisionAiFieldsVisibility(): void {
+  const enabled = visionAiModeSelect.value === 'separate';
+  visionAiFields.hidden = !enabled;
+  testVisionAiButton.disabled = !enabled;
+  if (!enabled) {
+    visionSettingsStatus.classList.remove('error');
+    visionSettingsStatus.textContent = '视觉模型已关闭；主模型仍可使用 PDF 文字上下文。';
+  } else if (!visionSettingsStatus.textContent || visionSettingsStatus.textContent.includes('已关闭')) {
+    visionSettingsStatus.textContent = '仅在需要查看图、表、公式截图或页面布局时调用。';
+  }
+}
+
+function readVisionAiConfigFromForm(): VisionAiConfig {
+  return {
+    mode: visionAiModeSelect.value as VisionAiMode,
+    providerId: 'openai-compatible',
+    apiKey: visionApiKeyInput.value.trim(),
+    baseUrl: visionBaseUrlInput.value.trim().replace(/\/+$/, ''),
+    model: visionModelInput.value.trim(),
+  };
+}
+
+function populateVisionAiConfigForm(config: VisionAiConfig): void {
+  visionAiModeSelect.value = config.mode;
+  visionApiKeyInput.value = config.apiKey;
+  visionModelInput.value = config.model;
+  visionBaseUrlInput.value = config.baseUrl;
+  updateVisionAiFieldsVisibility();
+}
+
+function validateVisionAiConfig(config: VisionAiConfig): boolean {
+  if (config.mode === 'disabled') return true;
+  if (config.apiKey && config.baseUrl && config.model) return true;
+  visionSettingsStatus.classList.add('error');
+  visionSettingsStatus.textContent = '启用视觉模型后，需要填写 API Key、模型标识和 OpenAI 兼容 API 地址。';
+  return false;
+}
+
+async function saveVisionAiConfig(showSuccess = true): Promise<boolean> {
+  const nextConfig = readVisionAiConfigFromForm();
+  if (!validateVisionAiConfig(nextConfig)) return false;
+  visionAiConfig = nextConfig;
+  await browser.storage.local.set({ [VISION_AI_CONFIG_STORAGE_KEY]: nextConfig });
+  populateVisionAiConfigForm(nextConfig);
+  visionSettingsStatus.classList.remove('error');
+  if (showSuccess) {
+    visionSettingsStatus.textContent = nextConfig.mode === 'separate'
+      ? `视觉模型已保存：${nextConfig.model}`
+      : '视觉模型已关闭；主模型仍可使用 PDF 文字上下文。';
+  }
+  return true;
+}
+
 function getInternalNavigationDocumentKey(): string {
   const fingerprint = getPdfFingerprint();
   return fingerprint ? `fingerprint:${fingerprint}` : `source:${sourceName}`;
@@ -1926,46 +2756,117 @@ function updateCitationReturnButton() {
 }
 
 function clearInternalNavigationHistory() {
+  clearPdfCitationHighlight();
+  if (internalNavigationReturnCheckTimer !== null) {
+    window.clearTimeout(internalNavigationReturnCheckTimer);
+    internalNavigationReturnCheckTimer = null;
+  }
   internalNavigationHistory.length = 0;
+  internalNavigationReturnCheckAvailableAt = 0;
   updateCitationReturnButton();
 }
 
-function captureInternalNavigationOrigin() {
+function scheduleInternalNavigationReturnCheck(delay = 80) {
+  if (internalNavigationHistory.length === 0) return;
+  if (internalNavigationReturnCheckTimer !== null) {
+    window.clearTimeout(internalNavigationReturnCheckTimer);
+  }
+
+  const guardDelay = Math.max(0, internalNavigationReturnCheckAvailableAt - Date.now());
+  internalNavigationReturnCheckTimer = window.setTimeout(() => {
+    internalNavigationReturnCheckTimer = null;
+    updateInternalNavigationReturnState();
+  }, Math.max(delay, guardDelay + 16));
+}
+
+function updateInternalNavigationReturnState() {
   if (
-    suppressInternalNavigationCapture ||
+    isInternalNavigationInProgress ||
     isReturningFromInternalNavigation ||
-    isOpeningDocument ||
+    isRestoringReadingPosition ||
+    Date.now() < internalNavigationReturnCheckAvailableAt ||
     !pdfDocument
   ) {
     return;
   }
 
+  const entry = internalNavigationHistory.at(-1);
+  if (!entry || entry.documentKey !== getInternalNavigationDocumentKey()) return;
+
   const position = getCurrentReadingPosition();
   if (!position) return;
 
-  const documentKey = getInternalNavigationDocumentKey();
-  const previous = internalNavigationHistory.at(-1);
-  if (
-    previous?.documentKey === documentKey &&
-    previous.pageNumber === position.pageNumber &&
-    Math.abs(previous.scrollTop - position.scrollTop) < 4 &&
-    Math.abs(previous.scrollLeft - position.scrollLeft) < 4
-  ) {
+  const verticalDistance = Math.abs(position.scrollTop - entry.scrollTop);
+  const horizontalDistance = Math.abs(position.scrollLeft - entry.scrollLeft);
+  // Only dismiss the return affordance after the reader has genuinely come
+  // back to the captured viewport. Treating any position on the same page as
+  // the origin made the state disappear (or reveal an older stack entry) while
+  // the user was still far away from the original paragraph.
+  const returnTolerance = 36;
+  const horizontalTolerance = 36;
+  const isNearOrigin =
+    position.pageNumber === entry.pageNumber &&
+    verticalDistance <= returnTolerance &&
+    horizontalDistance <= horizontalTolerance;
+
+  if (!entry.hasDepartedOrigin) {
+    const departureDistance = Math.max(180, viewerContainer.clientHeight * 0.7);
+    if (verticalDistance > departureDistance || position.pageNumber !== entry.pageNumber) {
+      entry.hasDepartedOrigin = true;
+    }
     return;
   }
 
-  internalNavigationHistory.push({ ...position, documentKey });
-  if (internalNavigationHistory.length > 20) internalNavigationHistory.shift();
-  updateCitationReturnButton();
+  if (isNearOrigin) {
+    internalNavigationHistory.length = 0;
+    updateCitationReturnButton();
+  }
 }
 
-function navigateToDestinationWithoutReturnHistory(destination: unknown) {
+function captureInternalNavigationOrigin(): InternalNavigationEntry | null {
+  if (
+    suppressInternalNavigationCapture ||
+    isInternalNavigationInProgress ||
+    isReturningFromInternalNavigation ||
+    isOpeningDocument ||
+    !pdfDocument
+  ) {
+    return null;
+  }
+
+  const documentKey = getInternalNavigationDocumentKey();
+  const existingEntry = internalNavigationHistory.at(-1);
+  if (existingEntry?.documentKey === documentKey) {
+    // A second citation click before returning still belongs to the same
+    // navigation session. Preserve the original reading position instead of
+    // turning the latest destination into a new (and misleading) return point.
+    return existingEntry;
+  }
+
+  const position = getCurrentReadingPosition();
+  if (!position) return null;
+
+  const entry: InternalNavigationEntry = {
+    ...position,
+    documentKey,
+    hasDepartedOrigin: false,
+  };
+  // A citation jump has exactly one origin. Keeping a browser-like stack here
+  // allowed late scroll/page events to expose stale entries and caused the
+  // "return to text" action to bounce through unrelated pages.
+  internalNavigationHistory.length = 0;
+  internalNavigationHistory.push(entry);
+  updateCitationReturnButton();
+  return entry;
+}
+
+async function navigateToDestinationWithoutReturnHistory(destination: unknown) {
   suppressInternalNavigationCapture = true;
   try {
-    return linkService.goToDestination(destination as any);
+    return await linkService.goToDestination(destination as any);
   } finally {
-    // The navigation-aware wrapper captures synchronously before PDF.js starts
-    // resolving an asynchronous named destination.
+    // Keep capture disabled until named destinations have been fully resolved.
+    // PDF.js may recursively call goToDestination while resolving them.
     suppressInternalNavigationCapture = false;
   }
 }
@@ -1974,13 +2875,18 @@ function returnToPreviousInternalNavigationPosition() {
   if (!pdfDocument || isReturningFromInternalNavigation) return;
 
   const documentKey = getInternalNavigationDocumentKey();
-  let entry = internalNavigationHistory.pop();
-  while (entry && entry.documentKey !== documentKey) entry = internalNavigationHistory.pop();
+  const entry = internalNavigationHistory.at(-1);
+  internalNavigationHistory.length = 0;
+  if (internalNavigationReturnCheckTimer !== null) {
+    window.clearTimeout(internalNavigationReturnCheckTimer);
+    internalNavigationReturnCheckTimer = null;
+  }
   updateCitationReturnButton();
-  if (!entry) return;
+  if (!entry || entry.documentKey !== documentKey) return;
 
   isReturningFromInternalNavigation = true;
   isRestoringReadingPosition = true;
+  clearPdfCitationHighlight();
 
   const pageNumber = Math.min(pdfDocument.numPages, Math.max(1, Math.round(entry.pageNumber)));
   if (Number.isFinite(entry.scale) && entry.scale > 0) {
@@ -1995,25 +2901,782 @@ function returnToPreviousInternalNavigationPosition() {
       viewerContainer.scrollTo({
         top: exactTop,
         left: exactLeft,
-        behavior: 'smooth',
+        behavior: 'auto',
       });
-      window.setTimeout(() => {
-        viewerContainer.scrollTop = exactTop;
-        viewerContainer.scrollLeft = exactLeft;
+      requestAnimationFrame(() => {
         isReturningFromInternalNavigation = false;
         isRestoringReadingPosition = false;
         updateControls();
         scheduleReadingPositionSave();
-      }, 450);
+      });
     });
   });
 }
 
 const goToPdfDestination = linkService.goToDestination.bind(linkService);
 linkService.goToDestination = async (destination: any) => {
-  captureInternalNavigationOrigin();
-  await goToPdfDestination(destination);
+  // PDF.js resolves a named destination by recursively calling
+  // this.goToDestination(explicitDestination). Only the outermost call owns the
+  // return origin; otherwise the nested call can overwrite it and later
+  // "return to text" actions appear to bounce between unrelated positions.
+  const isRootNavigation = !isInternalNavigationInProgress;
+  if (!isRootNavigation) {
+    return await goToPdfDestination(destination);
+  }
+
+  const bibliographyReferenceNumber =
+    parseBibliographyReferenceNumber(destination);
+  if (
+    bibliographyReferenceNumber !== null &&
+    (await navigateFromBibliographyToFirstCitation(
+      bibliographyReferenceNumber,
+      goToPdfDestination,
+    ))
+  ) {
+    return;
+  }
+
+  const capturedEntry = captureInternalNavigationOrigin();
+  isInternalNavigationInProgress = true;
+  internalNavigationReturnCheckAvailableAt = Date.now() + 600;
+  try {
+    const resolvedDestination = await resolvePdfDestination(destination);
+    await goToPdfDestination(destination);
+    await waitForAnimationFrames(2);
+    if (resolvedDestination) {
+      await highlightInternalPdfDestination(resolvedDestination);
+    }
+  } finally {
+    if (capturedEntry) capturedEntry.hasDepartedOrigin = true;
+    isInternalNavigationInProgress = false;
+    scheduleInternalNavigationReturnCheck();
+  }
 };
+
+interface CitationTextPoint {
+  node: Text;
+  offset: number;
+}
+
+interface CitationTextIndex {
+  text: string;
+  points: CitationTextPoint[];
+}
+
+function normalizeCitationCharacter(value: string): string {
+  return value
+    .normalize('NFKC')
+    .replace(/[‘’‛]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—−]/g, '-')
+    .replace(/\u00ad/g, '');
+}
+
+function normalizeCitationQuote(value: string): string {
+  return normalizeCitationCharacter(value)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildCitationTextIndex(
+  textLayer: HTMLElement,
+  insertSpacesBetweenNodes: boolean,
+): CitationTextIndex {
+  const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text);
+
+  let text = '';
+  const points: CitationTextPoint[] = [];
+  let previousNode: Text | null = null;
+  for (const node of nodes) {
+    const value = node.nodeValue ?? '';
+    if (
+      insertSpacesBetweenNodes &&
+      previousNode &&
+      text &&
+      !/\s/.test(text.at(-1) ?? '') &&
+      value &&
+      !/^\s/.test(value)
+    ) {
+      text += ' ';
+      points.push({ node: previousNode, offset: previousNode.length });
+    }
+
+    for (let offset = 0; offset < value.length; offset += 1) {
+      const normalized = normalizeCitationCharacter(value[offset] ?? '');
+      if (!normalized) continue;
+      for (const character of normalized) {
+        if (/\s/.test(character)) {
+          if (!text || text.endsWith(' ')) continue;
+          text += ' ';
+        } else {
+          text += character;
+        }
+        points.push({ node, offset });
+      }
+    }
+    previousNode = node;
+  }
+  return { text, points };
+}
+
+function clearPdfCitationHighlight(): void {
+  activePdfCitationLayer?.remove();
+  activePdfCitationLayer = null;
+  if (activePdfCitationTimer !== null) {
+    window.clearTimeout(activePdfCitationTimer);
+    activePdfCitationTimer = null;
+  }
+}
+
+function waitForAnimationFrames(count = 1): Promise<void> {
+  return new Promise((resolve) => {
+    const nextFrame = (remaining: number) => {
+      if (remaining <= 0) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(() => nextFrame(remaining - 1));
+    };
+    nextFrame(Math.max(1, count));
+  });
+}
+
+async function resolvePdfDestination(destination: any): Promise<any[] | null> {
+  if (Array.isArray(destination)) return destination;
+  if (typeof destination !== 'string' || !pdfDocument) return null;
+  try {
+    return (await pdfDocument.getDestination(destination)) as any[] | null;
+  } catch {
+    return null;
+  }
+}
+
+async function getPdfDestinationPageNumber(destination: any[]): Promise<number | null> {
+  if (!pdfDocument || destination.length === 0) return null;
+  const pageReference = destination[0];
+  if (Number.isInteger(pageReference)) {
+    const pageNumber = Number(pageReference) + 1;
+    return pageNumber >= 1 && pageNumber <= pdfDocument.numPages ? pageNumber : null;
+  }
+  if (!pageReference || typeof pageReference !== 'object') return null;
+  try {
+    return (await pdfDocument.getPageIndex(pageReference)) + 1;
+  } catch {
+    return null;
+  }
+}
+
+function getPdfDestinationTop(destination: any[]): number | null {
+  const destinationType = destination[1]?.name;
+  const candidate = destinationType === 'XYZ'
+    ? destination[3]
+    : destinationType === 'FitH' || destinationType === 'FitBH'
+      ? destination[2]
+      : destinationType === 'FitR'
+        ? destination[5]
+        : null;
+  return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : null;
+}
+
+function getPdfDestinationLeft(destination: any[]): number | null {
+  const destinationType = destination[1]?.name;
+  const candidate = destinationType === 'XYZ' || destinationType === 'FitR'
+    ? destination[2]
+    : null;
+  return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : null;
+}
+
+async function waitForPdfTextLayer(pageNumber: number): Promise<HTMLElement | null> {
+  const startedAt = performance.now();
+  while (performance.now() - startedAt < 3500) {
+    const layer = viewerElement.querySelector<HTMLElement>(
+      `.page[data-page-number="${pageNumber}"] .textLayer`,
+    );
+    if (layer && layer.textContent?.trim()) return layer;
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 40));
+  }
+  return null;
+}
+
+interface CitationTextMatch {
+  start: number;
+  length: number;
+}
+
+interface CitationClientRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+function getCitationWords(value: string): string[] {
+  return value.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function getCitationCandidateConfidence(quote: string, candidate: string): number {
+  const quoteWords = getCitationWords(quote);
+  const candidateWords = getCitationWords(candidate);
+  if (quoteWords.length < 6 || candidateWords.length < 4) return 0;
+  if (candidateWords.length > quoteWords.length * 1.55) return 0;
+  if (candidateWords.length < quoteWords.length * 0.6) return 0;
+
+  const previous = new Array<number>(candidateWords.length + 1).fill(0);
+  for (const quoteWord of quoteWords) {
+    let diagonal = 0;
+    for (let candidateIndex = 1; candidateIndex <= candidateWords.length; candidateIndex += 1) {
+      const above = previous[candidateIndex] ?? 0;
+      const left = previous[candidateIndex - 1] ?? 0;
+      previous[candidateIndex] = quoteWord === candidateWords[candidateIndex - 1]
+        ? diagonal + 1
+        : Math.max(above, left);
+      diagonal = above;
+    }
+  }
+  return (previous[candidateWords.length] ?? 0) / quoteWords.length;
+}
+
+function findCitationTextMatch(indexText: string, normalizedQuote: string): CitationTextMatch | null {
+  const exactStart = indexText.indexOf(normalizedQuote);
+  if (exactStart >= 0) return { start: exactStart, length: normalizedQuote.length };
+
+  const words = normalizedQuote.split(' ').filter(Boolean);
+  for (let anchorSize = Math.min(8, Math.floor(words.length / 2)); anchorSize >= 4; anchorSize -= 1) {
+    const startAnchor = words.slice(0, anchorSize).join(' ');
+    const endAnchor = words.slice(-anchorSize).join(' ');
+    let start = indexText.indexOf(startAnchor);
+    while (start >= 0) {
+      const endStart = indexText.indexOf(endAnchor, start + startAnchor.length);
+      const maximumSpan = Math.max(normalizedQuote.length * 1.55, normalizedQuote.length + 180);
+      if (endStart >= 0 && endStart - start <= maximumSpan) {
+        const length = endStart + endAnchor.length - start;
+        const candidate = indexText.slice(start, start + length);
+        if (getCitationCandidateConfidence(normalizedQuote, candidate) >= 0.82) {
+          return { start, length };
+        }
+      }
+      start = indexText.indexOf(startAnchor, start + 1);
+    }
+  }
+
+  // Do not fall back to a long prefix. Repeated prose, headers and bibliography
+  // entries can share such prefixes, and highlighting the wrong passage is
+  // substantially worse than reporting that the source could not be matched.
+  return null;
+}
+
+function createCitationRange(
+  index: CitationTextIndex,
+  start: number,
+  length: number,
+): Range | null {
+  if (length < 1) return null;
+  const startPoint = index.points[start];
+  const endPoint = index.points[start + length - 1];
+  if (!startPoint || !endPoint) return null;
+  const range = document.createRange();
+  range.setStart(
+    startPoint.node,
+    Math.min(startPoint.offset, startPoint.node.length),
+  );
+  range.setEnd(
+    endPoint.node,
+    Math.min(endPoint.offset + 1, endPoint.node.length),
+  );
+  return range;
+}
+
+function findCitationRange(textLayer: HTMLElement, quote: string): Range | null {
+  const normalizedQuote = normalizeCitationQuote(quote);
+  if (!normalizedQuote) return null;
+
+  for (const insertSpaces of [false, true]) {
+    const index = buildCitationTextIndex(textLayer, insertSpaces);
+    const match = findCitationTextMatch(index.text, normalizedQuote);
+    if (!match || match.length < 2) continue;
+    const range = createCitationRange(index, match.start, match.length);
+    if (range) return range;
+  }
+  return null;
+}
+
+function getCitationRectColumn(
+  rect: Pick<CitationClientRect, 'left' | 'right' | 'width'>,
+  pageRect: DOMRect,
+): 'left' | 'right' | 'full' {
+  if (rect.width >= pageRect.width * 0.58) return 'full';
+  return (rect.left + rect.right) / 2 < pageRect.left + pageRect.width / 2 ? 'left' : 'right';
+}
+
+function mergeCitationClientRects(rects: DOMRect[], pageRect: DOMRect): CitationClientRect[] {
+  const visibleRects = rects
+    .filter((rect) => rect.width >= 1 && rect.height >= 1)
+    .map((rect) => ({
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height,
+    }))
+    .sort((a, b) => a.top - b.top || a.left - b.left);
+  const merged: CitationClientRect[] = [];
+  for (const rect of visibleRects) {
+    const sameLine = [...merged].reverse().find((candidate) => {
+      const verticalOverlap = Math.min(rect.bottom, candidate.bottom) - Math.max(rect.top, candidate.top);
+      const minimumHeight = Math.min(rect.height, candidate.height);
+      const rectColumn = getCitationRectColumn(rect, pageRect);
+      const candidateColumn = getCitationRectColumn(candidate, pageRect);
+      const sameColumn =
+        rectColumn === candidateColumn ||
+        rectColumn === 'full' ||
+        candidateColumn === 'full';
+      return sameColumn && verticalOverlap >= minimumHeight * 0.68;
+    });
+    const horizontalGap = sameLine ? Math.max(0, rect.left - sameLine.right) : Number.POSITIVE_INFINITY;
+    // PDF.js often emits one client rect per word/span. Merge those rects into
+    // the visual line, but never bridge the two columns of a paper.
+    const maximumWordGap = sameLine
+      ? Math.max(36, Math.min(72, Math.min(rect.height, sameLine.height) * 5))
+      : 0;
+    if (sameLine && horizontalGap <= maximumWordGap) {
+      sameLine.left = Math.min(sameLine.left, rect.left);
+      sameLine.top = Math.min(sameLine.top, rect.top);
+      sameLine.right = Math.max(sameLine.right, rect.right);
+      sameLine.bottom = Math.max(sameLine.bottom, rect.bottom);
+      sameLine.width = sameLine.right - sameLine.left;
+      sameLine.height = sameLine.bottom - sameLine.top;
+      continue;
+    }
+    merged.push({ ...rect });
+  }
+  return merged;
+}
+
+function showPdfCitationHighlight(page: HTMLElement, rects: DOMRect[]): HTMLElement | null {
+  const pageRect = page.getBoundingClientRect();
+  const clippedRects = rects
+    .map((rect) => {
+      const left = Math.max(pageRect.left, rect.left);
+      const top = Math.max(pageRect.top, rect.top);
+      const right = Math.min(pageRect.right, rect.right);
+      const bottom = Math.min(pageRect.bottom, rect.bottom);
+      return DOMRect.fromRect({
+        x: left,
+        y: top,
+        width: Math.max(0, right - left),
+        height: Math.max(0, bottom - top),
+      });
+    })
+    .filter((rect) => rect.width >= 1 && rect.height >= 1);
+  const mergedRects = mergeCitationClientRects(clippedRects, pageRect);
+  if (mergedRects.length === 0) return null;
+  clearPdfCitationHighlight();
+  const layer = document.createElement('div');
+  layer.className = 'pdf-ai-citation-highlight-layer';
+  layer.setAttribute('aria-hidden', 'true');
+  for (const rect of mergedRects) {
+    const highlight = document.createElement('span');
+    highlight.className = 'pdf-ai-citation-highlight';
+    highlight.style.left = `${rect.left - pageRect.left}px`;
+    highlight.style.top = `${rect.top - pageRect.top}px`;
+    highlight.style.width = `${rect.width}px`;
+    highlight.style.height = `${rect.height}px`;
+    layer.append(highlight);
+  }
+  page.append(layer);
+  activePdfCitationLayer = layer;
+  // Smooth scrolling remains active after this function returns. If the user
+  // immediately presses "return to text", the unfinished animation competes
+  // with the restore scroll and pulls the document back toward the citation.
+  layer.firstElementChild?.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+  activePdfCitationTimer = window.setTimeout(clearPdfCitationHighlight, 9000);
+  return layer;
+}
+
+function parseBibliographyReferenceNumber(destination: unknown): number | null {
+  if (typeof destination !== "string") return null;
+  const match = /^rid:bibr:ref(\d+)$/i.exec(destination.trim());
+  if (!match?.[1]) return null;
+  const value = Number.parseInt(match[1], 10);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+async function findFirstBodyCitationTarget(
+  referenceNumber: number,
+): Promise<PdfBodyCitationTarget | null> {
+  if (!pdfDocument) return null;
+
+  const cacheKey = `${getInternalNavigationDocumentKey()}:${referenceNumber}`;
+  let pending = bibliographyBacklinkCache.get(cacheKey);
+  if (!pending) {
+    pending = (async () => {
+      const destinationName = `Item.${referenceNumber}`;
+      for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+        const page = await pdfDocument.getPage(pageNumber);
+        const annotations = await page.getAnnotations({ intent: "display" });
+        const pageWidth = Math.abs(Number(page.view?.[2] ?? 0) - Number(page.view?.[0] ?? 0));
+        const matches = annotations
+          .filter(
+            (annotation: any) =>
+              annotation?.dest === destinationName &&
+              Array.isArray(annotation?.rect) &&
+              annotation.rect.length === 4,
+          )
+          .map((annotation: any) => ({
+            pageNumber,
+            rect: annotation.rect.map(Number) as [number, number, number, number],
+            destinationName,
+          }))
+          .sort((left, right) => {
+            const leftX = Math.min(left.rect[0], left.rect[2]);
+            const rightX = Math.min(right.rect[0], right.rect[2]);
+            const leftColumn = pageWidth > 0 && leftX >= pageWidth / 2 ? 1 : 0;
+            const rightColumn = pageWidth > 0 && rightX >= pageWidth / 2 ? 1 : 0;
+            if (leftColumn !== rightColumn) return leftColumn - rightColumn;
+            const leftTop = Math.max(left.rect[1], left.rect[3]);
+            const rightTop = Math.max(right.rect[1], right.rect[3]);
+            return rightTop - leftTop || leftX - rightX;
+          });
+        if (matches[0]) return matches[0];
+      }
+      return null;
+    })();
+    bibliographyBacklinkCache.set(cacheKey, pending);
+  }
+  return pending;
+}
+
+function getCitationAnnotationClientRect(
+  target: PdfBodyCitationTarget,
+  pageElement: HTMLElement,
+): DOMRect | null {
+  const pageView = pdfViewer?.getPageView(target.pageNumber - 1) as any;
+  const viewport = pageView?.viewport;
+  if (!viewport?.convertToViewportRectangle) return null;
+  const converted = viewport.convertToViewportRectangle(target.rect);
+  const pageRect = pageElement.getBoundingClientRect();
+  const left = pageRect.left + Math.min(converted[0], converted[2]);
+  const top = pageRect.top + Math.min(converted[1], converted[3]);
+  return new DOMRect(
+    left,
+    top,
+    Math.abs(converted[2] - converted[0]),
+    Math.abs(converted[3] - converted[1]),
+  );
+}
+
+function citationGroupContainsReference(group: string, referenceNumber: number): boolean {
+  const escaped = String(referenceNumber).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`(?:^|\\D)${escaped}(?:\\D|$)`).test(group)) return true;
+  for (const match of group.matchAll(/(\d+)\s*[-–—]\s*(\d+)/g)) {
+    const start = Number(match[1]);
+    const end = Number(match[2]);
+    if (
+      Number.isInteger(start) &&
+      Number.isInteger(end) &&
+      referenceNumber >= Math.min(start, end) &&
+      referenceNumber <= Math.max(start, end)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function findNearestBodyCitationMatch(
+  index: CitationTextIndex,
+  referenceNumber: number,
+  targetRect: DOMRect,
+): { start: number; length: number; rects: DOMRect[] } | null {
+  const candidates: Array<{
+    start: number;
+    length: number;
+    rects: DOMRect[];
+    score: number;
+  }> = [];
+  for (const match of index.text.matchAll(/[\[(][^\])]{1,96}[\])]/g)) {
+    if (
+      match.index === undefined ||
+      !citationGroupContainsReference(match[0], referenceNumber)
+    ) {
+      continue;
+    }
+    const range = createCitationRange(index, match.index, match[0].length);
+    if (!range) continue;
+    const rects = Array.from(range.getClientRects()).filter(
+      (rect) => rect.width > 0 && rect.height > 0,
+    );
+    if (!rects.length) continue;
+    const score = Math.min(
+      ...rects.map((rect) => {
+        const dx = rect.left + rect.width / 2 - (targetRect.left + targetRect.width / 2);
+        const dy = rect.top + rect.height / 2 - (targetRect.top + targetRect.height / 2);
+        return dx * dx + dy * dy;
+      }),
+    );
+    candidates.push({ start: match.index, length: match[0].length, rects, score });
+  }
+  candidates.sort((left, right) => left.score - right.score);
+  return candidates[0] ?? null;
+}
+
+function expandCitationMatchToSentence(
+  text: string,
+  start: number,
+  length: number,
+): { start: number; length: number } {
+  const sentenceBoundary = /[.!?。！？]/;
+  let sentenceStart = start;
+  while (sentenceStart > 0 && !sentenceBoundary.test(text[sentenceStart - 1])) {
+    sentenceStart -= 1;
+  }
+  while (sentenceStart < start && /\s/.test(text[sentenceStart])) sentenceStart += 1;
+
+  let sentenceEnd = start + length;
+  while (sentenceEnd < text.length && !sentenceBoundary.test(text[sentenceEnd])) {
+    sentenceEnd += 1;
+  }
+  if (sentenceEnd < text.length) sentenceEnd += 1;
+  return { start: sentenceStart, length: Math.max(1, sentenceEnd - sentenceStart) };
+}
+
+async function highlightFirstBodyCitation(
+  target: PdfBodyCitationTarget,
+): Promise<void> {
+  const pageElement = viewerElement.querySelector<HTMLElement>(
+    `.page[data-page-number="${target.pageNumber}"]`,
+  );
+  if (!pageElement) return;
+  const textLayer = await waitForPdfTextLayer(pageElement);
+  const annotationRect = getCitationAnnotationClientRect(target, pageElement);
+  if (!textLayer || !annotationRect) return;
+
+  const index = buildCitationTextIndex(textLayer, true);
+  const match = findNearestBodyCitationMatch(index, Number(target.destinationName.slice(5)), annotationRect);
+  if (!match) {
+    showPdfCitationHighlight(pageElement, [annotationRect]);
+    return;
+  }
+
+  const sentence = expandCitationMatchToSentence(index.text, match.start, match.length);
+  const sentenceRange = createCitationRange(index, sentence.start, sentence.length);
+  const sentenceRects = sentenceRange
+    ? Array.from(sentenceRange.getClientRects()).filter(
+        (rect) =>
+          rect.width > 0 &&
+          rect.height > 0 &&
+          getCitationRectColumn(rect, pageElement.getBoundingClientRect()) ===
+            getCitationRectColumn(annotationRect, pageElement.getBoundingClientRect()),
+      )
+    : [];
+  showPdfCitationHighlight(pageElement, sentenceRects.length ? sentenceRects : match.rects);
+}
+
+async function navigateFromBibliographyToFirstCitation(
+  referenceNumber: number,
+  navigate: (destination: any) => Promise<any>,
+): Promise<boolean> {
+  const target = await findFirstBodyCitationTarget(referenceNumber);
+  if (!target) return false;
+
+  clearInternalNavigationHistory();
+  isInternalNavigationInProgress = true;
+  try {
+    const left = Math.min(target.rect[0], target.rect[2]);
+    const top = Math.max(target.rect[1], target.rect[3]);
+    await navigate([target.pageNumber - 1, { name: "XYZ" }, left, top, null]);
+    await waitForAnimationFrames(2);
+    await highlightFirstBodyCitation(target);
+  } finally {
+    isInternalNavigationInProgress = false;
+  }
+  return true;
+}
+
+async function highlightInternalPdfDestination(destination: any[]): Promise<void> {
+  const pageNumber = await getPdfDestinationPageNumber(destination);
+  if (!pageNumber) return;
+  const textLayer = await waitForPdfTextLayer(pageNumber);
+  const page = textLayer?.closest<HTMLElement>('.page');
+  if (!textLayer || !page) return;
+  const pageRect = page.getBoundingClientRect();
+
+  const spans = Array.from(textLayer.querySelectorAll<HTMLElement>('span'))
+    .map((span) => ({
+      rect: span.getBoundingClientRect(),
+      text: span.textContent ?? '',
+    }))
+    .filter(({ rect }) => rect.width >= 1 && rect.height >= 1);
+  if (spans.length === 0) return;
+
+  const destinationTop = getPdfDestinationTop(destination);
+  const destinationLeft = getPdfDestinationLeft(destination);
+  const firstSpan = spans[0];
+  if (!firstSpan) return;
+  let targetClientY = firstSpan.rect.top;
+  let targetClientX: number | null = null;
+  const pageView = pdfViewer.getPageView(pageNumber - 1);
+  const viewport = pageView?.viewport;
+  if (destinationTop !== null && destinationLeft !== null) {
+    const viewportPoint = viewport?.convertToViewportPoint(destinationLeft, destinationTop);
+    if (viewportPoint) {
+      const [viewportX, viewportY] = viewportPoint;
+      if (typeof viewportX === 'number' && Number.isFinite(viewportX)) {
+        targetClientX = pageRect.left + viewportX;
+      }
+      if (typeof viewportY === 'number' && Number.isFinite(viewportY)) {
+        targetClientY = pageRect.top + viewportY;
+      }
+    }
+  } else if (destinationTop !== null) {
+    const viewportY = viewport?.convertToViewportPoint(0, destinationTop)?.[1];
+    if (typeof viewportY === 'number' && Number.isFinite(viewportY)) {
+      targetClientY = pageRect.top + viewportY;
+    }
+  } else if (destinationLeft !== null) {
+    const viewportX = viewport?.convertToViewportPoint(destinationLeft, 0)?.[0];
+    if (typeof viewportX === 'number' && Number.isFinite(viewportX)) {
+      targetClientX = pageRect.left + viewportX;
+    }
+  }
+  const visualLines: Array<{
+    rects: DOMRect[];
+    text: string;
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+    column: 'left' | 'right' | 'full';
+  }> = [];
+  for (const span of [...spans].sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left)) {
+    const spanColumn = getCitationRectColumn({
+      left: span.rect.left,
+      right: span.rect.right,
+      width: span.rect.width,
+    }, pageRect);
+    const line = [...visualLines].reverse().find((candidate) => {
+      const overlap = Math.min(candidate.bottom, span.rect.bottom) - Math.max(candidate.top, span.rect.top);
+      const sameColumn =
+        candidate.column === spanColumn ||
+        candidate.column === 'full' ||
+        spanColumn === 'full';
+      return sameColumn && overlap >= Math.min(candidate.bottom - candidate.top, span.rect.height) * 0.62;
+    });
+    if (line) {
+      line.rects.push(span.rect);
+      line.text = `${line.text} ${span.text}`.trim();
+      line.top = Math.min(line.top, span.rect.top);
+      line.bottom = Math.max(line.bottom, span.rect.bottom);
+      line.left = Math.min(line.left, span.rect.left);
+      line.right = Math.max(line.right, span.rect.right);
+    } else {
+      visualLines.push({
+        rects: [span.rect],
+        text: span.text.trim(),
+        top: span.rect.top,
+        bottom: span.rect.bottom,
+        left: span.rect.left,
+        right: span.rect.right,
+        column: spanColumn,
+      });
+    }
+  }
+  visualLines.sort((a, b) => a.top - b.top || a.left - b.left);
+
+  const getLineDistance = (line: (typeof visualLines)[number]) => {
+    const verticalDistance = Math.abs(line.top - targetClientY);
+    if (targetClientX === null) return verticalDistance;
+    const horizontalDistance = targetClientX < line.left
+      ? line.left - targetClientX
+      : targetClientX > line.right
+        ? targetClientX - line.right
+        : 0;
+    // Y still dominates adjacent lines, while X breaks the ambiguity between
+    // two paper columns that happen to share the same vertical coordinate.
+    return verticalDistance * 3 + horizontalDistance;
+  };
+  const nearestLineIndex = visualLines.reduce((bestIndex, line, index) => (
+    getLineDistance(line) < getLineDistance(visualLines[bestIndex]!)
+      ? index
+      : bestIndex
+  ), 0);
+  const nearestLine = visualLines[nearestLineIndex];
+  if (!nearestLine) return;
+
+  const targetLines = [nearestLine];
+  const isBibliographyEntry = /^\s*\[\s*\d{1,3}\s*\]/.test(nearestLine.text);
+  if (isBibliographyEntry) {
+    const originColumn = nearestLine.column;
+    let previousLine = nearestLine;
+    for (let index = nearestLineIndex + 1; index < visualLines.length && targetLines.length < 6; index += 1) {
+      const line = visualLines[index];
+      if (!line) continue;
+      // Lines from the other column can share the same Y coordinate. Skip
+      // them instead of treating them as the end of the wrapped reference.
+      if (line.column !== originColumn) continue;
+      if (/^\s*\[\s*\d{1,3}\s*\]/.test(line.text)) break;
+      const gap = line.top - previousLine.bottom;
+      const lineHeight = Math.max(previousLine.bottom - previousLine.top, line.bottom - line.top);
+      if (gap < -lineHeight * 0.5) continue;
+      if (gap > Math.max(10, lineHeight * 1.25)) break;
+      targetLines.push(line);
+      previousLine = line;
+    }
+  }
+  showPdfCitationHighlight(page, targetLines.flatMap((line) => line.rects));
+}
+
+async function jumpToPdfCitation(pageNumber: number, quote: string): Promise<void> {
+  if (!pdfDocument) {
+    setStatus('请先打开 PDF。', true);
+    return;
+  }
+  if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > pdfDocument.numPages) {
+    setStatus(`引用页码无效：第 ${pageNumber} 页。`, true);
+    return;
+  }
+
+  // AI “查看原文”只负责原文定位；只有 PDF 内部引用跳转才建立“回到正文”历史。
+  clearInternalNavigationHistory();
+  isInternalNavigationInProgress = true;
+  pdfViewer.currentPageNumber = pageNumber;
+  pdfViewer.scrollPageIntoView({ pageNumber });
+
+  const textLayer = await waitForPdfTextLayer(pageNumber);
+  if (!textLayer) {
+    isInternalNavigationInProgress = false;
+    setStatus(`已跳到第 ${pageNumber} 页，但该页文字层尚未加载。`);
+    return;
+  }
+
+  const range = findCitationRange(textLayer, quote);
+  if (!range) {
+    isInternalNavigationInProgress = false;
+    setStatus(`已跳到第 ${pageNumber} 页，但没有精确匹配到引用原文。`, true);
+    return;
+  }
+
+  const page = textLayer.closest<HTMLElement>('.page');
+  if (!page) {
+    isInternalNavigationInProgress = false;
+    setStatus(`已跳到第 ${pageNumber} 页，但无法创建引用定位层。`, true);
+    return;
+  }
+  const layer = showPdfCitationHighlight(page, Array.from(range.getClientRects()));
+  if (!layer) {
+    isInternalNavigationInProgress = false;
+    setStatus(`已跳到第 ${pageNumber} 页，但引用区域当前不可见。`, true);
+    return;
+  }
+
+  isInternalNavigationInProgress = false;
+  setStatus(`已定位到第 ${pageNumber} 页引用原文。`);
+}
 
 function populateDeepSeekConfigForm(config: AiConfig): void {
   aiProviderSelect.value = config.providerId;
@@ -2027,6 +3690,7 @@ async function loadDeepSeekConfig(): Promise<void> {
   const stored = await browser.storage.local.get([
     AI_CONFIG_STORAGE_KEY,
     LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
+    VISION_AI_CONFIG_STORAGE_KEY,
   ]);
   const current = stored[AI_CONFIG_STORAGE_KEY] as Partial<AiConfig> | undefined;
   const legacy = stored[LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY] as (Partial<AiConfig> & {
@@ -2043,27 +3707,51 @@ async function loadDeepSeekConfig(): Promise<void> {
     reasoning: value?.reasoning ?? legacy?.thinking ?? DEFAULT_AI_CONFIG.reasoning,
   };
   if (!current && legacy) await browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: aiConfig });
+  const storedVision = stored[VISION_AI_CONFIG_STORAGE_KEY] as Partial<VisionAiConfig> | undefined;
+  visionAiConfig = {
+    ...DEFAULT_VISION_AI_CONFIG,
+    ...storedVision,
+    mode: storedVision?.mode === 'separate' ? 'separate' : 'disabled',
+    providerId: 'openai-compatible',
+    apiKey: storedVision?.apiKey?.trim() ?? '',
+    baseUrl: storedVision?.baseUrl?.trim().replace(/\/+$/, '') ?? '',
+    model: storedVision?.model?.trim() ?? '',
+  };
   aiConfigLoaded = true;
   populateDeepSeekConfigForm(aiConfig);
+  populateVisionAiConfigForm(visionAiConfig);
   updateDeepSeekProviderStatus();
 }
 
 async function saveDeepSeekConfig(showSuccess = true): Promise<boolean> {
   const nextConfig = readDeepSeekConfigFromForm();
+  const nextVisionConfig = readVisionAiConfigFromForm();
 
   if (!nextConfig.apiKey) {
     deepSeekSettingsStatus.textContent = '请输入 DeepSeek API Key。';
     deepSeekSettingsStatus.classList.add('error');
     return false;
   }
+  if (!validateVisionAiConfig(nextVisionConfig)) return false;
 
   aiConfig = nextConfig;
+  visionAiConfig = nextVisionConfig;
   aiConfigLoaded = true;
-  await browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: nextConfig });
+  await browser.storage.local.set({
+    [AI_CONFIG_STORAGE_KEY]: nextConfig,
+    [VISION_AI_CONFIG_STORAGE_KEY]: nextVisionConfig,
+  });
   populateDeepSeekConfigForm(nextConfig);
+  populateVisionAiConfigForm(nextVisionConfig);
   updateDeepSeekProviderStatus();
   deepSeekSettingsStatus.classList.remove('error');
   deepSeekSettingsStatus.textContent = showSuccess ? '设置已保存到当前浏览器。' : '';
+  visionSettingsStatus.classList.remove('error');
+  if (showSuccess) {
+    visionSettingsStatus.textContent = nextVisionConfig.mode === 'separate'
+      ? `视觉模型已保存：${nextVisionConfig.model}`
+      : '视觉模型已关闭；主模型仍可使用 PDF 文字上下文。';
+  }
   return true;
 }
 
@@ -2089,6 +3777,50 @@ async function testDeepSeekConnection(): Promise<void> {
     deepSeekSettingsStatus.textContent = error instanceof Error ? error.message : String(error);
   } finally {
     testDeepSeekButton.disabled = false;
+  }
+}
+
+function createVisionTestImage(): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = 96;
+  canvas.height = 96;
+  const context = canvas.getContext('2d');
+  if (!context) return '';
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#2563eb';
+  context.fillRect(14, 14, 68, 68);
+  context.fillStyle = '#ffffff';
+  context.font = 'bold 20px sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText('PDF', 48, 48);
+  return canvas.toDataURL('image/png');
+}
+
+async function testVisionAiConnection(): Promise<void> {
+  if (!(await saveVisionAiConfig(false))) return;
+  if (!isVisionAiConfigured(visionAiConfig)) {
+    visionSettingsStatus.classList.add('error');
+    visionSettingsStatus.textContent = '请先启用并填写视觉模型配置。';
+    return;
+  }
+
+  testVisionAiButton.disabled = true;
+  visionSettingsStatus.classList.remove('error');
+  visionSettingsStatus.textContent = '正在测试视觉模型…';
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: 'pdf-helper:ai-vision-test',
+      imageDataUrl: createVisionTestImage(),
+    }) as AiRuntimeResponse;
+    if (!response?.ok) throw new Error(response?.error || '视觉模型连接测试失败。');
+    visionSettingsStatus.textContent = `视觉连接成功：${response.model || visionAiConfig.model}`;
+  } catch (error) {
+    visionSettingsStatus.classList.add('error');
+    visionSettingsStatus.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    testVisionAiButton.disabled = false;
   }
 }
 
@@ -2241,6 +3973,9 @@ async function setReadingModePreference(preference: ReadingModePreference): Prom
   if (preference === 'auto') {
     updateReadingModeUi();
     await detectReadingMode(true);
+    if (pdfDocument) {
+      await initializeCurrentDocumentKnowledge(pdfDocument, { force: true, restoreSession: false });
+    }
     return;
   }
   resolvedReadingMode = preference;
@@ -2251,11 +3986,106 @@ async function setReadingModePreference(preference: ReadingModePreference): Prom
     updatedAt: Date.now(),
   });
   updateReadingModeUi();
+  if (pdfDocument) {
+    await initializeCurrentDocumentKnowledge(pdfDocument, { force: true, restoreSession: false });
+  }
+}
+
+function setDocumentAgentStatus(text: string): void {
+  documentAgentStatusText = text;
+  updateChatContextPreview();
+}
+
+function getDocumentAgentOutline() {
+  return getOutlinePageItems().map(({ title, pageNumber, depth }) => ({
+    title,
+    pageNumber,
+    depth,
+  }));
+}
+
+async function initializeCurrentDocumentKnowledge(
+  documentProxy: PDFDocumentProxy,
+  options: { force?: boolean; restoreSession?: boolean } = {},
+): Promise<void> {
+  const operationToken = ++documentAgentOperationToken;
+  const documentId = createDocumentAgentId(
+    getPdfFingerprint(documentProxy),
+    getDisplayFileName(sourceName),
+    documentProxy.numPages,
+  );
+  currentDocumentAgentId = documentId;
+  currentDocumentAgentRecord = null;
+  currentDocumentChunks = [];
+
+  if (options.restoreSession !== false) await restoreChatConversation(documentId);
+  if (pdfDocument !== documentProxy || operationToken !== documentAgentOperationToken) return;
+  if (!aiConfigLoaded) await loadDeepSeekConfig();
+  if (pdfDocument !== documentProxy || operationToken !== documentAgentOperationToken) return;
+
+  setDocumentAgentStatus('正在检查历史档案与本地全文索引…');
+  try {
+    const knowledge = await initializeDocumentKnowledge({
+      fingerprint: getPdfFingerprint(documentProxy),
+      name: getDisplayFileName(sourceName),
+      pageCount: documentProxy.numPages,
+      readingMode: resolvedReadingMode,
+      providerId: aiConfig.providerId,
+      model: aiConfig.model,
+      hasApiKey: Boolean(aiConfig.apiKey),
+      force: options.force,
+      extractPageText: (pageNumber) => extractPageText(documentProxy, pageNumber),
+      getOutline: getDocumentAgentOutline,
+      requestAi: requestAiContent,
+      isCurrent: () => pdfDocument === documentProxy && operationToken === documentAgentOperationToken,
+      onStatus: ({ text }) => {
+        if (pdfDocument === documentProxy && operationToken === documentAgentOperationToken) {
+          setDocumentAgentStatus(text);
+        }
+      },
+    });
+    if (pdfDocument !== documentProxy || operationToken !== documentAgentOperationToken) return;
+    currentDocumentAgentRecord = knowledge.record;
+    currentDocumentChunks = knowledge.chunks;
+    console.info('[PDF Helper Agent] 文档知识已就绪', {
+      documentId: knowledge.documentId,
+      restored: knowledge.restored,
+      status: knowledge.record.processingStatus,
+      readingMode: knowledge.record.readingMode,
+      chunks: knowledge.chunks.length,
+    });
+  } catch (error) {
+    if (pdfDocument !== documentProxy || operationToken !== documentAgentOperationToken) return;
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('文档已切换')) {
+      console.error('[PDF Helper Agent] 全文建档失败', error);
+      setDocumentAgentStatus(`全文建档失败，本地阅读不受影响：${message}`);
+    }
+  }
+}
+
+async function initializeOpenedDocumentFeatures(documentProxy: PDFDocumentProxy): Promise<void> {
+  const documentId = createDocumentAgentId(
+    getPdfFingerprint(documentProxy),
+    getDisplayFileName(sourceName),
+    documentProxy.numPages,
+  );
+  currentDocumentAgentId = documentId;
+  await restoreChatConversation(documentId);
+  if (pdfDocument !== documentProxy) return;
+  await Promise.all([
+    renderDocumentOutline(documentProxy),
+    loadReadingModeForDocument(documentProxy),
+  ]);
+  if (pdfDocument !== documentProxy) return;
+  await initializeCurrentDocumentKnowledge(documentProxy, { restoreSession: false });
 }
 
 async function sendChatMessage(): Promise<void> {
   const content = chatInput.value.trim();
-  if (!content || chatRequestPending) return;
+  const requestImages = pendingChatImages.map((image) => ({ ...image }));
+  const userPrompt = content || (requestImages.length ? '请分析这些截图，并结合当前 PDF 回答。' : '');
+  if (!userPrompt || chatRequestPending) return;
 
   if (!aiConfig.apiKey) {
     setDeepSeekSettingsOpen(true);
@@ -2264,13 +4094,49 @@ async function sendChatMessage(): Promise<void> {
     return;
   }
 
+  const requestAiConfig = { ...aiConfig };
+  const mainModelSupportsVision = isMainAiVisionCapable(requestAiConfig);
+  if (
+    requestImages.length > 0 &&
+    !mainModelSupportsVision &&
+    !isVisionAiConfigured(visionAiConfig)
+  ) {
+    setDeepSeekSettingsOpen(true);
+    visionSettingsStatus.classList.add('error');
+    visionSettingsStatus.textContent = '当前主模型不能看图，请配置视觉模型后再发送截图。';
+    return;
+  }
+
+  // Freeze every document-scoped dependency for this request. PDF extraction and
+  // Agent retrieval both await asynchronous work, so the user may open another
+  // document before they finish. Using the live globals in that case would mix
+  // the old question into the newly opened document session.
+  const requestDocument = pdfDocument;
+  const requestDocumentId = currentDocumentAgentId;
+  const requestDocumentRecord = currentDocumentAgentRecord;
+  const requestDocumentChunks = currentDocumentChunks;
+  const requestDocumentOutline = getDocumentAgentOutline();
+  const requestDocumentName = sourceName;
+  const requestReadingMode = resolvedReadingMode;
+  const requestSelectedText = selectedTextForAi;
+  const requestVisionAiConfig = { ...visionAiConfig };
+
   chatRequestPending = true;
   chatInput.value = '';
+  clearPendingChatImages();
   chatInput.disabled = true;
+  chatImageButton.disabled = true;
   chatSendButton.disabled = true;
-  chatHistory.push({ role: 'user', content });
-  appendChatMessage('user', content);
-  const assistantMessage = appendChatMessage('assistant', '', { pending: true });
+  chatHistory.push({ role: 'user', content: userPrompt, images: requestImages });
+  void persistChatConversation().catch((error) => {
+    console.warn('[PDF Helper Agent] 无法保存用户消息', error);
+  });
+  appendChatMessage('user', userPrompt, { images: requestImages });
+  const assistantMessage = appendChatMessage(
+    'assistant',
+    requestImages.length > 0 && !mainModelSupportsVision ? '正在调用视觉模型读取截图…' : '',
+    { pending: true },
+  );
   let streamedContent = '';
   let renderFrame = 0;
 
@@ -2281,17 +4147,133 @@ async function sendChatMessage(): Promise<void> {
 
   try {
     const pageNumber = Math.max(1, selectedTextPageNumber || pdfViewer.currentPageNumber || 1);
-    const pageText = pdfDocument
-      ? await extractPageText(pdfDocument, pageNumber).catch(() => '')
+    const pageText = requestDocument
+      ? await extractPageText(requestDocument, pageNumber).catch(() => '')
       : '';
+    if (pdfDocument !== requestDocument || currentDocumentAgentId !== requestDocumentId) return;
+
+    let imageContext = '';
+    if (requestImages.length > 0 && !mainModelSupportsVision) {
+      const analyses: string[] = [];
+      for (const [index, attachment] of requestImages.entries()) {
+        const analysis = await inspectChatImageWithVision(
+          attachment,
+          userPrompt,
+          requestVisionAiConfig,
+          {
+            documentName: requestDocumentName ? getDisplayFileName(requestDocumentName) : undefined,
+            pageNumber,
+            totalPages: requestDocument?.numPages,
+            readingMode: requestReadingMode,
+            sourcePages: [pageNumber],
+          },
+        );
+        analyses.push(`[用户截图 ${index + 1}：${attachment.name}]\n${analysis}`);
+      }
+      imageContext = analyses.join('\n\n');
+      updateChatMessage(assistantMessage, '截图已读取，正在检索 PDF 并组织回答…', { pending: true });
+    }
+
+    const retrieval = requestDocument
+      ? await buildDocumentRetrievalContext({
+        question: userPrompt,
+        currentPage: pageNumber,
+        currentPageText: pageText,
+        selectedText: requestSelectedText,
+        readingMode: requestReadingMode,
+        documentName: getDisplayFileName(requestDocumentName),
+        pageCount: requestDocument.numPages,
+        record: requestDocumentRecord,
+        chunks: requestDocumentChunks,
+        outline: requestDocumentOutline,
+        extractPageText: (targetPage) => extractPageText(requestDocument, targetPage),
+        requestAi: requestAiContent,
+        hasVisionModel: isVisionAiConfigured(requestVisionAiConfig),
+        userImageAttached: requestImages.length > 0,
+        inspectPageImage: (targetPage, question) => inspectPdfPageWithVision(
+          requestDocument,
+          requestDocumentId || createDocumentAgentId(
+            getPdfFingerprint(requestDocument),
+            requestDocumentName,
+            requestDocument.numPages,
+          ),
+          targetPage,
+          question,
+          requestVisionAiConfig,
+          requestDocumentName,
+          requestReadingMode,
+        ),
+      })
+      : {
+        text: '',
+        sourcePages: [pageNumber],
+        toolResults: [],
+        plannerReason: '当前没有打开 PDF。',
+        planningRounds: 0,
+      };
+    if (pdfDocument !== requestDocument || currentDocumentAgentId !== requestDocumentId) return;
+
+    const toolLabels = retrieval.toolResults.map((result) => result.label).join('、');
+    console.debug('[PDF Helper Agent] 本轮证据决策摘要', {
+      planningRounds: retrieval.planningRounds,
+      reason: retrieval.plannerReason,
+      tools: retrieval.toolResults.map((result) => ({
+        name: result.name,
+        label: result.label,
+        pages: result.pages,
+      })),
+      sourcePages: retrieval.sourcePages,
+    });
+    const requestHistory: AiConversationMessage[] = chatHistory.map((message) => mainModelSupportsVision
+      ? { ...message, images: message.images?.map((image) => ({ ...image })) }
+      : { role: message.role, content: message.content });
+    const pdfContext = (retrieval.text || pageText).trim()
+      ? `[PDF 文字补充上下文]\n${(retrieval.text || pageText).trim()}`
+      : '';
+    const visualContext = imageContext.trim()
+      ? `[用户附图视觉分析（本轮首要对象）]\n${imageContext.trim()}`
+      : '';
+    const combinedContext = (requestImages.length > 0
+      ? [visualContext, pdfContext]
+      : [pdfContext, visualContext])
+      .filter(Boolean)
+      .join('\n\n');
+    const visualFocusNote = requestImages.length > 0
+      ? ' 本轮用户附带了截图：用户问题中的“这张图”“图里”“这部分”默认指向截图。必须先直接分析截图中的对象、流程、标签、公式与关系；PDF 当前页和检索结果只用于补充背景，不得用页面概述替代图像分析。'
+      : '';
+    const contextNote = requestImages.length > 0
+      ? `本轮首要任务是回答用户对附图的提问。附图视觉分析是主证据；PDF 当前页、文字选区和论文检索结果都只作背景补充。除非用户明确询问 PDF 中的某个图号，否则不要把回答重心切回当前页面。${retrieval.toolResults.length > 0 ? `本地论文工具仅提供了补充材料：${toolLabels}。` : ''}`
+      : retrieval.toolResults.length > 0
+        ? `Agent 已按问题调用本地论文工具：${toolLabels}。请综合工具结果作答，并用规定的 PDF 原文引用标记支持关键结论。${visualFocusNote}`
+        : requestSelectedText
+          ? `Agent 判断当前选区和当前页已足够回答：${retrieval.plannerReason || '无需额外检索'}。回答应优先针对选区；当前页正文仅用于消歧和补足上下文。`
+          : `Agent 判断当前页证据已足够或没有可用的额外证据：${retrieval.plannerReason || '本轮未调用额外工具'}。只依据提供的正文回答，不要臆测未读取的页面。${visualFocusNote}`;
     const responseContent = await requestAiStream(
-      chatHistory,
+      requestHistory,
       {
-        documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
+        task: '聊天问答',
+        documentName: requestDocumentName ? getDisplayFileName(requestDocumentName) : undefined,
         pageNumber,
-        totalPages: pdfDocument?.numPages,
-        pageText: pageText || undefined,
-        selectedText: selectedTextForAi || undefined,
+        totalPages: requestDocument?.numPages,
+        pageText: combinedContext || undefined,
+        selectedText: requestSelectedText || undefined,
+        sourceScope: requestImages.length > 0
+          ? (retrieval.toolResults.length > 0 ? 'document' : 'page')
+          : retrieval.toolResults.length > 0
+            ? 'document'
+            : requestSelectedText
+              ? 'selection'
+              : 'page',
+        sourceLabel: requestImages.length > 0
+          ? '用户附图（PDF 内容仅作背景）'
+          : retrieval.toolResults.length > 0
+            ? toolLabels
+            : requestSelectedText
+              ? `第 ${pageNumber} 页选区`
+              : `第 ${pageNumber} 页`,
+        sourcePages: retrieval.sourcePages,
+        contextNote,
+        visualFocus: requestImages.length > 0,
       },
       (delta) => {
         streamedContent += delta;
@@ -2301,10 +4283,14 @@ async function sendChatMessage(): Promise<void> {
 
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
     streamedContent = responseContent;
+    if (pdfDocument !== requestDocument || currentDocumentAgentId !== requestDocumentId) return;
     if (!streamedContent.trim()) throw new Error('AI 模型没有返回有效回答。');
 
     updateChatMessage(assistantMessage, streamedContent, { streaming: false });
     chatHistory.push({ role: 'assistant', content: streamedContent });
+    void persistChatConversation().catch((error) => {
+      console.warn('[PDF Helper Agent] 无法保存助手消息', error);
+    });
   } catch (error) {
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
     updateChatMessage(
@@ -2315,13 +4301,18 @@ async function sendChatMessage(): Promise<void> {
   } finally {
     chatRequestPending = false;
     chatInput.disabled = false;
+    chatImageButton.disabled = false;
     chatSendButton.disabled = false;
     chatInput.focus();
   }
 }
 
 function setTranslationState(message: string, isError = false): void {
-  translationResultElement.textContent = message;
+  if (isError) {
+    translationResultElement.textContent = message;
+  } else {
+    renderChatMarkdown(translationResultElement, message);
+  }
   translationResultElement.classList.toggle('error', isError);
 }
 
@@ -2335,7 +4326,7 @@ function renderExplanationPoints(points: string[]): void {
 
   for (const point of points) {
     const item = document.createElement('li');
-    item.textContent = point;
+    renderChatMarkdown(item, point);
     list.append(item);
   }
 
@@ -2352,9 +4343,10 @@ function setSummaryState(message: string, isError = false, clearPoints = true): 
 function renderSummaryPoints(points: string[]): void {
   const list = document.createElement('ul');
 
-  for (const point of points) {
+  for (const [index, point] of points.entries()) {
     const item = document.createElement('li');
-    item.textContent = point;
+    item.classList.toggle('summary-takeaway', index === 0);
+    renderChatMarkdown(item, point);
     list.append(item);
   }
 
@@ -2363,25 +4355,34 @@ function renderSummaryPoints(points: string[]): void {
   summaryResultElement.classList.remove('error');
 }
 
-function getOutlinePageItems(): Array<{ pageNumber: number; title: string }> {
+function getOutlinePageItems(): OutlinePageItem[] {
   if (!outlineList) return [];
+  if (outlinePageItemsCache) return outlinePageItemsCache;
 
-  return Array.from(outlineList.querySelectorAll<HTMLButtonElement>('button[data-outline-page]'))
-    .map((button) => ({
+  outlinePageItemsCache = Array.from(
+    outlineList.querySelectorAll<HTMLButtonElement>('button[data-outline-page]'),
+  )
+    .map((button, order) => ({
       pageNumber: Number(button.dataset.outlinePage),
       title: button.textContent?.trim() || '未命名章节',
+      depth: Math.max(0, Number(button.dataset.outlineDepth) || 0),
+      order,
     }))
     .filter((item) => Number.isInteger(item.pageNumber) && item.pageNumber > 0)
-    .sort((left, right) => left.pageNumber - right.pageNumber);
+    .sort((left, right) => left.pageNumber - right.pageNumber || left.order - right.order);
+  return outlinePageItemsCache;
 }
 
 function getCurrentChapterContext(pageNumber: number): {
   title: string;
   startPage: number;
   endPage: number;
+  sourceKind: 'outline' | 'page-fallback';
+  nextTitle?: string;
+  nextStartPage?: number;
 } {
   const items = getOutlinePageItems();
-  let currentItem: { pageNumber: number; title: string } | null = null;
+  let currentItem: OutlinePageItem | null = null;
 
   for (const item of items) {
     if (item.pageNumber > pageNumber) break;
@@ -2393,29 +4394,108 @@ function getCurrentChapterContext(pageNumber: number): {
       title: `第 ${pageNumber} 页`,
       startPage: pageNumber,
       endPage: pageNumber,
+      sourceKind: 'page-fallback',
     };
   }
 
-  const nextItem = items.find((item) => item.pageNumber > currentItem.pageNumber);
+  const currentOrder = currentItem.order;
+  const nextItem = items.find((item) => (
+    item.order > currentOrder
+    && item.depth <= currentItem.depth
+  ));
+  const nextStartPage = nextItem?.pageNumber;
   return {
     title: currentItem.title,
     startPage: currentItem.pageNumber,
     endPage: Math.max(
       currentItem.pageNumber,
-      Math.min(pdfDocument?.numPages ?? pageNumber, (nextItem?.pageNumber ?? (pdfDocument?.numPages ?? pageNumber) + 1) - 1),
+      Math.min(
+        pdfDocument?.numPages ?? pageNumber,
+        nextStartPage === currentItem.pageNumber
+          ? currentItem.pageNumber
+          : (nextStartPage ?? (pdfDocument?.numPages ?? pageNumber) + 1) - 1,
+      ),
     ),
+    sourceKind: outlineUsesPageFallback ? 'page-fallback' : 'outline',
+    nextTitle: nextItem?.title,
+    nextStartPage,
   };
 }
 
-function getSummaryLabels(scope: SummaryScope): Omit<SummaryContext, 'text'> {
-  const pageNumber = pdfDocument ? Math.max(1, pdfViewer.currentPageNumber || 1) : 0;
+function findOutlineHeadingIndex(text: string, title: string, from = 0): number {
+  const source = text.toLocaleLowerCase();
+  const candidates = [
+    title.trim(),
+    title.replace(/^\s*(?:\d+(?:\.\d+)*|[ivxlcdm]+)[.)]?\s*/i, '').trim(),
+  ]
+    .filter((candidate, index, all) => candidate.length >= 3 && all.indexOf(candidate) === index)
+    .map((candidate) => candidate.toLocaleLowerCase());
+
+  for (const candidate of candidates) {
+    const directIndex = source.indexOf(candidate, from);
+    if (directIndex >= 0) return directIndex;
+
+    const compactCandidate = candidate.replace(/\s+/g, ' ');
+    if (compactCandidate !== candidate) {
+      const compactIndex = source.indexOf(compactCandidate, from);
+      if (compactIndex >= 0) return compactIndex;
+    }
+  }
+  return -1;
+}
+
+function slicePageTextToChapterBoundary(
+  pageText: string,
+  pageNumber: number,
+  chapter: ReturnType<typeof getCurrentChapterContext>,
+): { text: string; boundaryMatched: boolean } {
+  if (chapter.sourceKind !== 'outline') return { text: pageText, boundaryMatched: false };
+
+  let start = 0;
+  let end = pageText.length;
+  let boundaryMatched = false;
+  if (pageNumber === chapter.startPage) {
+    const headingIndex = findOutlineHeadingIndex(pageText, chapter.title);
+    if (headingIndex >= 0) {
+      start = headingIndex;
+      boundaryMatched = true;
+    }
+  }
+  if (chapter.nextTitle && chapter.nextStartPage === pageNumber) {
+    const nextHeadingIndex = findOutlineHeadingIndex(pageText, chapter.nextTitle, start + 1);
+    if (nextHeadingIndex > start) {
+      end = nextHeadingIndex;
+      boundaryMatched = true;
+    }
+  }
+  return { text: pageText.slice(start, end).trim(), boundaryMatched };
+}
+
+function getSummaryLabels(
+  scope: SummaryScope,
+  pageNumberOverride?: number,
+): Omit<SummaryContext, 'text'> {
+  const pageNumber = pdfDocument
+    ? Math.max(1, pageNumberOverride || pdfViewer.currentPageNumber || 1)
+    : 0;
   const chapter = pageNumber > 0
     ? getCurrentChapterContext(pageNumber)
-    : { title: '未定位', startPage: 0, endPage: 0 };
+    : {
+      title: '未定位',
+      startPage: 0,
+      endPage: 0,
+      sourceKind: 'page-fallback' as const,
+    };
 
   if (scope === 'chapter') {
     return {
       scope,
+      sourcePages: chapter.startPage > 0
+        ? Array.from(
+          { length: Math.max(0, chapter.endPage - chapter.startPage + 1) },
+          (_, index) => chapter.startPage + index,
+        )
+        : [],
       rangeLabel: '当前章节',
       sourceLabel: chapter.startPage === chapter.endPage
         ? `第 ${chapter.startPage} 页`
@@ -2426,6 +4506,7 @@ function getSummaryLabels(scope: SummaryScope): Omit<SummaryContext, 'text'> {
 
   return {
     scope,
+    sourcePages: pageNumber > 0 ? [pageNumber] : [],
     rangeLabel: scope === 'page' ? '当前页' : '当前选中文本',
     sourceLabel: pageNumber > 0 ? `第 ${pageNumber} 页` : '未打开 PDF',
     positionLabel: chapter.title,
@@ -2452,42 +4533,297 @@ async function extractPageText(documentProxy: PDFDocumentProxy, pageNumber: numb
   return normalizeCopiedText(rawText);
 }
 
+async function createStableTextKey(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest).slice(0, 12))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function renderPdfPageForVision(
+  documentProxy: PDFDocumentProxy,
+  pageNumber: number,
+): Promise<string> {
+  const page = await documentProxy.getPage(pageNumber);
+  const baseViewport = page.getViewport({ scale: 1 });
+  const targetWidth = 1600;
+  const targetHeight = 2200;
+  const scale = Math.max(
+    1,
+    Math.min(2.4, targetWidth / baseViewport.width, targetHeight / baseViewport.height),
+  );
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.ceil(viewport.width));
+  canvas.height = Math.max(1, Math.ceil(viewport.height));
+  await page.render({
+    canvas,
+    viewport,
+    background: '#ffffff',
+    annotationMode: AnnotationMode.ENABLE,
+  }).promise;
+  return canvas.toDataURL('image/jpeg', 0.88);
+}
+
+async function inspectPdfPageWithVision(
+  documentProxy: PDFDocumentProxy,
+  documentId: string,
+  pageNumber: number,
+  question: string,
+  config: VisionAiConfig,
+  documentName: string,
+  readingMode: ResolvedReadingMode,
+): Promise<{ content: string; model: string; cached: boolean }> {
+  if (!isVisionAiConfigured(config)) {
+    throw new Error('该问题需要查看 PDF 页面图像。请在右上角“设置 → 视觉模型”中完成配置。');
+  }
+  const normalizedQuestion = question.replace(/\s+/g, ' ').trim().slice(0, 1200);
+  const questionKey = await createStableTextKey(`${config.model}\n${normalizedQuestion}`);
+  const cacheId = `${documentId}:vision:${pageNumber}:${questionKey}`;
+  const cached = await getDocumentVisionCacheEntry(cacheId);
+  if (cached) return { content: cached.content, model: cached.model, cached: true };
+
+  const imageDataUrl = await renderPdfPageForVision(documentProxy, pageNumber);
+  const response = await browser.runtime.sendMessage({
+    type: 'pdf-helper:ai-vision',
+    prompt: [
+      `用户问题：${normalizedQuestion}`,
+      '请查看这一整页，只提取回答问题所需的视觉信息。',
+      '如果涉及图、表、公式或流程图，请先说明其位置/编号，再解释变量、关系和结论。',
+      '不要重复大段可直接从文字层读取的正文。',
+    ].join('\n'),
+    imageDataUrl,
+    context: {
+      task: 'Agent 视觉工具 · 查看 PDF 页面',
+      documentName: getDisplayFileName(documentName),
+      pageNumber,
+      totalPages: documentProxy.numPages,
+      readingMode,
+      sourceScope: 'page',
+      sourceLabel: `第 ${pageNumber} 页页面图像`,
+      sourcePages: [pageNumber],
+    },
+  }) as AiRuntimeResponse;
+  if (!response?.ok || !response.content?.trim()) {
+    throw new Error(response?.error || '视觉模型没有返回有效结果。');
+  }
+  const entry = {
+    id: cacheId,
+    documentId,
+    pageNumber,
+    questionKey,
+    content: response.content.trim(),
+    model: response.model || config.model,
+    updatedAt: Date.now(),
+  };
+  await putDocumentVisionCacheEntry(entry);
+  return { content: entry.content, model: entry.model, cached: false };
+}
+
+function classifySelectionForSummary(text: string): SelectionSummaryKind {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  const sentenceEndCount = normalized.match(/[.!?。！？]/g)?.length ?? 0;
+  if (normalized.length >= 320 || sentenceEndCount >= 2) return 'paragraph';
+  if (normalized.length >= 48 || sentenceEndCount === 1) return 'sentence';
+  return 'fragment';
+}
+
+function findPreviousSentenceBoundary(text: string, from: number, maxDistance = 700): number {
+  const minimum = Math.max(0, from - maxDistance);
+  for (let index = Math.min(from - 1, text.length - 1); index >= minimum; index -= 1) {
+    if (/[.!?。！？]/.test(text[index] ?? '')) return index + 1;
+  }
+  return minimum;
+}
+
+function findNextSentenceBoundary(text: string, from: number, maxDistance = 700): number {
+  const maximum = Math.min(text.length, from + maxDistance);
+  for (let index = Math.max(0, from); index < maximum; index += 1) {
+    if (/[.!?。！？]/.test(text[index] ?? '')) return index + 1;
+  }
+  return maximum;
+}
+
+function buildSelectionParagraphContext(
+  selectedText: string,
+  pageText: string,
+  selectionKind: SelectionSummaryKind,
+): string {
+  const target = selectedText.replace(/\s+/g, ' ').trim();
+  const source = pageText
+    .replace(/[\t ]+/g, ' ')
+    .replace(/[\t ]*\n[\t ]*/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (!source || selectionKind === 'paragraph') return target;
+
+  let targetStart = source.indexOf(target);
+  if (targetStart < 0 && target.length > 40) {
+    targetStart = source.indexOf(target.slice(0, Math.min(100, target.length)));
+  }
+  if (targetStart < 0) return target;
+
+  const targetEnd = Math.min(source.length, targetStart + target.length);
+  const paragraphStart = source.lastIndexOf('\n\n', targetStart);
+  const paragraphEnd = source.indexOf('\n\n', targetEnd);
+  const blockStart = paragraphStart >= 0 ? paragraphStart + 2 : 0;
+  const blockEnd = paragraphEnd >= 0 ? paragraphEnd : source.length;
+  const block = source.slice(blockStart, blockEnd).trim();
+  if (block.length >= target.length && block.length <= 1_600) return block;
+
+  const containingStart = findPreviousSentenceBoundary(source, targetStart);
+  const containingEnd = findNextSentenceBoundary(source, targetEnd);
+  const contextStart = findPreviousSentenceBoundary(source, Math.max(0, containingStart - 1), 500);
+  const contextEnd = findNextSentenceBoundary(source, containingEnd, 500);
+  const context = source.slice(contextStart, contextEnd).replace(/\s+/g, ' ').trim();
+  return context.length >= target.length ? context : target;
+}
+
+function getSummaryPointLimit(scope: SummaryScope): number {
+  if (scope === 'selection') return 2;
+  if (scope === 'page') return 3;
+  return 4;
+}
+
+function getSelectionKindLabel(kind: SelectionSummaryKind | undefined): string {
+  if (kind === 'fragment') return '句子片段';
+  if (kind === 'sentence') return '完整句子';
+  return '段落';
+}
+
+function buildSummaryPrompt(context: SummaryContext): string {
+  const pointLimit = getSummaryPointLimit(context.scope);
+  const sharedRules = [
+    `最多输出 ${pointLimit} 条，每行以“- ”开头。`,
+    '第一条必须直接说清楚该范围“讲了什么/得出了什么”，后续只保留理解论证所必需的机制、条件或结论。',
+    '不要输出标题、前言、结尾、任务复述，也不要出现“根据提供的内容”“核心要点如下”等套话。',
+    '每条必须具体，避免把同一件事拆成多个近义要点。',
+    '涉及公式时，用 Markdown 数学定界符书写：行内公式用 $...$，独立公式用 $$...$$；并在同一条中说明公式表达的关系或作用。',
+  ];
+
+  if (context.scope === 'selection') {
+    return [
+      `你要解释的是一个${getSelectionKindLabel(context.selectionKind)}，不是总结整页。`,
+      ...sharedRules,
+      '第一条只解释“目标文本”本身在说什么；“上下文段落”仅用于补全指代、术语和推理关系，不能把上下文中的其他内容混进目标结论。',
+      '若目标只是半句话或句子片段，先结合上下文还原它所在完整句子的含义，再给出解释。',
+      '',
+      '【目标文本】',
+      context.targetText ?? context.text,
+      '',
+      '【上下文段落（仅用于理解目标）】',
+      context.contextText ?? context.text,
+    ].join('\n');
+  }
+
+  if (context.scope === 'page') {
+    return [
+      '你要总结当前这一页。回答重点是“本页在整篇文档中讲了什么”，不是逐句摘录。',
+      ...sharedRules,
+      '第一条概括本页主旨；其余条目只保留本页最关键的推导、方法、实验发现或公式含义。',
+      '',
+      `【页面位置】${context.sourceLabel} · ${context.positionLabel}`,
+      '【本页正文】',
+      context.text,
+    ].join('\n');
+  }
+
+  return [
+    '你要总结当前章节，先概括章节承担的作用，再提炼少量关键论证或结论。',
+    ...sharedRules,
+    '',
+    `【章节位置】${context.sourceLabel} · ${context.positionLabel}`,
+    '【章节正文】',
+    context.text,
+  ].join('\n');
+}
+
+function normalizeSummaryPoints(content: string, scope: SummaryScope): string[] {
+  const boilerplate = /^(?:核心要点|总结|要点|根据(?:你|所)?提供|以下(?:是|为)|本页内容(?:主要)?)/;
+  return parseAiList(content)
+    .map((point) => point.replace(/^#{1,6}\s*/, '').replace(/^\*\*(.+)\*\*:?$/, '$1').trim())
+    .filter((point) => point.length > 0 && !boilerplate.test(point))
+    .slice(0, getSummaryPointLimit(scope));
+}
+
 async function buildSummaryContext(scope: SummaryScope): Promise<SummaryContext> {
   if (!pdfDocument) throw new Error('请先打开 PDF。');
 
   const documentAtStart = pdfDocument;
   const pageNumber = Math.max(1, pdfViewer.currentPageNumber || 1);
-  const labels = getSummaryLabels(scope);
+  const effectivePageNumber = scope === 'selection'
+    ? summarySelectionPageNumber || pageNumber
+    : pageNumber;
+  const labels = getSummaryLabels(scope, effectivePageNumber);
   let text = '';
+  let targetText: string | undefined;
+  let contextText: string | undefined;
+  let selectionKind: SelectionSummaryKind | undefined;
+  let sourcePages = [...labels.sourcePages];
+  let sourceTruncated = false;
+  let chapterBoundaryMatched = false;
 
   if (scope === 'selection') {
-    text = selectedTextForAi || getViewerSelectionText();
-    if (!text) throw new Error('请先在 PDF 中选中需要总结的文字。');
+    targetText = summarySelectionText.trim();
+    if (!targetText || summarySelectionPageNumber !== pageNumber) {
+      throw new Error('请先在当前页拖选需要总结的文字。高亮批注不等于文字选区。');
+    }
+    selectionKind = classifySelectionForSummary(targetText);
+    const pageText = await extractPageText(documentAtStart, effectivePageNumber);
+    contextText = buildSelectionParagraphContext(targetText, pageText, selectionKind);
+    text = contextText;
   } else if (scope === 'page') {
-    text = await extractPageText(documentAtStart, pageNumber);
+    const pageText = await extractPageText(documentAtStart, pageNumber);
+    text = `[第 ${pageNumber} 页]\n${pageText}`;
   } else {
     const chapter = getCurrentChapterContext(pageNumber);
     const pages: string[] = [];
+    const includedPages: number[] = [];
     let currentLength = 0;
 
     for (let currentPage = chapter.startPage; currentPage <= chapter.endPage; currentPage += 1) {
       if (pdfDocument !== documentAtStart) throw new Error('PDF 已切换，请重新总结。');
       const pageText = await extractPageText(documentAtStart, currentPage);
       if (!pageText) continue;
+      const chapterPage = slicePageTextToChapterBoundary(pageText, currentPage, chapter);
+      chapterBoundaryMatched ||= chapterPage.boundaryMatched;
+      if (!chapterPage.text) continue;
 
       const remainingLength = MAX_SUMMARY_SOURCE_LENGTH - currentLength;
-      if (remainingLength <= 0) break;
-      pages.push(pageText.slice(0, remainingLength));
-      currentLength += pageText.length;
+      if (remainingLength <= 0) {
+        sourceTruncated = true;
+        break;
+      }
+      const pageBlock = `[第 ${currentPage} 页]\n${chapterPage.text}`;
+      pages.push(pageBlock.slice(0, remainingLength));
+      includedPages.push(currentPage);
+      currentLength += pageBlock.length;
+      if (pageBlock.length > remainingLength) {
+        sourceTruncated = true;
+        break;
+      }
     }
 
     text = pages.join('\n\n');
+    sourcePages = includedPages;
   }
 
+  const untrimmedLength = text.length;
   text = text.trim().slice(0, MAX_SUMMARY_SOURCE_LENGTH);
+  sourceTruncated ||= untrimmedLength > MAX_SUMMARY_SOURCE_LENGTH;
   if (!text) throw new Error('当前范围没有可总结的文字内容。');
 
-  return { ...labels, text };
+  return {
+    ...labels,
+    text,
+    targetText,
+    contextText,
+    selectionKind,
+    sourcePages,
+    sourceTruncated,
+    chapterBoundaryMatched,
+  };
 }
 
 function cancelPendingSummaryGeneration(): void {
@@ -2543,6 +4879,7 @@ async function generateSummary(force = false): Promise<void> {
       context.scope,
       context.sourceLabel,
       context.positionLabel,
+      context.targetText ?? '',
       context.text,
     ].join('\u0000');
 
@@ -2553,21 +4890,30 @@ async function generateSummary(force = false): Promise<void> {
 
     setSummaryState('正在生成核心要点，请稍候…');
     const summaryContent = await requestAiContent(
-      [{
-        role: 'user',
-        content: [
-          `请总结下面的 PDF 内容。范围：${context.rangeLabel}；来源：${context.sourceLabel}；位置：${context.positionLabel}。`,
-          '请输出 4—6 条简体中文核心要点，每行一条，不要添加标题、前言或结尾。',
-          '',
-          context.text,
-        ].join('\n'),
-      }],
+      [{ role: 'user', content: buildSummaryPrompt(context) }],
       {
+        task: `总结 · ${context.rangeLabel}`,
         documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
         pageNumber: Math.max(1, pdfViewer.currentPageNumber || 1),
+        totalPages: pdfDocument?.numPages,
+        selectedText: context.scope === 'selection' ? context.targetText : undefined,
+        sourceScope: context.scope,
+        sourceLabel: `${context.sourceLabel} · ${context.positionLabel}`,
+        sourcePages: context.sourcePages,
+        contextNote: context.scope === 'selection'
+          ? '目标是选中文本；提示词中的段落仅用于消歧。'
+          : context.scope === 'chapter' && getCurrentChapterContext(
+            Math.max(1, pdfViewer.currentPageNumber || 1),
+          ).sourceKind === 'page-fallback'
+            ? '该 PDF 没有可用的内置目录，本次“当前章节”安全回退为当前页；正文按页标注。'
+          : context.sourceTruncated
+            ? '章节由 PDF 内置目录的层级与页码确定，正文按页标注；因长度上限发生截断，sourcePages 是实际发送页。同页多个小节无法仅凭目录页码再细分。'
+            : context.scope === 'chapter'
+              ? `章节由 PDF 内置目录的层级与页码确定，正文按页标注；sourcePages 是实际发送页。边界页目录标题${context.chapterBoundaryMatched ? '已匹配并裁剪' : '未匹配，使用页级范围'}。`
+              : '正文来自当前页并带有页码标记；sourcePages 是实际发送页。',
       },
     );
-    const points = parseAiList(summaryContent).slice(0, 8);
+    const points = normalizeSummaryPoints(summaryContent, context.scope);
 
     if (!points.length) throw new Error('模型没有返回总结内容。');
     if (controller.signal.aborted || scopeAtStart !== activeSummaryScope) return;
@@ -2653,14 +4999,14 @@ function setCardState(message: string, isError = false, clearCard = true): void 
 
 function renderGeneratedCard(content: GeneratedCardContent, context: CardContext): void {
   cardTitleElement.textContent = content.title;
-  cardExplanationElement.textContent = content.explanation;
-  cardPurposeElement.textContent = content.purpose;
-  cardUnderstandingElement.textContent = content.understanding;
+  renderChatMarkdown(cardExplanationElement, content.explanation);
+  renderChatMarkdown(cardPurposeElement, content.purpose);
+  renderChatMarkdown(cardUnderstandingElement, content.understanding);
   cardSourceLocationElement.textContent = context.sourceLocation;
 
   const points = content.keyPoints.map((point) => {
     const item = document.createElement('li');
-    item.textContent = point;
+    renderChatMarkdown(item, point);
     return item;
   });
   cardKeyPointsElement.replaceChildren(...points);
@@ -2779,13 +5125,21 @@ async function generatePaperCard(force = false): Promise<void> {
           `文档：${context.documentName}；页码：${context.pageNumber}；位置：${context.positionLabel}。`,
           '必须只输出 JSON，不要使用 Markdown 代码块。JSON 字段固定为：',
           '{"title":"卡片标题","explanation":"核心解释","key_points":["要点1","要点2","要点3"],"purpose":"作用或解决的问题","understanding":"便于学习者理解的通俗表述"}',
+          '所有数学变量和公式都必须保留为 LaTeX，并使用 $...$ 或 $$...$$ 定界符。',
           '',
           context.text,
         ].join('\n'),
       }],
       {
+        task: '生成学习卡片',
         documentName: context.documentName,
         pageNumber: context.pageNumber,
+        totalPages: pdfDocument?.numPages,
+        selectedText: context.text,
+        sourceScope: 'selection',
+        sourceLabel: context.sourceLocation,
+        sourcePages: [context.pageNumber],
+        contextNote: '卡片只依据当前选区生成。JSON 字符串中的公式也使用 $...$ 或 $$...$$。',
       },
     );
     const payload = parseAiJson(cardContent);
@@ -3122,21 +5476,48 @@ async function generatePaperOverviewCard(force = false): Promise<void> {
 }
 
 function openPaperCardPage(): void {
+  const transitionToken = ++paperCardPageTransitionToken;
   paperCardPageElement.hidden = false;
+  paperCardPageElement.setAttribute('aria-hidden', 'false');
   appFrame?.classList.add('paper-card-page-open');
   paperCardEntryButton?.classList.add('active');
   aiPanelToggleButton?.classList.remove('active');
   updatePaperCardDocumentName();
   paperCardPageElement.scrollTop = 0;
+  const animation = playUiAnimation(
+    paperCardPageElement,
+    [
+      { opacity: 0.12, transform: 'translate3d(18px, 0, 0) scale(0.992)' },
+      { opacity: 1, transform: 'translate3d(0, 0, 0) scale(1)' },
+    ],
+  );
+  if (animation) {
+    void waitForUiAnimation(animation).then(() => {
+      if (transitionToken === paperCardPageTransitionToken) paperCardPageElement.style.transform = '';
+    });
+  }
   void generatePaperOverviewCard();
 }
 
-function closePaperCardPage(): void {
+async function closePaperCardPage(): Promise<void> {
+  if (paperCardPageElement.hidden) return;
+  const transitionToken = ++paperCardPageTransitionToken;
   paperCardPageAbortController?.abort();
-  paperCardPageElement.hidden = true;
-  appFrame?.classList.remove('paper-card-page-open');
+  paperCardPageElement.setAttribute('aria-hidden', 'true');
   paperCardEntryButton?.classList.remove('active');
   aiPanelToggleButton?.classList.add('active');
+  const animation = playUiAnimation(
+    paperCardPageElement,
+    [
+      { opacity: 1, transform: 'translate3d(0, 0, 0) scale(1)' },
+      { opacity: 0, transform: 'translate3d(14px, 0, 0) scale(0.992)' },
+    ],
+    { duration: 190, easing: 'ease-in' },
+  );
+  await waitForUiAnimation(animation);
+  if (transitionToken !== paperCardPageTransitionToken) return;
+  paperCardPageElement.hidden = true;
+  appFrame?.classList.remove('paper-card-page-open');
 }
 
 function readSavedPaperOverviews(): SavedPaperOverview[] {
@@ -3254,7 +5635,17 @@ function scheduleAutomaticTranslation(text: string): void {
 function updateAiSelectedSnippet(): void {
   const text = getViewerSelectionText();
   const pageNumber = Math.max(1, pdfViewer.currentPageNumber || 1);
-  if (!text || (text === selectedTextForAi && pageNumber === selectedTextPageNumber)) return;
+  if (!text) return;
+
+  summarySelectionText = text;
+  summarySelectionPageNumber = pageNumber;
+  if (text === selectedTextForAi && pageNumber === selectedTextPageNumber) {
+    if (activeSummaryScope === 'selection' && activeAssistantView === 'summary') {
+      lastSummaryRequestKey = '';
+      scheduleSummaryGeneration();
+    }
+    return;
+  }
 
   selectedTextForAi = text;
   selectedTextPageNumber = pageNumber;
@@ -3304,15 +5695,38 @@ async function translateSelectedText(text: string): Promise<void> {
   setTranslationState('正在自动翻译，请稍候…');
 
   try {
+    const pageNumber = selectedTextPageNumber || pdfViewer.currentPageNumber || 1;
+    const pageText = pdfDocument
+      ? await extractPageText(pdfDocument, pageNumber).catch(() => '')
+      : '';
+    const selectionKind = classifySelectionForSummary(text);
+    const paragraphContext = buildSelectionParagraphContext(text, pageText, selectionKind);
     const translation = await requestAiContent(
       [{
         role: 'user',
-        content: '请把当前选中的 PDF 原文准确翻译成简体中文。保留原意、术语和逻辑，只输出译文，不要添加说明。',
+        content: [
+          '把“目标原文”准确翻译成简体中文，只输出译文，不要加标题、说明或总结。',
+          '要求：保留术语、变量、上下标和逻辑关系；上下文只用于消歧，不能把上下文中未选中的内容翻译进结果。',
+          '数学表达统一写成 LaTeX：行内公式使用 $...$，独立公式使用 $$...$$。例如把 2^{-\\gamma} 写成 $2^{-\\gamma}$。',
+          '',
+          '【目标原文】',
+          text,
+          '',
+          '【所在段落（仅用于消歧）】',
+          paragraphContext,
+        ].join('\n'),
       }],
       {
+        task: '翻译选中文本',
         documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
-        pageNumber: selectedTextPageNumber || pdfViewer.currentPageNumber || 1,
+        pageNumber,
+        totalPages: pdfDocument?.numPages,
         selectedText: text,
+        pageText: paragraphContext !== text ? paragraphContext : undefined,
+        sourceScope: 'selection',
+        sourceLabel: `第 ${pageNumber} 页选区`,
+        sourcePages: [pageNumber],
+        contextNote: '目标原文是唯一翻译对象；所在段落只用于消歧。',
       },
     );
 
@@ -3343,18 +5757,47 @@ async function explainSelectedText(text: string): Promise<void> {
   setExplanationState('正在生成 AI 解释，请稍候…');
 
   try {
+    const pageNumber = selectedTextPageNumber || pdfViewer.currentPageNumber || 1;
+    const pageText = pdfDocument
+      ? await extractPageText(pdfDocument, pageNumber).catch(() => '')
+      : '';
+    const selectionKind = classifySelectionForSummary(text);
+    const paragraphContext = buildSelectionParagraphContext(text, pageText, selectionKind);
     const explanation = await requestAiContent(
       [{
         role: 'user',
-        content: '请用简体中文解释当前选中的 PDF 原文，给出 3—5 条便于学习的核心要点，每行一条，不要添加标题。',
+        content: [
+          '解释“目标原文”，让第一次读到这段内容的人也能快速理解。只输出 2–3 行，每行以“- ”开头：',
+          '- **直白理解：** 用一句话说清这段话究竟在表达什么。',
+          '- **关键关系：** 只解释理解它必须知道的条件、因果、比较或推导；没有则省略。',
+          '- **术语/公式：** 只在确有术语或公式时解释符号含义与公式作用；没有则省略。',
+          '不要复述任务，不要写“根据原文”，不要把同一结论拆成多个近义要点。',
+          '数学表达必须使用 LaTeX：行内使用 $...$，独立公式使用 $$...$$。',
+          '',
+          '【目标原文】',
+          text,
+          '',
+          '【所在段落（仅用于消歧）】',
+          paragraphContext,
+        ].join('\n'),
       }],
       {
+        task: '解释选中文本',
         documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
-        pageNumber: selectedTextPageNumber || pdfViewer.currentPageNumber || 1,
+        pageNumber,
+        totalPages: pdfDocument?.numPages,
         selectedText: text,
+        pageText: paragraphContext !== text ? paragraphContext : undefined,
+        sourceScope: 'selection',
+        sourceLabel: `第 ${pageNumber} 页选区`,
+        sourcePages: [pageNumber],
+        contextNote: '目标原文是唯一解释对象；所在段落只用于补全指代与逻辑。',
       },
     );
-    const points = parseAiList(explanation).slice(0, 6);
+    const points = parseAiList(explanation)
+      .map((point) => point.replace(/^#{1,6}\s*/, '').trim())
+      .filter((point) => point && !/^(?:核心要点|解释|总结)[:：]?$/.test(point))
+      .slice(0, 3);
 
     if (!points.length) {
       throw new Error('模型没有返回解释内容。');
@@ -4572,6 +7015,7 @@ async function openPdf(
   pendingReadingPosition = null;
   isRestoringReadingPosition = false;
   clearInternalNavigationHistory();
+  bibliographyBacklinkCache.clear();
 
   setStatus(`正在解析 ${name}…`);
   textStatus.textContent = '正在建立文字层…';
@@ -4584,7 +7028,12 @@ async function openPdf(
 
     const rawPdfBytes = data instanceof Uint8Array ? new Uint8Array(data) : new Uint8Array(data);
     sourcePdfBytes = rawPdfBytes;
-    const loadingTask = getDocument({ data: new Uint8Array(rawPdfBytes) });
+    const loadingTask = getDocument({
+      data: new Uint8Array(rawPdfBytes),
+      // Prefer a GPU-backed canvas in Chromium/Edge. This reduces main-thread
+      // pressure while quickly scrolling image-heavy or high-zoom documents.
+      enableHWA: true,
+    });
     const documentProxy = await loadingTask.promise;
     pdfDocument = documentProxy;
     sourceName = name;
@@ -4616,6 +7065,14 @@ async function openPdf(
     findController.setDocument(documentProxy);
     selectedTextForAi = '';
     selectedTextPageNumber = 0;
+    documentAgentOperationToken += 1;
+    currentDocumentAgentId = '';
+    currentDocumentAgentRecord = null;
+    currentDocumentChunks = [];
+    currentDocumentSessionCreatedAt = 0;
+    documentAgentStatusText = '正在检查历史会话与全文档案…';
+    summarySelectionText = '';
+    summarySelectionPageNumber = 0;
     lastTranslatedText = '';
     lastExplainedText = '';
     selectedSnippetElement.textContent = '请在左侧 PDF 中选择文字';
@@ -4623,12 +7080,11 @@ async function openPdf(
     setTranslationState('选中英文后将自动翻译。');
     setExplanationState('选中英文后将自动生成解释。');
     updateChatContextPreview();
-    resetChatConversation();
+    resetChatConversation({ persist: false });
     resetSummaryState();
     resetCardState();
     resetPaperCardPageState();
-    void renderDocumentOutline(documentProxy);
-    void loadReadingModeForDocument(documentProxy);
+    void initializeOpenedDocumentFeatures(documentProxy);
     if (!paperCardPageElement.hidden) void generatePaperOverviewCard();
     markSavedChanges();
     window.setTimeout(() => {
@@ -4649,6 +7105,12 @@ async function openPdf(
     pendingReadingPosition = null;
     isRestoringReadingPosition = false;
     sourcePdfBytes = null;
+    documentAgentOperationToken += 1;
+    currentDocumentAgentId = '';
+    currentDocumentAgentRecord = null;
+    currentDocumentChunks = [];
+    currentDocumentSessionCreatedAt = 0;
+    documentAgentStatusText = '';
     restoredAnnotationWarmUpPending = false;
     annotationEditorWarmUpInFlight = false;
     clearOutlineList('打开 PDF 后显示目录');
@@ -4732,11 +7194,16 @@ eventBus.on('pagesinit', () => {
   updateControls();
 });
 
-eventBus.on('pagechanging', () => {
+eventBus.on('pagechanging', ({ pageNumber }: { pageNumber: number }) => {
   updateControls();
   updateSummaryMetadata();
   updateChatContextPreview();
   scheduleReadingPositionSave();
+
+  const navigationOrigin = internalNavigationHistory.at(-1);
+  if (navigationOrigin?.hasDepartedOrigin && navigationOrigin.pageNumber === pageNumber) {
+    scheduleInternalNavigationReturnCheck();
+  }
 
   if (!summaryPanelElement.hidden && activeSummaryScope !== 'selection') {
     lastSummaryRequestKey = '';
@@ -4798,15 +7265,19 @@ outlineToggleButton?.addEventListener('click', () => {
   setLeftPanelCollapsed(!appFrame?.classList.contains('left-panel-collapsed'));
 });
 
+focusReadingToggleButton.addEventListener('click', () => {
+  setFocusReadingMode(!focusReadingModeRequested);
+});
+
 aiPanelToggleButton?.addEventListener('click', () => {
   if (!paperCardPageElement.hidden) {
-    closePaperCardPage();
-    appFrame?.classList.remove('right-panel-collapsed');
+    void closePaperCardPage();
+    setRightPanelCollapsed(false);
     setAssistantView('chat');
     return;
   }
   const willOpen = appFrame?.classList.contains('right-panel-collapsed') ?? false;
-  appFrame?.classList.toggle('right-panel-collapsed');
+  setRightPanelCollapsed(!willOpen);
   if (willOpen) setAssistantView('chat');
 });
 
@@ -4818,7 +7289,7 @@ for (const button of assistantViewButtons) {
 }
 
 aiSettingsButton.addEventListener('click', () => {
-  setDeepSeekSettingsOpen(assistantSettingsPanel.hidden);
+  setDeepSeekSettingsOpen(!assistantSettingsOpen);
 });
 
 readingModeSelect.addEventListener('change', () => {
@@ -4828,7 +7299,11 @@ readingModeSelect.addEventListener('change', () => {
 
 detectReadingModeButton.addEventListener('click', () => {
   readingModePreference = 'auto';
-  void detectReadingMode(true);
+  void detectReadingMode(true).then(() => {
+    if (pdfDocument) {
+      return initializeCurrentDocumentKnowledge(pdfDocument, { force: true, restoreSession: false });
+    }
+  });
 });
 
 aiProviderSelect.addEventListener('change', () => {
@@ -4843,13 +7318,27 @@ aiProviderSelect.addEventListener('change', () => {
   deepSeekBaseUrlInput.value = provider.defaultBaseUrl;
 });
 
+visionAiModeSelect.addEventListener('change', () => {
+  updateVisionAiFieldsVisibility();
+});
+
 closeDeepSeekSettingsButton.addEventListener('click', () => {
   setDeepSeekSettingsOpen(false);
 });
 
 saveDeepSeekSettingsButton.addEventListener('click', () => {
   void saveDeepSeekConfig().then((saved) => {
-    if (saved && pdfDocument && readingModePreference === 'auto') void detectReadingMode(true);
+    if (!saved || !pdfDocument) return;
+    const documentAtSave = pdfDocument;
+    if (readingModePreference === 'auto') {
+      void detectReadingMode(true).then(() => {
+        if (pdfDocument === documentAtSave) {
+          return initializeCurrentDocumentKnowledge(documentAtSave, { restoreSession: false });
+        }
+      });
+      return;
+    }
+    void initializeCurrentDocumentKnowledge(documentAtSave, { restoreSession: false });
   });
 });
 
@@ -4857,9 +7346,24 @@ testDeepSeekButton.addEventListener('click', () => {
   void testDeepSeekConnection();
 });
 
+testVisionAiButton.addEventListener('click', () => {
+  void testVisionAiConnection();
+});
+
 chatForm.addEventListener('submit', (event) => {
   event.preventDefault();
   void sendChatMessage();
+});
+
+chatMessagesElement.addEventListener('click', (event) => {
+  const citation = (event.target as Element | null)?.closest<HTMLButtonElement>(
+    '.pdf-source-citation',
+  );
+  if (!citation) return;
+  event.preventDefault();
+  const pageNumber = Number(citation.dataset.pdfPage);
+  const quote = citation.dataset.pdfQuote?.trim() ?? '';
+  void jumpToPdfCitation(pageNumber, quote);
 });
 
 chatInput.addEventListener('keydown', (event) => {
@@ -4868,15 +7372,38 @@ chatInput.addEventListener('keydown', (event) => {
   void sendChatMessage();
 });
 
-clearChatButton.addEventListener('click', resetChatConversation);
+chatImageButton.addEventListener('click', () => {
+  if (!chatRequestPending) chatImageInput.click();
+});
 
-function activateAiTab(tabName: string): void {
+chatImageInput.addEventListener('change', () => {
+  const files = chatImageInput.files;
+  if (files?.length) void addChatImageFiles(files);
+  chatImageInput.value = '';
+});
+
+chatInput.addEventListener('paste', (event) => {
+  const imageFiles = Array.from(event.clipboardData?.items ?? [])
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+  if (imageFiles.length === 0) return;
+  event.preventDefault();
+  void addChatImageFiles(imageFiles);
+});
+
+clearChatButton.addEventListener('click', () => resetChatConversation());
+
+function activateAiTab(tabName: string, animatePanel = true): void {
+  const targetPanel = aiTabPanels.find((panel) => panel.dataset.aiPanel === tabName) ?? null;
+  const targetWasHidden = targetPanel?.hidden ?? true;
   for (const tab of aiTabButtons) {
     tab.classList.toggle('active', tab.dataset.aiTab === tabName);
   }
   for (const panel of aiTabPanels) {
     panel.hidden = panel.dataset.aiPanel !== tabName;
   }
+  if (animatePanel && targetWasHidden) revealUiElement(targetPanel, 1);
 
   if (tabName === 'translate') {
     const text = selectedTextForAi || getViewerSelectionText();
@@ -5291,6 +7818,11 @@ document.addEventListener('keydown', (event) => {
     closeFindBar();
     return;
   }
+  if (event.key === 'Escape' && focusReadingModeRequested) {
+    event.preventDefault();
+    setFocusReadingMode(false);
+    return;
+  }
   if (event.key === 'Delete' && selectedAnnotationEditor && !isEditingText) {
     event.preventDefault();
     event.stopPropagation();
@@ -5382,6 +7914,11 @@ viewerElement.addEventListener('pointerdown', () => {
   translationAbortController?.abort();
   explanationAbortController?.abort();
   if (activeSummaryScope === 'selection') {
+    summarySelectionText = '';
+    summarySelectionPageNumber = 0;
+    lastSummaryRequestKey = '';
+    lastSummaryPoints = [];
+    currentSummaryContext = null;
     cancelPendingSummaryGeneration();
     summaryAbortController?.abort();
   }
@@ -5389,17 +7926,73 @@ viewerElement.addEventListener('pointerdown', () => {
   cardAbortController?.abort();
 });
 
-viewerElement.addEventListener('pointerup', () => scheduleAiSelectedSnippetUpdate());
+viewerElement.addEventListener('pointerup', () => {
+  window.setTimeout(() => {
+    const text = getViewerSelectionText();
+    if (text) {
+      scheduleAiSelectedSnippetUpdate();
+      return;
+    }
+    if (activeSummaryScope === 'selection' && activeAssistantView === 'summary') {
+      summarySelectionText = '';
+      summarySelectionPageNumber = 0;
+      lastSummaryRequestKey = '';
+      lastSummaryPoints = [];
+      currentSummaryContext = null;
+      cancelPendingSummaryGeneration();
+      summaryAbortController?.abort();
+      setSummaryState('请先在当前页拖选一个句子、片段或段落，再进行总结。', true);
+    }
+  }, 0);
+});
 viewerElement.addEventListener('keyup', () => scheduleAiSelectedSnippetUpdate());
-citationReturnButton.addEventListener('click', returnToPreviousInternalNavigationPosition);
-viewerContainer.addEventListener('scroll', scheduleCustomSelectionRender, { passive: true });
+citationReturnButton.addEventListener(
+  'pointerdown',
+  (event) => {
+    if (!event.isPrimary || event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    returnToPreviousInternalNavigationPosition();
+  },
+  { capture: true },
+);
+
+citationReturnButton.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+
+  // Pointer activation is handled on pointerdown because the return operation
+  // immediately moves and hides this floating button. Waiting for click would
+  // require pointerup to still land on the same element, which is why clicking
+  // its left side could previously only flash without navigating. Keyboard
+  // activation still emits a click with detail === 0.
+  if (event.detail === 0) {
+    returnToPreviousInternalNavigationPosition();
+  }
+});
 viewerContainer.addEventListener(
   'scroll',
   () => {
+    if (!selectionContextMenu.hidden) hideSelectionContextMenu();
+    if (!highlightNotePopover.hidden) hideHighlightNote();
+    if (!annotationActionBar.hidden) hideAnnotationActionBar();
+    if (!('onscrollend' in viewerContainer)) {
+      scheduleReadingPositionSave();
+      if (internalNavigationHistory.length > 0) {
+        scheduleInternalNavigationReturnCheck(140);
+      }
+    }
+  },
+  { passive: true },
+);
+viewerContainer.addEventListener(
+  'scrollend',
+  () => {
     scheduleReadingPositionSave();
-    hideSelectionContextMenu();
-    hideHighlightNote();
-    hideAnnotationActionBar();
+    scheduleInternalNavigationReturnCheck();
   },
   { passive: true },
 );
