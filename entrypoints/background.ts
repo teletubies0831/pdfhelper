@@ -448,14 +448,14 @@ async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResp
       const result = await adapter.chat(config, [{
         role: 'system',
         content: [
-          '你是一名严谨的中文论文阅读助手。请根据用户提供的整篇论文或论文采样文本，生成一张结构化论文总览卡片。',
-          '必须忠于原文，不能编造作者、数据集、指标、实验结果或局限性；原文没有明确说明的字段必须填写“原文未明确出现”。',
-          '标题和作者尽量从论文首页识别；年份、会议或期刊只有明确出现时才填写。',
-          'reading_status 只能填写“略读完成”。',
-          'recommend_deep_reading 只能填写“建议精读”“建议按需精读”或“暂不建议精读”之一。',
-          'citation_points 应概括最值得在后续写作中引用的 1 到 3 个观点，并说明其用途。',
+          '你是一名严谨的中文论文阅读助手，服务对象是研究生论文阅读。请根据用户提供的整篇论文或论文采样文本，生成一张更适合研究生使用的结构化论文卡片。',
+          '事实类信息必须忠于原文，不能编造作者、数据集、指标、实验结果、局限性、会议等级等；原文没有明确说明的字段必须填写“原文未明确出现”。',
+          '标题和作者尽量从论文首页识别；年份、会议或期刊只有明确出现时才填写。keywords、topic_tags 可以根据原文标题、摘要与正文关键词概括。',
+          'reading_status 固定填写“略读完成”。recommend_deep_reading 只能填写“建议精读”“建议按需精读”或“暂不建议精读”。reading_difficulty 只能填写“较易”“中等”或“较难”。reading_value_score 填 0 到 10 的数字，可以带 1 位小数，它是基于论文内容做出的阅读辅助判断，不属于论文原始事实。',
+          'worth_reading、reading_advice、suitable_stages、prerequisites、research_connection、followup_questions、weekly_plan 属于“研究生阅读辅助建议”，允许你基于论文内容做合理判断，但要简洁、具体、可执行。',
+          'method_steps 尽量写成 1/2/3/4 结构；citation_points 应概括最值得在后续写作中引用的 1 到 3 个观点，并说明其用途。',
           '只返回一个 JSON 对象，不要使用 Markdown，不要添加解释。JSON 字段必须是：',
-          '{"title":"","authors":"","venue_year":"","research_area":"","one_sentence_summary":"","research_problem":"","core_innovation":"","method_overview":"","datasets":"","metrics":"","main_findings":"","limitations":"","reading_status":"略读完成","recommend_deep_reading":"建议按需精读","citation_points":""}',
+          '{"title":"","authors":"","venue_year":"","research_area":"","keywords":"","one_sentence_summary":"","research_problem":"","core_innovation":"","worth_reading":"","problem_setup":"","research_gap":"","why_important":"","topic_tags":"","method_overview":"","method_intuition":"","method_steps":"","key_assumptions":"","notation_guide":"","datasets":"","experiment_setup":"","metrics":"","main_findings":"","strongest_evidence":"","comparison_with_prior_work":"","limitations":"","reading_status":"略读完成","recommend_deep_reading":"建议按需精读","reading_difficulty":"中等","reading_value_score":"8.0","reading_advice":"","suitable_stages":"","prerequisites":"","citation_points":"","research_connection":"","followup_questions":"","weekly_plan":""}',
         ].join('\n'),
       }, {
         role: 'user',

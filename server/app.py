@@ -80,17 +80,38 @@ class GeneratePaperOverviewResponse(BaseModel):
     authors: str
     venue_year: str
     research_area: str
+    keywords: str
     one_sentence_summary: str
     research_problem: str
     core_innovation: str
+    worth_reading: str
+    problem_setup: str
+    research_gap: str
+    why_important: str
+    topic_tags: str
     method_overview: str
+    method_intuition: str
+    method_steps: str
+    key_assumptions: str
+    notation_guide: str
     datasets: str
+    experiment_setup: str
     metrics: str
     main_findings: str
+    strongest_evidence: str
+    comparison_with_prior_work: str
     limitations: str
     reading_status: str
     recommend_deep_reading: str
+    reading_difficulty: str
+    reading_value_score: str
+    reading_advice: str
+    suitable_stages: str
+    prerequisites: str
     citation_points: str
+    research_connection: str
+    followup_questions: str
+    weekly_plan: str
 
 
 def get_required_env(name: str) -> str:
@@ -271,22 +292,43 @@ def parse_paper_overview_content(content: str) -> dict[str, str]:
         "authors",
         "venue_year",
         "research_area",
+        "keywords",
         "one_sentence_summary",
         "research_problem",
         "core_innovation",
+        "worth_reading",
+        "problem_setup",
+        "research_gap",
+        "why_important",
+        "topic_tags",
         "method_overview",
+        "method_intuition",
+        "method_steps",
+        "key_assumptions",
+        "notation_guide",
         "datasets",
+        "experiment_setup",
         "metrics",
         "main_findings",
+        "strongest_evidence",
+        "comparison_with_prior_work",
         "limitations",
         "reading_status",
         "recommend_deep_reading",
+        "reading_difficulty",
+        "reading_value_score",
+        "reading_advice",
+        "suitable_stages",
+        "prerequisites",
         "citation_points",
+        "research_connection",
+        "followup_questions",
+        "weekly_plan",
     ]
     result: dict[str, str] = {}
     for key in keys:
         value = str(parsed.get(key, "")).strip()
-        result[key] = value[:3000] if value else "原文未明确出现"
+        result[key] = value if value else "原文未明确出现"
 
     return result
 
@@ -471,19 +513,28 @@ async def generate_paper_overview(
             {
                 "role": "system",
                 "content": (
-                    "你是一名严谨的中文论文阅读助手。请根据用户提供的整篇论文或论文采样文本，"
-                    "生成一张结构化论文总览卡片。必须忠于原文，不能编造作者、数据集、指标、"
-                    "实验结果或局限性；原文没有明确说明的字段必须填写‘原文未明确出现’。"
+                    "你是一名严谨的中文论文阅读助手，服务对象是研究生论文阅读。请根据用户提供的整篇论文或论文采样文本，"
+                    "生成一张更适合研究生使用的结构化论文卡片。事实类信息必须忠于原文，不能编造作者、数据集、指标、"
+                    "实验结果、局限性、会议等级等；原文没有明确说明的字段必须填写‘原文未明确出现’。"
                     "标题和作者尽量从论文首页识别；年份、会议或期刊只有明确出现时才填写。"
-                    "reading_status 只能填写‘略读完成’；recommend_deep_reading 只能填写"
-                    "‘建议精读’、‘建议按需精读’或‘暂不建议精读’之一。"
-                    "citation_points 应概括最值得在后续写作中引用的1到3个观点，并说明其用途。"
+                    "keywords、topic_tags 可以根据原文标题、摘要与正文关键词概括。"
+                    "reading_status 固定填写‘略读完成’；recommend_deep_reading 只能填写"
+                    "‘建议精读’、‘建议按需精读’或‘暂不建议精读’之一；reading_difficulty 只能填写"
+                    "‘较易’、‘中等’或‘较难’；reading_value_score 填 0 到 10 的数字，可以带 1 位小数，它是阅读辅助判断。"
+                    "worth_reading、reading_advice、suitable_stages、prerequisites、research_connection、followup_questions、weekly_plan"
+                    " 属于研究生阅读辅助建议，可以基于论文内容给出简洁、具体、可执行的判断。"
+                    "method_steps 尽量写成 1/2/3/4 结构；citation_points 应概括最值得在后续写作中引用的1到3个观点，并说明其用途。"
                     "只返回一个 JSON 对象，不要使用 Markdown，不要添加解释。JSON 字段必须是："
-                    '{"title":"","authors":"","venue_year":"","research_area":"",'
-                    '"one_sentence_summary":"","research_problem":"","core_innovation":"",'
-                    '"method_overview":"","datasets":"","metrics":"","main_findings":"",'
-                    '"limitations":"","reading_status":"略读完成",'
-                    '"recommend_deep_reading":"建议按需精读","citation_points":""}'
+                    '{"title":"","authors":"","venue_year":"","research_area":"","keywords":"",'
+                    '"one_sentence_summary":"","research_problem":"","core_innovation":"","worth_reading":"",'
+                    '"problem_setup":"","research_gap":"","why_important":"","topic_tags":"",'
+                    '"method_overview":"","method_intuition":"","method_steps":"","key_assumptions":"",'
+                    '"notation_guide":"","datasets":"","experiment_setup":"","metrics":"","main_findings":"",'
+                    '"strongest_evidence":"","comparison_with_prior_work":"","limitations":"",'
+                    '"reading_status":"略读完成","recommend_deep_reading":"建议按需精读",'
+                    '"reading_difficulty":"中等","reading_value_score":"8.0","reading_advice":"",'
+                    '"suitable_stages":"","prerequisites":"","citation_points":"","research_connection":"",'
+                    '"followup_questions":"","weekly_plan":""}'
                 ),
             },
             {

@@ -151,6 +151,8 @@ const readingModeStatus = requiredElement<HTMLElement>('reading-mode-status');
 const aiSettingsButton = requiredElement<HTMLButtonElement>('ai-settings-button');
 const paperCardEntryButton = document.getElementById('paper-card-entry');
 const paperCardPageElement = requiredElement<HTMLElement>('paper-card-page');
+const paperCardPageTitleElement = requiredElement<HTMLElement>('paper-card-page-title');
+const paperCardPageSubtitleElement = requiredElement<HTMLElement>('paper-card-page-subtitle');
 const paperCardBackButton = requiredElement<HTMLButtonElement>('paper-card-back');
 const returnToPdfButton = requiredElement<HTMLButtonElement>('return-to-pdf');
 const regeneratePaperCardButton = requiredElement<HTMLButtonElement>('regenerate-paper-card');
@@ -163,20 +165,43 @@ const paperTitleInput = requiredElement<HTMLInputElement>('paper-title');
 const paperAuthorsInput = requiredElement<HTMLInputElement>('paper-authors');
 const paperVenueYearInput = requiredElement<HTMLInputElement>('paper-venue-year');
 const paperResearchAreaInput = requiredElement<HTMLInputElement>('paper-research-area');
+const paperKeywordsInput = requiredElement<HTMLInputElement>('paper-keywords');
 const paperOneSentenceSummaryInput = requiredElement<HTMLTextAreaElement>('paper-one-sentence-summary');
 const paperResearchProblemInput = requiredElement<HTMLTextAreaElement>('paper-research-problem');
 const paperCoreInnovationInput = requiredElement<HTMLTextAreaElement>('paper-core-innovation');
+const paperWorthReadingInput = requiredElement<HTMLTextAreaElement>('paper-worth-reading');
+const paperProblemSetupInput = requiredElement<HTMLTextAreaElement>('paper-problem-setup');
+const paperResearchGapInput = requiredElement<HTMLTextAreaElement>('paper-research-gap');
+const paperWhyImportantInput = requiredElement<HTMLTextAreaElement>('paper-why-important');
+const paperTopicTagsInput = requiredElement<HTMLTextAreaElement>('paper-topic-tags');
 const paperMethodOverviewInput = requiredElement<HTMLTextAreaElement>('paper-method-overview');
+const paperMethodIntuitionInput = requiredElement<HTMLTextAreaElement>('paper-method-intuition');
+const paperMethodStepsInput = requiredElement<HTMLTextAreaElement>('paper-method-steps');
+const paperKeyAssumptionsInput = requiredElement<HTMLTextAreaElement>('paper-key-assumptions');
+const paperNotationGuideInput = requiredElement<HTMLTextAreaElement>('paper-notation-guide');
 const paperDatasetsInput = requiredElement<HTMLTextAreaElement>('paper-datasets');
+const paperExperimentSetupInput = requiredElement<HTMLTextAreaElement>('paper-experiment-setup');
 const paperMetricsInput = requiredElement<HTMLTextAreaElement>('paper-metrics');
 const paperMainFindingsInput = requiredElement<HTMLTextAreaElement>('paper-main-findings');
+const paperStrongestEvidenceInput = requiredElement<HTMLTextAreaElement>('paper-strongest-evidence');
+const paperComparisonPriorWorkInput = requiredElement<HTMLTextAreaElement>('paper-comparison-prior-work');
 const paperLimitationsInput = requiredElement<HTMLTextAreaElement>('paper-limitations');
 const paperReadingStatusInput = requiredElement<HTMLSelectElement>('paper-reading-status');
 const paperRecommendDeepReadingInput = requiredElement<HTMLSelectElement>('paper-recommend-deep-reading');
+const paperReadingDifficultyInput = requiredElement<HTMLSelectElement>('paper-reading-difficulty');
+const paperReadingValueScoreInput = requiredElement<HTMLInputElement>('paper-reading-value-score');
+const paperReadingAdviceInput = requiredElement<HTMLTextAreaElement>('paper-reading-advice');
+const paperSuitableStagesInput = requiredElement<HTMLTextAreaElement>('paper-suitable-stages');
+const paperPrerequisitesInput = requiredElement<HTMLTextAreaElement>('paper-prerequisites');
 const paperCitationPointsInput = requiredElement<HTMLTextAreaElement>('paper-citation-points');
+const paperResearchConnectionInput = requiredElement<HTMLTextAreaElement>('paper-research-connection');
+const paperFollowupQuestionsInput = requiredElement<HTMLTextAreaElement>('paper-followup-questions');
+const paperWeeklyPlanInput = requiredElement<HTMLTextAreaElement>('paper-weekly-plan');
 const paperPersonalNotesInput = requiredElement<HTMLTextAreaElement>('paper-personal-notes');
 const knowledgeBaseEntryButton = requiredElement<HTMLButtonElement>('knowledge-base-entry');
 const knowledgeBasePageElement = requiredElement<HTMLElement>('knowledge-base-page');
+const knowledgeMainElement = requiredElement<HTMLElement>('knowledge-library-view').closest<HTMLElement>('.knowledge-main');
+if (!knowledgeMainElement) throw new Error('缺少知识库主内容区域');
 const knowledgeBaseBackButton = requiredElement<HTMLButtonElement>('knowledge-base-back');
 const knowledgeFilterButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-knowledge-filter]'),
@@ -200,6 +225,26 @@ const knowledgeSortSelect = requiredElement<HTMLSelectElement>('knowledge-sort-s
 const knowledgeGroupSelect = requiredElement<HTMLSelectElement>('knowledge-group-select');
 const knowledgePageStatusElement = requiredElement<HTMLElement>('knowledge-page-status');
 const knowledgeListElement = requiredElement<HTMLElement>('knowledge-list');
+const knowledgePageSubtitleElement = document.getElementById('knowledge-page-subtitle') as HTMLElement | null;
+const knowledgeDashboardMetricsElement = document.getElementById('knowledge-dashboard-metrics') as HTMLElement | null;
+const knowledgeStudentWorkbenchElement = document.getElementById('knowledge-student-workbench') as HTMLElement | null;
+const knowledgeWeeklyTasksElement = document.getElementById('knowledge-weekly-tasks') as HTMLElement | null;
+const knowledgeFocusButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-knowledge-focus]'),
+);
+const knowledgeFocusCountTodoElement = document.getElementById('knowledge-focus-count-todo') as HTMLElement | null;
+const knowledgeFocusCountDeepElement = document.getElementById('knowledge-focus-count-deep') as HTMLElement | null;
+const knowledgeFocusCountFinishedElement = document.getElementById('knowledge-focus-count-finished') as HTMLElement | null;
+const knowledgeFocusCountCitableElement = document.getElementById('knowledge-focus-count-citable') as HTMLElement | null;
+const knowledgeFocusCountReplicateElement = document.getElementById('knowledge-focus-count-replicate') as HTMLElement | null;
+const knowledgeFocusCountRelatedElement = document.getElementById('knowledge-focus-count-related') as HTMLElement | null;
+const knowledgeFocusCountMethodsElement = document.getElementById('knowledge-focus-count-methods') as HTMLElement | null;
+const knowledgeYearFilterSelect = document.getElementById('knowledge-year-filter') as HTMLSelectElement | null;
+const knowledgeVenueFilterSelect = document.getElementById('knowledge-venue-filter') as HTMLSelectElement | null;
+const knowledgeReadingStatusFilterSelect = document.getElementById('knowledge-reading-status-filter') as HTMLSelectElement | null;
+const knowledgePriorityFilterSelect = document.getElementById('knowledge-priority-filter') as HTMLSelectElement | null;
+const knowledgeClearFiltersButton = document.getElementById('knowledge-clear-filters') as HTMLButtonElement | null;
+const knowledgeBatchOrganizeButton = document.getElementById('knowledge-batch-organize') as HTMLButtonElement | null;
 const knowledgeModeButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>('[data-knowledge-mode]'),
 );
@@ -1637,6 +1682,7 @@ type KnowledgeKind = 'note' | 'reading-card' | 'paper-card';
 type KnowledgeFilter = 'all' | KnowledgeKind;
 type KnowledgeSource = 'knowledge-note' | 'summary-note' | 'reading-card' | 'paper-overview';
 type KnowledgePageMode = 'library' | 'qa' | 'insights';
+type KnowledgeFocus = 'all' | 'todo' | 'deep' | 'finished' | 'citable' | 'replicate' | 'related' | 'methods';
 type KnowledgeResearchScope = 'selected' | 'filtered' | 'all';
 
 interface SummaryContext {
@@ -1685,17 +1731,38 @@ interface PaperOverviewApiResponse {
   authors?: unknown;
   venue_year?: unknown;
   research_area?: unknown;
+  keywords?: unknown;
   one_sentence_summary?: unknown;
   research_problem?: unknown;
   core_innovation?: unknown;
+  worth_reading?: unknown;
+  problem_setup?: unknown;
+  research_gap?: unknown;
+  why_important?: unknown;
+  topic_tags?: unknown;
   method_overview?: unknown;
+  method_intuition?: unknown;
+  method_steps?: unknown;
+  key_assumptions?: unknown;
+  notation_guide?: unknown;
   datasets?: unknown;
+  experiment_setup?: unknown;
   metrics?: unknown;
   main_findings?: unknown;
+  strongest_evidence?: unknown;
+  comparison_with_prior_work?: unknown;
   limitations?: unknown;
   reading_status?: unknown;
   recommend_deep_reading?: unknown;
+  reading_difficulty?: unknown;
+  reading_value_score?: unknown;
+  reading_advice?: unknown;
+  suitable_stages?: unknown;
+  prerequisites?: unknown;
   citation_points?: unknown;
+  research_connection?: unknown;
+  followup_questions?: unknown;
+  weekly_plan?: unknown;
   detail?: unknown;
 }
 
@@ -1704,17 +1771,38 @@ interface PaperCardFormData {
   authors: string;
   venueYear: string;
   researchArea: string;
+  keywords: string;
   oneSentenceSummary: string;
   researchProblem: string;
   coreInnovation: string;
+  worthReading: string;
+  problemSetup: string;
+  researchGap: string;
+  whyImportant: string;
+  topicTags: string;
   methodOverview: string;
+  methodIntuition: string;
+  methodSteps: string;
+  keyAssumptions: string;
+  notationGuide: string;
   datasets: string;
+  experimentSetup: string;
   metrics: string;
   mainFindings: string;
+  strongestEvidence: string;
+  comparisonWithPriorWork: string;
   limitations: string;
   readingStatus: string;
   recommendDeepReading: string;
+  readingDifficulty: string;
+  readingValueScore: string;
+  readingAdvice: string;
+  suitableStages: string;
+  prerequisites: string;
   citationPoints: string;
+  researchConnection: string;
+  followupQuestions: string;
+  weeklyPlan: string;
   personalNotes: string;
 }
 
@@ -1722,6 +1810,7 @@ interface SavedPaperOverview extends PaperCardFormData {
   id: string;
   documentName: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 
@@ -1787,9 +1876,196 @@ let cardGenerationTimer: ReturnType<typeof setTimeout> | null = null;
 let paperCardPageAbortController: AbortController | null = null;
 let paperCardPageDocumentKey = '';
 let paperCardPageSourceCache: { document: PDFDocumentProxy; text: string } | null = null;
+let editingPaperOverviewId: string | null = null;
+let paperCardReviewDocumentName = '';
+let paperCardReturnTarget: 'pdf' | 'knowledge' = 'pdf';
 let activeKnowledgeFilter: KnowledgeFilter = 'all';
 let activeKnowledgeCategory = 'all';
 let activeKnowledgeTag = '';
+let activeKnowledgeFocus: KnowledgeFocus = 'all';
+let activeKnowledgeYear = 'all';
+let activeKnowledgeVenue = 'all';
+let activeKnowledgeReadingStatus = 'all';
+let activeKnowledgePriority = 'all';
+
+const APP_VIEW_SESSION_STORAGE_KEY = 'pdf-helper-app-view-state-v1';
+
+type PersistedAppView = 'viewer' | 'knowledge' | 'paper-review';
+
+interface PersistedAppViewState {
+  view: PersistedAppView;
+  knowledgeMode: KnowledgePageMode;
+  knowledgeFilter: KnowledgeFilter;
+  knowledgeCategory: string;
+  knowledgeTag: string;
+  knowledgeFocus: KnowledgeFocus;
+  knowledgeYear: string;
+  knowledgeVenue: string;
+  knowledgeReadingStatus: string;
+  knowledgePriority: string;
+  knowledgeSearch: string;
+  knowledgeSort: string;
+  knowledgeGroup: string;
+  knowledgeResearchScope: string;
+  knowledgeResearchQuestion: string;
+  knowledgeInsightQuestion: string;
+  selectedKnowledgeRecordKey: string;
+  selectedKnowledgeResearchKeys: string[];
+  knowledgeScrollTop: number;
+  reviewPaperOverviewId: string;
+  paperCardScrollTop: number;
+}
+
+function readPersistedAppViewState(): PersistedAppViewState | null {
+  try {
+    const raw = sessionStorage.getItem(APP_VIEW_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PersistedAppViewState>;
+    if (value.view !== 'viewer' && value.view !== 'knowledge' && value.view !== 'paper-review') {
+      return null;
+    }
+    return {
+      view: value.view,
+      knowledgeMode: value.knowledgeMode === 'qa' || value.knowledgeMode === 'insights'
+        ? value.knowledgeMode
+        : 'library',
+      knowledgeFilter: value.knowledgeFilter === 'note'
+        || value.knowledgeFilter === 'reading-card'
+        || value.knowledgeFilter === 'paper-card'
+        ? value.knowledgeFilter
+        : 'all',
+      knowledgeCategory: typeof value.knowledgeCategory === 'string' ? value.knowledgeCategory : 'all',
+      knowledgeTag: typeof value.knowledgeTag === 'string' ? value.knowledgeTag : '',
+      knowledgeFocus: value.knowledgeFocus === 'todo'
+        || value.knowledgeFocus === 'deep'
+        || value.knowledgeFocus === 'finished'
+        || value.knowledgeFocus === 'citable'
+        || value.knowledgeFocus === 'replicate'
+        || value.knowledgeFocus === 'related'
+        || value.knowledgeFocus === 'methods'
+        ? value.knowledgeFocus
+        : 'all',
+      knowledgeYear: typeof value.knowledgeYear === 'string' ? value.knowledgeYear : 'all',
+      knowledgeVenue: typeof value.knowledgeVenue === 'string' ? value.knowledgeVenue : 'all',
+      knowledgeReadingStatus: typeof value.knowledgeReadingStatus === 'string'
+        ? value.knowledgeReadingStatus
+        : 'all',
+      knowledgePriority: typeof value.knowledgePriority === 'string' ? value.knowledgePriority : 'all',
+      knowledgeSearch: typeof value.knowledgeSearch === 'string' ? value.knowledgeSearch : '',
+      knowledgeSort: typeof value.knowledgeSort === 'string' ? value.knowledgeSort : 'newest',
+      knowledgeGroup: typeof value.knowledgeGroup === 'string' ? value.knowledgeGroup : 'none',
+      knowledgeResearchScope: typeof value.knowledgeResearchScope === 'string'
+        ? value.knowledgeResearchScope
+        : 'selected',
+      knowledgeResearchQuestion: typeof value.knowledgeResearchQuestion === 'string'
+        ? value.knowledgeResearchQuestion
+        : '',
+      knowledgeInsightQuestion: typeof value.knowledgeInsightQuestion === 'string'
+        ? value.knowledgeInsightQuestion
+        : '',
+      selectedKnowledgeRecordKey: typeof value.selectedKnowledgeRecordKey === 'string'
+        ? value.selectedKnowledgeRecordKey
+        : '',
+      selectedKnowledgeResearchKeys: Array.isArray(value.selectedKnowledgeResearchKeys)
+        ? value.selectedKnowledgeResearchKeys.filter((key): key is string => typeof key === 'string')
+        : [],
+      knowledgeScrollTop: Number.isFinite(value.knowledgeScrollTop) ? Number(value.knowledgeScrollTop) : 0,
+      reviewPaperOverviewId: typeof value.reviewPaperOverviewId === 'string'
+        ? value.reviewPaperOverviewId
+        : '',
+      paperCardScrollTop: Number.isFinite(value.paperCardScrollTop) ? Number(value.paperCardScrollTop) : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getCurrentPersistedAppView(): PersistedAppView {
+  if (!paperCardPageElement.hidden && editingPaperOverviewId) return 'paper-review';
+  if (!knowledgeBasePageElement.hidden) return 'knowledge';
+  return 'viewer';
+}
+
+function persistCurrentAppViewState(): void {
+  const state: PersistedAppViewState = {
+    view: getCurrentPersistedAppView(),
+    knowledgeMode: activeKnowledgePageMode,
+    knowledgeFilter: activeKnowledgeFilter,
+    knowledgeCategory: activeKnowledgeCategory,
+    knowledgeTag: activeKnowledgeTag,
+    knowledgeFocus: activeKnowledgeFocus,
+    knowledgeYear: activeKnowledgeYear,
+    knowledgeVenue: activeKnowledgeVenue,
+    knowledgeReadingStatus: activeKnowledgeReadingStatus,
+    knowledgePriority: activeKnowledgePriority,
+    knowledgeSearch: knowledgeSearchInput.value,
+    knowledgeSort: knowledgeSortSelect.value,
+    knowledgeGroup: knowledgeGroupSelect.value,
+    knowledgeResearchScope: knowledgeResearchScopeSelect.value,
+    knowledgeResearchQuestion: knowledgeResearchQuestionInput.value,
+    knowledgeInsightQuestion: knowledgeInsightQuestionInput.value,
+    selectedKnowledgeRecordKey,
+    selectedKnowledgeResearchKeys: Array.from(selectedKnowledgeResearchKeys),
+    knowledgeScrollTop: knowledgeMainElement.scrollTop,
+    reviewPaperOverviewId: editingPaperOverviewId || '',
+    paperCardScrollTop: paperCardPageElement.scrollTop,
+  };
+
+  try {
+    sessionStorage.setItem(APP_VIEW_SESSION_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage failures; the application must remain usable.
+  }
+}
+
+function applyPersistedKnowledgeState(state: PersistedAppViewState): void {
+  activeKnowledgePageMode = state.knowledgeMode;
+  activeKnowledgeFilter = state.knowledgeFilter;
+  activeKnowledgeCategory = state.knowledgeCategory;
+  activeKnowledgeTag = state.knowledgeTag;
+  activeKnowledgeFocus = state.knowledgeFocus;
+  activeKnowledgeYear = state.knowledgeYear;
+  activeKnowledgeVenue = state.knowledgeVenue;
+  activeKnowledgeReadingStatus = state.knowledgeReadingStatus;
+  activeKnowledgePriority = state.knowledgePriority;
+  selectedKnowledgeRecordKey = state.selectedKnowledgeRecordKey;
+  selectedKnowledgeResearchKeys = new Set(state.selectedKnowledgeResearchKeys);
+
+  knowledgeSearchInput.value = state.knowledgeSearch;
+  knowledgeSortSelect.value = state.knowledgeSort;
+  knowledgeGroupSelect.value = state.knowledgeGroup;
+  knowledgeResearchScopeSelect.value = state.knowledgeResearchScope;
+  knowledgeResearchQuestionInput.value = state.knowledgeResearchQuestion;
+  knowledgeInsightQuestionInput.value = state.knowledgeInsightQuestion;
+}
+
+function restoreAppViewAfterRefresh(): void {
+  const state = readPersistedAppViewState();
+  if (!state || state.view === 'viewer') return;
+
+  applyPersistedKnowledgeState(state);
+
+  if (state.view === 'paper-review' && state.reviewPaperOverviewId) {
+    const item = collectKnowledgeItems().find(
+      (candidate) => candidate.source === 'paper-overview'
+        && candidate.id === state.reviewPaperOverviewId,
+    );
+    if (item) {
+      openSavedPaperOverviewReview(item);
+      requestAnimationFrame(() => {
+        paperCardPageElement.scrollTop = Math.max(0, state.paperCardScrollTop);
+      });
+      return;
+    }
+  }
+
+  openKnowledgeBasePage();
+  setKnowledgePageMode(state.knowledgeMode);
+  requestAnimationFrame(() => {
+    knowledgeMainElement.scrollTop = Math.max(0, state.knowledgeScrollTop);
+  });
+}
+
 let selectedKnowledgeRecordKey = '';
 let knowledgeEditorTargetKey: string | null = null;
 let activeKnowledgePageMode: KnowledgePageMode = 'library';
@@ -1834,6 +2110,26 @@ function setAssistantView(view: AssistantView): void {
   } else {
     activateAiTab(view);
   }
+}
+
+
+let settingsSavedFeedbackTimer: number | undefined;
+
+function showSettingsSavedFeedback(): void {
+  if (settingsSavedFeedbackTimer !== undefined) {
+    window.clearTimeout(settingsSavedFeedbackTimer);
+  }
+
+  aiSettingsButton.classList.add('saved');
+  aiSettingsButton.textContent = '✓ 已保存';
+  aiSettingsButton.setAttribute('aria-label', 'AI 设置已保存');
+
+  settingsSavedFeedbackTimer = window.setTimeout(() => {
+    aiSettingsButton.classList.remove('saved');
+    aiSettingsButton.textContent = '⚙ 设置';
+    aiSettingsButton.setAttribute('aria-label', '打开 AI 设置');
+    settingsSavedFeedbackTimer = undefined;
+  }, 1400);
 }
 
 function setDeepSeekSettingsOpen(open: boolean): void {
@@ -3066,43 +3362,152 @@ function collectPaperCardFormData(): PaperCardFormData {
     authors: paperAuthorsInput.value.trim(),
     venueYear: paperVenueYearInput.value.trim(),
     researchArea: paperResearchAreaInput.value.trim(),
+    keywords: paperKeywordsInput.value.trim(),
     oneSentenceSummary: paperOneSentenceSummaryInput.value.trim(),
     researchProblem: paperResearchProblemInput.value.trim(),
     coreInnovation: paperCoreInnovationInput.value.trim(),
+    worthReading: paperWorthReadingInput.value.trim(),
+    problemSetup: paperProblemSetupInput.value.trim(),
+    researchGap: paperResearchGapInput.value.trim(),
+    whyImportant: paperWhyImportantInput.value.trim(),
+    topicTags: paperTopicTagsInput.value.trim(),
     methodOverview: paperMethodOverviewInput.value.trim(),
+    methodIntuition: paperMethodIntuitionInput.value.trim(),
+    methodSteps: paperMethodStepsInput.value.trim(),
+    keyAssumptions: paperKeyAssumptionsInput.value.trim(),
+    notationGuide: paperNotationGuideInput.value.trim(),
     datasets: paperDatasetsInput.value.trim(),
+    experimentSetup: paperExperimentSetupInput.value.trim(),
     metrics: paperMetricsInput.value.trim(),
     mainFindings: paperMainFindingsInput.value.trim(),
+    strongestEvidence: paperStrongestEvidenceInput.value.trim(),
+    comparisonWithPriorWork: paperComparisonPriorWorkInput.value.trim(),
     limitations: paperLimitationsInput.value.trim(),
     readingStatus: paperReadingStatusInput.value.trim(),
     recommendDeepReading: paperRecommendDeepReadingInput.value.trim(),
+    readingDifficulty: paperReadingDifficultyInput.value.trim(),
+    readingValueScore: paperReadingValueScoreInput.value.trim(),
+    readingAdvice: paperReadingAdviceInput.value.trim(),
+    suitableStages: paperSuitableStagesInput.value.trim(),
+    prerequisites: paperPrerequisitesInput.value.trim(),
     citationPoints: paperCitationPointsInput.value.trim(),
+    researchConnection: paperResearchConnectionInput.value.trim(),
+    followupQuestions: paperFollowupQuestionsInput.value.trim(),
+    weeklyPlan: paperWeeklyPlanInput.value.trim(),
     personalNotes: paperPersonalNotesInput.value.trim(),
   };
 }
 
+
+
+const PAPER_CARD_TEXTAREA_MIN_HEIGHT = 44;
+
+function autoResizePaperCardTextarea(textarea: HTMLTextAreaElement): void {
+  // Reset first so the field can shrink when content becomes shorter.
+  textarea.style.height = `${PAPER_CARD_TEXTAREA_MIN_HEIGHT}px`;
+  textarea.style.height = '0px';
+
+  const computedStyle = window.getComputedStyle(textarea);
+  const borderHeight = (
+    Number.parseFloat(computedStyle.borderTopWidth || '0')
+    + Number.parseFloat(computedStyle.borderBottomWidth || '0')
+  );
+  const contentHeight = Math.ceil(textarea.scrollHeight + borderHeight);
+
+  textarea.style.height = `${Math.max(PAPER_CARD_TEXTAREA_MIN_HEIGHT, contentHeight)}px`;
+}
+
+function refreshPaperCardTextareaHeights(): void {
+  const textareas = paperCardFormElement.querySelectorAll<HTMLTextAreaElement>('textarea');
+  for (const textarea of textareas) autoResizePaperCardTextarea(textarea);
+}
+
+function schedulePaperCardTextareaRefresh(): void {
+  // The paper-card page is initially hidden. Two animation frames ensure
+  // layout is measurable after it becomes visible and after AI content renders.
+  requestAnimationFrame(() => {
+    refreshPaperCardTextareaHeights();
+    requestAnimationFrame(refreshPaperCardTextareaHeights);
+  });
+}
+
+function bindPaperCardTextareaAutoResize(): void {
+  const textareas = paperCardFormElement.querySelectorAll<HTMLTextAreaElement>('textarea');
+  for (const textarea of textareas) {
+    textarea.addEventListener('input', () => autoResizePaperCardTextarea(textarea));
+  }
+  window.addEventListener('resize', schedulePaperCardTextareaRefresh);
+  schedulePaperCardTextareaRefresh();
+}
+
 function renderPaperCardForm(data: Omit<PaperCardFormData, 'personalNotes'>): void {
+
   paperTitleInput.value = data.title;
   paperAuthorsInput.value = data.authors;
   paperVenueYearInput.value = data.venueYear;
   paperResearchAreaInput.value = data.researchArea;
+  paperKeywordsInput.value = data.keywords;
   paperOneSentenceSummaryInput.value = data.oneSentenceSummary;
   paperResearchProblemInput.value = data.researchProblem;
   paperCoreInnovationInput.value = data.coreInnovation;
+  paperWorthReadingInput.value = data.worthReading;
+  paperProblemSetupInput.value = data.problemSetup;
+  paperResearchGapInput.value = data.researchGap;
+  paperWhyImportantInput.value = data.whyImportant;
+  paperTopicTagsInput.value = data.topicTags;
   paperMethodOverviewInput.value = data.methodOverview;
+  paperMethodIntuitionInput.value = data.methodIntuition;
+  paperMethodStepsInput.value = data.methodSteps;
+  paperKeyAssumptionsInput.value = data.keyAssumptions;
+  paperNotationGuideInput.value = data.notationGuide;
   paperDatasetsInput.value = data.datasets;
+  paperExperimentSetupInput.value = data.experimentSetup;
   paperMetricsInput.value = data.metrics;
   paperMainFindingsInput.value = data.mainFindings;
+  paperStrongestEvidenceInput.value = data.strongestEvidence;
+  paperComparisonPriorWorkInput.value = data.comparisonWithPriorWork;
   paperLimitationsInput.value = data.limitations;
   setSelectValue(paperReadingStatusInput, data.readingStatus);
   setSelectValue(paperRecommendDeepReadingInput, data.recommendDeepReading);
+  setSelectValue(paperReadingDifficultyInput, data.readingDifficulty);
+  paperReadingValueScoreInput.value = data.readingValueScore;
+  paperReadingAdviceInput.value = data.readingAdvice;
+  paperSuitableStagesInput.value = data.suitableStages;
+  paperPrerequisitesInput.value = data.prerequisites;
   paperCitationPointsInput.value = data.citationPoints;
+  paperResearchConnectionInput.value = data.researchConnection;
+  paperFollowupQuestionsInput.value = data.followupQuestions;
+  paperWeeklyPlanInput.value = data.weeklyPlan;
+  schedulePaperCardTextareaRefresh();
 }
 
 function updatePaperCardDocumentName(): void {
-  const name = sourceName ? getDisplayFileName(sourceName) : '尚未打开 PDF';
+  const currentName = sourceName ? getDisplayFileName(sourceName) : '';
+  const name = paperCardReviewDocumentName || currentName || '尚未打开 PDF';
   paperCardDocumentNameElement.textContent = name;
-  paperCardDocumentNameElement.title = sourceName || name;
+  paperCardDocumentNameElement.title = paperCardReviewDocumentName || sourceName || name;
+}
+
+function setPaperCardPageMode(mode: 'generate' | 'review'): void {
+  const isReview = mode === 'review';
+  paperCardPageElement.classList.toggle('review-mode', isReview);
+  paperCardPageTitleElement.textContent = isReview ? '复习论文卡片' : '生成论文卡片页面';
+  paperCardPageSubtitleElement.textContent = isReview
+    ? '从知识库打开已保存的论文卡片，可完整复习、修改并再次保存'
+    : '面向研究生论文阅读：先判断值不值得读，再理解方法、证据与和自己课题的关系';
+  regeneratePaperCardButton.hidden = isReview;
+  savePaperCardPageButton.textContent = isReview ? '▣ 保存修改' : '▣ 保存卡片';
+  paperCardBackButton.setAttribute(
+    'aria-label',
+    isReview && paperCardReturnTarget === 'knowledge' ? '返回知识库' : '返回 PDF',
+  );
+}
+
+function clearPaperCardReviewState(): void {
+  editingPaperOverviewId = null;
+  paperCardReviewDocumentName = '';
+  paperCardReturnTarget = 'pdf';
+  setPaperCardPageMode('generate');
 }
 
 function resetPaperCardPageState(): void {
@@ -3114,7 +3519,8 @@ function resetPaperCardPageState(): void {
   paperCardFormElement.classList.remove('generating');
   regeneratePaperCardButton.disabled = false;
   setPaperCardPageStatus();
-  updatePaperCardDocumentName();
+  if (!editingPaperOverviewId) updatePaperCardDocumentName();
+  schedulePaperCardTextareaRefresh();
 }
 
 function getPaperOverviewPageNumbers(totalPages: number): number[] {
@@ -3223,17 +3629,38 @@ async function generatePaperOverviewCard(force = false): Promise<void> {
       authors: normalizePaperOverviewField(payload.authors),
       venueYear: normalizePaperOverviewField(payload.venue_year),
       researchArea: normalizePaperOverviewField(payload.research_area),
+      keywords: normalizePaperOverviewField(payload.keywords),
       oneSentenceSummary: normalizePaperOverviewField(payload.one_sentence_summary),
       researchProblem: normalizePaperOverviewField(payload.research_problem),
       coreInnovation: normalizePaperOverviewField(payload.core_innovation),
+      worthReading: normalizePaperOverviewField(payload.worth_reading),
+      problemSetup: normalizePaperOverviewField(payload.problem_setup),
+      researchGap: normalizePaperOverviewField(payload.research_gap),
+      whyImportant: normalizePaperOverviewField(payload.why_important),
+      topicTags: normalizePaperOverviewField(payload.topic_tags),
       methodOverview: normalizePaperOverviewField(payload.method_overview),
+      methodIntuition: normalizePaperOverviewField(payload.method_intuition),
+      methodSteps: normalizePaperOverviewField(payload.method_steps),
+      keyAssumptions: normalizePaperOverviewField(payload.key_assumptions),
+      notationGuide: normalizePaperOverviewField(payload.notation_guide),
       datasets: normalizePaperOverviewField(payload.datasets),
+      experimentSetup: normalizePaperOverviewField(payload.experiment_setup),
       metrics: normalizePaperOverviewField(payload.metrics),
       mainFindings: normalizePaperOverviewField(payload.main_findings),
+      strongestEvidence: normalizePaperOverviewField(payload.strongest_evidence),
+      comparisonWithPriorWork: normalizePaperOverviewField(payload.comparison_with_prior_work),
       limitations: normalizePaperOverviewField(payload.limitations),
       readingStatus: normalizePaperOverviewField(payload.reading_status),
       recommendDeepReading: normalizePaperOverviewField(payload.recommend_deep_reading),
+      readingDifficulty: normalizePaperOverviewField(payload.reading_difficulty),
+      readingValueScore: normalizePaperOverviewField(payload.reading_value_score),
+      readingAdvice: normalizePaperOverviewField(payload.reading_advice),
+      suitableStages: normalizePaperOverviewField(payload.suitable_stages),
+      prerequisites: normalizePaperOverviewField(payload.prerequisites),
       citationPoints: normalizePaperOverviewField(payload.citation_points),
+      researchConnection: normalizePaperOverviewField(payload.research_connection),
+      followupQuestions: normalizePaperOverviewField(payload.followup_questions),
+      weeklyPlan: normalizePaperOverviewField(payload.weekly_plan),
     });
 
     paperCardPageDocumentKey = documentKey;
@@ -3256,6 +3683,7 @@ async function generatePaperOverviewCard(force = false): Promise<void> {
 }
 
 function openPaperCardPage(): void {
+  clearPaperCardReviewState();
   knowledgeBasePageElement.hidden = true;
   appFrame?.classList.remove('knowledge-base-page-open');
   knowledgeBaseEntryButton.classList.remove('active');
@@ -3265,15 +3693,72 @@ function openPaperCardPage(): void {
   aiPanelToggleButton?.classList.remove('active');
   updatePaperCardDocumentName();
   paperCardPageElement.scrollTop = 0;
+  schedulePaperCardTextareaRefresh();
   void generatePaperOverviewCard();
 }
 
-function closePaperCardPage(): void {
+function openSavedPaperOverviewReview(item: KnowledgeItem): void {
+  if (item.source !== 'paper-overview') {
+    openKnowledgeEditor(item);
+    return;
+  }
+
+  const card = readSavedPaperOverviews().find((candidate) => candidate.id === item.id);
+  if (!card) {
+    setKnowledgePageStatus('这张论文卡片已经不存在，请刷新知识库后重试。', true);
+    renderKnowledgeBase();
+    return;
+  }
+
+  paperCardPageAbortController?.abort();
+  paperCardPageAbortController = null;
+  editingPaperOverviewId = card.id;
+  paperCardReviewDocumentName = card.documentName || item.documentName;
+  paperCardReturnTarget = 'knowledge';
+  paperCardPageDocumentKey = `saved:${card.id}`;
+  paperCardPageSourceCache = null;
+
+  knowledgeBasePageElement.hidden = true;
+  appFrame?.classList.remove('knowledge-base-page-open');
+  knowledgeBaseEntryButton.classList.add('active');
+  paperCardPageElement.hidden = false;
+  appFrame?.classList.add('paper-card-page-open');
+  paperCardEntryButton?.classList.add('active');
+  aiPanelToggleButton?.classList.remove('active');
+
+  setPaperCardPageMode('review');
+  updatePaperCardDocumentName();
+  renderPaperCardForm(card);
+  paperPersonalNotesInput.value = card.personalNotes || '';
+  setPaperCardPageStatus();
+  paperCardPageElement.scrollTop = 0;
+  schedulePaperCardTextareaRefresh();
+  persistCurrentAppViewState();
+}
+
+function closePaperCardPage(destination: 'pdf' | 'knowledge' = 'pdf'): void {
   paperCardPageAbortController?.abort();
   paperCardPageElement.hidden = true;
   appFrame?.classList.remove('paper-card-page-open');
   paperCardEntryButton?.classList.remove('active');
+
+  const returnToKnowledge = destination === 'knowledge';
+  clearPaperCardReviewState();
+
+  if (returnToKnowledge) {
+    knowledgeBasePageElement.hidden = false;
+    appFrame?.classList.add('knowledge-base-page-open');
+    knowledgeBaseEntryButton.classList.add('active');
+    aiPanelToggleButton?.classList.remove('active');
+    renderKnowledgeBase();
+    return;
+  }
+
+  knowledgeBasePageElement.hidden = true;
+  appFrame?.classList.remove('knowledge-base-page-open');
+  knowledgeBaseEntryButton.classList.remove('active');
   aiPanelToggleButton?.classList.add('active');
+  persistCurrentAppViewState();
 }
 
 function readSavedPaperOverviews(): SavedPaperOverview[] {
@@ -3292,14 +3777,41 @@ function savePaperOverviewCard(): void {
     return;
   }
 
+  const now = new Date().toISOString();
+  const cards = readSavedPaperOverviews();
+
+  if (editingPaperOverviewId) {
+    const existing = cards.find((card) => card.id === editingPaperOverviewId);
+    if (!existing) {
+      setPaperCardPageStatus('原论文卡片已经不存在，无法保存修改。', true);
+      return;
+    }
+
+    const updatedCards = cards.map((card) => card.id === editingPaperOverviewId
+      ? {
+          ...card,
+          ...data,
+          documentName: paperCardReviewDocumentName || card.documentName,
+          updatedAt: now,
+        }
+      : card);
+    localStorage.setItem(SAVED_PAPER_OVERVIEWS_STORAGE_KEY, JSON.stringify(updatedCards));
+    selectedKnowledgeRecordKey = getKnowledgeRecordKey('paper-overview', editingPaperOverviewId);
+    setPaperCardPageStatus(`已保存“${data.title || existing.documentName}”的复习修改。`);
+    return;
+  }
+
   const card: SavedPaperOverview = {
     id: crypto.randomUUID(),
     documentName: sourceName ? getDisplayFileName(sourceName) : '未命名论文',
     ...data,
-    createdAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   };
-  const cards = [card, ...readSavedPaperOverviews()].slice(0, 100);
-  localStorage.setItem(SAVED_PAPER_OVERVIEWS_STORAGE_KEY, JSON.stringify(cards));
+  localStorage.setItem(
+    SAVED_PAPER_OVERVIEWS_STORAGE_KEY,
+    JSON.stringify([card, ...cards].slice(0, 100)),
+  );
   refreshKnowledgeBaseIfOpen();
   setPaperCardPageStatus(`已保存“${data.title || card.documentName}”论文卡片。`);
 }
@@ -3311,33 +3823,78 @@ function formatPaperOverviewMarkdown(data: PaperCardFormData): string {
     `- 作者：${data.authors || '原文未明确出现'}`,
     `- 年份 / 会议 / 期刊：${data.venueYear || '原文未明确出现'}`,
     `- 研究领域：${data.researchArea || '原文未明确出现'}`,
+    `- 关键词：${data.keywords || '原文未明确出现'}`,
     '',
-    '## 核心内容',
-    '',
-    `**一句话总结：** ${data.oneSentenceSummary}`,
+    '## 一、速读判断',
     '',
     `**研究问题：** ${data.researchProblem}`,
     '',
-    `**核心创新：** ${data.coreInnovation}`,
+    `**一句话总结：** ${data.oneSentenceSummary}`,
+    '',
+    `**核心贡献：** ${data.coreInnovation}`,
+    '',
+    `**为什么值得读：** ${data.worthReading}`,
+    '',
+    '## 二、论文定位',
+    '',
+    `**问题设定：** ${data.problemSetup}`,
+    '',
+    `**研究空白 / 未解决的问题：** ${data.researchGap}`,
+    '',
+    `**为什么重要：** ${data.whyImportant}`,
+    '',
+    `**相关主题标签：** ${data.topicTags}`,
+    '',
+    '## 三、方法理解',
     '',
     `**方法概述：** ${data.methodOverview}`,
     '',
-    '## 实验与结论',
+    `**方法直觉：** ${data.methodIntuition}`,
+    '',
+    `**方法流程：** ${data.methodSteps}`,
+    '',
+    `**关键假设：** ${data.keyAssumptions}`,
+    '',
+    `**符号 / 术语速览：** ${data.notationGuide}`,
+    '',
+    '## 四、实验与证据',
     '',
     `**数据集：** ${data.datasets}`,
+    '',
+    `**实验设置：** ${data.experimentSetup}`,
     '',
     `**评估指标：** ${data.metrics}`,
     '',
     `**主要实验结论：** ${data.mainFindings}`,
     '',
+    `**最强证据：** ${data.strongestEvidence}`,
+    '',
+    `**与已有工作对比：** ${data.comparisonWithPriorWork}`,
+    '',
     `**局限性：** ${data.limitations}`,
     '',
-    '## 我的判断',
+    '## 五、阅读决策',
     '',
     `- 阅读状态：${data.readingStatus}`,
     `- 是否建议精读：${data.recommendDeepReading}`,
+    `- 阅读难度：${data.readingDifficulty}`,
+    `- 阅读价值评分：${data.readingValueScore}`,
+    '',
+    `**阅读建议：** ${data.readingAdvice}`,
+    '',
+    `**适合什么阶段阅读：** ${data.suitableStages}`,
+    '',
+    `**先修知识：** ${data.prerequisites}`,
+    '',
+    '## 六、和我的研究的关系',
     '',
     `**适合引用的点：** ${data.citationPoints}`,
+    '',
+    `**与我的课题关联：** ${data.researchConnection}`,
+    '',
+    `**后续追问 / 复现计划：** ${data.followupQuestions}`,
+    '',
+    `**本周阅读计划：** ${data.weeklyPlan}`,
     '',
     `**我的备注：** ${data.personalNotes}`,
   ].join('\n');
@@ -3516,10 +4073,13 @@ function collectKnowledgeItems(): KnowledgeItem[] {
   for (const card of readSavedPaperOverviews()) {
     if (!card || typeof card.id !== 'string') continue;
     const createdAt = typeof card.createdAt === 'string' ? card.createdAt : new Date().toISOString();
+    const updatedAt = typeof card.updatedAt === 'string' ? card.updatedAt : createdAt;
     const tags = normalizeKnowledgeTags([
       card.researchArea,
       card.readingStatus,
       card.recommendDeepReading,
+      card.keywords,
+      card.topicTags,
     ]);
     items.push(applyKnowledgeMeta({
       recordKey: getKnowledgeRecordKey('paper-overview', card.id),
@@ -3533,7 +4093,7 @@ function collectKnowledgeItems(): KnowledgeItem[] {
       category: card.researchArea?.trim() || '论文卡片',
       tags: tags.length ? tags : ['论文卡片'],
       createdAt,
-      updatedAt: createdAt,
+      updatedAt,
     }, metaStore));
   }
 
@@ -3610,12 +4170,256 @@ function setKnowledgeFilter(filter: KnowledgeFilter): void {
   renderKnowledgeBase();
 }
 
+
+function getKnowledgeBaseDocumentName(label: string): string {
+  return label.replace(/\.pdf$/i, '').trim();
+}
+
+function extractKnowledgeYear(item: KnowledgeItem): string {
+  const match = [item.title, item.documentName, item.content].join(' ').match(/20\d{2}/);
+  return match ? match[0] : '未标注';
+}
+
+function extractKnowledgeVenue(item: KnowledgeItem): string {
+  const text = [item.title, item.documentName, item.content].join(' ');
+  const venuePatterns = ['USENIX', 'CCS', 'NDSS', 'S&P', 'EUROCRYPT', 'CRYPTO', 'IEEE', 'ACM', 'AAAI', 'NeurIPS', 'ICML', 'ICLR', 'TDSC'];
+  for (const venue of venuePatterns) {
+    if (text.toUpperCase().includes(venue.toUpperCase())) return venue;
+  }
+  return item.category || '未分类';
+}
+
+function deriveKnowledgeReadingStatus(item: KnowledgeItem): string {
+  const joined = [item.category, ...item.tags, item.content].join(' ');
+  if (/精读中|建议精读|精读/.test(joined)) return '精读中';
+  if (/已读完|略读完成|读完|已完成/.test(joined)) return '已读完';
+  if (/略读/.test(joined)) return '略读完成';
+  if (/待读|待读/.test(joined)) return '待读';
+  if (item.kind === 'paper-card') return '精读中';
+  if (item.kind === 'reading-card') return '略读完成';
+  return '待读';
+}
+
+function deriveKnowledgePriority(item: KnowledgeItem): string {
+  const joined = [item.category, ...item.tags, item.content].join(' ');
+  if (/高优先级|建议精读|核心|必读/.test(joined)) return '高优先级';
+  if (/中优先级|推荐/.test(joined)) return '中优先级';
+  return '常规';
+}
+
+function isKnowledgeCitable(item: KnowledgeItem): boolean {
+  const joined = [item.category, ...item.tags, item.content].join(' ');
+  return /可引用|适合引用|引用价值|引用点|研究贡献/.test(joined) || item.kind === 'paper-card';
+}
+
+function isKnowledgeReplicable(item: KnowledgeItem): boolean {
+  const joined = [item.category, ...item.tags, item.content].join(' ');
+  return /复现|实验|代码|benchmark|性能评估/i.test(joined);
+}
+
+function isKnowledgeRelatedWork(item: KnowledgeItem): boolean {
+  const joined = [item.category, ...item.tags, item.content].join(' ');
+  return /相关工作|综述|survey|背景/.test(joined);
+}
+
+function isKnowledgeMethodInspiration(item: KnowledgeItem): boolean {
+  const joined = [item.category, ...item.tags, item.content].join(' ');
+  return /方法|思路|灵感|idea|启发|框架|设计/.test(joined) || item.kind === 'reading-card';
+}
+
+function matchesKnowledgeFocus(item: KnowledgeItem, focus: KnowledgeFocus): boolean {
+  if (focus === 'all') return true;
+  const status = deriveKnowledgeReadingStatus(item);
+  if (focus === 'todo') return status === '待读';
+  if (focus === 'deep') return status === '精读中';
+  if (focus === 'finished') return status === '已读完' || status === '略读完成';
+  if (focus === 'citable') return isKnowledgeCitable(item);
+  if (focus === 'replicate') return isKnowledgeReplicable(item);
+  if (focus === 'related') return isKnowledgeRelatedWork(item);
+  if (focus === 'methods') return isKnowledgeMethodInspiration(item);
+  return true;
+}
+
+function getKnowledgeCitationScore(item: KnowledgeItem): number {
+  const base = item.kind === 'paper-card' ? 4.2 : item.kind === 'reading-card' ? 3.9 : 3.6;
+  const bonus = Math.min(0.7, item.tags.length * 0.08 + (isKnowledgeCitable(item) ? 0.25 : 0));
+  return Math.min(5, Math.round((base + bonus) * 10) / 10);
+}
+
+function getKnowledgeRelevancePercent(item: KnowledgeItem): number {
+  const base = item.kind === 'paper-card' ? 78 : item.kind === 'reading-card' ? 72 : 65;
+  const bonus = Math.min(20, item.tags.length * 3 + Math.min(12, Math.floor(item.content.length / 120)));
+  return Math.min(98, base + bonus);
+}
+
+function getKnowledgeExcerptForDashboard(item: KnowledgeItem): string {
+  const excerpt = getKnowledgeExcerpt(item.content).replace(/\s+/g, ' ').trim();
+  return excerpt || '暂无摘要内容';
+}
+
+function createRatingStars(value: number): string {
+  const full = Math.round(value);
+  return '★'.repeat(Math.max(0, Math.min(5, full))) + '☆'.repeat(Math.max(0, 5 - full));
+}
+
+function updateKnowledgeItemTags(item: KnowledgeItem, updater: (tags: string[]) => string[]): void {
+  const now = new Date().toISOString();
+  const nextTags = normalizeKnowledgeTags(updater([...item.tags]));
+  if (item.source === 'knowledge-note') {
+    const notes = readSavedKnowledgeNotes().map((note) => note.id === item.id
+      ? { ...note, tags: nextTags, updatedAt: now }
+      : note);
+    writeSavedKnowledgeNotes(notes);
+  } else {
+    const metaStore = readKnowledgeItemMetaStore();
+    metaStore[item.recordKey] = {
+      ...(metaStore[item.recordKey] || {}),
+      tags: nextTags,
+      updatedAt: now,
+    };
+    writeKnowledgeItemMetaStore(metaStore);
+  }
+}
+
+function toggleKnowledgeSemanticTag(item: KnowledgeItem, tag: string): void {
+  const exists = item.tags.includes(tag);
+  updateKnowledgeItemTags(item, (tags) => exists ? tags.filter((candidate) => candidate !== tag) : [...tags, tag]);
+  setKnowledgePageStatus(exists ? `已取消“${tag}”。` : `已标记为“${tag}”。`);
+  renderKnowledgeBase();
+}
+
+function renderKnowledgeMetricCards(items: KnowledgeItem[], filtered: KnowledgeItem[]): void {
+  if (!knowledgeDashboardMetricsElement) return;
+  const now = Date.now();
+  const withinWeek = filtered.filter((item) => now - new Date(item.updatedAt).getTime() <= 7 * 24 * 60 * 60 * 1000);
+  const metrics = [
+    { icon: '📘', title: '本周精读', value: String(withinWeek.filter((item) => deriveKnowledgeReadingStatus(item) === '精读中').length), unit: '篇', hint: `本周更新 ${withinWeek.length}` },
+    { icon: '❝', title: '可引用论文', value: String(filtered.filter(isKnowledgeCitable).length), unit: '篇', hint: '适合写相关工作/论文引用' },
+    { icon: '⚗', title: '待复现实验', value: String(filtered.filter(isKnowledgeReplicable).length), unit: '篇', hint: '建议整理代码与实验清单' },
+    { icon: '💡', title: '研究灵感', value: String(filtered.filter(isKnowledgeMethodInspiration).length), unit: '条', hint: '方法、设计与启发' },
+    { icon: '🗂', title: '知识库总量', value: String(items.length), unit: '条', hint: `覆盖 ${new Set(items.map((item) => item.documentName)).size} 篇文档` },
+  ];
+  const cards = metrics.map((metric) => {
+    const article = document.createElement('article');
+    article.className = 'knowledge-metric-card';
+    article.innerHTML = `
+      <div class="knowledge-metric-icon" aria-hidden="true">${metric.icon}</div>
+      <div class="knowledge-metric-body">
+        <span>${metric.title}</span>
+        <strong>${metric.value}<em>${metric.unit}</em></strong>
+        <small>${metric.hint}</small>
+      </div>
+    `;
+    return article;
+  });
+  knowledgeDashboardMetricsElement.replaceChildren(...cards);
+}
+
+function renderKnowledgeStudentPanels(filtered: KnowledgeItem[]): void {
+  if (knowledgeStudentWorkbenchElement) {
+    const cards = [
+      { title: '必读清单', desc: '把高价值、与研究方向高度相关的论文先排出来。', count: filtered.filter((item) => deriveKnowledgePriority(item) === '高优先级').length, label: '待完成' },
+      { title: '可引用观点', desc: '优先收集可直接写进相关工作和论文背景的观点。', count: filtered.filter(isKnowledgeCitable).length, label: '可引用' },
+      { title: '方法对比', desc: '比较方法假设、性能、适用场景与局限。', count: Math.max(1, Math.min(filtered.length, new Set(filtered.map((item) => item.category)).size)), label: '待对比' },
+      { title: '复现实验计划', desc: '把需要复现的论文转成实验任务清单。', count: filtered.filter(isKnowledgeReplicable).length, label: '进行中' },
+    ];
+    const workbench = cards.map((card) => {
+      const article = document.createElement('article');
+      article.className = 'knowledge-workbench-card';
+      article.innerHTML = `
+        <strong>${card.title}</strong>
+        <p>${card.desc}</p>
+        <footer><span>${card.label} ${card.count}</span><button type="button">→</button></footer>
+      `;
+      return article;
+    });
+    knowledgeStudentWorkbenchElement.replaceChildren(...workbench);
+  }
+
+  if (knowledgeWeeklyTasksElement) {
+    const tasks = [
+      { title: '精读 3 篇论文并完成笔记', current: Math.min(3, filtered.filter((item) => deriveKnowledgeReadingStatus(item) === '精读中').length), total: 3 },
+      { title: '整理可引用观点', current: Math.min(10, filtered.filter(isKnowledgeCitable).length), total: 10 },
+      { title: '复现实验：补齐实验计划', current: Math.min(2, filtered.filter(isKnowledgeReplicable).length), total: 2 },
+      { title: '更新相关工作综述', current: Math.min(1, filtered.filter(isKnowledgeRelatedWork).length), total: 1 },
+    ];
+    const nodes = tasks.map((task) => {
+      const row = document.createElement('div');
+      row.className = 'knowledge-task-row';
+      const percent = task.total ? Math.max(0, Math.min(100, Math.round(task.current / task.total * 100))) : 0;
+      row.innerHTML = `
+        <div class="knowledge-task-copy">
+          <label><input type="checkbox" ${task.current >= task.total ? 'checked' : ''} /> <span>${task.title}</span></label>
+          <small>${task.current}/${task.total}</small>
+        </div>
+        <div class="knowledge-task-progress"><span style="width:${percent}%"></span></div>
+      `;
+      return row;
+    });
+    knowledgeWeeklyTasksElement.replaceChildren(...nodes);
+  }
+}
+
+function syncKnowledgeFocusCounts(items: KnowledgeItem[]): void {
+  if (knowledgeFocusCountTodoElement) knowledgeFocusCountTodoElement.textContent = String(items.filter((item) => matchesKnowledgeFocus(item, 'todo')).length);
+  if (knowledgeFocusCountDeepElement) knowledgeFocusCountDeepElement.textContent = String(items.filter((item) => matchesKnowledgeFocus(item, 'deep')).length);
+  if (knowledgeFocusCountFinishedElement) knowledgeFocusCountFinishedElement.textContent = String(items.filter((item) => matchesKnowledgeFocus(item, 'finished')).length);
+  if (knowledgeFocusCountCitableElement) knowledgeFocusCountCitableElement.textContent = String(items.filter((item) => matchesKnowledgeFocus(item, 'citable')).length);
+  if (knowledgeFocusCountReplicateElement) knowledgeFocusCountReplicateElement.textContent = String(items.filter((item) => matchesKnowledgeFocus(item, 'replicate')).length);
+  if (knowledgeFocusCountRelatedElement) knowledgeFocusCountRelatedElement.textContent = String(items.filter((item) => matchesKnowledgeFocus(item, 'related')).length);
+  if (knowledgeFocusCountMethodsElement) knowledgeFocusCountMethodsElement.textContent = String(items.filter((item) => matchesKnowledgeFocus(item, 'methods')).length);
+  for (const button of knowledgeFocusButtons) {
+    const focus = button.dataset.knowledgeFocus as KnowledgeFocus | undefined;
+    button.classList.toggle('active', focus === activeKnowledgeFocus);
+  }
+}
+
+function populateKnowledgeDashboardFilters(items: KnowledgeItem[]): void {
+  const syncSelect = (select: HTMLSelectElement | null, current: string, fallbackLabel: string, values: string[]): void => {
+    if (!select) return;
+    const previous = current;
+    select.innerHTML = '';
+    const allOption = document.createElement('option');
+    allOption.value = 'all';
+    allOption.textContent = fallbackLabel;
+    select.append(allOption);
+    for (const value of values) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      select.append(option);
+    }
+    if (values.includes(previous)) select.value = previous;
+    else select.value = 'all';
+  };
+
+  const years = Array.from(new Set(items.map(extractKnowledgeYear).filter((value) => value && value !== '未标注'))).sort((a, b) => Number(b) - Number(a));
+  const venues = Array.from(new Set(items.map(extractKnowledgeVenue).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  const statuses = ['待读', '精读中', '已读完', '略读完成'];
+  const priorities = ['高优先级', '中优先级', '常规'];
+
+  syncSelect(knowledgeYearFilterSelect, activeKnowledgeYear, '年份', years);
+  syncSelect(knowledgeVenueFilterSelect, activeKnowledgeVenue, '会议/期刊', venues);
+  syncSelect(knowledgeReadingStatusFilterSelect, activeKnowledgeReadingStatus, '阅读状态', statuses);
+  syncSelect(knowledgePriorityFilterSelect, activeKnowledgePriority, '优先级', priorities);
+
+  activeKnowledgeYear = knowledgeYearFilterSelect?.value || 'all';
+  activeKnowledgeVenue = knowledgeVenueFilterSelect?.value || 'all';
+  activeKnowledgeReadingStatus = knowledgeReadingStatusFilterSelect?.value || 'all';
+  activeKnowledgePriority = knowledgePriorityFilterSelect?.value || 'all';
+}
+
 function getFilteredKnowledgeItems(items: KnowledgeItem[]): KnowledgeItem[] {
   const query = knowledgeSearchInput.value.trim().toLocaleLowerCase('zh-CN');
   const filtered = items.filter((item) => {
     if (activeKnowledgeFilter !== 'all' && item.kind !== activeKnowledgeFilter) return false;
     if (activeKnowledgeCategory !== 'all' && item.category !== activeKnowledgeCategory) return false;
     if (activeKnowledgeTag && !item.tags.includes(activeKnowledgeTag)) return false;
+    if (!matchesKnowledgeFocus(item, activeKnowledgeFocus)) return false;
+    if (activeKnowledgeYear !== 'all' && extractKnowledgeYear(item) !== activeKnowledgeYear) return false;
+    if (activeKnowledgeVenue !== 'all' && extractKnowledgeVenue(item) !== activeKnowledgeVenue) return false;
+    if (activeKnowledgeReadingStatus !== 'all' && deriveKnowledgeReadingStatus(item) !== activeKnowledgeReadingStatus) return false;
+    if (activeKnowledgePriority !== 'all' && deriveKnowledgePriority(item) !== activeKnowledgePriority) return false;
     if (!query) return true;
     const haystack = [
       item.title,
@@ -3623,6 +4427,8 @@ function getFilteredKnowledgeItems(items: KnowledgeItem[]): KnowledgeItem[] {
       item.documentName,
       item.positionLabel,
       item.category,
+      extractKnowledgeVenue(item),
+      extractKnowledgeYear(item),
       ...item.tags,
     ].join('\n').toLocaleLowerCase('zh-CN');
     return haystack.includes(query);
@@ -3714,18 +4520,31 @@ function renderKnowledgeSidebar(items: KnowledgeItem[]): void {
 
 function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
   const card = document.createElement('article');
-  card.className = `knowledge-item-card kind-${item.kind}`;
-  card.classList.toggle('selected', item.recordKey === selectedKnowledgeRecordKey);
+  card.className = `knowledge-item-card knowledge-dashboard-card kind-${item.kind}`;
   card.classList.toggle('selected-for-research', selectedKnowledgeResearchKeys.has(item.recordKey));
   card.dataset.recordKey = item.recordKey;
   card.tabIndex = 0;
-  card.setAttribute('role', 'button');
+
+  const status = deriveKnowledgeReadingStatus(item);
+  const priority = deriveKnowledgePriority(item);
+  const citationScore = getKnowledgeCitationScore(item);
+  const relevance = getKnowledgeRelevancePercent(item);
+  const venue = extractKnowledgeVenue(item);
+  const year = extractKnowledgeYear(item);
+  const excerpt = getKnowledgeExcerptForDashboard(item);
 
   const top = document.createElement('div');
   top.className = 'knowledge-item-card-top';
-  const kind = document.createElement('span');
-  kind.className = 'knowledge-card-kind';
-  kind.textContent = `${getKnowledgeKindIcon(item.kind)} ${getKnowledgeKindLabel(item.kind)}`;
+
+  const badges = document.createElement('div');
+  badges.className = 'knowledge-card-badges';
+  const statusBadge = document.createElement('span');
+  statusBadge.className = `knowledge-badge status-${status === '精读中' ? 'deep' : status === '已读完' || status === '略读完成' ? 'done' : 'todo'}`;
+  statusBadge.textContent = status;
+  const priorityBadge = document.createElement('span');
+  priorityBadge.className = `knowledge-badge priority-${priority === '高优先级' ? 'high' : priority === '中优先级' ? 'medium' : 'normal'}`;
+  priorityBadge.textContent = priority;
+  badges.append(statusBadge, priorityBadge);
 
   const meta = document.createElement('div');
   meta.className = 'knowledge-card-meta';
@@ -3751,38 +4570,86 @@ function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
     updateKnowledgeResearchScopeSummary();
   });
   meta.append(time, selectionLabel);
-  top.append(kind, meta);
+  top.append(badges, meta);
 
   const title = document.createElement('strong');
   title.className = 'knowledge-card-title';
   title.textContent = item.title;
 
-  const excerpt = document.createElement('p');
-  excerpt.className = 'knowledge-card-excerpt';
-  excerpt.textContent = getKnowledgeExcerpt(item.content) || '暂无正文内容';
+  const subtitle = document.createElement('div');
+  subtitle.className = 'knowledge-card-subtitle';
+  subtitle.textContent = `${venue} ${year !== '未标注' ? year : ''} · ${getKnowledgeBaseDocumentName(item.documentName)}`.trim();
 
-  const source = document.createElement('div');
-  source.className = 'knowledge-card-source';
-  source.textContent = `来源：${item.documentName}${item.pageNumber ? ` · 第 ${item.pageNumber} 页` : ''}`;
+  const excerptElement = document.createElement('p');
+  excerptElement.className = 'knowledge-card-excerpt';
+  excerptElement.textContent = excerpt;
 
   const tags = document.createElement('div');
   tags.className = 'knowledge-card-tags';
-  for (const tag of item.tags.slice(0, 3)) {
+  for (const tag of item.tags.slice(0, 4)) {
     const tagElement = document.createElement('span');
-    tagElement.textContent = `#${tag}`;
+    tagElement.textContent = `# ${tag}`;
     tags.append(tagElement);
   }
 
-  card.append(top, title, excerpt, source, tags);
-  const openDetail = (): void => {
-    selectedKnowledgeRecordKey = item.recordKey;
-    renderKnowledgeBase();
-  };
-  card.addEventListener('click', openDetail);
+  const metrics = document.createElement('div');
+  metrics.className = 'knowledge-card-metrics';
+  metrics.innerHTML = `
+    <div><span>引用价值</span><strong>${createRatingStars(citationScore)} <em>${citationScore.toFixed(1)}</em></strong></div>
+    <div><span>研究关联度</span><strong>${relevance}%</strong></div>
+    <div><span>最近复习</span><strong>${formatKnowledgeRelativeDate(item.updatedAt)}</strong></div>
+  `;
+
+  const actions = document.createElement('div');
+  actions.className = 'knowledge-card-actions';
+
+  const primaryButton = document.createElement('button');
+  primaryButton.type = 'button';
+  primaryButton.className = 'knowledge-card-primary-button';
+  primaryButton.textContent = item.source === 'paper-overview' ? '打开复习页' : '查看详情';
+  primaryButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (item.source === 'paper-overview') openSavedPaperOverviewReview(item);
+    else openKnowledgeEditor(item);
+  });
+
+  const secondButton = document.createElement('button');
+  secondButton.type = 'button';
+  secondButton.textContent = '查看卡片';
+  secondButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (item.source === 'paper-overview') openSavedPaperOverviewReview(item);
+    else openKnowledgeEditor(item);
+  });
+
+  const replicateButton = document.createElement('button');
+  replicateButton.type = 'button';
+  replicateButton.textContent = isKnowledgeReplicable(item) ? '已加入复现' : '加入复现';
+  replicateButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleKnowledgeSemanticTag(item, '待复现');
+  });
+
+  const citeButton = document.createElement('button');
+  citeButton.type = 'button';
+  citeButton.textContent = isKnowledgeCitable(item) ? '已标记可引用' : '标记可引用';
+  citeButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleKnowledgeSemanticTag(item, '可引用');
+  });
+
+  actions.append(primaryButton, secondButton, replicateButton, citeButton);
+  card.append(top, title, subtitle, excerptElement, tags, metrics, actions);
+
+  card.addEventListener('dblclick', () => {
+    if (item.source === 'paper-overview') openSavedPaperOverviewReview(item);
+    else openKnowledgeEditor(item);
+  });
   card.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === 'Enter') {
       event.preventDefault();
-      openDetail();
+      if (item.source === 'paper-overview') openSavedPaperOverviewReview(item);
+      else openKnowledgeEditor(item);
     }
   });
   return card;
@@ -3902,6 +4769,10 @@ function renderKnowledgeDetail(items: KnowledgeItem[], item: KnowledgeItem | und
   });
   knowledgeDetailTagsElement.replaceChildren(...tags);
   renderKnowledgeBody(item.content);
+  knowledgeEditItemButton.textContent = item.source === 'paper-overview' ? '打开复习页' : '编辑内容';
+  knowledgeEditItemButton.title = item.source === 'paper-overview'
+    ? '打开完整论文卡片页面进行复习和修改'
+    : '编辑当前知识内容';
 
   const related = items.filter(
     (candidate) => candidate.recordKey !== item.recordKey && candidate.documentName === item.documentName,
@@ -3953,6 +4824,7 @@ function setKnowledgePageMode(mode: KnowledgePageMode): void {
     knowledgePageTitleElement.textContent = getKnowledgeFilterLabel(activeKnowledgeFilter);
   }
   updateKnowledgeResearchScopeSummary();
+  persistCurrentAppViewState();
 }
 
 function getKnowledgeResearchScopeItems(): KnowledgeItem[] {
@@ -4189,12 +5061,23 @@ function renderKnowledgeBase(): void {
     Array.from(selectedKnowledgeResearchKeys).filter((key) => validKeys.has(key)),
   );
   renderKnowledgeSidebar(items);
+  populateKnowledgeDashboardFilters(items);
+  syncKnowledgeFocusCounts(items);
   const filtered = getFilteredKnowledgeItems(items);
+  if (knowledgePageSubtitleElement) {
+    knowledgePageSubtitleElement.textContent = activeKnowledgeFocus === 'all'
+      ? '管理你的文献笔记、论文卡片与综述准备，一站式助力高效科研。'
+      : '聚焦当前阅读目标，优先处理最值得研究生投入时间的文献内容。';
+  }
+  knowledgePageTitleElement.textContent = '研究知识库';
   knowledgeTotalCountElement.textContent = String(filtered.length);
   knowledgeDocumentCountElement.textContent = String(new Set(filtered.map((item) => item.documentName)).size);
+  renderKnowledgeMetricCards(items, filtered);
   renderKnowledgeList(filtered);
+  renderKnowledgeStudentPanels(filtered);
   setKnowledgePageMode(activeKnowledgePageMode);
   updateKnowledgeResearchScopeSummary();
+  persistCurrentAppViewState();
 }
 
 function refreshKnowledgeBaseIfOpen(): void {
@@ -4219,6 +5102,7 @@ function closeKnowledgeBasePage(): void {
   appFrame?.classList.remove('knowledge-base-page-open');
   knowledgeBaseEntryButton.classList.remove('active');
   aiPanelToggleButton?.classList.add('active');
+  persistCurrentAppViewState();
 }
 
 function getSelectedKnowledgeItem(): KnowledgeItem | undefined {
@@ -6171,7 +7055,14 @@ closeDeepSeekSettingsButton.addEventListener('click', () => {
 
 saveDeepSeekSettingsButton.addEventListener('click', () => {
   void saveDeepSeekConfig().then((saved) => {
-    if (saved && pdfDocument && readingModePreference === 'auto') void detectReadingMode(true);
+    if (!saved) return;
+
+    setDeepSeekSettingsOpen(false);
+    showSettingsSavedFeedback();
+
+    if (pdfDocument && readingModePreference === 'auto') {
+      void detectReadingMode(true);
+    }
   });
 });
 
@@ -6226,6 +7117,8 @@ for (const button of aiTabButtons) {
     if (tabName) activateAiTab(tabName);
   });
 }
+
+bindPaperCardTextareaAutoResize();
 
 paperCardEntryButton?.addEventListener('click', openPaperCardPage);
 knowledgeBaseEntryButton.addEventListener('click', openKnowledgeBasePage);
@@ -6282,7 +7175,64 @@ knowledgeImportInput.addEventListener('change', () => {
 });
 knowledgeSearchInput.addEventListener('input', renderKnowledgeBase);
 knowledgeSortSelect.addEventListener('change', renderKnowledgeBase);
+
+let appViewStateSaveTimer: number | undefined;
+function scheduleAppViewStateSave(): void {
+  if (appViewStateSaveTimer !== undefined) window.clearTimeout(appViewStateSaveTimer);
+  appViewStateSaveTimer = window.setTimeout(() => {
+    persistCurrentAppViewState();
+    appViewStateSaveTimer = undefined;
+  }, 160);
+}
+
+knowledgeMainElement.addEventListener('scroll', scheduleAppViewStateSave, { passive: true });
+paperCardPageElement.addEventListener('scroll', scheduleAppViewStateSave, { passive: true });
+knowledgeResearchQuestionInput.addEventListener('input', scheduleAppViewStateSave);
+knowledgeInsightQuestionInput.addEventListener('input', scheduleAppViewStateSave);
+knowledgeResearchScopeSelect.addEventListener('change', persistCurrentAppViewState);
 knowledgeGroupSelect.addEventListener('change', renderKnowledgeBase);
+knowledgeYearFilterSelect?.addEventListener('change', () => {
+  activeKnowledgeYear = knowledgeYearFilterSelect.value;
+  renderKnowledgeBase();
+});
+knowledgeVenueFilterSelect?.addEventListener('change', () => {
+  activeKnowledgeVenue = knowledgeVenueFilterSelect.value;
+  renderKnowledgeBase();
+});
+knowledgeReadingStatusFilterSelect?.addEventListener('change', () => {
+  activeKnowledgeReadingStatus = knowledgeReadingStatusFilterSelect.value;
+  renderKnowledgeBase();
+});
+knowledgePriorityFilterSelect?.addEventListener('change', () => {
+  activeKnowledgePriority = knowledgePriorityFilterSelect.value;
+  renderKnowledgeBase();
+});
+knowledgeClearFiltersButton?.addEventListener('click', () => {
+  activeKnowledgeYear = 'all';
+  activeKnowledgeVenue = 'all';
+  activeKnowledgeReadingStatus = 'all';
+  activeKnowledgePriority = 'all';
+  activeKnowledgeCategory = 'all';
+  activeKnowledgeTag = '';
+  activeKnowledgeFocus = 'all';
+  knowledgeSearchInput.value = '';
+  if (knowledgeYearFilterSelect) knowledgeYearFilterSelect.value = 'all';
+  if (knowledgeVenueFilterSelect) knowledgeVenueFilterSelect.value = 'all';
+  if (knowledgeReadingStatusFilterSelect) knowledgeReadingStatusFilterSelect.value = 'all';
+  if (knowledgePriorityFilterSelect) knowledgePriorityFilterSelect.value = 'all';
+  renderKnowledgeBase();
+});
+for (const button of knowledgeFocusButtons) {
+  button.addEventListener('click', () => {
+    const focus = button.dataset.knowledgeFocus as KnowledgeFocus | undefined;
+    if (!focus) return;
+    activeKnowledgeFocus = focus;
+    renderKnowledgeBase();
+  });
+}
+knowledgeBatchOrganizeButton?.addEventListener('click', () => {
+  setKnowledgePageStatus('已切换到研究型知识库视图。后续可以继续扩展批量整理逻辑。');
+});
 for (const button of knowledgeFilterButtons) {
   button.addEventListener('click', () => {
     const filter = button.dataset.knowledgeFilter as KnowledgeFilter | undefined;
@@ -6296,7 +7246,12 @@ knowledgeDetailCloseButton.addEventListener('click', () => {
 knowledgeOpenSourceButton.addEventListener('click', openSelectedKnowledgeSource);
 knowledgeEditItemButton.addEventListener('click', () => {
   const item = getSelectedKnowledgeItem();
-  if (item) openKnowledgeEditor(item);
+  if (!item) return;
+  if (item.source === 'paper-overview') {
+    openSavedPaperOverviewReview(item);
+    return;
+  }
+  openKnowledgeEditor(item);
 });
 knowledgeDeleteItemButton.addEventListener('click', deleteSelectedKnowledgeItem);
 knowledgeEditorCloseButton.addEventListener('click', closeKnowledgeEditor);
@@ -6308,8 +7263,8 @@ knowledgeEditorForm.addEventListener('submit', (event) => {
   event.preventDefault();
   saveKnowledgeEditor();
 });
-paperCardBackButton.addEventListener('click', closePaperCardPage);
-returnToPdfButton.addEventListener('click', closePaperCardPage);
+paperCardBackButton.addEventListener('click', () => closePaperCardPage(paperCardReturnTarget));
+returnToPdfButton.addEventListener('click', () => closePaperCardPage('pdf'));
 regeneratePaperCardButton.addEventListener('click', () => {
   paperCardPageDocumentKey = '';
   void generatePaperOverviewCard(true);
@@ -6812,11 +7767,13 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     cancelReadingPositionSave();
     void persistCurrentReadingPosition();
+    persistCurrentAppViewState();
   }
 });
 window.addEventListener('beforeunload', (event) => {
   cancelReadingPositionSave();
   void persistCurrentReadingPosition();
+  persistCurrentAppViewState();
   if (!hasUnsavedChanges) return;
   event.preventDefault();
   event.returnValue = '';
@@ -6865,6 +7822,7 @@ updateChatContextPreview();
 updateReadingModeUi();
 void loadDeepSeekConfig();
 textStatus.textContent = '交互已就绪';
+restoreAppViewAfterRefresh();
 
 const source = new URLSearchParams(window.location.search).get('src');
 if (source?.startsWith('http://') || source?.startsWith('https://')) {

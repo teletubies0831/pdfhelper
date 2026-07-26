@@ -14,7 +14,7 @@
 
   <div class="toolbar-menu" data-toolbar-menu>
     <button
-      class="toolbar-pill toolbar-menu-trigger"
+      class="toolbar-pill toolbar-menu-trigger toolbar-nav-button toolbar-file-button"
       type="button"
       aria-haspopup="menu"
       aria-expanded="false"
@@ -55,7 +55,7 @@
   </div>
   <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" />
 
-  <button id="outline-toggle" class="toolbar-pill" type="button" title="左侧目录面板">
+  <button id="outline-toggle" class="toolbar-pill toolbar-nav-button toolbar-outline-button" type="button" title="左侧目录面板">
     <span class="toolbar-icon">☰</span>
     目录
   </button>
@@ -74,7 +74,7 @@
 
   <div class="toolbar-menu annotation-tools" data-toolbar-menu>
     <button
-      class="toolbar-pill toolbar-menu-trigger"
+      class="toolbar-pill toolbar-menu-trigger toolbar-nav-button toolbar-annotation-button"
       type="button"
       aria-haspopup="menu"
       aria-expanded="false"
@@ -124,7 +124,7 @@
 
   <div class="toolbar-menu ai-tools-menu" data-toolbar-menu>
     <button
-      class="toolbar-pill toolbar-menu-trigger"
+      class="toolbar-pill toolbar-menu-trigger toolbar-nav-button toolbar-ai-button"
       type="button"
       aria-haspopup="menu"
       aria-expanded="false"
@@ -155,7 +155,7 @@
   <div id="document-name" class="document-name" title="尚未打开文件">尚未打开文件</div>
   <button
     id="ai-settings-button"
-    class="toolbar-icon-button toolbar-settings-button"
+    class="toolbar-icon-button toolbar-settings-button toolbar-nav-button"
     type="button"
     title="AI 设置"
     aria-label="打开 AI 设置"
@@ -164,12 +164,12 @@
   </button>
 </header>
 
-      <section id="paper-card-page" class="paper-card-page" hidden aria-label="生成论文卡片页面">
+            <section id="paper-card-page" class="paper-card-page" hidden aria-label="生成论文卡片页面">
         <div class="paper-card-page-header">
           <button id="paper-card-back" class="paper-card-back" type="button" aria-label="返回 PDF">←</button>
           <div>
-            <h1>生成论文卡片页面</h1>
-            <p>提炼论文关键信息，结构化记录，便于后续写作与复用</p>
+            <h1 id="paper-card-page-title">生成论文卡片页面</h1>
+            <p id="paper-card-page-subtitle">面向研究生论文阅读：先判断值不值得读，再理解方法、证据与和自己课题的关系</p>
           </div>
         </div>
 
@@ -190,108 +190,221 @@
           <div id="paper-card-page-status" class="paper-card-page-status" hidden aria-live="polite"></div>
 
           <form id="paper-card-form" class="paper-card-form">
-            <section class="paper-card-form-section">
-              <h2><span aria-hidden="true">▱</span> 论文基本信息</h2>
-              <div class="paper-card-field-grid two-columns">
-                <label>
-                  <span>标题：</span>
-                  <input id="paper-title" name="title" type="text" placeholder="请输入论文标题" />
-                </label>
-                <label>
-                  <span>作者：</span>
-                  <input id="paper-authors" name="authors" type="text" placeholder="请输入作者" />
-                </label>
-                <label>
-                  <span>年份 / 会议 / 期刊：</span>
-                  <input id="paper-venue-year" name="venueYear" type="text" placeholder="请输入年份 / 会议 / 期刊" />
-                </label>
-                <label>
-                  <span>研究领域：</span>
-                  <input id="paper-research-area" name="researchArea" type="text" placeholder="请输入研究领域" />
-                </label>
-              </div>
-            </section>
+            <div class="paper-card-layout">
+              <div class="paper-card-main">
+                <section class="paper-card-form-section">
+                  <h2><span aria-hidden="true">▱</span> 论文概览</h2>
+                  <div class="paper-card-field-grid two-columns">
+                    <label class="full-width">
+                      <span>标题：</span>
+                      <input id="paper-title" name="title" type="text" placeholder="请输入论文标题" />
+                    </label>
+                    <label class="full-width">
+                      <span>作者：</span>
+                      <input id="paper-authors" name="authors" type="text" placeholder="请输入作者" />
+                    </label>
+                    <label>
+                      <span>年份 / 会议 / 期刊：</span>
+                      <input id="paper-venue-year" name="venueYear" type="text" placeholder="例如 NDSS 2026 / NeurIPS 2024" />
+                    </label>
+                    <label>
+                      <span>研究领域：</span>
+                      <input id="paper-research-area" name="researchArea" type="text" placeholder="例如 密码学 / 大模型 / 计算机视觉" />
+                    </label>
+                    <label class="full-width">
+                      <span>关键词：</span>
+                      <input id="paper-keywords" name="keywords" type="text" placeholder="建议使用逗号分隔，例如 OPRF, MPC, Differential Privacy" />
+                    </label>
+                  </div>
+                </section>
 
-            <section class="paper-card-form-section">
-              <h2><span aria-hidden="true">♙</span> 核心内容</h2>
-              <div class="paper-card-field-grid">
-                <label>
-                  <span>一句话总结：</span>
-                  <textarea id="paper-one-sentence-summary" name="oneSentenceSummary" rows="2" placeholder="用一句话概括论文的核心内容"></textarea>
-                </label>
-                <label>
-                  <span>研究问题：</span>
-                  <textarea id="paper-research-problem" name="researchProblem" rows="2" placeholder="论文试图解决的关键问题是什么？"></textarea>
-                </label>
-                <label>
-                  <span>核心创新：</span>
-                  <textarea id="paper-core-innovation" name="coreInnovation" rows="2" placeholder="论文的主要创新有哪些？"></textarea>
-                </label>
-                <label>
-                  <span>方法概述：</span>
-                  <textarea id="paper-method-overview" name="methodOverview" rows="2" placeholder="论文采用了怎样的方法或技术路线？"></textarea>
-                </label>
-              </div>
-            </section>
+                <section class="paper-card-form-section">
+                  <h2><span aria-hidden="true">①</span> 速读判断：先看这篇值不值得读</h2>
+                  <div class="paper-card-field-grid two-columns">
+                    <label>
+                      <span>研究问题：</span>
+                      <textarea id="paper-research-problem" name="researchProblem" rows="1" placeholder="论文试图解决的关键问题是什么？"></textarea>
+                    </label>
+                    <label>
+                      <span>一句话总结：</span>
+                      <textarea id="paper-one-sentence-summary" name="oneSentenceSummary" rows="1" placeholder="用一句话概括论文核心结论与价值"></textarea>
+                    </label>
+                    <label>
+                      <span>核心贡献：</span>
+                      <textarea id="paper-core-innovation" name="coreInnovation" rows="1" placeholder="列出 3~5 个最重要贡献"></textarea>
+                    </label>
+                    <label>
+                      <span>为什么值得读：</span>
+                      <textarea id="paper-worth-reading" name="worthReading" rows="1" placeholder="这篇论文为什么值得研究生花时间读？适合在哪个场景使用？"></textarea>
+                    </label>
+                  </div>
+                </section>
 
-            <section class="paper-card-form-section">
-              <h2><span aria-hidden="true">♧</span> 实验与结论</h2>
-              <div class="paper-card-field-grid two-columns first-row-two-columns">
-                <label>
-                  <span>数据集：</span>
-                  <textarea id="paper-datasets" name="datasets" rows="2" placeholder="使用的数据集名称及规模"></textarea>
-                </label>
-                <label>
-                  <span>评估指标：</span>
-                  <textarea id="paper-metrics" name="metrics" rows="2" placeholder="用于评估的方法或指标"></textarea>
-                </label>
-                <label class="full-width">
-                  <span>主要实验结论：</span>
-                  <textarea id="paper-main-findings" name="mainFindings" rows="2" placeholder="实验得到的主要结论是什么？"></textarea>
-                </label>
-                <label class="full-width">
-                  <span>局限性：</span>
-                  <textarea id="paper-limitations" name="limitations" rows="2" placeholder="论文中提到的局限性或可能的不足"></textarea>
-                </label>
-              </div>
-            </section>
+                <section class="paper-card-form-section">
+                  <h2><span aria-hidden="true">②</span> 论文定位：这篇论文在领域里处于什么位置</h2>
+                  <div class="paper-card-field-grid two-columns">
+                    <label>
+                      <span>问题设定：</span>
+                      <textarea id="paper-problem-setup" name="problemSetup" rows="1" placeholder="任务定义、输入输出、研究边界与假设"></textarea>
+                    </label>
+                    <label>
+                      <span>研究空白 / 未解决的问题：</span>
+                      <textarea id="paper-research-gap" name="researchGap" rows="1" placeholder="这篇论文补了什么空白？旧方法差在哪里？"></textarea>
+                    </label>
+                    <label>
+                      <span>为什么重要：</span>
+                      <textarea id="paper-why-important" name="whyImportant" rows="1" placeholder="为什么这个问题重要？对应用、理论或系统有什么意义？"></textarea>
+                    </label>
+                    <label>
+                      <span>相关主题标签：</span>
+                      <textarea id="paper-topic-tags" name="topicTags" rows="1" placeholder="例如：隐私计算、联邦学习、RAG、代码智能"></textarea>
+                    </label>
+                  </div>
+                </section>
 
-            <section class="paper-card-form-section">
-              <h2><span aria-hidden="true">♙</span> 我的判断</h2>
-              <div class="paper-card-field-grid two-columns first-row-two-columns">
-                <label>
-                  <span>阅读状态：</span>
-                  <select id="paper-reading-status" name="readingStatus">
-                    <option value="">请选择阅读状态</option>
-                    <option value="待读">待读</option>
-                    <option value="略读完成">略读完成</option>
-                    <option value="精读中">精读中</option>
-                    <option value="精读完成">精读完成</option>
-                  </select>
-                </label>
-                <label>
-                  <span>是否建议精读：</span>
-                  <select id="paper-recommend-deep-reading" name="recommendDeepReading">
-                    <option value="">请选择</option>
-                    <option value="建议精读">建议精读</option>
-                    <option value="建议按需精读">建议按需精读</option>
-                    <option value="暂不建议精读">暂不建议精读</option>
-                  </select>
-                </label>
-                <label class="full-width">
-                  <span>适合引用的点：</span>
-                  <textarea id="paper-citation-points" name="citationPoints" rows="2" placeholder="论文中适合引用的结论、方法或亮点"></textarea>
-                </label>
-                <label class="full-width">
-                  <span>我的备注：</span>
-                  <textarea id="paper-personal-notes" name="personalNotes" rows="2" placeholder="补充想法、记录你的思考或规划应用计划"></textarea>
-                </label>
+                <section class="paper-card-form-section">
+                  <h2><span aria-hidden="true">③</span> 方法理解：给研究生的快速拆解</h2>
+                  <div class="paper-card-field-grid two-columns">
+                    <label>
+                      <span>方法概述：</span>
+                      <textarea id="paper-method-overview" name="methodOverview" rows="1" placeholder="方法整体做了什么"></textarea>
+                    </label>
+                    <label>
+                      <span>方法直觉：</span>
+                      <textarea id="paper-method-intuition" name="methodIntuition" rows="1" placeholder="用更通俗的话解释方法直觉"></textarea>
+                    </label>
+                    <label class="full-width">
+                      <span>方法流程：</span>
+                      <textarea id="paper-method-steps" name="methodSteps" rows="1" placeholder="分步骤说明方法流程，建议 1/2/3/4 编号"></textarea>
+                    </label>
+                    <label>
+                      <span>关键假设：</span>
+                      <textarea id="paper-key-assumptions" name="keyAssumptions" rows="1" placeholder="例如半诚实模型、数据分布假设、独立同分布等"></textarea>
+                    </label>
+                    <label>
+                      <span>符号 / 术语速览：</span>
+                      <textarea id="paper-notation-guide" name="notationGuide" rows="1" placeholder="帮助快速读懂公式与专业术语"></textarea>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="paper-card-form-section">
+                  <h2><span aria-hidden="true">④</span> 实验与证据：结果是否站得住</h2>
+                  <div class="paper-card-field-grid two-columns">
+                    <label>
+                      <span>数据集：</span>
+                      <textarea id="paper-datasets" name="datasets" rows="1" placeholder="数据集名称、规模、来源"></textarea>
+                    </label>
+                    <label>
+                      <span>实验设置：</span>
+                      <textarea id="paper-experiment-setup" name="experimentSetup" rows="1" placeholder="实验环境、变量控制、模型配置、比较对象"></textarea>
+                    </label>
+                    <label>
+                      <span>评估指标：</span>
+                      <textarea id="paper-metrics" name="metrics" rows="1" placeholder="准确率、F1、AUC、延迟、通信复杂度等"></textarea>
+                    </label>
+                    <label>
+                      <span>主要实验结论：</span>
+                      <textarea id="paper-main-findings" name="mainFindings" rows="1" placeholder="最重要的实验发现是什么"></textarea>
+                    </label>
+                    <label>
+                      <span>最强证据：</span>
+                      <textarea id="paper-strongest-evidence" name="strongestEvidence" rows="1" placeholder="最能支撑论文结论的实验或理论证据"></textarea>
+                    </label>
+                    <label>
+                      <span>与已有工作对比：</span>
+                      <textarea id="paper-comparison-prior-work" name="comparisonWithPriorWork" rows="1" placeholder="本文相较经典方法或强基线更好/更差在哪里"></textarea>
+                    </label>
+                    <label class="full-width">
+                      <span>局限性：</span>
+                      <textarea id="paper-limitations" name="limitations" rows="1" placeholder="论文中提到或从结果中能看出的局限性"></textarea>
+                    </label>
+                  </div>
+                </section>
               </div>
-            </section>
+
+              <aside class="paper-card-sidebar">
+                <section class="paper-card-form-section paper-card-sidebar-section">
+                  <h2><span aria-hidden="true">★</span> 阅读决策</h2>
+                  <div class="paper-card-field-grid compact-grid">
+                    <label>
+                      <span>阅读状态：</span>
+                      <select id="paper-reading-status" name="readingStatus">
+                        <option value="">请选择阅读状态</option>
+                        <option value="待读">待读</option>
+                        <option value="略读完成">略读完成</option>
+                        <option value="精读中">精读中</option>
+                        <option value="精读完成">精读完成</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>是否建议精读：</span>
+                      <select id="paper-recommend-deep-reading" name="recommendDeepReading">
+                        <option value="">请选择</option>
+                        <option value="建议精读">建议精读</option>
+                        <option value="建议按需精读">建议按需精读</option>
+                        <option value="暂不建议精读">暂不建议精读</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>阅读难度：</span>
+                      <select id="paper-reading-difficulty" name="readingDifficulty">
+                        <option value="">请选择</option>
+                        <option value="较易">较易</option>
+                        <option value="中等">中等</option>
+                        <option value="较难">较难</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>阅读价值评分（0~10）：</span>
+                      <input id="paper-reading-value-score" name="readingValueScore" type="number" min="0" max="10" step="0.1" placeholder="例如 8.8" />
+                    </label>
+                    <label class="full-width">
+                      <span>阅读建议：</span>
+                      <textarea id="paper-reading-advice" name="readingAdvice" rows="1" placeholder="建议重点读哪些章节？哪些可以略过？"></textarea>
+                    </label>
+                    <label class="full-width">
+                      <span>适合什么阶段阅读：</span>
+                      <textarea id="paper-suitable-stages" name="suitableStages" rows="1" placeholder="例如 文献调研期 / 方法学习期 / 论文写作期"></textarea>
+                    </label>
+                    <label class="full-width">
+                      <span>先修知识：</span>
+                      <textarea id="paper-prerequisites" name="prerequisites" rows="1" placeholder="阅读前建议补充的知识背景"></textarea>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="paper-card-form-section paper-card-sidebar-section">
+                  <h2><span aria-hidden="true">✎</span> 和我的研究有什么关系</h2>
+                  <div class="paper-card-field-grid compact-grid">
+                    <label class="full-width">
+                      <span>适合引用的点：</span>
+                      <textarea id="paper-citation-points" name="citationPoints" rows="1" placeholder="后续写相关工作、引言、实验分析时最值得引用的点"></textarea>
+                    </label>
+                    <label class="full-width">
+                      <span>与我的课题关联：</span>
+                      <textarea id="paper-research-connection" name="researchConnection" rows="1" placeholder="这篇论文和我当前研究方向、实验设计或写作有什么关系"></textarea>
+                    </label>
+                    <label class="full-width">
+                      <span>后续追问 / 复现计划：</span>
+                      <textarea id="paper-followup-questions" name="followupQuestions" rows="1" placeholder="我下一步想验证什么、复现什么、追问作者什么问题"></textarea>
+                    </label>
+                    <label class="full-width">
+                      <span>本周阅读计划：</span>
+                      <textarea id="paper-weekly-plan" name="weeklyPlan" rows="1" placeholder="例如：周二读方法，周三核对实验，周末整理 related work"></textarea>
+                    </label>
+                    <label class="full-width">
+                      <span>我的备注：</span>
+                      <textarea id="paper-personal-notes" name="personalNotes" rows="1" placeholder="补充想法、灵感、可迁移点或写作素材"></textarea>
+                    </label>
+                  </div>
+                </section>
+              </aside>
+            </div>
           </form>
 
           <div class="paper-card-privacy-note">
-            <strong>ⓘ 温馨提示：</strong> 隐私、实验数据和结论仅保留论文明确披露的信息；未出现的内容统一标记为“原文未明确出现”。
+            <strong>ⓘ 温馨提示：</strong> 事实类信息必须尽量忠于原文；“阅读价值评分”“阅读建议”“适合什么阶段阅读”等属于阅读辅助判断，可由 AI 结合论文内容给出建议，最终以你的研究目标为准。
           </div>
         </div>
       </section>
@@ -305,7 +418,7 @@
               <div class="knowledge-brand-mark" aria-hidden="true">▣</div>
               <div>
                 <strong>知识库</strong>
-                <p>集中管理 AI 笔记与卡片</p>
+                <p>你的研究阅读工作台</p>
               </div>
             </div>
 
@@ -350,13 +463,15 @@
           <main class="knowledge-main">
             <header class="knowledge-main-header">
               <div>
-                <h1 id="knowledge-page-title">全部内容</h1>
-                <p>共 <strong id="knowledge-total-count">0</strong> 条内容，来自 <strong id="knowledge-document-count">0</strong> 篇文档</p>
+                <h1 id="knowledge-page-title">研究知识库</h1>
+                <p id="knowledge-page-subtitle">管理你的文献笔记、论文卡片与综述准备，一站式助力高效科研。</p>
+                <p class="knowledge-page-meta">共 <strong id="knowledge-total-count">0</strong> 条内容，来自 <strong id="knowledge-document-count">0</strong> 篇文档</p>
               </div>
               <div class="knowledge-main-actions">
                 <button id="knowledge-refresh" type="button">↻ 刷新</button>
                 <button id="knowledge-import" type="button">⇧ 导入笔记</button>
                 <input id="knowledge-import-input" type="file" accept="application/json,.json" hidden />
+                <button id="knowledge-batch-organize" type="button">▣ 批量整理</button>
                 <button id="knowledge-new-note" class="primary-button" type="button">＋ 新建笔记</button>
               </div>
             </header>
@@ -368,16 +483,40 @@
             </div>
 
             <div id="knowledge-library-view">
-            <div class="knowledge-search-row">
+            <div class="knowledge-focus-tabs" role="tablist" aria-label="研究阅读快捷视图">
+              <button class="active" data-knowledge-focus="all" type="button">全部</button>
+              <button data-knowledge-focus="todo" type="button">待读 <strong id="knowledge-focus-count-todo">0</strong></button>
+              <button data-knowledge-focus="deep" type="button">精读中 <strong id="knowledge-focus-count-deep">0</strong></button>
+              <button data-knowledge-focus="finished" type="button">已读完 <strong id="knowledge-focus-count-finished">0</strong></button>
+              <button data-knowledge-focus="citable" type="button">可引用 <strong id="knowledge-focus-count-citable">0</strong></button>
+              <button data-knowledge-focus="replicate" type="button">待复现 <strong id="knowledge-focus-count-replicate">0</strong></button>
+              <button data-knowledge-focus="related" type="button">相关工作 <strong id="knowledge-focus-count-related">0</strong></button>
+              <button data-knowledge-focus="methods" type="button">方法灵感 <strong id="knowledge-focus-count-methods">0</strong></button>
+            </div>
+
+            <div class="knowledge-search-row research-search-row">
               <label class="knowledge-search-box">
                 <span aria-hidden="true">⌕</span>
                 <input id="knowledge-search-input" type="search" placeholder="搜索笔记、卡片、论文标题、关键词…" />
               </label>
               <select id="knowledge-sort-select" aria-label="排序方式">
-                <option value="newest">最近保存</option>
+                <option value="newest">最近更新</option>
                 <option value="oldest">最早保存</option>
                 <option value="title">按标题</option>
               </select>
+              <select id="knowledge-year-filter" aria-label="年份筛选">
+                <option value="all">年份</option>
+              </select>
+              <select id="knowledge-venue-filter" aria-label="会议或期刊筛选">
+                <option value="all">会议/期刊</option>
+              </select>
+              <select id="knowledge-reading-status-filter" aria-label="阅读状态筛选">
+                <option value="all">阅读状态</option>
+              </select>
+              <select id="knowledge-priority-filter" aria-label="优先级筛选">
+                <option value="all">优先级</option>
+              </select>
+              <button id="knowledge-clear-filters" type="button">清空</button>
               <select id="knowledge-group-select" aria-label="分组方式">
                 <option value="none">不分组</option>
                 <option value="source">按来源文档</option>
@@ -386,14 +525,32 @@
             </div>
 
             <div class="knowledge-filter-tabs" role="tablist" aria-label="知识库筛选">
-              <button class="active" data-knowledge-filter="all" type="button">全部</button>
+              <button class="active" data-knowledge-filter="all" type="button">全部内容</button>
               <button data-knowledge-filter="note" type="button">笔记</button>
               <button data-knowledge-filter="reading-card" type="button">阅读卡片</button>
               <button data-knowledge-filter="paper-card" type="button">论文卡片</button>
             </div>
 
+            <div id="knowledge-dashboard-metrics" class="knowledge-dashboard-metrics" aria-label="研究统计"></div>
             <div id="knowledge-page-status" class="knowledge-page-status" hidden aria-live="polite"></div>
             <div id="knowledge-list" class="knowledge-card-grid" aria-live="polite"></div>
+
+            <div class="knowledge-student-panels">
+              <section class="knowledge-student-panel">
+                <header class="knowledge-student-panel-header">
+                  <strong>研究生阅读视角</strong>
+                  <span>更贴近研究生做文献整理、引用与复现的真实需求</span>
+                </header>
+                <div id="knowledge-student-workbench" class="knowledge-student-workbench"></div>
+              </section>
+              <section class="knowledge-weekly-task-panel">
+                <header class="knowledge-student-panel-header">
+                  <strong>本周文献任务</strong>
+                  <span>把阅读、引用整理与实验复现拆成可执行的小任务</span>
+                </header>
+                <div id="knowledge-weekly-tasks" class="knowledge-weekly-tasks"></div>
+              </section>
+            </div>
             </div>
 
             <section id="knowledge-research-view" class="knowledge-research-view" hidden aria-label="跨文献研究分析">
