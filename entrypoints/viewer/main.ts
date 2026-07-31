@@ -9,6 +9,7 @@ import {
 } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import DOMPurify from 'dompurify';
+import katex from 'katex';
 import { marked } from 'marked';
 import {
   EventBus,
@@ -18,13 +19,17 @@ import {
 } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import { browser } from 'wxt/browser';
 import 'pdfjs-dist/web/pdf_viewer.css';
+import 'katex/dist/katex.min.css';
 
 import {
   AI_CONFIG_STORAGE_KEY,
   AI_PROVIDERS,
   AI_STREAM_PORT_NAME,
   DEFAULT_AI_CONFIG,
+  DEFAULT_VISION_AI_CONFIG,
   LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
+  VISION_AI_CONFIG_STORAGE_KEY,
+  isVisionAiConfigured,
   normalizeAiBaseUrl,
   type AiConfig,
   type AiConversationMessage,
@@ -33,6 +38,8 @@ import {
   type AiRuntimeResponse,
   type AiStreamServerMessage,
   type AiStreamStartMessage,
+  type VisionAiConfig,
+  type VisionAiMode,
 } from '../../shared/ai';
 import {
   READING_MODE_STORAGE_KEY,
@@ -145,6 +152,8 @@ const editorModeButtons = Array.from(
 const appFrame = document.querySelector<HTMLElement>('.app-frame');
 const outlineToggleButton = document.getElementById('outline-toggle');
 const aiPanelToggleButton = document.getElementById('ai-panel-toggle');
+const focusModeButton = requiredElement<HTMLButtonElement>('focus-mode-toggle');
+const focusModeLabel = requiredElement<HTMLElement>('focus-mode-label');
 const readingModeSelect = requiredElement<HTMLSelectElement>('reading-mode-select');
 const detectReadingModeButton = requiredElement<HTMLButtonElement>('detect-reading-mode');
 const readingModeStatus = requiredElement<HTMLElement>('reading-mode-status');
@@ -306,14 +315,13 @@ const assistantViewButtons = Array.from(
 );
 const assistantChatPanel = requiredElement<HTMLElement>('assistant-chat-panel');
 const assistantSettingsPanel = requiredElement<HTMLElement>('assistant-settings-panel');
+const settingsModalBackdrop = requiredElement<HTMLElement>('settings-modal-backdrop');
 const assistantToolsRuntime = requiredElement<HTMLElement>('assistant-tools-runtime');
 const closeDeepSeekSettingsButton = requiredElement<HTMLButtonElement>('close-deepseek-settings');
-const chatContextPreview = requiredElement<HTMLElement>('chat-context-preview');
 const chatMessagesElement = requiredElement<HTMLElement>('chat-messages');
 const chatForm = requiredElement<HTMLFormElement>('chat-form');
 const chatInput = requiredElement<HTMLTextAreaElement>('chat-input');
 const chatSendButton = requiredElement<HTMLButtonElement>('chat-send');
-const clearChatButton = requiredElement<HTMLButtonElement>('clear-chat');
 const chatProviderStatus = requiredElement<HTMLElement>('chat-provider-status');
 const aiProviderSelect = requiredElement<HTMLSelectElement>('ai-provider');
 const deepSeekApiKeyInput = requiredElement<HTMLInputElement>('deepseek-api-key');
@@ -323,6 +331,13 @@ const deepSeekBaseUrlInput = requiredElement<HTMLInputElement>('deepseek-base-ur
 const deepSeekSettingsStatus = requiredElement<HTMLElement>('deepseek-settings-status');
 const saveDeepSeekSettingsButton = requiredElement<HTMLButtonElement>('save-deepseek-settings');
 const testDeepSeekButton = requiredElement<HTMLButtonElement>('test-deepseek');
+const visionAiModeSelect = requiredElement<HTMLSelectElement>('vision-ai-mode');
+const visionAiFields = requiredElement<HTMLElement>('vision-ai-fields');
+const visionApiKeyInput = requiredElement<HTMLInputElement>('vision-api-key');
+const visionModelInput = requiredElement<HTMLInputElement>('vision-model');
+const visionBaseUrlInput = requiredElement<HTMLInputElement>('vision-base-url');
+const visionSettingsStatus = requiredElement<HTMLElement>('vision-settings-status');
+const testVisionAiButton = requiredElement<HTMLButtonElement>('test-vision-ai');
 const aiTabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.ai-tabs button'));
 const aiTabPanels = Array.from(document.querySelectorAll<HTMLElement>('[data-ai-panel]'));
 const selectedSnippetElement = requiredElement<HTMLElement>('selected-snippet');
@@ -1508,6 +1523,17 @@ function setLeftPanelCollapsed(collapsed: boolean) {
   outlineToggleButton?.classList.toggle('active', !collapsed);
 }
 
+function setFocusMode(enabled: boolean): void {
+  if (!appFrame) return;
+
+  appFrame.classList.toggle('focus-mode', enabled);
+  const isEnabled = appFrame.classList.contains('focus-mode');
+  focusModeButton.classList.toggle('active', isEnabled);
+  focusModeButton.setAttribute('aria-pressed', String(isEnabled));
+  focusModeButton.title = isEnabled ? '恢复顶部工具栏' : '隐藏顶部工具栏，专注阅读 PDF';
+  focusModeLabel.textContent = isEnabled ? '退出专注' : '专注模式';
+}
+
 function updateOutlineActivePage() {
   if (!outlineList) return;
   const currentPage = String(pdfViewer.currentPageNumber || '');
@@ -2077,6 +2103,7 @@ let lastKnowledgeResearchItems: KnowledgeItem[] = [];
 let knowledgeResearchPending = false;
 let aiConfig: AiConfig = { ...DEFAULT_AI_CONFIG };
 let aiConfigLoaded = false;
+let visionAiConfig: VisionAiConfig = { ...DEFAULT_VISION_AI_CONFIG };
 let chatHistory: AiConversationMessage[] = [];
 let chatRequestPending = false;
 let readingModePreference: ReadingModePreference = 'auto';
@@ -2137,9 +2164,17 @@ function setDeepSeekSettingsOpen(open: boolean): void {
     document.body.append(assistantSettingsPanel);
   }
   assistantSettingsPanel.hidden = !open;
+  settingsModalBackdrop.hidden = !open;
+  settingsModalBackdrop.setAttribute('aria-hidden', String(!open));
+  if (appFrame) appFrame.inert = open;
+  document.body.classList.toggle('settings-modal-open', open);
   aiSettingsButton.classList.toggle('active', open);
   aiSettingsButton.setAttribute('aria-expanded', String(open));
-  if (open) window.setTimeout(() => deepSeekApiKeyInput.focus(), 0);
+  if (open) {
+    window.setTimeout(() => deepSeekApiKeyInput.focus(), 0);
+  } else {
+    aiSettingsButton.focus();
+  }
 }
 
 async function requestAiContent(
@@ -2156,7 +2191,10 @@ async function requestAiContent(
   const response = await browser.runtime.sendMessage({
     type: 'pdf-helper:ai-chat',
     messages,
-    context: { ...context, readingMode: resolvedReadingMode },
+    context: {
+      ...context,
+      readingMode: context.readingMode ?? resolvedReadingMode,
+    },
   }) as AiRuntimeResponse;
 
   if (!response?.ok || !response.content?.trim()) {
@@ -2186,24 +2224,156 @@ function parseAiJson(content: string): Record<string, unknown> {
   return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
 }
 
-function updateChatContextPreview(): void {
-  const documentLabel = sourceName ? getDisplayFileName(sourceName) : '尚未打开 PDF';
-  const pageNumber = Math.max(1, selectedTextPageNumber || pdfViewer.currentPageNumber || 1);
-  const selectedText = selectedTextForAi.trim();
+interface MarkdownMathToken {
+  expression: string;
+  displayMode: boolean;
+}
 
-  if (selectedText) {
-    chatContextPreview.textContent = `${documentLabel} · 第 ${pageNumber} 页\n${selectedText.slice(0, 420)}${selectedText.length > 420 ? '…' : ''}`;
-    chatContextPreview.classList.add('has-selection');
-  } else {
-    chatContextPreview.textContent = sourceName
-      ? `${documentLabel} · 第 ${pageNumber} 页 · ${getReadingModeLabel(resolvedReadingMode)}（自动携带当前页正文）`
-      : '打开 PDF 后，助手会自动携带当前页正文；选中文字时优先使用选区。';
-    chatContextPreview.classList.remove('has-selection');
+interface MarkdownCitationToken {
+  pageNumber: number;
+  quote: string;
+}
+
+function protectMarkdownCitations(content: string): {
+  markdown: string;
+  tokens: MarkdownCitationToken[];
+} {
+  const tokens: MarkdownCitationToken[] = [];
+  const markdown = content.replace(
+    /\[\[PDF:P(\d{1,5})\|([^\]\r\n]{1,500})\]\]/g,
+    (_match, pageValue: string, quoteValue: string) => {
+      const pageNumber = Number(pageValue);
+      const quote = quoteValue.replace(/\s+/g, ' ').trim();
+      if (!Number.isInteger(pageNumber) || pageNumber < 1 || quote.length < 2) return '';
+      const index = tokens.push({ pageNumber, quote }) - 1;
+      return `PDFHELPERCITATIONTOKEN${index}END`;
+    },
+  );
+  return { markdown, tokens };
+}
+
+function restoreMarkdownCitations(
+  container: HTMLElement,
+  tokens: MarkdownCitationToken[],
+): void {
+  if (tokens.length === 0) return;
+  const tokenPattern = /PDFHELPERCITATIONTOKEN(\d+)END/g;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+
+  for (const textNode of textNodes) {
+    const value = textNode.nodeValue ?? '';
+    tokenPattern.lastIndex = 0;
+    if (!tokenPattern.test(value)) continue;
+    tokenPattern.lastIndex = 0;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const match of value.matchAll(tokenPattern)) {
+      const start = match.index ?? 0;
+      if (start > cursor) fragment.append(value.slice(cursor, start));
+      const token = tokens[Number(match[1])];
+      if (token) {
+        const citation = document.createElement('button');
+        citation.type = 'button';
+        citation.className = 'pdf-source-citation';
+        citation.dataset.pdfPage = String(token.pageNumber);
+        citation.dataset.pdfQuote = token.quote;
+        citation.dataset.citationTooltip = `点击跳转到第 ${token.pageNumber} 页：${token.quote.slice(0, 88)}${token.quote.length > 88 ? '…' : ''}`;
+        citation.setAttribute('aria-label', citation.dataset.citationTooltip);
+        citation.textContent = `第 ${token.pageNumber} 页 · 查看原文`;
+        fragment.append(citation);
+      }
+      cursor = start + match[0].length;
+    }
+    if (cursor < value.length) fragment.append(value.slice(cursor));
+    textNode.replaceWith(fragment);
   }
 }
 
-function renderChatMarkdown(container: HTMLElement, content: string): void {
-  const html = marked.parse(content, {
+function normalizeBareLatexMath(content: string): string {
+  return content.replace(
+    /(^|[^$\\\w])(\d+(?:\.\d+)?\^\{[^{}\n]{1,80}\})(?![$])/g,
+    (_match, prefix: string, expression: string) => `${prefix}$${expression}$`,
+  );
+}
+
+function protectMarkdownMath(content: string): {
+  markdown: string;
+  tokens: MarkdownMathToken[];
+} {
+  const tokens: MarkdownMathToken[] = [];
+  const addToken = (expression: string, displayMode: boolean): string => {
+    const index = tokens.push({ expression: expression.trim(), displayMode }) - 1;
+    return `PDFHELPERMATHTOKEN${index}END`;
+  };
+
+  let markdown = normalizeBareLatexMath(content)
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_match, expression: string) => addToken(expression, true))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_match, expression: string) => addToken(expression, true))
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_match, expression: string) => addToken(expression, false));
+
+  markdown = markdown.replace(
+    /(^|[^\\$])\$([^$\n]+?)\$/gm,
+    (_match, prefix: string, expression: string) => `${prefix}${addToken(expression, false)}`,
+  );
+  return { markdown, tokens };
+}
+
+function restoreMarkdownMath(container: HTMLElement, tokens: MarkdownMathToken[]): void {
+  if (tokens.length === 0) return;
+
+  const tokenPattern = /PDFHELPERMATHTOKEN(\d+)END/g;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+
+  for (const textNode of textNodes) {
+    const value = textNode.nodeValue ?? '';
+    tokenPattern.lastIndex = 0;
+    if (!tokenPattern.test(value)) continue;
+
+    tokenPattern.lastIndex = 0;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const match of value.matchAll(tokenPattern)) {
+      const start = match.index ?? 0;
+      if (start > cursor) fragment.append(value.slice(cursor, start));
+
+      const token = tokens[Number(match[1])];
+      if (token) {
+        const math = document.createElement('span');
+        math.className = token.displayMode ? 'pdf-helper-math display' : 'pdf-helper-math inline';
+        math.setAttribute('aria-label', token.expression);
+        math.innerHTML = katex.renderToString(token.expression, {
+          displayMode: token.displayMode,
+          output: 'htmlAndMathml',
+          strict: false,
+          throwOnError: false,
+          trust: false,
+        });
+        fragment.append(math);
+      }
+      cursor = start + match[0].length;
+    }
+    if (cursor < value.length) fragment.append(value.slice(cursor));
+    textNode.replaceWith(fragment);
+  }
+}
+
+function renderChatMarkdown(
+  container: HTMLElement,
+  content: string,
+  renderCitations = true,
+): void {
+  const citationResult = renderCitations
+    ? protectMarkdownCitations(content)
+    : {
+      markdown: content.replace(/\[\[PDF:P\d{1,5}\|[^\]\r\n]{1,500}\]\]/g, ''),
+      tokens: [] as MarkdownCitationToken[],
+    };
+  const mathResult = protectMarkdownMath(citationResult.markdown);
+  const html = marked.parse(mathResult.markdown, {
     async: false,
     breaks: true,
     gfm: true,
@@ -2216,6 +2386,63 @@ function renderChatMarkdown(container: HTMLElement, content: string): void {
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
   }
+  restoreMarkdownMath(container, mathResult.tokens);
+  restoreMarkdownCitations(container, citationResult.tokens);
+}
+
+function updateChatReasoning(
+  message: HTMLElement,
+  content: string,
+  streaming: boolean,
+): void {
+  let details = message.querySelector<HTMLDetailsElement>('.chat-message-reasoning');
+  if (!content.trim()) {
+    if (!streaming) details?.remove();
+    return;
+  }
+
+  if (!details) {
+    details = document.createElement('details');
+    details.className = 'chat-message-reasoning';
+    details.open = true;
+
+    const summary = document.createElement('summary');
+    const label = document.createElement('span');
+    label.className = 'chat-reasoning-label';
+    const state = document.createElement('span');
+    state.className = 'chat-reasoning-state';
+    summary.append(label, state);
+
+    const body = document.createElement('div');
+    body.className = 'chat-reasoning-content';
+    details.append(summary, body);
+    summary.addEventListener('click', (event) => {
+      event.preventDefault();
+      details?.classList.toggle('expanded');
+      if (details) details.open = true;
+      const nextState = details?.querySelector<HTMLElement>('.chat-reasoning-state');
+      if (nextState) {
+        nextState.textContent = details?.classList.contains('expanded') ? '点击收起' : '点击展开';
+      }
+    });
+
+    const answerBody = message.querySelector('.chat-message-content');
+    if (answerBody) message.insertBefore(details, answerBody);
+    else message.append(details);
+  }
+
+  const label = details.querySelector<HTMLElement>('.chat-reasoning-label');
+  const state = details.querySelector<HTMLElement>('.chat-reasoning-state');
+  const body = details.querySelector<HTMLElement>('.chat-reasoning-content');
+  if (label) label.textContent = streaming ? '正在思考…' : '思考过程';
+  if (state) {
+    state.textContent = streaming
+      ? '生成中'
+      : details.classList.contains('expanded')
+        ? '点击收起'
+        : '点击展开';
+  }
+  if (body) renderChatMarkdown(body, content);
 }
 
 function updateChatMessage(
@@ -2230,7 +2457,7 @@ function updateChatMessage(
   if (!body) return;
 
   if (message.classList.contains('assistant') && !options.error) {
-    renderChatMarkdown(body, content);
+    renderChatMarkdown(body, content, !options.streaming);
   } else {
     body.textContent = content;
   }
@@ -2263,14 +2490,19 @@ function appendChatMessage(
 function requestAiStream(
   messages: AiConversationMessage[],
   context: AiStreamStartMessage['context'],
-  onDelta: (content: string) => void,
-): Promise<string> {
+  onDelta: (delta: { content?: string; reasoningContent?: string }) => void,
+): Promise<{ content: string; reasoningContent: string }> {
   const requestId = crypto.randomUUID();
   const port = browser.runtime.connect({ name: AI_STREAM_PORT_NAME });
 
   return new Promise((resolve, reject) => {
     let settled = false;
     let content = '';
+    let reasoningContent = '';
+    let debugConversation: Array<{
+      role: 'system' | 'user' | 'assistant';
+      content: string;
+    }> = [];
 
     const finish = (callback: () => void): void => {
       if (settled) return;
@@ -2287,13 +2519,66 @@ function requestAiStream(
       const message = value as AiStreamServerMessage;
       if (!message || message.requestId !== requestId) return;
 
+      if (message.type === 'started') {
+        const debug = message.debug;
+        console.groupCollapsed(`[PDF Helper AI] 聊天请求 · ${message.model}`);
+        if (debug) {
+          debugConversation = debug.messages.map((item) => ({ ...item }));
+          console.log('模型配置', {
+            provider: debug.providerId,
+            model: debug.model,
+            baseUrl: debug.baseUrl,
+            reasoning: debug.reasoning,
+            maxOutputTokens: debug.maxOutputTokens,
+          });
+          const [systemMessage, ...conversationMessages] = debug.messages;
+          if (systemMessage) console.log('System Prompt\n', systemMessage.content);
+          conversationMessages.forEach((item, index) => {
+            console.log(
+              `${item.role === 'user' ? 'User' : 'Assistant'} Prompt #${index + 1}\n`,
+              item.content,
+            );
+          });
+          console.log(
+            '工具调用',
+            debug.tools.length ? debug.tools : '本轮请求未调用工具',
+          );
+          console.log('完整模型对话（实际发送内容）', debugConversation);
+        }
+        console.groupEnd();
+        return;
+      }
       if (message.type === 'delta') {
         content += message.content;
-        onDelta(message.content);
+        onDelta({ content: message.content });
+        return;
+      }
+      if (message.type === 'reasoning-delta') {
+        reasoningContent += message.content;
+        onDelta({ reasoningContent: message.content });
         return;
       }
       if (message.type === 'done') {
-        finish(() => resolve(content));
+        if (debugConversation.length === 0 && message.debug) {
+          debugConversation = message.debug.messages.map((item) => ({ ...item }));
+        }
+        const completedConversation = [
+          ...debugConversation,
+          { role: 'assistant' as const, content },
+        ];
+        console.groupCollapsed(`[PDF Helper AI] 聊天响应完成 · ${message.model}`);
+        const systemMessage = completedConversation.find((item) => item.role === 'system');
+        if (systemMessage) console.log('System Prompt / 角色设定\n', systemMessage.content);
+        console.log('发送给模型的全部历史对话', debugConversation);
+        console.log('思考过程\n', reasoningContent || '本轮没有返回思考过程');
+        console.log('最终回答\n', content);
+        console.log('完整模型对话（包含最终回答）', completedConversation);
+        console.log(
+          '完整模型对话 JSON（可直接复制）\n',
+          JSON.stringify(completedConversation, null, 2),
+        );
+        console.groupEnd();
+        finish(() => resolve({ content, reasoningContent }));
         return;
       }
       if (message.type === 'error') {
@@ -2311,7 +2596,10 @@ function requestAiStream(
       type: 'start',
       requestId,
       messages,
-      context: { ...context, readingMode: resolvedReadingMode },
+      context: {
+        ...context,
+        readingMode: context.readingMode ?? resolvedReadingMode,
+      },
     };
     port.postMessage(startMessage);
   });
@@ -2344,6 +2632,42 @@ function readDeepSeekConfigFromForm(): AiConfig {
     model: deepSeekModelSelect.value,
     reasoning: deepSeekThinkingSelect.value as AiReasoningMode,
   };
+}
+
+function updateVisionAiFieldsVisibility(): void {
+  const enabled = visionAiModeSelect.value === 'separate';
+  visionAiFields.hidden = !enabled;
+  testVisionAiButton.disabled = !enabled;
+  if (!enabled) {
+    visionSettingsStatus.classList.remove('error');
+    visionSettingsStatus.textContent = '';
+  }
+}
+
+function readVisionAiConfigFromForm(): VisionAiConfig {
+  return {
+    mode: visionAiModeSelect.value as VisionAiMode,
+    providerId: 'openai-compatible',
+    apiKey: visionApiKeyInput.value.trim(),
+    baseUrl: visionBaseUrlInput.value.trim().replace(/\/+$/, ''),
+    model: visionModelInput.value.trim(),
+  };
+}
+
+function populateVisionAiConfigForm(config: VisionAiConfig): void {
+  visionAiModeSelect.value = config.mode;
+  visionApiKeyInput.value = config.apiKey;
+  visionModelInput.value = config.model;
+  visionBaseUrlInput.value = config.baseUrl;
+  updateVisionAiFieldsVisibility();
+}
+
+function validateVisionAiConfig(config: VisionAiConfig): boolean {
+  if (config.mode === 'disabled') return true;
+  if (isVisionAiConfigured(config)) return true;
+  visionSettingsStatus.classList.add('error');
+  visionSettingsStatus.textContent = '启用视觉模型后，请填写 API Key、模型和 API 地址。';
+  return false;
 }
 
 function getInternalNavigationDocumentKey(): string {
@@ -2463,6 +2787,7 @@ async function loadDeepSeekConfig(): Promise<void> {
   const stored = await browser.storage.local.get([
     AI_CONFIG_STORAGE_KEY,
     LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
+    VISION_AI_CONFIG_STORAGE_KEY,
   ]);
   const current = stored[AI_CONFIG_STORAGE_KEY] as Partial<AiConfig> | undefined;
   const legacy = stored[LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY] as (Partial<AiConfig> & {
@@ -2479,27 +2804,51 @@ async function loadDeepSeekConfig(): Promise<void> {
     reasoning: value?.reasoning ?? legacy?.thinking ?? DEFAULT_AI_CONFIG.reasoning,
   };
   if (!current && legacy) await browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: aiConfig });
+  const storedVision = stored[VISION_AI_CONFIG_STORAGE_KEY] as Partial<VisionAiConfig> | undefined;
+  visionAiConfig = {
+    ...DEFAULT_VISION_AI_CONFIG,
+    ...storedVision,
+    mode: storedVision?.mode === 'separate' ? 'separate' : 'disabled',
+    providerId: 'openai-compatible',
+    apiKey: storedVision?.apiKey?.trim() ?? '',
+    baseUrl: storedVision?.baseUrl?.trim().replace(/\/+$/, '') ?? '',
+    model: storedVision?.model?.trim() ?? '',
+  };
   aiConfigLoaded = true;
   populateDeepSeekConfigForm(aiConfig);
+  populateVisionAiConfigForm(visionAiConfig);
   updateDeepSeekProviderStatus();
 }
 
 async function saveDeepSeekConfig(showSuccess = true): Promise<boolean> {
   const nextConfig = readDeepSeekConfigFromForm();
+  const nextVisionConfig = readVisionAiConfigFromForm();
 
   if (!nextConfig.apiKey) {
     deepSeekSettingsStatus.textContent = '请输入 DeepSeek API Key。';
     deepSeekSettingsStatus.classList.add('error');
     return false;
   }
+  if (!validateVisionAiConfig(nextVisionConfig)) return false;
 
   aiConfig = nextConfig;
+  visionAiConfig = nextVisionConfig;
   aiConfigLoaded = true;
-  await browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: nextConfig });
+  await browser.storage.local.set({
+    [AI_CONFIG_STORAGE_KEY]: nextConfig,
+    [VISION_AI_CONFIG_STORAGE_KEY]: nextVisionConfig,
+  });
   populateDeepSeekConfigForm(nextConfig);
+  populateVisionAiConfigForm(nextVisionConfig);
   updateDeepSeekProviderStatus();
   deepSeekSettingsStatus.classList.remove('error');
   deepSeekSettingsStatus.textContent = showSuccess ? '设置已保存到当前浏览器。' : '';
+  visionSettingsStatus.classList.remove('error');
+  if (showSuccess) {
+    visionSettingsStatus.textContent = nextVisionConfig.mode === 'separate'
+      ? `视觉模型已保存：${nextVisionConfig.model}`
+      : '';
+  }
   return true;
 }
 
@@ -2528,6 +2877,43 @@ async function testDeepSeekConnection(): Promise<void> {
   }
 }
 
+function createVisionTestImage(): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = 32;
+  canvas.height = 32;
+  const context = canvas.getContext('2d');
+  if (!context) return '';
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, 32, 32);
+  context.fillStyle = '#1f67e8';
+  context.fillRect(8, 8, 16, 16);
+  return canvas.toDataURL('image/png');
+}
+
+async function testVisionAiConnection(): Promise<void> {
+  const nextConfig = readVisionAiConfigFromForm();
+  if (!validateVisionAiConfig(nextConfig)) return;
+  visionAiConfig = nextConfig;
+  await browser.storage.local.set({ [VISION_AI_CONFIG_STORAGE_KEY]: nextConfig });
+
+  testVisionAiButton.disabled = true;
+  visionSettingsStatus.classList.remove('error');
+  visionSettingsStatus.textContent = '正在测试视觉模型…';
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: 'pdf-helper:ai-vision-test',
+      imageDataUrl: createVisionTestImage(),
+    }) as AiRuntimeResponse;
+    if (!response?.ok) throw new Error(response?.error || '视觉模型连接测试失败。');
+    visionSettingsStatus.textContent = `视觉连接成功：${response.model || nextConfig.model}`;
+  } catch (error) {
+    visionSettingsStatus.classList.add('error');
+    visionSettingsStatus.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    testVisionAiButton.disabled = false;
+  }
+}
+
 function getReadingModeDocumentKey(documentProxy: PDFDocumentProxy | null = pdfDocument): string {
   const fingerprint = getPdfFingerprint(documentProxy);
   if (fingerprint) return `fingerprint:${fingerprint}`;
@@ -2547,7 +2933,6 @@ function updateReadingModeUi(): void {
     ? '由 AI 根据文件名、目录与正文样本识别，可手动切换'
     : '当前文档使用手动指定的阅读模式');
   readingModeStatus.classList.toggle('error', Boolean(readingModeError));
-  updateChatContextPreview();
 }
 
 async function readReadingModeStore(): Promise<Record<string, ReadingModeState>> {
@@ -2708,37 +3093,48 @@ async function sendChatMessage(): Promise<void> {
   appendChatMessage('user', content);
   const assistantMessage = appendChatMessage('assistant', '', { pending: true });
   let streamedContent = '';
+  let streamedReasoningContent = '';
   let renderFrame = 0;
 
   const flushStreamedContent = (): void => {
     renderFrame = 0;
+    updateChatReasoning(assistantMessage, streamedReasoningContent, true);
     updateChatMessage(assistantMessage, streamedContent, { streaming: true });
   };
 
   try {
+    const documentAtRequestStart = pdfDocument;
     const pageNumber = Math.max(1, selectedTextPageNumber || pdfViewer.currentPageNumber || 1);
-    const pageText = pdfDocument
-      ? await extractPageText(pdfDocument, pageNumber).catch(() => '')
+    const documentText = documentAtRequestStart
+      ? await extractFullDocumentText(documentAtRequestStart)
       : '';
-    const responseContent = await requestAiStream(
+    if (pdfDocument !== documentAtRequestStart) {
+      throw new Error('PDF 已切换，请在新文档中重新发送问题。');
+    }
+    const response = await requestAiStream(
       chatHistory,
       {
         documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
         pageNumber,
-        totalPages: pdfDocument?.numPages,
-        pageText: pageText || undefined,
+        totalPages: documentAtRequestStart?.numPages,
+        documentText: documentText || undefined,
         selectedText: selectedTextForAi || undefined,
+        readingMode: documentAtRequestStart ? 'paper' : resolvedReadingMode,
       },
       (delta) => {
-        streamedContent += delta;
+        if (delta.content) streamedContent += delta.content;
+        if (delta.reasoningContent) streamedReasoningContent += delta.reasoningContent;
         if (!renderFrame) renderFrame = window.requestAnimationFrame(flushStreamedContent);
       },
     );
 
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
-    streamedContent = responseContent;
+    streamedContent = await validatePdfCitations(response.content, documentAtRequestStart);
+    streamedReasoningContent = response.reasoningContent;
     if (!streamedContent.trim()) throw new Error('AI 模型没有返回有效回答。');
+    console.log('[PDF Helper AI] 引用校验后的最终回答\n', streamedContent);
 
+    updateChatReasoning(assistantMessage, streamedReasoningContent, false);
     updateChatMessage(assistantMessage, streamedContent, { streaming: false });
     chatHistory.push({ role: 'assistant', content: streamedContent });
     attachChatSaveAction(
@@ -2750,6 +3146,7 @@ async function sendChatMessage(): Promise<void> {
     );
   } catch (error) {
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
+    updateChatReasoning(assistantMessage, streamedReasoningContent, false);
     updateChatMessage(
       assistantMessage,
       `请求失败：${error instanceof Error ? error.message : String(error)}`,
@@ -2893,6 +3290,237 @@ async function extractPageText(documentProxy: PDFDocumentProxy, pageNumber: numb
     .join('');
 
   return normalizeCopiedText(rawText);
+}
+
+function normalizeCitationMatchText(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/\u00ad/g, '')
+    .replace(/[–—−]/g, '-')
+    .replace(/\s+/g, '');
+}
+
+async function validatePdfCitations(
+  content: string,
+  documentProxy: PDFDocumentProxy | null,
+): Promise<string> {
+  const pattern = /\[\[PDF:P(\d{1,5})\|([^\]\r\n]{1,500})\]\]/g;
+  const matches = Array.from(content.matchAll(pattern));
+  const removeUnverifiableShorthand = (value: string): string => value.replace(
+    /\[?\[PDF:(?:P)?\d{1,5}\]?\]/gi,
+    '',
+  );
+  if (matches.length === 0) return removeUnverifiableShorthand(content);
+  if (!documentProxy) return removeUnverifiableShorthand(content.replace(pattern, ''));
+
+  const pageTextCache = new Map<number, string>();
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const match of matches) {
+    const start = match.index ?? 0;
+    parts.push(content.slice(cursor, start));
+    const pageNumber = Number(match[1]);
+    const quote = match[2]?.replace(/\s+/g, ' ').trim() ?? '';
+    let valid = Number.isInteger(pageNumber)
+      && pageNumber >= 1
+      && pageNumber <= documentProxy.numPages
+      && normalizeCitationMatchText(quote).length >= 8;
+
+    if (valid) {
+      if (!pageTextCache.has(pageNumber)) {
+        const pageText = await extractPageText(documentProxy, pageNumber).catch(() => '');
+        pageTextCache.set(pageNumber, normalizeCitationMatchText(pageText));
+      }
+      valid = pageTextCache.get(pageNumber)?.includes(normalizeCitationMatchText(quote)) ?? false;
+    }
+
+    if (valid) {
+      parts.push(match[0]);
+    } else {
+      console.warn('[PDF Helper 引用校验] 已移除无法匹配原文的引用', {
+        pageNumber,
+        quote,
+      });
+    }
+    cursor = start + match[0].length;
+  }
+  parts.push(content.slice(cursor));
+  return removeUnverifiableShorthand(parts.join(''));
+}
+
+interface CitationTextPoint {
+  node: Text;
+  offset: number;
+}
+
+let activeChatCitationHighlight: HTMLElement | null = null;
+let activeChatCitationHighlightTimer: number | undefined;
+
+function clearChatCitationHighlight(): void {
+  activeChatCitationHighlight?.remove();
+  activeChatCitationHighlight = null;
+  if (activeChatCitationHighlightTimer !== undefined) {
+    window.clearTimeout(activeChatCitationHighlightTimer);
+    activeChatCitationHighlightTimer = undefined;
+  }
+}
+
+async function waitForCitationTextLayer(pageNumber: number): Promise<HTMLElement | null> {
+  const startedAt = performance.now();
+  while (performance.now() - startedAt < 4000) {
+    const layer = viewerElement.querySelector<HTMLElement>(
+      `.page[data-page-number="${pageNumber}"] .textLayer`,
+    );
+    if (layer?.textContent?.trim()) return layer;
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 40));
+  }
+  return null;
+}
+
+function findCitationRange(textLayer: HTMLElement, quote: string): Range | null {
+  const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
+  const points: CitationTextPoint[] = [];
+  let normalizedText = '';
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    const value = node.nodeValue ?? '';
+    for (let offset = 0; offset < value.length; offset += 1) {
+      const normalized = normalizeCitationMatchText(value[offset] ?? '');
+      for (const character of normalized) {
+        normalizedText += character;
+        points.push({ node, offset });
+      }
+    }
+  }
+
+  const normalizedQuote = normalizeCitationMatchText(quote);
+  const start = normalizedText.indexOf(normalizedQuote);
+  if (start < 0 || normalizedQuote.length === 0) return null;
+  const startPoint = points[start];
+  const endPoint = points[start + normalizedQuote.length - 1];
+  if (!startPoint || !endPoint) return null;
+  const range = document.createRange();
+  range.setStart(startPoint.node, startPoint.offset);
+  range.setEnd(endPoint.node, Math.min(endPoint.offset + 1, endPoint.node.length));
+  return range;
+}
+
+function highlightCitationRange(textLayer: HTMLElement, range: Range): void {
+  const page = textLayer.closest<HTMLElement>('.pdfViewer .page');
+  if (!page) return;
+  const pageRect = page.getBoundingClientRect();
+  const sourceRects = Array.from(range.getClientRects())
+    .filter((rect) => rect.width > 1 && rect.height > 1)
+    .sort((left, right) => left.top - right.top || left.left - right.left);
+  const rects: Array<{ left: number; top: number; right: number; bottom: number }> = [];
+  for (const rect of sourceRects) {
+    const previous = rects.at(-1);
+    const sameLine = previous
+      && Math.abs(previous.top - rect.top) <= Math.max(3, rect.height * 0.35)
+      && rect.left - previous.right <= 24;
+    if (previous && sameLine) {
+      previous.right = Math.max(previous.right, rect.right);
+      previous.bottom = Math.max(previous.bottom, rect.bottom);
+    } else {
+      rects.push({
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      });
+    }
+  }
+  if (rects.length === 0) return;
+
+  clearChatCitationHighlight();
+  const layer = document.createElement('div');
+  layer.className = 'pdf-ai-citation-highlight-layer';
+  for (const rect of rects) {
+    const highlight = document.createElement('div');
+    highlight.className = 'pdf-ai-citation-highlight';
+    highlight.style.left = `${rect.left - pageRect.left}px`;
+    highlight.style.top = `${rect.top - pageRect.top}px`;
+    highlight.style.width = `${rect.right - rect.left}px`;
+    highlight.style.height = `${rect.bottom - rect.top}px`;
+    layer.append(highlight);
+  }
+  page.append(layer);
+  activeChatCitationHighlight = layer;
+  activeChatCitationHighlightTimer = window.setTimeout(clearChatCitationHighlight, 10000);
+}
+
+async function jumpToPdfCitation(pageNumber: number, quote: string): Promise<void> {
+  if (
+    !pdfDocument
+    || !Number.isInteger(pageNumber)
+    || pageNumber < 1
+    || pageNumber > pdfDocument.numPages
+    || !quote.trim()
+  ) {
+    return;
+  }
+
+  console.info('[PDF Helper 引用定位] 开始查找原文', {
+    pageNumber,
+    citedQuote: quote,
+  });
+  citationReturnButton.classList.remove('visible');
+  citationReturnButton.setAttribute('aria-hidden', 'true');
+  citationReturnButton.tabIndex = -1;
+  citationReturnPosition.textContent = '';
+  pdfViewer.currentPageNumber = pageNumber;
+  pdfViewer.scrollPageIntoView({ pageNumber });
+  const textLayer = await waitForCitationTextLayer(pageNumber);
+  if (!textLayer) {
+    console.warn('[PDF Helper 引用定位] 文字层未加载，无法核对原文', {
+      pageNumber,
+      citedQuote: quote,
+    });
+    return;
+  }
+  const range = findCitationRange(textLayer, quote);
+  if (!range) {
+    console.warn('[PDF Helper 引用定位] 页面已打开，但文字层中未找到对应原句', {
+      pageNumber,
+      citedQuote: quote,
+    });
+    return;
+  }
+  const matchedOriginalText = range.toString();
+  console.info('[PDF Helper 引用定位] 已匹配到 PDF 原文', {
+    pageNumber,
+    citedQuote: quote,
+    matchedOriginalText,
+    normalizedMatch:
+      normalizeCitationMatchText(quote) === normalizeCitationMatchText(matchedOriginalText),
+  });
+  const target = range.startContainer.parentElement;
+  target?.scrollIntoView({ block: 'center', inline: 'nearest' });
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+  highlightCitationRange(textLayer, range);
+}
+
+const fullDocumentTextCache = new WeakMap<PDFDocumentProxy, Promise<string>>();
+
+function extractFullDocumentText(documentProxy: PDFDocumentProxy): Promise<string> {
+  const cached = fullDocumentTextCache.get(documentProxy);
+  if (cached) return cached;
+
+  const extraction = (async () => {
+    const pages: string[] = [];
+    for (let pageNumber = 1; pageNumber <= documentProxy.numPages; pageNumber += 1) {
+      const pageText = await extractPageText(documentProxy, pageNumber).catch(() => '');
+      pages.push(`[PDF 第 ${pageNumber} 页]\n${pageText || '（本页没有可提取文字）'}`);
+    }
+    return pages.join('\n\n').trim();
+  })();
+
+  fullDocumentTextCache.set(documentProxy, extraction);
+  void extraction.catch(() => fullDocumentTextCache.delete(documentProxy));
+  return extraction;
 }
 
 async function buildSummaryContext(scope: SummaryScope): Promise<SummaryContext> {
@@ -5417,8 +6045,6 @@ function updateAiSelectedSnippet(): void {
   selectedTextPageNumber = pageNumber;
   selectedSnippetElement.textContent = text;
   selectedSnippetElement.title = text;
-  updateChatContextPreview();
-
   translationAbortController?.abort();
   explanationAbortController?.abort();
   cancelPendingAutomaticTranslation();
@@ -6779,7 +7405,6 @@ async function openPdf(
     selectedSnippetElement.title = '';
     setTranslationState('选中英文后将自动翻译。');
     setExplanationState('选中英文后将自动生成解释。');
-    updateChatContextPreview();
     resetChatConversation();
     resetSummaryState();
     resetCardState();
@@ -6892,7 +7517,6 @@ eventBus.on('pagesinit', () => {
 eventBus.on('pagechanging', () => {
   updateControls();
   updateSummaryMetadata();
-  updateChatContextPreview();
   scheduleReadingPositionSave();
 
   if (!summaryPanelElement.hidden && activeSummaryScope !== 'selection') {
@@ -6997,7 +7621,9 @@ document.addEventListener('pointerdown', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeToolbarMenus();
+  if (event.key !== 'Escape') return;
+  closeToolbarMenus();
+  if (!assistantSettingsPanel.hidden) setDeepSeekSettingsOpen(false);
 });
 
 outlineToggleButton?.addEventListener('click', () => {
@@ -7014,6 +7640,10 @@ aiPanelToggleButton?.addEventListener('click', () => {
   const willOpen = appFrame?.classList.contains('right-panel-collapsed') ?? false;
   appFrame?.classList.toggle('right-panel-collapsed');
   if (willOpen) setAssistantView('chat');
+});
+
+focusModeButton.addEventListener('click', () => {
+  setFocusMode(!appFrame?.classList.contains('focus-mode'));
 });
 
 for (const button of assistantViewButtons) {
@@ -7049,6 +7679,8 @@ aiProviderSelect.addEventListener('change', () => {
   deepSeekBaseUrlInput.value = provider.defaultBaseUrl;
 });
 
+visionAiModeSelect.addEventListener('change', updateVisionAiFieldsVisibility);
+
 closeDeepSeekSettingsButton.addEventListener('click', () => {
   setDeepSeekSettingsOpen(false);
 });
@@ -7070,9 +7702,31 @@ testDeepSeekButton.addEventListener('click', () => {
   void testDeepSeekConnection();
 });
 
+testVisionAiButton.addEventListener('click', () => {
+  void testVisionAiConnection();
+});
+
+deepSeekThinkingSelect.addEventListener('change', () => {
+  aiConfig = {
+    ...aiConfig,
+    reasoning: deepSeekThinkingSelect.value as AiReasoningMode,
+  };
+  if (aiConfigLoaded) void browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: aiConfig });
+});
+
 chatForm.addEventListener('submit', (event) => {
   event.preventDefault();
   void sendChatMessage();
+});
+
+chatMessagesElement.addEventListener('click', (event) => {
+  const citation = (event.target as Element | null)?.closest<HTMLButtonElement>(
+    '.pdf-source-citation',
+  );
+  if (!citation) return;
+  const pageNumber = Number(citation.dataset.pdfPage);
+  const quote = citation.dataset.pdfQuote?.trim() ?? '';
+  void jumpToPdfCitation(pageNumber, quote);
 });
 
 chatInput.addEventListener('keydown', (event) => {
@@ -7080,8 +7734,6 @@ chatInput.addEventListener('keydown', (event) => {
   event.preventDefault();
   void sendChatMessage();
 });
-
-clearChatButton.addEventListener('click', resetChatConversation);
 
 function activateAiTab(tabName: string): void {
   for (const tab of aiTabButtons) {
@@ -7818,7 +8470,6 @@ updateNoteIndicatorsVisibility();
 clearOutlineList('打开 PDF 后显示目录');
 setLeftPanelCollapsed(false);
 updateControls();
-updateChatContextPreview();
 updateReadingModeUi();
 void loadDeepSeekConfig();
 textStatus.textContent = '交互已就绪';

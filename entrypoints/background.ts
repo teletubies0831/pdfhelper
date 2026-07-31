@@ -12,7 +12,9 @@ import {
   AI_CONFIG_STORAGE_KEY,
   AI_STREAM_PORT_NAME,
   DEFAULT_AI_CONFIG,
+  DEFAULT_VISION_AI_CONFIG,
   LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
+  VISION_AI_CONFIG_STORAGE_KEY,
   isAiRuntimeRequest,
   normalizeAiBaseUrl,
   type AiConfig,
@@ -22,6 +24,7 @@ import {
   type AiRuntimeResponse,
   type AiStreamServerMessage,
   type AiStreamStartMessage,
+  type VisionAiConfig,
 } from '../shared/ai';
 import {
   getReadingModeStrategy,
@@ -115,6 +118,20 @@ async function getAiConfig(): Promise<AiConfig> {
   return config;
 }
 
+async function getVisionAiConfig(): Promise<VisionAiConfig> {
+  const stored = await browser.storage.local.get(VISION_AI_CONFIG_STORAGE_KEY);
+  const value = stored[VISION_AI_CONFIG_STORAGE_KEY] as Partial<VisionAiConfig> | undefined;
+  return {
+    ...DEFAULT_VISION_AI_CONFIG,
+    ...value,
+    mode: value?.mode === 'separate' ? 'separate' : 'disabled',
+    providerId: 'openai-compatible',
+    apiKey: value?.apiKey?.trim() ?? '',
+    baseUrl: value?.baseUrl?.trim().replace(/\/+$/, '') ?? '',
+    model: value?.model?.trim() ?? '',
+  };
+}
+
 function getProviderError(payload: unknown, fallback: string): string {
   if (!payload || typeof payload !== 'object') return fallback;
   const error = (payload as { error?: unknown }).error;
@@ -131,6 +148,75 @@ type ProviderMessage = {
 interface ProviderChatResult {
   content: string;
   model: string;
+  reasoningContent?: string;
+}
+
+interface ProviderStreamDelta {
+  content?: string;
+  reasoningContent?: string;
+}
+
+function getVisionContent(payload: unknown): string {
+  const content = (payload as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  })?.choices?.[0]?.message?.content;
+  if (typeof content === 'string') return content.trim();
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((item) => item && typeof item === 'object' && 'text' in item
+      ? String((item as { text?: unknown }).text ?? '')
+      : '')
+    .join('\n')
+    .trim();
+}
+
+async function requestVisionCompletion(
+  config: VisionAiConfig,
+  prompt: string,
+  imageDataUrl: string,
+  context?: AiDocumentContext,
+): Promise<ProviderChatResult> {
+  if (config.mode !== 'separate' || !config.apiKey || !config.baseUrl || !config.model) {
+    throw new Error('请先在“设置”中完成视觉模型配置。');
+  }
+  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [
+        {
+          role: 'system',
+          content: [
+            '你是 PDF Helper 的视觉阅读工具，只分析图片中实际可见的内容。',
+            '优先识别图表、公式、表格、流程图、页面结构以及文字抽取遗漏的信息。',
+            '不确定时明确说明，不要补写图片中不存在的内容。',
+            context?.documentName ? `文档：${context.documentName}` : '',
+            context?.pageNumber ? `页码：第 ${context.pageNumber} 页` : '',
+          ].filter(Boolean).join('\n'),
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: imageDataUrl, detail: 'high' } },
+          ],
+        },
+      ],
+      stream: false,
+      max_tokens: 1600,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(getProviderError(payload, `视觉模型请求失败：HTTP ${response.status}`));
+  }
+  const content = getVisionContent(payload);
+  if (!content) throw new Error('视觉模型没有返回有效内容。');
+  return { content, model: config.model };
 }
 
 interface AiProviderAdapter {
@@ -142,7 +228,7 @@ interface AiProviderAdapter {
     messages: ProviderMessage[],
     maxOutputTokens: number,
     signal: AbortSignal,
-    onDelta: (content: string) => void,
+    onDelta: (delta: ProviderStreamDelta) => void,
   ): Promise<ProviderChatResult>;
 }
 
@@ -216,7 +302,7 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
     messages: ProviderMessage[],
     maxOutputTokens: number,
     signal: AbortSignal,
-    onDelta: (content: string) => void,
+    onDelta: (delta: ProviderStreamDelta) => void,
   ): Promise<ProviderChatResult> {
     if (!config.apiKey) throw new Error('请先在 PDF Helper 的“设置”中配置 API Key。');
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -245,6 +331,7 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
     const decoder = new TextDecoder();
     let buffer = '';
     let completeContent = '';
+    let completeReasoningContent = '';
     let finished = false;
 
     const processEvent = (event: string): boolean => {
@@ -257,12 +344,23 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
       if (!data) return false;
       if (data === '[DONE]') return true;
       const payload = JSON.parse(data) as {
-        choices?: Array<{ delta?: { content?: unknown } }>;
+        choices?: Array<{
+          delta?: {
+            content?: unknown;
+            reasoning_content?: unknown;
+          };
+        }>;
       };
-      const content = payload.choices?.[0]?.delta?.content;
+      const delta = payload.choices?.[0]?.delta;
+      const reasoningContent = delta?.reasoning_content;
+      if (typeof reasoningContent === 'string' && reasoningContent) {
+        completeReasoningContent += reasoningContent;
+        onDelta({ reasoningContent });
+      }
+      const content = delta?.content;
       if (typeof content === 'string' && content) {
         completeContent += content;
-        onDelta(content);
+        onDelta({ content });
       }
       return false;
     };
@@ -284,7 +382,11 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
       }
     }
 
-    return { content: completeContent, model: config.model };
+    return {
+      content: completeContent,
+      model: config.model,
+      reasoningContent: completeReasoningContent || undefined,
+    };
   }
 }
 
@@ -311,14 +413,31 @@ function buildSystemContent(context?: AiDocumentContext): string {
     contextParts.push(`用户当前选中的 PDF 原文（回答时最高优先级）：\n${context.selectedText.trim().slice(0, 12000)}`);
   }
   if (context?.pageText?.trim()) {
-    contextParts.push(`当前页完整正文：\n${context.pageText.trim().slice(0, 24000)}`);
+    contextParts.push(`当前页完整正文（用于定位当前阅读位置）：\n${context.pageText.trim()}`);
+  }
+  if (context?.documentText?.trim()) {
+    contextParts.push([
+      '下面提供的是整篇论文的全部可提取正文，已按 PDF 页码分隔。',
+      '回答前必须先综合全文判断研究问题、方法、实验、证据、结论和局限，不能只依据当前页。',
+      '当前页和用户选区用于确定提问重点，但全文内容是回答的完整依据。',
+      `论文全文：\n${context.documentText.trim()}`,
+    ].join('\n'));
   }
 
   return [
-    '你是 PDF Helper 的阅读助手。请结合提供的 PDF 上下文，用清晰、准确、可核验的中文回答。',
+    '你是 PDF Helper 的论文阅读助手。请阅读所提供的整篇论文全文，并用清晰、准确、可核验的中文回答。',
     '如果上下文不足，请明确说明，不要编造文档中不存在的内容。涉及翻译时忠实保留术语，涉及解释时优先给出直观含义。',
-    '请使用简洁的 Markdown 组织回答；不要给整个回答套一层 Markdown 代码围栏。',
+    '请使用简洁的 Markdown 组织回答；不要给整个回答套一层 Markdown 代码围栏。数学变量和公式必须使用 LaTeX：行内公式用 $...$，独立公式用 $$...$$。',
     ...contextParts,
+    [
+      '【最终引用格式要求——回答前必须再次检查】',
+      '凡是回答中的事实、方法、实验结果、数字或结论能够由论文原文直接支持时，请在对应句末添加：[[PDF:P页码|该页逐字原文短句]]。',
+      '正确示例：[[PDF:P8|the matching rates are divided into three bins]]。',
+      '禁止输出 [[PDF:8]]、[[PDF:P8]]、[PDF:8] 等不含逐字原文的简写；这些格式无法校验，也不会显示为可点击引用。',
+      '页码必须使用所提供全文中的 PDF 页码；原文短句必须逐字摘自该页，建议 10—180 个字符。',
+      '只有确实存在对应原文时才能添加标记。无法找到逐字原文时不要添加引用，严禁编造页码、改写原句后冒充原文或给推测性内容添加引用。',
+      '引用标记只用于事实依据，不要单独列出参考文献清单。',
+    ].join('\n'),
   ].join('\n\n');
 }
 
@@ -361,28 +480,50 @@ async function streamAiResponse(
 ): Promise<void> {
   const config = await getAiConfig();
   const adapter = getProviderAdapter(config);
+  const maxOutputTokens = 2048;
+  const conversation = buildConversation(request.messages, request.context);
+  const debug = {
+    providerId: config.providerId,
+    model: config.model,
+    baseUrl: config.baseUrl,
+    reasoning: config.reasoning,
+    maxOutputTokens,
+    messages: conversation,
+    tools: [],
+  };
   postAiStreamMessage(port, {
     type: 'started',
     requestId: request.requestId,
     model: config.model,
+    debug,
   });
   const result = await adapter.stream(
     config,
-    buildConversation(request.messages, request.context),
-    2048,
+    conversation,
+    maxOutputTokens,
     signal,
-    (content) => {
-      postAiStreamMessage(port, {
-        type: 'delta',
-        requestId: request.requestId,
-        content,
-      });
+    (delta) => {
+      if (delta.reasoningContent) {
+        postAiStreamMessage(port, {
+          type: 'reasoning-delta',
+          requestId: request.requestId,
+          content: delta.reasoningContent,
+        });
+      }
+      if (delta.content) {
+        postAiStreamMessage(port, {
+          type: 'delta',
+          requestId: request.requestId,
+          content: delta.content,
+        });
+      }
     },
   );
   postAiStreamMessage(port, {
     type: 'done',
     requestId: request.requestId,
     model: result.model,
+    debug,
   });
 }
 
@@ -409,6 +550,22 @@ function parseReadingModeDetection(content: string): {
 
 async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResponse> {
   try {
+    if (message.type === 'pdf-helper:ai-vision' || message.type === 'pdf-helper:ai-vision-test') {
+      const visionConfig = await getVisionAiConfig();
+      const result = await requestVisionCompletion(
+        visionConfig,
+        message.type === 'pdf-helper:ai-vision-test'
+          ? '这是连接测试图，请只回答“视觉连接成功”。'
+          : message.prompt,
+        message.type === 'pdf-helper:ai-vision-test'
+          ? message.imageDataUrl
+            || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZsgAAAABJRU5ErkJggg=='
+          : message.imageDataUrl,
+        message.type === 'pdf-helper:ai-vision' ? message.context : undefined,
+      );
+      return { ok: true, content: result.content, model: result.model };
+    }
+
     const config = await getAiConfig();
     const adapter = getProviderAdapter(config);
 

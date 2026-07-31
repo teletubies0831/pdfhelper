@@ -1,6 +1,7 @@
 import type { ResolvedReadingMode } from './reading-mode';
 
 export const AI_CONFIG_STORAGE_KEY = 'pdf-helper-ai-config-v1';
+export const VISION_AI_CONFIG_STORAGE_KEY = 'pdf-helper-vision-ai-config-v1';
 export const LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY = 'pdf-helper-deepseek-config-v1';
 export const AI_STREAM_PORT_NAME = 'pdf-helper:ai-stream-v1';
 
@@ -54,6 +55,16 @@ export interface AiConfig {
   reasoning: AiReasoningMode;
 }
 
+export type VisionAiMode = 'disabled' | 'separate';
+
+export interface VisionAiConfig {
+  mode: VisionAiMode;
+  providerId: 'openai-compatible';
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 export interface AiConversationMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -65,6 +76,7 @@ export interface AiDocumentContext {
   totalPages?: number;
   selectedText?: string;
   pageText?: string;
+  documentText?: string;
   readingMode?: ResolvedReadingMode;
 }
 
@@ -92,6 +104,18 @@ export interface AiGeneratePaperOverviewRequest {
   text: string;
 }
 
+export interface AiVisionRequest {
+  type: 'pdf-helper:ai-vision';
+  prompt: string;
+  imageDataUrl: string;
+  context?: AiDocumentContext;
+}
+
+export interface AiVisionTestRequest {
+  type: 'pdf-helper:ai-vision-test';
+  imageDataUrl?: string;
+}
+
 export interface AiStreamStartMessage {
   type: 'start';
   requestId: string;
@@ -99,17 +123,36 @@ export interface AiStreamStartMessage {
   context?: AiDocumentContext;
 }
 
+export interface AiStreamDebugInfo {
+  providerId: AiProviderId;
+  model: string;
+  baseUrl: string;
+  reasoning: AiReasoningMode;
+  maxOutputTokens: number;
+  messages: Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+  }>;
+  tools: Array<{
+    name: string;
+    arguments?: Record<string, unknown>;
+  }>;
+}
+
 export type AiStreamServerMessage =
-  | { type: 'started'; requestId: string; model: string }
+  | { type: 'started'; requestId: string; model: string; debug?: AiStreamDebugInfo }
   | { type: 'delta'; requestId: string; content: string }
-  | { type: 'done'; requestId: string; model: string }
+  | { type: 'reasoning-delta'; requestId: string; content: string }
+  | { type: 'done'; requestId: string; model: string; debug?: AiStreamDebugInfo }
   | { type: 'error'; requestId: string; error: string };
 
 export type AiRuntimeRequest =
   | AiChatRequest
   | AiTestRequest
   | AiDetectReadingModeRequest
-  | AiGeneratePaperOverviewRequest;
+  | AiGeneratePaperOverviewRequest
+  | AiVisionRequest
+  | AiVisionTestRequest;
 
 export interface AiRuntimeResponse {
   ok: boolean;
@@ -129,6 +172,19 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   reasoning: 'disabled',
 };
 
+export const DEFAULT_VISION_AI_CONFIG: VisionAiConfig = {
+  mode: 'disabled',
+  providerId: 'openai-compatible',
+  apiKey: '',
+  baseUrl: '',
+  model: '',
+};
+
+export function isVisionAiConfigured(config: VisionAiConfig): boolean {
+  return config.mode === 'separate'
+    && Boolean(config.apiKey.trim() && config.baseUrl.trim() && config.model.trim());
+}
+
 export function normalizeAiBaseUrl(value: string, providerId: AiProviderId): string {
   const normalized = value.trim().replace(/\/+$/, '');
   if (normalized) return normalized;
@@ -141,5 +197,7 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
   return type === 'pdf-helper:ai-chat'
     || type === 'pdf-helper:ai-test'
     || type === 'pdf-helper:ai-detect-reading-mode'
-    || type === 'pdf-helper:ai-generate-paper-overview';
+    || type === 'pdf-helper:ai-generate-paper-overview'
+    || type === 'pdf-helper:ai-vision'
+    || type === 'pdf-helper:ai-vision-test';
 }

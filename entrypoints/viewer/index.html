@@ -72,84 +72,31 @@
     <small id="reading-mode-status">AI自动 · 通用阅读</small>
   </div>
 
-  <div class="toolbar-menu annotation-tools" data-toolbar-menu>
-    <button
-      class="toolbar-pill toolbar-menu-trigger toolbar-nav-button toolbar-annotation-button"
-      type="button"
-      aria-haspopup="menu"
-      aria-expanded="false"
-    >
-      <span aria-hidden="true">✎</span>
-      批注工具
-      <span class="toolbar-menu-caret" aria-hidden="true">⌄</span>
+  <div class="toolbar-group annotation-tools expanded-toolbar-group" aria-label="批注工具">
+    <button class="toolbar-nav-button" type="button" data-editor-mode="select" title="选择文字；选择批注后可移动或编辑">
+      移动/选择
     </button>
-    <div class="toolbar-menu-panel annotation-menu-panel" role="menu" hidden>
-      <div class="toolbar-menu-section">
-        <div class="toolbar-menu-heading">批注模式</div>
-        <div class="toolbar-menu-grid annotation-mode-grid">
-          <button class="toolbar-menu-item" type="button" data-editor-mode="select" role="menuitem" title="选择文字；选择批注后可移动或编辑">
-            移动 / 选择
-          </button>
-          <button class="toolbar-menu-item" type="button" data-editor-mode="highlight" role="menuitem" title="选中文字并高亮">
-            高亮
-          </button>
-          <button class="toolbar-menu-item" type="button" data-editor-mode="ink" role="menuitem" title="自由绘制">
-            画笔
-          </button>
-          <button class="toolbar-menu-item" type="button" data-editor-mode="text" role="menuitem" title="在页面上添加文本">
-            文字批注
-          </button>
-        </div>
-      </div>
-
-      <div class="toolbar-menu-section">
-        <div class="toolbar-menu-heading">样式</div>
-        <label class="highlight-color-control toolbar-menu-color" title="高亮颜色">
-          <span>高亮颜色</span>
-          <input id="highlight-color" type="color" value="#fff066" />
-        </label>
-      </div>
-
-      <div class="toolbar-menu-section">
-        <div class="toolbar-menu-heading">编辑与管理</div>
-        <div class="toolbar-menu-grid">
-          <button id="undo-annotation" class="toolbar-menu-item" type="button" role="menuitem" title="撤销批注">撤销</button>
-          <button id="redo-annotation" class="toolbar-menu-item" type="button" role="menuitem" title="重做批注">重做</button>
-          <button id="smart-copy" class="toolbar-menu-item" type="button" role="menuitem" title="整理复制选中文本">整理复制</button>
-          <button id="toggle-notes" class="toolbar-menu-item" type="button" role="menuitem" title="隐藏/显示所有笔记标记">隐藏笔记</button>
-        </div>
-      </div>
-    </div>
+    <button class="toolbar-nav-button" type="button" data-editor-mode="highlight" title="选中文字并高亮">
+      ✎ 高亮
+    </button>
+    <label class="highlight-color-control" title="高亮颜色">
+      <span>颜色</span>
+      <input id="highlight-color" type="color" value="#fff066" />
+    </label>
+    <button class="toolbar-nav-button" type="button" data-editor-mode="ink" title="自由绘制">画笔</button>
+    <button class="toolbar-nav-button" type="button" data-editor-mode="text" title="在页面上添加文本">批注</button>
+    <button id="undo-annotation" class="toolbar-nav-button" type="button" title="撤销批注">撤销</button>
+    <button id="redo-annotation" class="toolbar-nav-button" type="button" title="重做批注">重做</button>
+    <button id="smart-copy" class="toolbar-nav-button" type="button" title="整理复制选中文本">整理复制</button>
+    <button id="toggle-notes" class="toolbar-nav-button" type="button" title="隐藏/显示所有笔记标记">隐藏笔记</button>
   </div>
 
-  <div class="toolbar-menu ai-tools-menu" data-toolbar-menu>
-    <button
-      class="toolbar-pill toolbar-menu-trigger toolbar-nav-button toolbar-ai-button"
-      type="button"
-      aria-haspopup="menu"
-      aria-expanded="false"
-    >
-      <span aria-hidden="true">✦</span>
-      AI 工具
-      <span class="toolbar-menu-caret" aria-hidden="true">⌄</span>
+  <div class="toolbar-group ai-tools expanded-toolbar-group" aria-label="AI 工具">
+    <button id="ai-panel-toggle" class="toolbar-pill toolbar-nav-button ai-entry active" type="button">
+      ✦ AI 助手
     </button>
-    <div class="toolbar-menu-panel" role="menu" hidden>
-      <div class="toolbar-menu-section">
-        <div class="toolbar-menu-heading">智能阅读</div>
-        <button id="ai-panel-toggle" class="toolbar-menu-item ai-entry active" type="button" role="menuitem">
-          <span aria-hidden="true">✦</span>
-          聊天与解释
-        </button>
-        <button id="paper-card-entry" class="toolbar-menu-item" type="button" role="menuitem">
-          <span aria-hidden="true">▤</span>
-          生成论文卡片
-        </button>
-        <button id="knowledge-base-entry" class="toolbar-menu-item" type="button" role="menuitem">
-          <span aria-hidden="true">▦</span>
-          知识库
-        </button>
-      </div>
-    </div>
+    <button id="paper-card-entry" class="toolbar-pill toolbar-nav-button" type="button">生成论文卡片</button>
+    <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button">知识库</button>
   </div>
 
   <div id="document-name" class="document-name" title="尚未打开文件">尚未打开文件</div>
@@ -682,10 +629,9 @@
       </section>
 
       <div class="workspace">
-        <aside class="left-panel" aria-label="左侧目录 / 缩略图">
-          <div class="side-tabs">
+        <aside class="left-panel" aria-label="左侧目录">
+          <div class="side-tabs single-tab">
             <button class="active" type="button">目录</button>
-            <button type="button">缩略图</button>
           </div>
 
           <nav class="outline-list" aria-label="PDF 目录">
@@ -714,6 +660,16 @@
                 <span id="status-text">请选择PDF文件。</span>
                 <span id="text-status">文字层尚未加载</span>
               </div>
+              <button
+                id="focus-mode-toggle"
+                class="reader-focus-button"
+                type="button"
+                title="隐藏顶部工具栏，专注阅读 PDF"
+                aria-pressed="false"
+              >
+                <span aria-hidden="true">⛶</span>
+                <span id="focus-mode-label">专注模式</span>
+              </button>
             </div>
 
             <button
@@ -762,16 +718,6 @@
             </div>
 
             <section id="assistant-chat-panel" class="assistant-panel chat-panel" role="tabpanel">
-              <div class="chat-context-card">
-                <div class="chat-context-heading">
-                  <strong>当前上下文</strong>
-                  <button id="clear-chat" type="button">清空对话</button>
-                </div>
-                <div id="chat-context-preview" class="chat-context-preview">
-                  打开 PDF 后会自动携带当前页正文；选中文字时优先使用选区。
-                </div>
-              </div>
-
               <div id="chat-messages" class="chat-messages" aria-live="polite">
                 <article class="chat-message assistant">
                   <div class="chat-message-role">PDF Helper</div>
@@ -787,24 +733,33 @@
                   aria-label="聊天输入"
                 ></textarea>
                 <div class="chat-composer-footer">
-                  <span id="chat-provider-status">AI 尚未配置</span>
+                  <div class="chat-composer-meta">
+                    <span id="chat-provider-status">AI 尚未配置</span>
+                    <label class="chat-reasoning-control" title="设置聊天回答是否启用思考模式">
+                      <span>思考</span>
+                      <select id="deepseek-thinking" aria-label="聊天思考模式">
+                        <option value="disabled">关闭</option>
+                        <option value="enabled">开启</option>
+                      </select>
+                    </label>
+                  </div>
                   <button id="chat-send" class="primary-button" type="submit">发送</button>
                 </div>
               </form>
             </section>
 
-            <section id="assistant-settings-panel" class="assistant-panel settings-panel settings-popover" role="dialog" aria-modal="false" aria-label="AI 设置" hidden>
+            <section id="assistant-settings-panel" class="assistant-panel settings-panel settings-popover" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title" hidden>
               <div class="settings-heading">
                 <div>
-                  <strong>AI 模型服务</strong>
-                  <p>由扩展直接请求所选模型供应商，不需要启动 Python 服务。</p>
+                  <strong id="ai-settings-title">AI 模型配置</strong>
+                  <p>配置会安全保存在当前浏览器扩展中。</p>
                 </div>
                 <div class="settings-heading-actions">
-                  <span class="local-config-badge">本地配置</span>
                   <button id="close-deepseek-settings" class="settings-close-button" type="button" aria-label="关闭设置">×</button>
                 </div>
               </div>
 
+              <div class="settings-section-title">文本模型</div>
               <label class="settings-field">
                 <span>模型供应商</span>
                 <select id="ai-provider">
@@ -817,7 +772,7 @@
 
               <label class="settings-field">
                 <span>API Key</span>
-                <input id="deepseek-api-key" type="password" autocomplete="off" placeholder="sk-..." />
+                <input id="deepseek-api-key" type="text" autocomplete="off" placeholder="sk-..." />
               </label>
 
               <label class="settings-field">
@@ -828,25 +783,42 @@
                 </select>
               </label>
 
-              <label class="settings-field">
-                <span>思考模式</span>
-                <select id="deepseek-thinking">
-                  <option value="disabled">关闭（响应更快）</option>
-                  <option value="enabled">开启（复杂问题）</option>
-                </select>
-              </label>
+              <input id="deepseek-base-url" type="hidden" value="https://api.deepseek.com" />
 
-              <details class="advanced-settings">
-                <summary>高级设置</summary>
+              <div class="settings-section-divider" role="separator"></div>
+              <div class="settings-section-heading">
+                <div>
+                  <strong>视觉模型</strong>
+                  <p>用于识别 PDF 中的图表、公式和页面布局。</p>
+                </div>
+                <select id="vision-ai-mode" aria-label="视觉模型状态">
+                  <option value="disabled">暂不配置</option>
+                  <option value="separate">启用</option>
+                </select>
+              </div>
+
+              <div id="vision-ai-fields" class="settings-nested-fields" hidden>
+                <label class="settings-field">
+                  <span>模型供应商</span>
+                  <select id="vision-ai-provider">
+                    <option value="openai-compatible">OpenAI 兼容接口</option>
+                  </select>
+                </label>
+                <label class="settings-field">
+                  <span>API Key</span>
+                  <input id="vision-api-key" type="text" autocomplete="off" placeholder="视觉模型 API Key" />
+                </label>
+                <label class="settings-field">
+                  <span>模型</span>
+                  <input id="vision-model" type="text" autocomplete="off" placeholder="例如 qwen-vl-max" />
+                </label>
                 <label class="settings-field">
                   <span>API 地址</span>
-                  <input id="deepseek-base-url" type="url" value="https://api.deepseek.com" />
+                  <input id="vision-base-url" type="url" autocomplete="off" placeholder="https://example.com/v1" />
                 </label>
-              </details>
-
-              <p class="settings-privacy-note">
-                API Key 仅保存在当前浏览器扩展的本地存储中；自动识别、聊天、翻译、总结或卡片功能会直接请求所选供应商。
-              </p>
+                <button id="test-vision-ai" class="settings-inline-test" type="button">测试视觉连接</button>
+              </div>
+              <div id="vision-settings-status" class="settings-status" aria-live="polite"></div>
               <div id="deepseek-settings-status" class="settings-status" aria-live="polite"></div>
               <div class="settings-actions">
                 <button id="test-deepseek" type="button">测试连接</button>
@@ -1084,6 +1056,8 @@
       <button id="find-next" type="button" title="下一个">↓</button>
       <button id="find-close" type="button" title="关闭">×</button>
     </form>
+
+    <div id="settings-modal-backdrop" class="settings-modal-backdrop" hidden aria-hidden="true"></div>
 
     <script type="module" src="./main.ts"></script>
   </body>
