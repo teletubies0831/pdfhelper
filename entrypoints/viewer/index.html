@@ -718,6 +718,10 @@
             </div>
 
             <section id="assistant-chat-panel" class="assistant-panel chat-panel" role="tabpanel">
+              <div class="chat-panel-toolbar">
+                <span>当前 PDF 对话</span>
+                <button id="clear-chat" type="button" title="清空当前 PDF 的聊天记录">清空对话</button>
+              </div>
               <div id="chat-messages" class="chat-messages" aria-live="polite">
                 <article class="chat-message assistant">
                   <div class="chat-message-role">PDF Helper</div>
@@ -726,14 +730,17 @@
               </div>
 
               <form id="chat-form" class="chat-composer">
+                <div id="chat-attachments" class="chat-attachments" aria-label="待发送截图" hidden></div>
                 <textarea
                   id="chat-input"
                   rows="3"
-                  placeholder="询问当前 PDF；Enter 发送，Shift + Enter 换行"
+                  placeholder="询问当前 PDF；可粘贴截图，Enter 发送，Shift + Enter 换行"
                   aria-label="聊天输入"
                 ></textarea>
                 <div class="chat-composer-footer">
                   <div class="chat-composer-meta">
+                    <input id="chat-image-input" type="file" accept="image/*" multiple hidden />
+                    <button id="chat-image-button" class="chat-image-button" type="button" title="添加截图，也可以直接粘贴截图" aria-label="添加截图">截图</button>
                     <span id="chat-provider-status">AI 尚未配置</span>
                     <label class="chat-reasoning-control" title="设置聊天回答是否启用思考模式">
                       <span>思考</span>
@@ -781,6 +788,21 @@
                   <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
                   <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
                 </select>
+              </label>
+
+              <label class="settings-field">
+                <span>最大输出 Token</span>
+                <input
+                  id="deepseek-max-output-tokens"
+                  type="number"
+                  min="256"
+                  max="65536"
+                  step="256"
+                  value="8192"
+                  inputmode="numeric"
+                  aria-describedby="deepseek-max-output-tokens-hint"
+                />
+                <small id="deepseek-max-output-tokens-hint">思考过程和最终回答共同占用该额度，默认 8192。</small>
               </label>
 
               <input id="deepseek-base-url" type="hidden" value="https://api.deepseek.com" />

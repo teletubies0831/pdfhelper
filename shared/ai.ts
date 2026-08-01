@@ -53,6 +53,7 @@ export interface AiConfig {
   baseUrl: string;
   model: string;
   reasoning: AiReasoningMode;
+  maxOutputTokens: number;
 }
 
 export type VisionAiMode = 'disabled' | 'separate';
@@ -65,9 +66,19 @@ export interface VisionAiConfig {
   model: string;
 }
 
+export interface AiImageAttachment {
+  id: string;
+  name: string;
+  mediaType: string;
+  dataUrl: string;
+  width?: number;
+  height?: number;
+}
+
 export interface AiConversationMessage {
   role: 'user' | 'assistant';
   content: string;
+  images?: AiImageAttachment[];
 }
 
 export interface AiDocumentContext {
@@ -77,6 +88,7 @@ export interface AiDocumentContext {
   selectedText?: string;
   pageText?: string;
   documentText?: string;
+  imageAnalysis?: string;
   readingMode?: ResolvedReadingMode;
 }
 
@@ -170,6 +182,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   baseUrl: 'https://api.deepseek.com',
   model: 'deepseek-v4-flash',
   reasoning: 'disabled',
+  maxOutputTokens: 8192,
 };
 
 export const DEFAULT_VISION_AI_CONFIG: VisionAiConfig = {
@@ -200,4 +213,10 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
     || type === 'pdf-helper:ai-generate-paper-overview'
     || type === 'pdf-helper:ai-vision'
     || type === 'pdf-helper:ai-vision-test';
+}
+
+export function normalizeAiMaxOutputTokens(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_AI_CONFIG.maxOutputTokens;
+  return Math.min(65536, Math.max(256, Math.trunc(parsed)));
 }

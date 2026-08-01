@@ -17,6 +17,7 @@ import {
   VISION_AI_CONFIG_STORAGE_KEY,
   isAiRuntimeRequest,
   normalizeAiBaseUrl,
+  normalizeAiMaxOutputTokens,
   type AiConfig,
   type AiConversationMessage,
   type AiDocumentContext,
@@ -110,6 +111,7 @@ async function getAiConfig(): Promise<AiConfig> {
     baseUrl: normalizeAiBaseUrl(source?.baseUrl ?? '', providerId),
     reasoning: source?.reasoning ?? legacy?.thinking ?? DEFAULT_AI_CONFIG.reasoning,
     model: source?.model || DEFAULT_AI_CONFIG.model,
+    maxOutputTokens: normalizeAiMaxOutputTokens(source?.maxOutputTokens),
   };
 
   if (!current && legacy) {
@@ -416,29 +418,60 @@ function buildSystemContent(context?: AiDocumentContext): string {
     contextParts.push(`当前页完整正文（用于定位当前阅读位置）：\n${context.pageText.trim()}`);
   }
   if (context?.documentText?.trim()) {
+    const documentInstructions = context?.imageAnalysis?.trim()
+      ? [
+        '下面提供整篇论文的全部可提取正文，已按 PDF 页码分隔。',
+        '本轮必须先回答截图中实际展示的内容；论文全文仅用于补充截图的背景、术语、方法位置和上下文。',
+        '不得跳过截图分析并直接输出当前页概述或整篇论文总结。',
+      ]
+      : [
+        '下面提供的是整篇论文的全部可提取正文，已按 PDF 页码分隔。',
+        '回答前必须先综合全文判断研究问题、方法、实验、证据、结论和局限，不能只依据当前页。',
+        '当前页和用户选区用于确定提问重点，但全文内容是回答的完整依据。',
+      ];
     contextParts.push([
-      '下面提供的是整篇论文的全部可提取正文，已按 PDF 页码分隔。',
-      '回答前必须先综合全文判断研究问题、方法、实验、证据、结论和局限，不能只依据当前页。',
-      '当前页和用户选区用于确定提问重点，但全文内容是回答的完整依据。',
+      ...documentInstructions,
       `论文全文：\n${context.documentText.trim()}`,
     ].join('\n'));
   }
+  if (context?.imageAnalysis?.trim()) {
+    contextParts.push([
+      '【本轮用户截图——最高优先级】',
+      '用户问题中的“这部分”“这里”“这个”“图里”等指代，默认且必须指向用户上传的截图。',
+      '请直接解释截图中实际出现的内容，不要把问题改写成“当前 PDF 页面讲了什么”或“整篇论文讲了什么”。',
+      '回答顺序必须是：先分析截图，再结合已提供的论文全文补充；论文内容不能覆盖截图主旨。',
+      `视觉工具分析结果：\n${context.imageAnalysis.trim().slice(0, 24000)}`,
+    ].join('\n'));
+  }
+
+  const hasPdfEvidence = Boolean(
+    context?.documentText?.trim()
+    || context?.pageText?.trim()
+    || context?.selectedText?.trim(),
+  );
+  const primaryInstruction = context?.imageAnalysis?.trim()
+    ? '你是 PDF Helper 的视觉问答助手。本轮首要对象是用户上传的截图，请依据视觉工具分析结果直接回答截图问题。'
+    : '你是 PDF Helper 的论文阅读助手。请阅读所提供的整篇论文全文，并用清晰、准确、可核验的中文回答。';
 
   return [
-    '你是 PDF Helper 的论文阅读助手。请阅读所提供的整篇论文全文，并用清晰、准确、可核验的中文回答。',
+    primaryInstruction,
     '如果上下文不足，请明确说明，不要编造文档中不存在的内容。涉及翻译时忠实保留术语，涉及解释时优先给出直观含义。',
     '请使用简洁的 Markdown 组织回答；不要给整个回答套一层 Markdown 代码围栏。数学变量和公式必须使用 LaTeX：行内公式用 $...$，独立公式用 $$...$$。',
     ...contextParts,
-    [
+    hasPdfEvidence ? [
       '【最终引用格式要求——回答前必须再次检查】',
-      '凡是回答中的事实、方法、实验结果、数字或结论能够由论文原文直接支持时，请在对应句末添加：[[PDF:P页码|该页逐字原文短句]]。',
+      '凡是回答中的事实、方法、实验结果、数字或结论能够由论文原文直接支持时，请在对应内容后添加：[[PDF:P页码|该页逐字原文片段]]。',
       '正确示例：[[PDF:P8|the matching rates are divided into three bins]]。',
+      '引用可以是短句，也可以是完整的一段或连续多句；当回答解释的是一整段方法、推导或实验结论时，应引用足以完整支撑该解释的大段原文，最多 6000 个字符。',
+      '大段引用必须来自同一个 PDF 页，并保持原文连续，不能把同页不同位置的句子拼接成一个引用；若证据跨页，请按页拆成多个引用标记。',
+      '引用标记内部必须直接复制所提供 PDF 全文中的纯文本，不要在原文中重新添加 Markdown、LaTeX 定界符或改写数学符号。',
+      '回答完成后检查：只要关键论断在论文中有直接依据，就应给出可校验引用；引用长度以能够完整支撑对应解释为准，不要为了缩短而丢失必要上下文。',
       '禁止输出 [[PDF:8]]、[[PDF:P8]]、[PDF:8] 等不含逐字原文的简写；这些格式无法校验，也不会显示为可点击引用。',
-      '页码必须使用所提供全文中的 PDF 页码；原文短句必须逐字摘自该页，建议 10—180 个字符。',
+      '页码必须使用所提供全文中的 PDF 页码；原文短句必须逐字摘自该页。',
       '只有确实存在对应原文时才能添加标记。无法找到逐字原文时不要添加引用，严禁编造页码、改写原句后冒充原文或给推测性内容添加引用。',
       '引用标记只用于事实依据，不要单独列出参考文献清单。',
-    ].join('\n'),
-  ].join('\n\n');
+    ].join('\n') : '',
+  ].filter(Boolean).join('\n\n');
 }
 
 function buildConversation(
@@ -480,7 +513,7 @@ async function streamAiResponse(
 ): Promise<void> {
   const config = await getAiConfig();
   const adapter = getProviderAdapter(config);
-  const maxOutputTokens = 2048;
+  const maxOutputTokens = config.maxOutputTokens;
   const conversation = buildConversation(request.messages, request.context);
   const debug = {
     providerId: config.providerId,
@@ -634,7 +667,7 @@ async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResp
     const result = await adapter.chat(
       config,
       buildConversation(message.messages, message.context),
-      2048,
+      config.maxOutputTokens,
     );
     return {
       ok: true,

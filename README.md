@@ -33,7 +33,7 @@
 ## 1. 配置 AI API
 
 启动扩展后，在 AI 阅读助手右上角“设置”中填写 API Key、Base URL 和模型。
-聊天、翻译、解释、总结、阅读卡片与论文总览卡片都会由扩展后台直接调用该 API，不需要运行 `server/start.ps1`。
+聊天、翻译、解释、总结、阅读卡片与论文总览卡片都会由扩展后台直接调用该 API，无需本地后端。
 
 ## 2. 启动扩展
 
@@ -61,10 +61,9 @@ pnpm build
 ## 项目目录
 
 - `entrypoints/background.ts`：扩展后台逻辑
-- `entrypoints/sidepanel/`：侧边栏页面
+- `entrypoints/helper-panel/`：辅助面板页面
 - `entrypoints/viewer/`：PDF.js 阅读器
 - `shared/`：共享类型与 PDF 来源处理
-- `server/`：旧版兼容后端（当前前端不再依赖，可不启动）
 
 ## 不应提交或打包的内容
 

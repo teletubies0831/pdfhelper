@@ -31,8 +31,10 @@ import {
   VISION_AI_CONFIG_STORAGE_KEY,
   isVisionAiConfigured,
   normalizeAiBaseUrl,
+  normalizeAiMaxOutputTokens,
   type AiConfig,
   type AiConversationMessage,
+  type AiImageAttachment,
   type AiProviderId,
   type AiReasoningMode,
   type AiRuntimeResponse,
@@ -49,6 +51,11 @@ import {
   type ReadingModeState,
   type ResolvedReadingMode,
 } from '../../shared/reading-mode';
+import { createDocumentAgentId } from '../../shared/document-agent';
+import {
+  getLatestDocumentSession,
+  putDocumentSession,
+} from './document-agent-store';
 
 import './style.css';
 
@@ -321,11 +328,16 @@ const closeDeepSeekSettingsButton = requiredElement<HTMLButtonElement>('close-de
 const chatMessagesElement = requiredElement<HTMLElement>('chat-messages');
 const chatForm = requiredElement<HTMLFormElement>('chat-form');
 const chatInput = requiredElement<HTMLTextAreaElement>('chat-input');
+const chatAttachmentsElement = requiredElement<HTMLElement>('chat-attachments');
+const chatImageInput = requiredElement<HTMLInputElement>('chat-image-input');
+const chatImageButton = requiredElement<HTMLButtonElement>('chat-image-button');
 const chatSendButton = requiredElement<HTMLButtonElement>('chat-send');
+const clearChatButton = requiredElement<HTMLButtonElement>('clear-chat');
 const chatProviderStatus = requiredElement<HTMLElement>('chat-provider-status');
 const aiProviderSelect = requiredElement<HTMLSelectElement>('ai-provider');
 const deepSeekApiKeyInput = requiredElement<HTMLInputElement>('deepseek-api-key');
 const deepSeekModelSelect = requiredElement<HTMLSelectElement>('deepseek-model');
+const deepSeekMaxOutputTokensInput = requiredElement<HTMLInputElement>('deepseek-max-output-tokens');
 const deepSeekThinkingSelect = requiredElement<HTMLSelectElement>('deepseek-thinking');
 const deepSeekBaseUrlInput = requiredElement<HTMLInputElement>('deepseek-base-url');
 const deepSeekSettingsStatus = requiredElement<HTMLElement>('deepseek-settings-status');
@@ -2106,6 +2118,9 @@ let aiConfigLoaded = false;
 let visionAiConfig: VisionAiConfig = { ...DEFAULT_VISION_AI_CONFIG };
 let chatHistory: AiConversationMessage[] = [];
 let chatRequestPending = false;
+let chatPersistenceQueue: Promise<void> = Promise.resolve();
+let pendingChatImages: AiImageAttachment[] = [];
+let chatImagePreviewOverlay: HTMLElement | null = null;
 let readingModePreference: ReadingModePreference = 'auto';
 let resolvedReadingMode: ResolvedReadingMode = 'general';
 let readingModeDetectionPending = false;
@@ -2234,13 +2249,22 @@ interface MarkdownCitationToken {
   quote: string;
 }
 
+// A citation may intentionally contain a full paragraph. Keep one page worth
+// of text available so the click target can resolve and highlight the complete
+// source range instead of forcing the model to cite only a short sentence.
+const PDF_CITATION_PATTERN_SOURCE = String.raw`\[\[PDF:P(\d{1,5})\|([\s\S]{2,6000}?)\]\]`;
+
+function createPdfCitationPattern(): RegExp {
+  return new RegExp(PDF_CITATION_PATTERN_SOURCE, 'g');
+}
+
 function protectMarkdownCitations(content: string): {
   markdown: string;
   tokens: MarkdownCitationToken[];
 } {
   const tokens: MarkdownCitationToken[] = [];
   const markdown = content.replace(
-    /\[\[PDF:P(\d{1,5})\|([^\]\r\n]{1,500})\]\]/g,
+    createPdfCitationPattern(),
     (_match, pageValue: string, quoteValue: string) => {
       const pageNumber = Number(pageValue);
       const quote = quoteValue.replace(/\s+/g, ' ').trim();
@@ -2298,6 +2322,29 @@ function normalizeBareLatexMath(content: string): string {
   );
 }
 
+function repairUnclosedInlineMathLines(content: string): string {
+  return content.split(/\r?\n/).map((line) => {
+    const delimiters: number[] = [];
+    for (let index = 0; index < line.length; index += 1) {
+      if (line[index] !== '$' || line[index - 1] === '\\') continue;
+      if (line[index - 1] === '$' || line[index + 1] === '$') continue;
+      delimiters.push(index);
+    }
+    if (delimiters.length % 2 === 0) return line;
+    const opener = delimiters.at(-1);
+    if (opener === undefined) return line;
+    const candidate = line.slice(opener + 1).trim();
+    const looksLikeLatex = candidate.length >= 3
+      && candidate.length <= 2000
+      && (
+        /\\[A-Za-z]+/.test(candidate)
+        || /[_^](?:\{|[A-Za-z0-9])/.test(candidate)
+        || /(?:^|\s)[A-Za-z][A-Za-z0-9_{}^]*\s*=/.test(candidate)
+      );
+    return looksLikeLatex ? `${line}$` : line;
+  }).join('\n');
+}
+
 function protectMarkdownMath(content: string): {
   markdown: string;
   tokens: MarkdownMathToken[];
@@ -2313,8 +2360,19 @@ function protectMarkdownMath(content: string): {
     .replace(/\\\[([\s\S]+?)\\\]/g, (_match, expression: string) => addToken(expression, true))
     .replace(/\\\(([\s\S]+?)\\\)/g, (_match, expression: string) => addToken(expression, false));
 
+  // Models occasionally wrap one inline formula across several Markdown
+  // lines. Accept soft line breaks inside $...$, but never cross an empty
+  // paragraph; otherwise one unmatched currency/document dollar sign could
+  // consume a large part of the answer.
   markdown = markdown.replace(
-    /(^|[^\\$])\$([^$\n]+?)\$/gm,
+    /(^|[^\\$])\$((?:[^$\r\n]|\r?\n(?!\s*\r?\n)){1,2000}?)\$/g,
+    (_match, prefix: string, expression: string) =>
+      `${prefix}${addToken(expression.replace(/\s*\r?\n\s*/g, ' '), false)}`,
+  );
+  // Some providers occasionally omit the closing dollar entirely. Repair it
+  // only when the unmatched tail is unmistakably LaTeX, then tokenize again.
+  markdown = repairUnclosedInlineMathLines(markdown).replace(
+    /(^|[^\\$])\$([^$\r\n]{1,2000}?)\$/g,
     (_match, prefix: string, expression: string) => `${prefix}${addToken(expression, false)}`,
   );
   return { markdown, tokens };
@@ -2369,7 +2427,7 @@ function renderChatMarkdown(
   const citationResult = renderCitations
     ? protectMarkdownCitations(content)
     : {
-      markdown: content.replace(/\[\[PDF:P\d{1,5}\|[^\]\r\n]{1,500}\]\]/g, ''),
+      markdown: content.replace(createPdfCitationPattern(), ''),
       tokens: [] as MarkdownCitationToken[],
     };
   const mathResult = protectMarkdownMath(citationResult.markdown);
@@ -2388,6 +2446,115 @@ function renderChatMarkdown(
   }
   restoreMarkdownMath(container, mathResult.tokens);
   restoreMarkdownCitations(container, citationResult.tokens);
+}
+
+type ChatActivityState = 'active' | 'done' | 'error';
+
+function updateChatActivity(
+  message: HTMLElement,
+  key: string,
+  label: string,
+  state: ChatActivityState,
+  detail = '',
+): void {
+  let activity = message.querySelector<HTMLElement>('.chat-message-activity');
+  if (!activity) {
+    activity = document.createElement('div');
+    activity.className = 'chat-message-activity';
+    activity.setAttribute('aria-live', 'polite');
+    const firstContent = message.querySelector('.chat-message-reasoning, .chat-message-content');
+    if (firstContent) message.insertBefore(activity, firstContent);
+    else message.append(activity);
+  }
+
+  let row = Array.from(activity.querySelectorAll<HTMLElement>('.chat-activity-row'))
+    .find((item) => item.dataset.activityKey === key);
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'chat-activity-row';
+    row.dataset.activityKey = key;
+    const icon = document.createElement('span');
+    icon.className = 'chat-activity-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('span');
+    text.className = 'chat-activity-label';
+    const secondary = document.createElement('small');
+    secondary.className = 'chat-activity-detail';
+    row.append(icon, text, secondary);
+    activity.append(row);
+  }
+
+  row.dataset.state = state;
+  const text = row.querySelector<HTMLElement>('.chat-activity-label');
+  const secondary = row.querySelector<HTMLElement>('.chat-activity-detail');
+  if (text) text.textContent = label;
+  if (secondary) {
+    secondary.textContent = detail;
+    secondary.hidden = !detail;
+  }
+  chatMessagesElement.scrollTop = chatMessagesElement.scrollHeight;
+}
+
+function failActiveChatActivities(message: HTMLElement): void {
+  for (const row of message.querySelectorAll<HTMLElement>('.chat-activity-row[data-state="active"]')) {
+    row.dataset.state = 'error';
+  }
+}
+
+function renderChatMessageImages(
+  message: HTMLElement,
+  images: AiImageAttachment[] | undefined,
+): void {
+  message.querySelector('.chat-message-images')?.remove();
+  if (!images?.length) return;
+  const gallery = document.createElement('div');
+  gallery.className = 'chat-message-images';
+  for (const attachment of images) {
+    const image = document.createElement('img');
+    image.className = 'chat-message-image';
+    image.src = attachment.dataUrl;
+    image.alt = attachment.name || '聊天截图';
+    image.title = attachment.name || '聊天截图';
+    image.tabIndex = 0;
+    image.setAttribute('role', 'button');
+    image.setAttribute('aria-label', `放大查看 ${attachment.name || '聊天截图'}`);
+    gallery.append(image);
+  }
+  const body = message.querySelector('.chat-message-content');
+  if (body) message.insertBefore(gallery, body);
+  else message.append(gallery);
+}
+
+function closeChatImagePreview(): void {
+  const overlay = chatImagePreviewOverlay;
+  if (!overlay) return;
+  chatImagePreviewOverlay = null;
+  overlay.classList.remove('visible');
+  window.setTimeout(() => overlay.remove(), 160);
+}
+
+function openChatImagePreview(source: string, alternativeText: string): void {
+  closeChatImagePreview();
+  const overlay = document.createElement('div');
+  overlay.className = 'chat-image-preview-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', '截图大图预览；再次点击退出');
+  overlay.tabIndex = -1;
+
+  const image = document.createElement('img');
+  image.className = 'chat-image-preview-image';
+  image.src = source;
+  image.alt = alternativeText || '聊天截图大图';
+  const hint = document.createElement('div');
+  hint.className = 'chat-image-preview-hint';
+  hint.textContent = '再次点击退出查看 · Esc 关闭';
+  overlay.append(image, hint);
+  overlay.addEventListener('click', closeChatImagePreview);
+  document.body.append(overlay);
+  chatImagePreviewOverlay = overlay;
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+  overlay.focus();
 }
 
 function updateChatReasoning(
@@ -2467,7 +2634,7 @@ function updateChatMessage(
 function appendChatMessage(
   role: 'user' | 'assistant',
   content: string,
-  options: { pending?: boolean; error?: boolean } = {},
+  options: { pending?: boolean; error?: boolean; images?: AiImageAttachment[] } = {},
 ): HTMLElement {
   const message = document.createElement('article');
   message.className = `chat-message ${role}`;
@@ -2483,8 +2650,130 @@ function appendChatMessage(
 
   message.append(roleLabel, body);
   chatMessagesElement.append(message);
+  renderChatMessageImages(message, options.images);
   updateChatMessage(message, content, options);
   return message;
+}
+
+const MAX_CHAT_IMAGE_COUNT = 3;
+const MAX_CHAT_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_CHAT_IMAGE_EDGE = 1600;
+
+async function createChatImageAttachment(
+  blob: Blob,
+  fallbackName = 'screenshot.png',
+): Promise<AiImageAttachment> {
+  if (!blob.type.startsWith('image/')) throw new Error('只能添加图片文件。');
+  if (blob.size > MAX_CHAT_IMAGE_BYTES) throw new Error('单张图片不能超过 15 MB。');
+
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const scale = Math.min(1, MAX_CHAT_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) throw new Error('浏览器无法处理这张图片。');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, width, height);
+    context.drawImage(bitmap, 0, 0, width, height);
+    return {
+      id: crypto.randomUUID(),
+      name: blob instanceof File && blob.name ? blob.name : fallbackName,
+      mediaType: 'image/jpeg',
+      dataUrl: canvas.toDataURL('image/jpeg', 0.88),
+      width,
+      height,
+    };
+  } finally {
+    bitmap.close();
+  }
+}
+
+function renderPendingChatImages(): void {
+  chatAttachmentsElement.replaceChildren();
+  chatAttachmentsElement.hidden = pendingChatImages.length === 0;
+  for (const attachment of pendingChatImages) {
+    const item = document.createElement('div');
+    item.className = 'chat-attachment';
+    const image = document.createElement('img');
+    image.src = attachment.dataUrl;
+    image.alt = attachment.name;
+    image.title = attachment.name;
+    image.tabIndex = 0;
+    image.setAttribute('role', 'button');
+    image.setAttribute('aria-label', `放大查看 ${attachment.name}`);
+    image.addEventListener('click', () => openChatImagePreview(image.src, image.alt));
+    image.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openChatImagePreview(image.src, image.alt);
+    });
+    const removeButton = document.createElement('button');
+    removeButton.type = 'button';
+    removeButton.className = 'chat-attachment-remove';
+    removeButton.textContent = '×';
+    removeButton.setAttribute('aria-label', `移除 ${attachment.name}`);
+    removeButton.addEventListener('click', () => {
+      pendingChatImages = pendingChatImages.filter((imageItem) => imageItem.id !== attachment.id);
+      renderPendingChatImages();
+    });
+    item.append(image, removeButton);
+    chatAttachmentsElement.append(item);
+  }
+}
+
+async function addChatImageFiles(files: Iterable<Blob>): Promise<void> {
+  const availableSlots = MAX_CHAT_IMAGE_COUNT - pendingChatImages.length;
+  if (availableSlots <= 0) {
+    setStatus(`一次最多添加 ${MAX_CHAT_IMAGE_COUNT} 张截图。`, true);
+    return;
+  }
+  const candidates = Array.from(files).slice(0, availableSlots);
+  for (const [index, file] of candidates.entries()) {
+    try {
+      pendingChatImages.push(
+        await createChatImageAttachment(file, `screenshot-${index + 1}.png`),
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error), true);
+    }
+  }
+  renderPendingChatImages();
+  chatInput.focus();
+}
+
+function clearPendingChatImages(): void {
+  pendingChatImages = [];
+  chatImageInput.value = '';
+  renderPendingChatImages();
+}
+
+async function inspectChatImageWithVision(
+  attachment: AiImageAttachment,
+  question: string,
+  context: AiStreamStartMessage['context'],
+): Promise<string> {
+  if (!isVisionAiConfigured(visionAiConfig)) {
+    throw new Error('请先在“设置 → 视觉模型”中启用并配置视觉模型。');
+  }
+  const response = await browser.runtime.sendMessage({
+    type: 'pdf-helper:ai-vision',
+    prompt: [
+      '这是用户随聊天消息附加的截图。',
+      question ? `用户问题：${question.slice(0, 2000)}` : '用户希望你分析这张截图。',
+      '请准确识别截图中的文字、公式、图表、界面状态和重要空间关系。',
+      '输出可直接交给主语言模型使用的中文事实说明；不确定的地方明确标注，不要猜测。',
+    ].join('\n'),
+    imageDataUrl: attachment.dataUrl,
+    context,
+  }) as AiRuntimeResponse;
+  if (!response?.ok || !response.content?.trim()) {
+    throw new Error(response?.error || `视觉模型未能分析 ${attachment.name}。`);
+  }
+  return response.content.trim();
 }
 
 function requestAiStream(
@@ -2605,13 +2894,127 @@ function requestAiStream(
   });
 }
 
-function resetChatConversation(): void {
-  chatHistory = [];
+function renderChatConversation(messages: AiConversationMessage[]): void {
+  chatHistory = messages.map((message) => ({
+    ...message,
+    images: message.images?.map((image) => ({ ...image })),
+  }));
   chatMessagesElement.replaceChildren();
+  for (const message of chatHistory) {
+    appendChatMessage(message.role, message.content, { images: message.images });
+  }
+  if (chatHistory.length > 0) {
+    requestAnimationFrame(() => {
+      chatMessagesElement.scrollTop = chatMessagesElement.scrollHeight;
+    });
+    return;
+  }
   appendChatMessage(
     'assistant',
     '你好，我可以结合当前 PDF 和你选中的文字回答问题。选中一段原文后，可以直接让我翻译、解释或总结。',
   );
+}
+
+function resetChatConversation(): void {
+  clearPendingChatImages();
+  renderChatConversation([]);
+}
+
+function getDocumentChatId(documentProxy: PDFDocumentProxy): string {
+  return createDocumentAgentId(
+    getPdfFingerprint(documentProxy),
+    sourceName,
+    documentProxy.numPages,
+  );
+}
+
+function queueChatConversationPersistence(
+  documentProxy: PDFDocumentProxy | null,
+): Promise<void> {
+  if (!documentProxy || !('indexedDB' in window)) return Promise.resolve();
+  const documentId = getDocumentChatId(documentProxy);
+  const title = sourceName ? getDisplayFileName(sourceName) : '未命名 PDF';
+  const messages = chatHistory.map((message) => ({
+    ...message,
+    images: message.images?.map((image) => ({ ...image })),
+  }));
+  chatPersistenceQueue = chatPersistenceQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const existing = await getLatestDocumentSession(documentId);
+      const now = Date.now();
+      await putDocumentSession({
+        id: existing?.id ?? `${documentId}:chat:default`,
+        documentId,
+        title,
+        messages,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+    })
+    .catch((error) => {
+      console.warn('[PDF Helper 对话存储] 保存失败', {
+        documentId,
+        error,
+      });
+    });
+  return chatPersistenceQueue;
+}
+
+async function restoreChatConversation(documentProxy: PDFDocumentProxy): Promise<void> {
+  if (!('indexedDB' in window)) {
+    resetChatConversation();
+    return;
+  }
+  const documentId = getDocumentChatId(documentProxy);
+  try {
+    await chatPersistenceQueue;
+    const session = await getLatestDocumentSession(documentId);
+    if (pdfDocument !== documentProxy) return;
+    const storedMessages = (session?.messages ?? []).filter(
+      (message): message is AiConversationMessage =>
+        (message?.role === 'user' || message?.role === 'assistant')
+        && typeof message.content === 'string'
+        && Boolean(message.content.trim()),
+    ).map((message) => ({
+      ...message,
+      images: Array.isArray(message.images)
+        ? message.images.filter(
+          (image) => image
+            && typeof image.id === 'string'
+            && typeof image.name === 'string'
+            && typeof image.dataUrl === 'string'
+            && image.dataUrl.startsWith('data:image/'),
+        )
+        : undefined,
+    }));
+    const messages: AiConversationMessage[] = [];
+    let citationsChanged = false;
+    for (const message of storedMessages) {
+      if (message.role !== 'assistant' || !createPdfCitationPattern().test(message.content)) {
+        messages.push(message);
+        continue;
+      }
+      const validatedContent = await validatePdfCitations(message.content, documentProxy);
+      citationsChanged ||= validatedContent !== message.content;
+      messages.push({ ...message, content: validatedContent });
+    }
+    if (pdfDocument !== documentProxy) return;
+    renderChatConversation(messages);
+    if (citationsChanged) void queueChatConversationPersistence(documentProxy);
+    console.info('[PDF Helper 对话存储] 已恢复当前 PDF 对话', {
+      documentId,
+      messages: messages.length,
+      citationsRevalidated: citationsChanged,
+      updatedAt: session?.updatedAt,
+    });
+  } catch (error) {
+    if (pdfDocument === documentProxy) resetChatConversation();
+    console.warn('[PDF Helper 对话存储] 恢复失败', {
+      documentId,
+      error,
+    });
+  }
 }
 
 function updateDeepSeekProviderStatus(): void {
@@ -2631,6 +3034,7 @@ function readDeepSeekConfigFromForm(): AiConfig {
     baseUrl: normalizeAiBaseUrl(deepSeekBaseUrlInput.value, providerId),
     model: deepSeekModelSelect.value,
     reasoning: deepSeekThinkingSelect.value as AiReasoningMode,
+    maxOutputTokens: normalizeAiMaxOutputTokens(deepSeekMaxOutputTokensInput.value),
   };
 }
 
@@ -2779,6 +3183,7 @@ function populateDeepSeekConfigForm(config: AiConfig): void {
   aiProviderSelect.value = config.providerId;
   deepSeekApiKeyInput.value = config.apiKey;
   deepSeekModelSelect.value = config.model;
+  deepSeekMaxOutputTokensInput.value = String(config.maxOutputTokens);
   deepSeekThinkingSelect.value = config.reasoning;
   deepSeekBaseUrlInput.value = config.baseUrl;
 }
@@ -2802,6 +3207,7 @@ async function loadDeepSeekConfig(): Promise<void> {
     apiKey: value?.apiKey?.trim() ?? '',
     baseUrl: normalizeAiBaseUrl(value?.baseUrl ?? DEFAULT_AI_CONFIG.baseUrl, providerId),
     reasoning: value?.reasoning ?? legacy?.thinking ?? DEFAULT_AI_CONFIG.reasoning,
+    maxOutputTokens: normalizeAiMaxOutputTokens(value?.maxOutputTokens),
   };
   if (!current && legacy) await browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: aiConfig });
   const storedVision = stored[VISION_AI_CONFIG_STORAGE_KEY] as Partial<VisionAiConfig> | undefined;
@@ -3076,7 +3482,11 @@ async function setReadingModePreference(preference: ReadingModePreference): Prom
 
 async function sendChatMessage(): Promise<void> {
   const content = chatInput.value.trim();
-  if (!content || chatRequestPending) return;
+  const requestImages = pendingChatImages.map((image) => ({ ...image }));
+  const userPrompt = content || (requestImages.length
+    ? '请直接分析这些截图中的内容。'
+    : '');
+  if (!userPrompt || chatRequestPending) return;
 
   if (!aiConfig.apiKey) {
     setDeepSeekSettingsOpen(true);
@@ -3084,17 +3494,40 @@ async function sendChatMessage(): Promise<void> {
     deepSeekSettingsStatus.textContent = '先配置并保存 API Key，之后即可聊天。';
     return;
   }
+  if (requestImages.length > 0 && !isVisionAiConfigured(visionAiConfig)) {
+    setDeepSeekSettingsOpen(true);
+    visionSettingsStatus.classList.add('error');
+    visionSettingsStatus.textContent = '发送截图前，请先启用并配置视觉模型。';
+    return;
+  }
 
   chatRequestPending = true;
+  const documentAtRequestStart = pdfDocument;
+  const documentNameAtRequestStart = sourceName;
   chatInput.value = '';
+  clearPendingChatImages();
   chatInput.disabled = true;
+  chatImageButton.disabled = true;
   chatSendButton.disabled = true;
-  chatHistory.push({ role: 'user', content });
-  appendChatMessage('user', content);
+  clearChatButton.disabled = true;
+  chatHistory.push({ role: 'user', content: userPrompt, images: requestImages });
+  appendChatMessage('user', userPrompt, { images: requestImages });
+  void queueChatConversationPersistence(documentAtRequestStart);
   const assistantMessage = appendChatMessage('assistant', '', { pending: true });
+  updateChatActivity(
+    assistantMessage,
+    'context',
+    requestImages.length > 0
+      ? '正在准备截图分析'
+      : documentAtRequestStart
+        ? '正在读取 PDF 全文'
+        : '正在准备对话上下文',
+    'active',
+  );
   let streamedContent = '';
   let streamedReasoningContent = '';
   let renderFrame = 0;
+  let modelActivityStarted = false;
 
   const flushStreamedContent = (): void => {
     renderFrame = 0;
@@ -3103,7 +3536,6 @@ async function sendChatMessage(): Promise<void> {
   };
 
   try {
-    const documentAtRequestStart = pdfDocument;
     const pageNumber = Math.max(1, selectedTextPageNumber || pdfViewer.currentPageNumber || 1);
     const documentText = documentAtRequestStart
       ? await extractFullDocumentText(documentAtRequestStart)
@@ -3111,24 +3543,157 @@ async function sendChatMessage(): Promise<void> {
     if (pdfDocument !== documentAtRequestStart) {
       throw new Error('PDF 已切换，请在新文档中重新发送问题。');
     }
+    updateChatActivity(
+      assistantMessage,
+      'context',
+      requestImages.length > 0
+        ? '截图与 PDF 全文上下文已准备'
+        : documentAtRequestStart
+          ? '已读取 PDF 全文'
+          : '对话上下文已准备',
+      'done',
+      documentText && documentAtRequestStart ? `${documentAtRequestStart.numPages} 页` : '',
+    );
+
+    const visionContext = {
+      documentName: documentNameAtRequestStart
+        ? getDisplayFileName(documentNameAtRequestStart)
+        : undefined,
+      pageNumber,
+      totalPages: documentAtRequestStart?.numPages,
+      readingMode: documentAtRequestStart ? 'paper' as const : resolvedReadingMode,
+    };
+    const visionTasks = requestImages.map(async (attachment, index) => {
+      const activityKey = `vision-${attachment.id}`;
+      updateChatActivity(
+        assistantMessage,
+        activityKey,
+        `调用视觉工具 · 分析截图 ${index + 1}/${requestImages.length}`,
+        'active',
+        attachment.name,
+      );
+      console.info('[PDF Helper 工具调用] analyze_screenshot', {
+        index: index + 1,
+        name: attachment.name,
+        width: attachment.width,
+        height: attachment.height,
+        execution: 'parallel',
+      });
+      try {
+        const analysis = await inspectChatImageWithVision(
+          attachment,
+          userPrompt,
+          visionContext,
+        );
+        console.info('[PDF Helper 工具结果] analyze_screenshot', {
+          index: index + 1,
+          name: attachment.name,
+          analysis,
+        });
+        updateChatActivity(
+          assistantMessage,
+          activityKey,
+          `视觉工具已完成 · 截图 ${index + 1}/${requestImages.length}`,
+          'done',
+          attachment.name,
+        );
+        return `[截图 ${index + 1}：${attachment.name}]\n${analysis}`;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        updateChatActivity(
+          assistantMessage,
+          activityKey,
+          `视觉工具失败 · 截图 ${index + 1}/${requestImages.length}`,
+          'error',
+          message,
+        );
+        console.error('[PDF Helper 工具失败] analyze_screenshot', {
+          index: index + 1,
+          name: attachment.name,
+          error,
+        });
+        throw error;
+      }
+    });
+    const visionResults = await Promise.allSettled(visionTasks);
+    const visionFailures = visionResults.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    if (visionFailures.length > 0) {
+      const firstReason = visionFailures[0]?.reason;
+      throw new Error(
+        `${visionFailures.length} 张截图分析失败：${firstReason instanceof Error ? firstReason.message : String(firstReason)}`,
+      );
+    }
+    const imageAnalyses = visionResults.map((result) =>
+      (result as PromiseFulfilledResult<string>).value,
+    );
+
+    const requestHistory = chatHistory.map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
+    if (imageAnalyses.length > 0) {
+      const lastUserMessage = requestHistory.at(-1);
+      if (lastUserMessage?.role === 'user') {
+        lastUserMessage.content = [
+          userPrompt,
+          '本轮附带了用户截图。“这部分/这里/这个/图里”均指截图，不是当前 PDF 页面。',
+          '必须先直接分析截图中实际展示的内容，再结合论文全文补充背景、术语或上下文。',
+          '禁止跳过截图分析，直接改为总结当前 PDF 页面或整篇论文。',
+        ].join('\n\n');
+      }
+    }
+
+    updateChatActivity(
+      assistantMessage,
+      'model',
+      aiConfig.reasoning === 'enabled' ? '主模型正在思考' : '主模型正在生成回答',
+      'active',
+      aiConfig.model,
+    );
+    modelActivityStarted = true;
     const response = await requestAiStream(
-      chatHistory,
+      requestHistory,
       {
-        documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
+        documentName: documentNameAtRequestStart
+          ? getDisplayFileName(documentNameAtRequestStart)
+          : undefined,
         pageNumber,
         totalPages: documentAtRequestStart?.numPages,
         documentText: documentText || undefined,
-        selectedText: selectedTextForAi || undefined,
+        selectedText: requestImages.length === 0
+          ? selectedTextForAi || undefined
+          : undefined,
+        imageAnalysis: imageAnalyses.join('\n\n') || undefined,
         readingMode: documentAtRequestStart ? 'paper' : resolvedReadingMode,
       },
       (delta) => {
         if (delta.content) streamedContent += delta.content;
         if (delta.reasoningContent) streamedReasoningContent += delta.reasoningContent;
+        if (delta.content) {
+          updateChatActivity(
+            assistantMessage,
+            'model',
+            '主模型正在生成回答',
+            'active',
+            aiConfig.model,
+          );
+        } else if (delta.reasoningContent && modelActivityStarted) {
+          updateChatActivity(
+            assistantMessage,
+            'model',
+            '主模型正在思考',
+            'active',
+            aiConfig.model,
+          );
+        }
         if (!renderFrame) renderFrame = window.requestAnimationFrame(flushStreamedContent);
       },
     );
 
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
+    updateChatActivity(assistantMessage, 'model', '回答生成完成', 'done', aiConfig.model);
     streamedContent = await validatePdfCitations(response.content, documentAtRequestStart);
     streamedReasoningContent = response.reasoningContent;
     if (!streamedContent.trim()) throw new Error('AI 模型没有返回有效回答。');
@@ -3137,15 +3702,17 @@ async function sendChatMessage(): Promise<void> {
     updateChatReasoning(assistantMessage, streamedReasoningContent, false);
     updateChatMessage(assistantMessage, streamedContent, { streaming: false });
     chatHistory.push({ role: 'assistant', content: streamedContent });
+    void queueChatConversationPersistence(documentAtRequestStart);
     attachChatSaveAction(
       assistantMessage,
-      content,
+      userPrompt,
       streamedContent,
-      sourceName ? getDisplayFileName(sourceName) : '未关联文档',
+      documentNameAtRequestStart ? getDisplayFileName(documentNameAtRequestStart) : '未关联文档',
       pageNumber,
     );
   } catch (error) {
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
+    failActiveChatActivities(assistantMessage);
     updateChatReasoning(assistantMessage, streamedReasoningContent, false);
     updateChatMessage(
       assistantMessage,
@@ -3155,7 +3722,9 @@ async function sendChatMessage(): Promise<void> {
   } finally {
     chatRequestPending = false;
     chatInput.disabled = false;
+    chatImageButton.disabled = false;
     chatSendButton.disabled = false;
+    clearChatButton.disabled = false;
     chatInput.focus();
   }
 }
@@ -3294,6 +3863,13 @@ async function extractPageText(documentProxy: PDFDocumentProxy, pageNumber: numb
 
 function normalizeCitationMatchText(value: string): string {
   return value
+    .replace(/\\(?:mathbb|mathbf|mathrm|mathit|text|operatorname)\s*\{([^{}]*)\}/g, '$1')
+    .replace(/\\(?:left|right)\b/g, '')
+    .replace(/\\times\b/g, '×')
+    .replace(/\\in\b/g, '∈')
+    .replace(/\\lambda\b/g, 'λ')
+    .replace(/\\sigma\b/g, 'σ')
+    .replace(/[$\\{}_^]/g, '')
     .normalize('NFKC')
     .toLocaleLowerCase()
     .replace(/\u00ad/g, '')
@@ -3301,11 +3877,73 @@ function normalizeCitationMatchText(value: string): string {
     .replace(/\s+/g, '');
 }
 
+interface NormalizedCitationMatch {
+  start: number;
+  end: number;
+  exact: boolean;
+  confidence: number;
+}
+
+function findNormalizedCitationMatch(
+  normalizedSource: string,
+  normalizedQuote: string,
+): NormalizedCitationMatch | null {
+  if (!normalizedSource || normalizedQuote.length < 8) return null;
+  const exactStart = normalizedSource.indexOf(normalizedQuote);
+  if (exactStart >= 0) {
+    return {
+      start: exactStart,
+      end: exactStart + normalizedQuote.length,
+      exact: true,
+      confidence: 1,
+    };
+  }
+
+  // Long PDF passages commonly differ only around formulas, ligatures or
+  // extraction order. Confirm several sizeable anchors in source order before
+  // accepting the location; this avoids turning an unrelated page number into
+  // a clickable citation while still locating the surrounding paragraph.
+  if (normalizedQuote.length < 96) return null;
+  const anchorLength = Math.min(72, Math.max(28, Math.floor(normalizedQuote.length / 9)));
+  const anchors: Array<{
+    quoteStart: number;
+    sourceStart: number;
+    length: number;
+  }> = [];
+  let sourceCursor = 0;
+  for (let quoteStart = 0; quoteStart + anchorLength <= normalizedQuote.length; quoteStart += anchorLength) {
+    const anchor = normalizedQuote.slice(quoteStart, quoteStart + anchorLength);
+    const sourceStart = normalizedSource.indexOf(anchor, sourceCursor);
+    if (sourceStart < 0) continue;
+    anchors.push({ quoteStart, sourceStart, length: anchor.length });
+    sourceCursor = sourceStart + anchor.length;
+  }
+
+  const matchedCharacters = anchors.reduce((total, anchor) => total + anchor.length, 0);
+  const confidence = matchedCharacters / normalizedQuote.length;
+  if (anchors.length < 2 || confidence < 0.32) return null;
+  const first = anchors[0];
+  const last = anchors.at(-1);
+  if (!first || !last) return null;
+  const locatedSpan = last.sourceStart + last.length - first.sourceStart;
+  if (locatedSpan > normalizedQuote.length * 1.65) return null;
+
+  return {
+    start: Math.max(0, first.sourceStart - first.quoteStart),
+    end: Math.min(
+      normalizedSource.length,
+      last.sourceStart + last.length + normalizedQuote.length - last.quoteStart - last.length,
+    ),
+    exact: false,
+    confidence,
+  };
+}
+
 async function validatePdfCitations(
   content: string,
   documentProxy: PDFDocumentProxy | null,
 ): Promise<string> {
-  const pattern = /\[\[PDF:P(\d{1,5})\|([^\]\r\n]{1,500})\]\]/g;
+  const pattern = createPdfCitationPattern();
   const matches = Array.from(content.matchAll(pattern));
   const removeUnverifiableShorthand = (value: string): string => value.replace(
     /\[?\[PDF:(?:P)?\d{1,5}\]?\]/gi,
@@ -3332,7 +3970,10 @@ async function validatePdfCitations(
         const pageText = await extractPageText(documentProxy, pageNumber).catch(() => '');
         pageTextCache.set(pageNumber, normalizeCitationMatchText(pageText));
       }
-      valid = pageTextCache.get(pageNumber)?.includes(normalizeCitationMatchText(quote)) ?? false;
+      valid = Boolean(findNormalizedCitationMatch(
+        pageTextCache.get(pageNumber) ?? '',
+        normalizeCitationMatchText(quote),
+      ));
     }
 
     if (valid) {
@@ -3378,7 +4019,10 @@ async function waitForCitationTextLayer(pageNumber: number): Promise<HTMLElement
   return null;
 }
 
-function findCitationRange(textLayer: HTMLElement, quote: string): Range | null {
+function findCitationRange(textLayer: HTMLElement, quote: string): {
+  range: Range;
+  match: NormalizedCitationMatch;
+} | null {
   const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
   const points: CitationTextPoint[] = [];
   let normalizedText = '';
@@ -3394,43 +4038,29 @@ function findCitationRange(textLayer: HTMLElement, quote: string): Range | null 
     }
   }
 
-  const normalizedQuote = normalizeCitationMatchText(quote);
-  const start = normalizedText.indexOf(normalizedQuote);
-  if (start < 0 || normalizedQuote.length === 0) return null;
-  const startPoint = points[start];
-  const endPoint = points[start + normalizedQuote.length - 1];
+  const match = findNormalizedCitationMatch(normalizedText, normalizeCitationMatchText(quote));
+  if (!match || match.end <= match.start) return null;
+  const startPoint = points[match.start];
+  const endPoint = points[match.end - 1];
   if (!startPoint || !endPoint) return null;
   const range = document.createRange();
   range.setStart(startPoint.node, startPoint.offset);
   range.setEnd(endPoint.node, Math.min(endPoint.offset + 1, endPoint.node.length));
-  return range;
+  return { range, match };
 }
 
 function highlightCitationRange(textLayer: HTMLElement, range: Range): void {
   const page = textLayer.closest<HTMLElement>('.pdfViewer .page');
   if (!page) return;
   const pageRect = page.getBoundingClientRect();
-  const sourceRects = Array.from(range.getClientRects())
-    .filter((rect) => rect.width > 1 && rect.height > 1)
-    .sort((left, right) => left.top - right.top || left.left - right.left);
-  const rects: Array<{ left: number; top: number; right: number; bottom: number }> = [];
-  for (const rect of sourceRects) {
-    const previous = rects.at(-1);
-    const sameLine = previous
-      && Math.abs(previous.top - rect.top) <= Math.max(3, rect.height * 0.35)
-      && rect.left - previous.right <= 24;
-    if (previous && sameLine) {
-      previous.right = Math.max(previous.right, rect.right);
-      previous.bottom = Math.max(previous.bottom, rect.bottom);
-    } else {
-      rects.push({
-        left: rect.left,
-        top: rect.top,
-        right: rect.right,
-        bottom: rect.bottom,
-      });
-    }
-  }
+  const rects = mergeSelectionRects(Array.from(range.getClientRects()).map((rect) => ({
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    width: rect.width,
+    height: rect.height,
+  })));
   if (rects.length === 0) return;
 
   clearChatCitationHighlight();
@@ -3479,21 +4109,22 @@ async function jumpToPdfCitation(pageNumber: number, quote: string): Promise<voi
     });
     return;
   }
-  const range = findCitationRange(textLayer, quote);
-  if (!range) {
+  const locatedCitation = findCitationRange(textLayer, quote);
+  if (!locatedCitation) {
     console.warn('[PDF Helper 引用定位] 页面已打开，但文字层中未找到对应原句', {
       pageNumber,
       citedQuote: quote,
     });
     return;
   }
+  const { range, match } = locatedCitation;
   const matchedOriginalText = range.toString();
   console.info('[PDF Helper 引用定位] 已匹配到 PDF 原文', {
     pageNumber,
     citedQuote: quote,
     matchedOriginalText,
-    normalizedMatch:
-      normalizeCitationMatchText(quote) === normalizeCitationMatchText(matchedOriginalText),
+    matchMode: match.exact ? 'exact' : 'multi-anchor',
+    matchConfidence: match.confidence,
   });
   const target = range.startContainer.parentElement;
   target?.scrollIntoView({ block: 'center', inline: 'nearest' });
@@ -6181,32 +6812,83 @@ function getSelectionHeightRatio(): number {
 }
 
 function mergeSelectionRects(rects: SelectionRect[]): SelectionRect[] {
-  const sorted = [...rects].sort((a, b) => a.top - b.top || a.left - b.left);
-  const merged: SelectionRect[] = [];
+  const validRects = rects.filter((rect) =>
+    Number.isFinite(rect.left)
+    && Number.isFinite(rect.top)
+    && rect.width > 0.5
+    && rect.height > 1,
+  );
+  if (validRects.length === 0) return [];
 
-  for (const rect of sorted) {
-    const previous = merged.at(-1);
-    const sameLine =
-      previous &&
-      Math.abs(previous.top + previous.height / 2 - (rect.top + rect.height / 2)) <=
-        Math.max(previous.height, rect.height) * 0.45;
-    const closeEnough =
-      previous && rect.left <= previous.right + Math.max(previous.height, rect.height) * 0.9;
+  const median = (values: number[]): number => {
+    const sortedValues = [...values].sort((left, right) => left - right);
+    const middle = Math.floor(sortedValues.length / 2);
+    return sortedValues.length % 2
+      ? sortedValues[middle] ?? 0
+      : ((sortedValues[middle - 1] ?? 0) + (sortedValues[middle] ?? 0)) / 2;
+  };
+  const typicalHeight = Math.max(4, median(validRects.map((rect) => rect.height)));
+  const lineClusters: SelectionRect[][] = [];
+  const byCenter = [...validRects].sort((left, right) =>
+    (left.top + left.height / 2) - (right.top + right.height / 2)
+    || left.left - right.left,
+  );
 
-    if (previous && sameLine && closeEnough) {
-      const right = Math.max(previous.right, rect.right);
-      const bottom = Math.max(previous.bottom, rect.bottom);
-      previous.top = Math.min(previous.top, rect.top);
-      previous.right = right;
-      previous.bottom = bottom;
-      previous.width = right - previous.left;
-      previous.height = bottom - previous.top;
-    } else {
-      merged.push({ ...rect });
+  for (const rect of byCenter) {
+    const center = rect.top + rect.height / 2;
+    let bestCluster: SelectionRect[] | undefined;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const cluster of lineClusters) {
+      const clusterCenter = median(cluster.map((item) => item.top + item.height / 2));
+      const distance = Math.abs(center - clusterCenter);
+      // Formula superscripts/subscripts may have different boxes, but their
+      // visual centers still remain closer than the next body-text baseline.
+      if (distance <= typicalHeight * 0.82 && distance < bestDistance) {
+        bestCluster = cluster;
+        bestDistance = distance;
+      }
     }
+    if (bestCluster) bestCluster.push(rect);
+    else lineClusters.push([rect]);
   }
 
-  return merged;
+  const merged: SelectionRect[] = [];
+  for (const cluster of lineClusters) {
+    const centers = cluster.map((rect) => rect.top + rect.height / 2);
+    const center = median(centers);
+    const lineHeight = Math.min(
+      typicalHeight * 1.3,
+      Math.max(typicalHeight * 0.78, median(cluster.map((rect) => rect.height))),
+    );
+    const horizontal = [...cluster].sort((left, right) => left.left - right.left);
+    let segmentLeft = horizontal[0]?.left ?? 0;
+    let segmentRight = horizontal[0]?.right ?? segmentLeft;
+
+    const pushSegment = () => {
+      const top = center - lineHeight / 2;
+      merged.push({
+        left: segmentLeft,
+        top,
+        right: segmentRight,
+        bottom: top + lineHeight,
+        width: segmentRight - segmentLeft,
+        height: lineHeight,
+      });
+    };
+
+    for (const rect of horizontal.slice(1)) {
+      if (rect.left <= segmentRight + typicalHeight * 1.25) {
+        segmentRight = Math.max(segmentRight, rect.right);
+      } else {
+        pushSegment();
+        segmentLeft = rect.left;
+        segmentRight = rect.right;
+      }
+    }
+    pushSegment();
+  }
+
+  return merged.sort((left, right) => left.top - right.top || left.left - right.left);
 }
 
 function getTextNodeSelectionOffsets(range: Range, textNode: Text): { start: number; end: number } | null {
@@ -7405,7 +8087,8 @@ async function openPdf(
     selectedSnippetElement.title = '';
     setTranslationState('选中英文后将自动翻译。');
     setExplanationState('选中英文后将自动生成解释。');
-    resetChatConversation();
+    clearPendingChatImages();
+    await restoreChatConversation(documentProxy);
     resetSummaryState();
     resetCardState();
     resetPaperCardPageState();
@@ -7719,7 +8402,46 @@ chatForm.addEventListener('submit', (event) => {
   void sendChatMessage();
 });
 
+chatImageButton.addEventListener('click', () => {
+  if (!chatRequestPending) chatImageInput.click();
+});
+
+chatImageInput.addEventListener('change', () => {
+  const files = chatImageInput.files;
+  if (files?.length) void addChatImageFiles(files);
+  chatImageInput.value = '';
+});
+
+chatInput.addEventListener('paste', (event) => {
+  const imageFiles = Array.from(event.clipboardData?.items ?? [])
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
+  if (imageFiles.length === 0) return;
+  event.preventDefault();
+  void addChatImageFiles(imageFiles);
+});
+
+clearChatButton.addEventListener('click', () => {
+  if (chatRequestPending) return;
+  if (chatHistory.length > 0 && !window.confirm('确定清空当前 PDF 的全部聊天记录吗？')) return;
+  const documentAtClear = pdfDocument;
+  resetChatConversation();
+  void queueChatConversationPersistence(documentAtClear).then(() => {
+    console.info('[PDF Helper 对话存储] 已清空当前 PDF 对话', {
+      documentId: documentAtClear ? getDocumentChatId(documentAtClear) : undefined,
+    });
+  });
+});
+
 chatMessagesElement.addEventListener('click', (event) => {
+  const previewImage = (event.target as Element | null)?.closest<HTMLImageElement>(
+    '.chat-message-image',
+  );
+  if (previewImage) {
+    openChatImagePreview(previewImage.src, previewImage.alt);
+    return;
+  }
   const citation = (event.target as Element | null)?.closest<HTMLButtonElement>(
     '.pdf-source-citation',
   );
@@ -7727,6 +8449,23 @@ chatMessagesElement.addEventListener('click', (event) => {
   const pageNumber = Number(citation.dataset.pdfPage);
   const quote = citation.dataset.pdfQuote?.trim() ?? '';
   void jumpToPdfCitation(pageNumber, quote);
+});
+
+chatMessagesElement.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const previewImage = (event.target as Element | null)?.closest<HTMLImageElement>(
+    '.chat-message-image',
+  );
+  if (!previewImage) return;
+  event.preventDefault();
+  openChatImagePreview(previewImage.src, previewImage.alt);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && chatImagePreviewOverlay) {
+    event.preventDefault();
+    closeChatImagePreview();
+  }
 });
 
 chatInput.addEventListener('keydown', (event) => {
