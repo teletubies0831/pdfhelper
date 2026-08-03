@@ -841,6 +841,60 @@
                 <button id="test-vision-ai" class="settings-inline-test" type="button">测试视觉连接</button>
               </div>
               <div id="vision-settings-status" class="settings-status" aria-live="polite"></div>
+
+              <div class="settings-section-divider" role="separator"></div>
+              <div class="settings-section-heading settings-agent-tools-heading">
+                <div>
+                  <strong>Agent 工具</strong>
+                  <p>这些工具会真实发送给模型，并由 PDF Helper 执行。</p>
+                </div>
+                <span class="settings-agent-tools-count">1 个已启用</span>
+              </div>
+              <div class="settings-agent-tools-list">
+                <article class="settings-agent-tool-item">
+                  <span class="settings-agent-tool-status">已启用</span>
+                  <div>
+                    <strong>memory.upsert</strong>
+                    <p>写入长期记忆。用户明确要求记住偏好、研究方向或持续项目目标时调用。</p>
+                    <small>参数：key、category、content、scope、confidence?、importance?</small>
+                  </div>
+                </article>
+              </div>
+
+              <div class="settings-section-divider" role="separator"></div>
+              <div class="settings-section-heading settings-memory-heading">
+                <div>
+                  <strong>会话记忆</strong>
+                  <p>较早对话自动压缩；明确的长期记忆通过 Agent 工具在回答前写入。</p>
+                </div>
+              </div>
+              <div class="settings-compact-grid">
+                <label class="settings-field">
+                  <span>触发压缩字符数</span>
+                  <input id="chat-compression-trigger-characters" type="number" min="5000" max="500000" step="1000" value="40000" inputmode="numeric" />
+                </label>
+                <label class="settings-field">
+                  <span>未压缩消息上限</span>
+                  <input id="chat-compression-max-recent-messages" type="number" min="4" max="100" step="1" value="16" inputmode="numeric" />
+                </label>
+                <label class="settings-field">
+                  <span>压缩后保留消息</span>
+                  <input id="chat-compression-keep-recent-messages" type="number" min="2" max="99" step="1" value="4" inputmode="numeric" />
+                </label>
+              </div>
+              <small class="settings-memory-hint">任一上限达到后触发压缩；保留消息数必须小于未压缩消息上限。</small>
+
+              <div class="settings-memory-toolbar">
+                <div>
+                  <strong>长期记忆</strong>
+                  <span id="long-term-memory-count">0 条</span>
+                </div>
+                <button id="refresh-long-term-memories" type="button">刷新</button>
+              </div>
+              <div id="long-term-memory-list" class="settings-memory-list" aria-live="polite">
+                <div class="settings-memory-empty">暂无长期记忆</div>
+              </div>
+
               <div id="deepseek-settings-status" class="settings-status" aria-live="polite"></div>
               <div class="settings-actions">
                 <button id="test-deepseek" type="button">测试连接</button>

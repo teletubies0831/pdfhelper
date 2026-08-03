@@ -76,6 +76,8 @@ export interface DocumentAgentSession {
   documentId: string;
   title: string;
   messages: AiConversationMessage[];
+  conversationSummary?: string;
+  summarizedMessageCount?: number;
   createdAt: number;
   updatedAt: number;
 }

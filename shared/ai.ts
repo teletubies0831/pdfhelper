@@ -1,4 +1,9 @@
 import type { ResolvedReadingMode } from './reading-mode';
+import type {
+  LongTermMemoryCategory,
+  LongTermMemoryScope,
+  LongTermMemorySourceType,
+} from './memory';
 
 export const AI_CONFIG_STORAGE_KEY = 'pdf-helper-ai-config-v1';
 export const VISION_AI_CONFIG_STORAGE_KEY = 'pdf-helper-vision-ai-config-v1';
@@ -89,6 +94,13 @@ export interface AiDocumentContext {
   pageText?: string;
   documentText?: string;
   imageAnalysis?: string;
+  conversationSummary?: string;
+  longTermMemory?: string;
+  memoryOperationResult?: string;
+  completedTools?: Array<{
+    name: string;
+    arguments?: Record<string, unknown>;
+  }>;
   readingMode?: ResolvedReadingMode;
 }
 
@@ -114,6 +126,48 @@ export interface AiGeneratePaperOverviewRequest {
   documentName: string;
   pageCount: number;
   text: string;
+}
+
+export interface AiCompressConversationRequest {
+  type: 'pdf-helper:ai-compress-conversation';
+  previousSummary?: string;
+  messages: AiConversationMessage[];
+}
+
+export interface AiMemoryCandidate {
+  key: string;
+  category: LongTermMemoryCategory;
+  content: string;
+  scope: LongTermMemoryScope;
+  sourceType: LongTermMemorySourceType;
+  confidence: number;
+  importance: number;
+}
+
+export interface AiExtractLongTermMemoryRequest {
+  type: 'pdf-helper:ai-extract-long-term-memory';
+  userMessage: string;
+  assistantMessage: string;
+  confirmedMemoryProposal?: string;
+  documentId?: string;
+  documentName?: string;
+  existingMemories?: Array<{ key: string; content: string; scope: LongTermMemoryScope; scopeId?: string }>;
+}
+
+export interface AiPlanLongTermMemoryToolsRequest {
+  type: 'pdf-helper:ai-plan-long-term-memory-tools';
+  userMessage: string;
+  assistantMessage: string;
+  confirmedMemoryProposal?: string;
+  documentId?: string;
+  documentName?: string;
+  existingMemories?: Array<{ key: string; content: string; scope: LongTermMemoryScope; scopeId?: string }>;
+}
+
+export interface AiNativeToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
 }
 
 export interface AiVisionRequest {
@@ -145,24 +199,65 @@ export interface AiStreamDebugInfo {
     role: 'system' | 'user' | 'assistant';
     content: string;
   }>;
-  tools: Array<{
+  availableTools: Array<{
+    name: string;
+    description: string;
+    parameters: string;
+  }>;
+  completedTools: Array<{
     name: string;
     arguments?: Record<string, unknown>;
   }>;
+}
+
+export interface AiStreamCompletionInfo {
+  finishReason?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  contentLength: number;
+  reasoningLength: number;
+  receivedDoneMarker: boolean;
+  eventCount: number;
+  httpStatus?: number;
+  providerRequestId?: string;
+}
+
+export interface AiStreamErrorInfo {
+  name?: string;
+  httpStatus?: number;
+  responseBody?: string;
+  model?: string;
+  baseUrl?: string;
+  finishReason?: string;
+  contentLength?: number;
+  reasoningLength?: number;
+  receivedDoneMarker?: boolean;
+  eventCount?: number;
+  providerRequestId?: string;
 }
 
 export type AiStreamServerMessage =
   | { type: 'started'; requestId: string; model: string; debug?: AiStreamDebugInfo }
   | { type: 'delta'; requestId: string; content: string }
   | { type: 'reasoning-delta'; requestId: string; content: string }
-  | { type: 'done'; requestId: string; model: string; debug?: AiStreamDebugInfo }
-  | { type: 'error'; requestId: string; error: string };
+  | {
+      type: 'done';
+      requestId: string;
+      model: string;
+      debug?: AiStreamDebugInfo;
+      completion?: AiStreamCompletionInfo;
+    }
+  | { type: 'error'; requestId: string; error: string; details?: AiStreamErrorInfo };
 
 export type AiRuntimeRequest =
   | AiChatRequest
   | AiTestRequest
   | AiDetectReadingModeRequest
   | AiGeneratePaperOverviewRequest
+  | AiCompressConversationRequest
+  | AiPlanLongTermMemoryToolsRequest
+  | AiExtractLongTermMemoryRequest
   | AiVisionRequest
   | AiVisionTestRequest;
 
@@ -173,6 +268,8 @@ export interface AiRuntimeResponse {
   model?: string;
   readingMode?: ResolvedReadingMode;
   rationale?: string;
+  memoryCandidates?: AiMemoryCandidate[];
+  toolCalls?: AiNativeToolCall[];
   error?: string;
 }
 
@@ -211,6 +308,9 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
     || type === 'pdf-helper:ai-test'
     || type === 'pdf-helper:ai-detect-reading-mode'
     || type === 'pdf-helper:ai-generate-paper-overview'
+    || type === 'pdf-helper:ai-compress-conversation'
+    || type === 'pdf-helper:ai-plan-long-term-memory-tools'
+    || type === 'pdf-helper:ai-extract-long-term-memory'
     || type === 'pdf-helper:ai-vision'
     || type === 'pdf-helper:ai-vision-test';
 }

@@ -9,6 +9,11 @@ import {
 } from '../shared/selection';
 import { extractPdfSource } from '../shared/pdf-source';
 import {
+  AGENT_TOOL_DEFINITIONS,
+  formatAgentToolCatalogForPrompt,
+  getNativeAgentTools,
+} from '../shared/agent-tools';
+import {
   AI_CONFIG_STORAGE_KEY,
   AI_STREAM_PORT_NAME,
   DEFAULT_AI_CONFIG,
@@ -21,8 +26,11 @@ import {
   type AiConfig,
   type AiConversationMessage,
   type AiDocumentContext,
+  type AiMemoryCandidate,
   type AiRuntimeRequest,
   type AiRuntimeResponse,
+  type AiStreamCompletionInfo,
+  type AiStreamErrorInfo,
   type AiStreamServerMessage,
   type AiStreamStartMessage,
   type VisionAiConfig,
@@ -151,11 +159,29 @@ interface ProviderChatResult {
   content: string;
   model: string;
   reasoningContent?: string;
+  completion?: AiStreamCompletionInfo;
 }
 
 interface ProviderStreamDelta {
   content?: string;
   reasoningContent?: string;
+}
+
+class AiProviderRequestError extends Error {
+  constructor(
+    message: string,
+    readonly details: AiStreamErrorInfo,
+  ) {
+    super(message);
+    this.name = 'AiProviderRequestError';
+  }
+}
+
+function getSafeErrorDetails(error: unknown): AiStreamErrorInfo {
+  if (error instanceof AiProviderRequestError) return error.details;
+  return {
+    name: error instanceof Error ? error.name : 'UnknownError',
+  };
 }
 
 function getVisionContent(payload: unknown): string {
@@ -307,27 +333,72 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
     onDelta: (delta: ProviderStreamDelta) => void,
   ): Promise<ProviderChatResult> {
     if (!config.apiKey) throw new Error('请先在 PDF Helper 的“设置”中配置 API Key。');
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        thinking: { type: config.reasoning },
-        stream: true,
-        max_tokens: maxOutputTokens,
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      throw new Error(getProviderError(payload, `AI 请求失败：HTTP ${response.status}`));
+    let response: Response;
+    try {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          thinking: { type: config.reasoning },
+          // Explicit memory writes are planned and executed before this main
+          // response. Still send the native definitions so the main model
+          // genuinely knows which Agent tools the application provides.
+          tools: getNativeAgentTools(),
+          tool_choice: 'none',
+          stream: true,
+          max_tokens: maxOutputTokens,
+        }),
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted) throw error;
+      throw new AiProviderRequestError(
+        `无法连接 AI 供应商：${error instanceof Error ? error.message : String(error)}`,
+        {
+          name: error instanceof Error ? error.name : 'ProviderNetworkError',
+          model: config.model,
+          baseUrl: config.baseUrl,
+        },
+      );
     }
-    if (!response.body) throw new Error('当前浏览器没有提供可读取的 AI 流式响应。');
+
+    const providerRequestId = response.headers.get('x-request-id')
+      ?? response.headers.get('request-id')
+      ?? undefined;
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => '');
+      let payload: unknown = null;
+      try {
+        payload = responseBody ? JSON.parse(responseBody) : null;
+      } catch {
+        // Keep the raw body in the safe diagnostics below.
+      }
+      throw new AiProviderRequestError(
+        getProviderError(payload, `AI 请求失败：HTTP ${response.status}`),
+        {
+          name: 'ProviderHttpError',
+          httpStatus: response.status,
+          responseBody: responseBody.slice(0, 4000),
+          model: config.model,
+          baseUrl: config.baseUrl,
+          providerRequestId,
+        },
+      );
+    }
+    if (!response.body) {
+      throw new AiProviderRequestError('当前浏览器没有提供可读取的 AI 流式响应。', {
+        name: 'MissingResponseBodyError',
+        httpStatus: response.status,
+        model: config.model,
+        baseUrl: config.baseUrl,
+        providerRequestId,
+      });
+    }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -335,6 +406,12 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
     let completeContent = '';
     let completeReasoningContent = '';
     let finished = false;
+    let finishReason: string | undefined;
+    let receivedDoneMarker = false;
+    let eventCount = 0;
+    let promptTokens: number | undefined;
+    let completionTokens: number | undefined;
+    let totalTokens: number | undefined;
 
     const processEvent = (event: string): boolean => {
       const data = event
@@ -344,16 +421,68 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
         .join('\n')
         .trim();
       if (!data) return false;
-      if (data === '[DONE]') return true;
-      const payload = JSON.parse(data) as {
+      eventCount += 1;
+      if (data === '[DONE]') {
+        receivedDoneMarker = true;
+        return true;
+      }
+      let payload: {
+        error?: unknown;
+        usage?: {
+          prompt_tokens?: unknown;
+          completion_tokens?: unknown;
+          total_tokens?: unknown;
+        };
         choices?: Array<{
+          finish_reason?: unknown;
           delta?: {
             content?: unknown;
             reasoning_content?: unknown;
           };
         }>;
       };
-      const delta = payload.choices?.[0]?.delta;
+      try {
+        payload = JSON.parse(data) as typeof payload;
+      } catch (error) {
+        throw new AiProviderRequestError('AI 流式响应包含无法解析的数据。', {
+          name: error instanceof Error ? error.name : 'StreamParseError',
+          httpStatus: response.status,
+          responseBody: data.slice(0, 2000),
+          model: config.model,
+          baseUrl: config.baseUrl,
+          contentLength: completeContent.length,
+          reasoningLength: completeReasoningContent.length,
+          finishReason,
+          receivedDoneMarker,
+          eventCount,
+          providerRequestId,
+        });
+      }
+      if (payload.error) {
+        throw new AiProviderRequestError(
+          getProviderError(payload, 'AI 供应商在流式响应中返回了错误。'),
+          {
+            name: 'ProviderStreamError',
+            httpStatus: response.status,
+            responseBody: JSON.stringify(payload).slice(0, 4000),
+            model: config.model,
+            baseUrl: config.baseUrl,
+            contentLength: completeContent.length,
+            reasoningLength: completeReasoningContent.length,
+            finishReason,
+            receivedDoneMarker,
+            eventCount,
+            providerRequestId,
+          },
+        );
+      }
+      const choice = payload.choices?.[0];
+      if (typeof choice?.finish_reason === 'string') finishReason = choice.finish_reason;
+      const usage = payload.usage;
+      if (typeof usage?.prompt_tokens === 'number') promptTokens = usage.prompt_tokens;
+      if (typeof usage?.completion_tokens === 'number') completionTokens = usage.completion_tokens;
+      if (typeof usage?.total_tokens === 'number') totalTokens = usage.total_tokens;
+      const delta = choice?.delta;
       const reasoningContent = delta?.reasoning_content;
       if (typeof reasoningContent === 'string' && reasoningContent) {
         completeReasoningContent += reasoningContent;
@@ -384,10 +513,45 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
       }
     }
 
+    const completion: AiStreamCompletionInfo = {
+      finishReason,
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      contentLength: completeContent.length,
+      reasoningLength: completeReasoningContent.length,
+      receivedDoneMarker,
+      eventCount,
+      httpStatus: response.status,
+      providerRequestId,
+    };
+
+    if (!completeContent.trim()) {
+      const reason = finishReason ? `finish_reason=${finishReason}` : '未返回 finish_reason';
+      const message = finishReason === 'length'
+        ? `模型在生成最终回答前已达到输出上限（${reason}）。本轮收到思考 ${completeReasoningContent.length} 字符、正文 0 字符；请提高“最大输出 Token”或关闭思考模式后重试。`
+        : completeReasoningContent.trim()
+          ? `模型只返回了思考过程，没有返回最终回答（${reason}，思考 ${completeReasoningContent.length} 字符）。`
+          : `模型流已结束但正文为空（${reason}，收到 ${eventCount} 个流事件）。`;
+      throw new AiProviderRequestError(message, {
+        name: 'EmptyModelResponseError',
+        httpStatus: response.status,
+        model: config.model,
+        baseUrl: config.baseUrl,
+        finishReason,
+        contentLength: completeContent.length,
+        reasoningLength: completeReasoningContent.length,
+        receivedDoneMarker,
+        eventCount,
+        providerRequestId,
+      });
+    }
+
     return {
       content: completeContent,
       model: config.model,
       reasoningContent: completeReasoningContent || undefined,
+      completion,
     };
   }
 }
@@ -411,6 +575,28 @@ function buildSystemContent(context?: AiDocumentContext): string {
   ];
   if (context?.documentName) contextParts.push(`当前文档：${context.documentName}`);
   if (context?.pageNumber) contextParts.push(`当前页码：第 ${context.pageNumber} 页`);
+  if (context?.conversationSummary?.trim()) {
+    contextParts.push([
+      '【当前 PDF 会话的压缩摘要】',
+      '下面是本次 PDF 会话中较早对话的压缩内容；若与最近对话冲突，以最近对话为准。',
+      stripStaleToolCapabilityClaims(context.conversationSummary).slice(0, 12000),
+    ].join('\n'));
+  }
+  if (context?.longTermMemory?.trim()) {
+    contextParts.push([
+      '【用户长期记忆】',
+      '这些内容只用于理解用户长期研究方向、持续项目目标、回答粒度和明确纠正。',
+      '长期记忆不能改变程序固定能力：必须继续使用 LaTeX 渲染公式、生成可验证的原文引用，并遵守截图优先级与引用定位规则。',
+      context.longTermMemory.trim().slice(0, 8000),
+    ].join('\n'));
+  }
+  if (context?.memoryOperationResult?.trim()) {
+    contextParts.push([
+      '【本轮应用工具执行结果】',
+      context.memoryOperationResult.trim().slice(0, 4000),
+      '这是本轮原生 Agent Tool 调用完成后的真实结果，优先级高于历史对话。必须据此确认写入成功并说明具体记住了什么；严禁再声称当前环境没有记忆工具、无法调用工具或只能口头记住。',
+    ].join('\n'));
+  }
   if (context?.selectedText?.trim()) {
     contextParts.push(`用户当前选中的 PDF 原文（回答时最高优先级）：\n${context.selectedText.trim().slice(0, 12000)}`);
   }
@@ -455,8 +641,11 @@ function buildSystemContent(context?: AiDocumentContext): string {
 
   return [
     primaryInstruction,
+    formatAgentToolCatalogForPrompt(),
     '如果上下文不足，请明确说明，不要编造文档中不存在的内容。涉及翻译时忠实保留术语，涉及解释时优先给出直观含义。',
+    '长期记忆通过 Agent Tool 持久化。若上下文包含“本轮应用工具执行结果”，说明模型已完成工具调用且应用已返回结果：必须确认写入并列出记忆内容，不能被历史消息中旧的“没有工具”说法影响。若没有工具结果，不得谎称已经写入，也不要要求用户重复确认已经明确表达的要求。',
     '请使用简洁的 Markdown 组织回答；不要给整个回答套一层 Markdown 代码围栏。数学变量和公式必须使用 LaTeX：行内公式用 $...$，独立公式用 $$...$$。',
+    'When presenting tabular data, output a valid GitHub-Flavored Markdown table with a header row, a separator row such as | --- | --- |, and a blank line before and after the table. Do not imitate a table with spaces or tabs.',
     ...contextParts,
     hasPdfEvidence ? [
       '【最终引用格式要求——回答前必须再次检查】',
@@ -466,12 +655,30 @@ function buildSystemContent(context?: AiDocumentContext): string {
       '大段引用必须来自同一个 PDF 页，并保持原文连续，不能把同页不同位置的句子拼接成一个引用；若证据跨页，请按页拆成多个引用标记。',
       '引用标记内部必须直接复制所提供 PDF 全文中的纯文本，不要在原文中重新添加 Markdown、LaTeX 定界符或改写数学符号。',
       '回答完成后检查：只要关键论断在论文中有直接依据，就应给出可校验引用；引用长度以能够完整支撑对应解释为准，不要为了缩短而丢失必要上下文。',
+      '同一段末尾不要连续重复输出指向同一页、同一段原文的引用标记；一份证据只保留一个引用。只有确实引用了同页不同位置的原文时，才输出多个同页标记。',
       '禁止输出 [[PDF:8]]、[[PDF:P8]]、[PDF:8] 等不含逐字原文的简写；这些格式无法校验，也不会显示为可点击引用。',
       '页码必须使用所提供全文中的 PDF 页码；原文短句必须逐字摘自该页。',
       '只有确实存在对应原文时才能添加标记。无法找到逐字原文时不要添加引用，严禁编造页码、改写原句后冒充原文或给推测性内容添加引用。',
       '引用标记只用于事实依据，不要单独列出参考文献清单。',
     ].join('\n') : '',
+    // Keep the capability catalog at the very end as well. Long PDF text can
+    // be large, and the model must not lose this authoritative runtime fact.
+    formatAgentToolCatalogForPrompt(),
+    '以上工具定义已作为本轮请求的原生 tools 参数发送给模型。memory.upsert 的写入由应用在主回答前执行；如本轮给出“工具执行结果”，说明该调用已经成功完成。',
   ].filter(Boolean).join('\n\n');
+}
+
+function stripStaleToolCapabilityClaims(value: string): string {
+  return value
+    .split(/\n{2,}/)
+    .filter((paragraph) => !(
+      /(?:工具列表|Agent\s*工具列表).{0,20}(?:为空|空的|没有)/i.test(paragraph)
+      || /(?:没有|不存在|未注册|无法使用|不能调用|没有给我).{0,40}(?:记忆|长期记忆|Agent)?\s*工具/i.test(paragraph)
+      || /(?:无法|不能).{0,20}(?:写入|持久化).{0,20}长期记忆/i.test(paragraph)
+      || /等.{0,30}(?:支持|可用).{0,20}工具.{0,20}(?:补写|再写)/i.test(paragraph)
+    ))
+    .join('\n\n')
+    .trim();
 }
 
 function buildConversation(
@@ -481,7 +688,17 @@ function buildConversation(
   const conversation: ProviderMessage[] = messages
     .filter((item) => item.content.trim())
     .slice(-16)
-    .map((item) => ({ role: item.role, content: item.content.trim().slice(0, 16000) }));
+    .map((item) => {
+      let content = item.content.trim();
+      if (item.role === 'assistant') {
+        // Older builds incorrectly told users that no memory tool existed.
+        // Those stale capability claims must not override the current system
+        // tool result when a persisted conversation is restored.
+        content = stripStaleToolCapabilityClaims(content);
+      }
+      return { role: item.role, content: content.slice(0, 16000) };
+    })
+    .filter((item) => item.content);
   return [{ role: 'system', content: buildSystemContent(context) }, ...conversation];
 }
 
@@ -522,7 +739,12 @@ async function streamAiResponse(
     reasoning: config.reasoning,
     maxOutputTokens,
     messages: conversation,
-    tools: [],
+    availableTools: AGENT_TOOL_DEFINITIONS.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parametersSummary,
+    })),
+    completedTools: request.context?.completedTools?.map((tool) => ({ ...tool })) ?? [],
   };
   postAiStreamMessage(port, {
     type: 'started',
@@ -557,6 +779,7 @@ async function streamAiResponse(
     requestId: request.requestId,
     model: result.model,
     debug,
+    completion: result.completion,
   });
 }
 
@@ -605,6 +828,214 @@ async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResp
     if (message.type === 'pdf-helper:ai-test') {
       const models = await adapter.test(config);
       return { ok: true, models };
+    }
+
+    if (message.type === 'pdf-helper:ai-compress-conversation') {
+      const transcript = message.messages
+        .filter((item) => item.content.trim())
+        .map((item) => `${item.role === 'user' ? '用户' : '助手'}：${item.content.trim().slice(0, 12000)}`)
+        .join('\n\n')
+        .slice(0, 80000);
+      if (!transcript) throw new Error('没有可压缩的对话内容。');
+      // Conversation compression is a summarization task. Reasoning mode can
+      // consume the entire small output budget as reasoning_content and leave
+      // message.content empty, which looks like a failed compression to the
+      // viewer. Keep the user's reasoning preference for the main chat only.
+      const compressionConfig: AiConfig = {
+        ...config,
+        reasoning: 'disabled',
+      };
+      const result = await adapter.chat(compressionConfig, [{
+        role: 'system',
+        content: [
+          '你是对话记忆压缩器。请把较早的 PDF 阅读对话压缩成可供后续模型继续交流的中文长期摘要。',
+          '必须保留：用户真实目标和偏好、用户纠正过的内容、重要术语与公式含义、已确认结论、关键页码或引用线索、尚未解决的问题以及后续约定。',
+          '删除：寒暄、重复解释、过程性状态、冗长原文复制和已经失效的临时信息。',
+          '不要补充论文或对话中没有的信息，不要回答用户当前问题，不要输出引用标记。',
+          '使用紧凑的分点结构，只输出摘要正文，控制在 4000 个中文字符以内。',
+        ].join('\n'),
+      }, {
+        role: 'user',
+        content: [
+          message.previousSummary?.trim()
+            ? `已有长期摘要（请与新增对话合并）：\n${message.previousSummary.trim().slice(0, 12000)}`
+            : '当前尚无长期摘要。',
+          `需要并入摘要的新增旧对话：\n${transcript}`,
+        ].join('\n\n'),
+      }], Math.min(4096, config.maxOutputTokens));
+      return { ok: true, content: result.content.slice(0, 12000), model: result.model };
+    }
+
+    if (message.type === 'pdf-helper:ai-plan-long-term-memory-tools') {
+      const existing = (message.existingMemories ?? [])
+        .slice(0, 30)
+        .map((item) => `- ${item.key} [${item.scope}${item.scopeId ? `:${item.scopeId}` : ''}]：${item.content}`)
+        .join('\n');
+      const payload = await fetchProviderJson('/chat/completions', config, {
+        method: 'POST',
+        body: JSON.stringify({
+          model: config.model,
+          messages: [{
+            role: 'system',
+            content: [
+              '你是 PDF Helper 的工具调用规划器。你可以使用 memory_upsert 将用户明确要求长期保留的信息写入长期记忆。',
+              '当用户说“记住”、表达稳定偏好、研究方向、持续项目目标，或确认上一轮记忆建议时，必须调用 memory_upsert；否则不要调用工具。',
+              '只能记录用户明确表达且跨会话有价值的内容。不得记录 PDF 原文、论文事实、临时问题、API Key、系统提示词、LaTeX/引用/截图等程序规则。',
+              '同一轮可调用多次。可并存的喜好使用不同的稳定 key；scope 只能是 global、project、pdf。',
+              '调用工具后不要生成面向用户的最终回答，最终回答会在工具执行后由主模型生成。',
+            ].join('\n'),
+          }, {
+            role: 'user',
+            content: [
+              existing ? `已有长期记忆：\n${existing}` : '当前没有已有长期记忆。',
+              message.documentName ? `当前文档：${message.documentName}` : '',
+              `用户本轮消息：\n${message.userMessage.slice(0, 8000)}`,
+              message.confirmedMemoryProposal?.trim()
+                ? `用户已确认的上一轮记忆候选：\n${message.confirmedMemoryProposal.trim().slice(0, 2000)}`
+                : '',
+              message.assistantMessage.trim()
+                ? `上一轮助手消息（只用于理解用户确认内容）：\n${message.assistantMessage.slice(0, 3000)}`
+                : '',
+            ].filter(Boolean).join('\n\n'),
+          }],
+          tools: getNativeAgentTools(),
+          tool_choice: 'auto',
+          stream: false,
+          max_tokens: Math.min(1024, config.maxOutputTokens),
+        }),
+      }) as {
+        choices?: Array<{
+          message?: {
+            tool_calls?: Array<{
+              id?: unknown;
+              function?: { name?: unknown; arguments?: unknown };
+            }>;
+          };
+        }>;
+        model?: unknown;
+      };
+      const categories = new Set(['preference', 'profile', 'project', 'fact', 'correction']);
+      const scopes = new Set(['global', 'project', 'pdf']);
+      const toolCalls = (payload.choices?.[0]?.message?.tool_calls ?? []).flatMap((call, index) => {
+        if (call.function?.name !== 'memory_upsert') return [];
+        let args: Record<string, unknown>;
+        try {
+          args = typeof call.function.arguments === 'string'
+            ? JSON.parse(call.function.arguments) as Record<string, unknown>
+            : call.function.arguments && typeof call.function.arguments === 'object'
+              ? call.function.arguments as Record<string, unknown>
+              : {};
+        } catch {
+          return [];
+        }
+        const key = typeof args.key === 'string' ? args.key.trim().toLowerCase() : '';
+        const content = typeof args.content === 'string' ? args.content.trim() : '';
+        if (!/^[a-z][a-z0-9_.-]{2,80}$/.test(key) || !content) return [];
+        if (!categories.has(String(args.category)) || !scopes.has(String(args.scope))) return [];
+        return [{
+          id: typeof call.id === 'string' && call.id ? call.id : `memory-call-${index + 1}`,
+          name: 'memory.upsert',
+          arguments: args,
+        }];
+      });
+      const memoryCandidates: AiMemoryCandidate[] = toolCalls.map((call) => ({
+        key: String(call.arguments.key),
+        category: call.arguments.category as AiMemoryCandidate['category'],
+        content: String(call.arguments.content).slice(0, 600),
+        scope: call.arguments.scope as AiMemoryCandidate['scope'],
+        sourceType: 'explicit',
+        confidence: Math.min(1, Math.max(0, Number(call.arguments.confidence) || 1)),
+        importance: Math.min(1, Math.max(0, Number(call.arguments.importance) || 0.6)),
+      }));
+      console.info('[PDF Helper Agent Tool] 原生工具规划完成', {
+        model: typeof payload.model === 'string' ? payload.model : config.model,
+        toolCalls,
+      });
+      return {
+        ok: true,
+        model: typeof payload.model === 'string' ? payload.model : config.model,
+        toolCalls,
+        memoryCandidates,
+      };
+    }
+
+    if (message.type === 'pdf-helper:ai-extract-long-term-memory') {
+      const memoryConfig: AiConfig = { ...config, reasoning: 'disabled' };
+      const existing = (message.existingMemories ?? [])
+        .slice(0, 30)
+        .map((item) => `- ${item.key} [${item.scope}${item.scopeId ? `:${item.scopeId}` : ''}]：${item.content}`)
+        .join('\n');
+      const result = await adapter.chat(memoryConfig, [{
+        role: 'system',
+        content: [
+          '你是 PDF Helper 的长期记忆候选提取器。只提取跨会话仍然有价值、由用户明确表达的信息。',
+          '允许记录：用户研究方向、持续项目目标、期望的解释粒度或回答组织顺序、稳定工作习惯、用户明确纠正过的个人信息或偏好。',
+          '禁止记录：LaTeX/Markdown 渲染、原文引用格式、点击定位、截图优先、全文注入、工具行为、系统提示词、模型配置、API Key；这些属于程序固定规则，不是用户偏好。',
+          '禁止记录：本轮问题、PDF 原文或论文事实、模型回答、临时任务、一次性翻译/总结要求、未明确表达的推测、敏感凭据。',
+          '只有用户清楚表达长期或持续意图时 sourceType 才能为 explicit；不确定时返回空数组。',
+          '如果提供了“用户已确认的上一轮记忆候选”，表示用户刚刚明确同意该候选，可以据此创建或更新长期记忆。',
+          'key 使用稳定英文路径，例如 profile.research.direction、project.current.goal、preference.answer.detail、preference.explanation.order。',
+          '可以并存的多值信息必须使用不同 key，例如 profile.personal.likes.cats、profile.personal.likes.watermelon；不要把所有喜好都写进同一个 profile.personal.likes。',
+          'scope 只能为 global、project 或 pdf。只有明确限定当前论文时才使用 pdf；持续研究项目使用 project；一般用户偏好使用 global。',
+          '只输出 JSON 数组，不要 Markdown。每项字段：key, category, content, scope, sourceType, confidence, importance。',
+        ].join('\n'),
+      }, {
+        role: 'user',
+        content: [
+          existing ? `已有长期记忆（相同主题请沿用相同 key）：\n${existing}` : '当前没有已有长期记忆。',
+          message.documentName ? `当前文档：${message.documentName}` : '',
+          `用户本轮消息：\n${message.userMessage.slice(0, 8000)}`,
+          message.confirmedMemoryProposal?.trim()
+            ? `用户已确认的上一轮记忆候选：\n${message.confirmedMemoryProposal.trim().slice(0, 2000)}`
+            : '',
+          `助手回答仅用于理解上下文，不得把助手内容保存为用户记忆：\n${message.assistantMessage.slice(0, 4000)}`,
+        ].filter(Boolean).join('\n\n'),
+      }], Math.min(2048, config.maxOutputTokens));
+      const cleaned = result.content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      const arrayStart = cleaned.indexOf('[');
+      const arrayEnd = cleaned.lastIndexOf(']');
+      const objectStart = cleaned.indexOf('{');
+      const objectEnd = cleaned.lastIndexOf('}');
+      const jsonText = arrayStart >= 0 && arrayEnd > arrayStart
+        ? cleaned.slice(arrayStart, arrayEnd + 1)
+        : objectStart >= 0 && objectEnd > objectStart
+          ? cleaned.slice(objectStart, objectEnd + 1)
+          : '';
+      if (!jsonText) {
+        console.warn('[PDF Helper 长期记忆] 提取模型没有返回可解析 JSON', {
+          model: result.model,
+          content: cleaned.slice(0, 1200),
+        });
+        return { ok: true, memoryCandidates: [], model: result.model };
+      }
+      const parsed = JSON.parse(jsonText) as unknown;
+      const parsedItems = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === 'object'
+          ? [parsed]
+          : [];
+      const categories = new Set(['preference', 'profile', 'project', 'fact', 'correction']);
+      const scopes = new Set(['global', 'project', 'pdf']);
+      const candidates: AiMemoryCandidate[] = parsedItems
+        .flatMap((value): AiMemoryCandidate[] => {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+          const item = value as Record<string, unknown>;
+          const key = typeof item.key === 'string' ? item.key.trim().toLowerCase() : '';
+          const content = typeof item.content === 'string' ? item.content.trim() : '';
+          if (!/^[a-z][a-z0-9_.-]{2,80}$/.test(key) || !content) return [];
+          if (!categories.has(String(item.category)) || !scopes.has(String(item.scope))) return [];
+          if (item.sourceType !== 'explicit') return [];
+          return [{
+            key,
+            category: item.category as AiMemoryCandidate['category'],
+            content: content.slice(0, 600),
+            scope: item.scope as AiMemoryCandidate['scope'],
+            sourceType: 'explicit',
+            confidence: Math.min(1, Math.max(0, Number(item.confidence) || 1)),
+            importance: Math.min(1, Math.max(0, Number(item.importance) || 0.5)),
+          }];
+        }).slice(0, 6);
+      return { ok: true, memoryCandidates: candidates, model: result.model };
     }
 
     if (message.type === 'pdf-helper:ai-detect-reading-mode') {
@@ -706,10 +1137,17 @@ export default defineBackground(() => {
       const { signal } = activeRequest;
       void streamAiResponse(message, port, signal).catch((error) => {
         if (signal.aborted) return;
+        const details = getSafeErrorDetails(error);
+        console.error('[PDF Helper AI] 流式请求失败', {
+          requestId: message.requestId,
+          error: error instanceof Error ? error.message : String(error),
+          details,
+        });
         postAiStreamMessage(port, {
           type: 'error',
           requestId: message.requestId,
           error: error instanceof Error ? error.message : String(error),
+          details,
         });
       });
     });
