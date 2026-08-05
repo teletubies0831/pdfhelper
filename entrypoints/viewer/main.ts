@@ -657,6 +657,8 @@ const deepSeekApiKeyInput =
   requiredElement<HTMLInputElement>("deepseek-api-key");
 const deepSeekModelSelect =
   requiredElement<HTMLSelectElement>("deepseek-model");
+const translationModelSelect =
+  requiredElement<HTMLSelectElement>("translation-model");
 const deepSeekMaxOutputTokensInput = requiredElement<HTMLInputElement>(
   "deepseek-max-output-tokens",
 );
@@ -704,7 +706,26 @@ const aiTabButtons = Array.from(
 const aiTabPanels = Array.from(
   document.querySelectorAll<HTMLElement>("[data-ai-panel]"),
 );
-const selectedSnippetElement = requiredElement<HTMLElement>("selected-snippet");
+const selectedSnippetElement =
+  requiredElement<HTMLTextAreaElement>("selected-snippet");
+const selectedSnippetMathPreview = requiredElement<HTMLElement>(
+  "selected-snippet-math-preview",
+);
+const translationSourceSentenceField = requiredElement<HTMLElement>(
+  "translation-source-sentence-field",
+);
+const translationSourceSentenceInput = requiredElement<HTMLTextAreaElement>(
+  "translation-source-sentence",
+);
+const translationSourceSentenceTranslation = requiredElement<HTMLElement>(
+  "translation-source-sentence-translation",
+);
+const translationSourceSentenceMathPreview = requiredElement<HTMLElement>(
+  "translation-source-sentence-math-preview",
+);
+const applyTranslationEditButton = requiredElement<HTMLButtonElement>(
+  "apply-translation-edit",
+);
 const translationLearningHintElement = requiredElement<HTMLElement>(
   "translation-learning-hint",
 );
@@ -718,6 +739,30 @@ const saveTranslationNoteButton = requiredElement<HTMLButtonElement>(
 );
 const generateMoreExamplesButton = requiredElement<HTMLButtonElement>(
   "generate-more-examples",
+);
+const translationHistoryCountElement = requiredElement<HTMLElement>(
+  "translation-history-count",
+);
+const clearTranslationHistoryButton = requiredElement<HTMLButtonElement>(
+  "clear-translation-history",
+);
+const openTranslationHistoryButton = requiredElement<HTMLButtonElement>(
+  "open-translation-history",
+);
+const translationHistoryDialog = requiredElement<HTMLElement>(
+  "translation-history-dialog",
+);
+const closeTranslationHistoryButton = requiredElement<HTMLButtonElement>(
+  "close-translation-history",
+);
+const translationHistorySearchInput = requiredElement<HTMLInputElement>(
+  "translation-history-search",
+);
+const translationHistoryDialogCount = requiredElement<HTMLElement>(
+  "translation-history-dialog-count",
+);
+const translationHistoryDialogList = requiredElement<HTMLElement>(
+  "translation-history-dialog-list",
 );
 const copyTranslationButton =
   requiredElement<HTMLButtonElement>("copy-translation");
@@ -2243,7 +2288,8 @@ function getViewerSelectionRawText(): string {
   ) {
     return "";
   }
-  return selection.toString();
+  const reconstructed = getSelectionSurroundingText().selected;
+  return reconstructed || selection.toString();
 }
 
 function getViewerSelectionText(): string {
@@ -2451,6 +2497,7 @@ interface KnowledgeItem {
 let aiSelectionUpdateFrame = 0;
 let selectedTextForAi = "";
 let selectedTextPageNumber = 0;
+let lastViewerSelectionText = "";
 let lastTranslatedText = "";
 let autoTranslateTimer: ReturnType<typeof setTimeout> | null = null;
 let translationAbortController: AbortController | null = null;
@@ -2497,12 +2544,26 @@ interface VocabularyPartOfSpeech {
   meaning: string;
 }
 
+interface VocabularySense extends VocabularyPartOfSpeech {
+  definitionEn: string;
+}
+
+interface VocabularyWordForm {
+  label: string;
+  value: string;
+}
+
 interface VocabularyLearningResult {
   kind: "word";
   selectionComplete: boolean;
+  selectedWord: string;
   word: string;
+  wordForm: string;
+  namedEntityType: string;
   pronunciation: string;
   partsOfSpeech: VocabularyPartOfSpeech[];
+  senses: VocabularySense[];
+  forms: VocabularyWordForm[];
   meaningInSentence: string;
   sentence: string;
   sentenceTranslation: string;
@@ -2518,6 +2579,7 @@ interface SentenceKeyword {
 
 interface SentenceLearningResult {
   kind: "sentence";
+  sourceText: string;
   translation: string;
   keywords: SentenceKeyword[];
 }
@@ -2525,6 +2587,24 @@ interface SentenceLearningResult {
 type EnglishLearningResult = VocabularyLearningResult | SentenceLearningResult;
 
 let currentEnglishLearningResult: EnglishLearningResult | null = null;
+let currentEnglishLearningSourceText = "";
+let currentEnglishLearningSourceSentence = "";
+
+const TRANSLATION_HISTORY_STORAGE_KEY = "pdf-helper-translation-history-v1";
+const MAX_TRANSLATION_HISTORY_PER_DOCUMENT = 200;
+
+interface TranslationHistoryEntry {
+  id: string;
+  sourceText: string;
+  pageNumber: number;
+  result: EnglishLearningResult;
+  updatedAt: number;
+}
+
+type TranslationHistoryStore = Record<string, TranslationHistoryEntry[]>;
+
+let translationHistoryDocumentKey = "";
+let translationHistoryEntries: TranslationHistoryEntry[] = [];
 
 const APP_VIEW_SESSION_STORAGE_KEY = "pdf-helper-app-view-state-v1";
 
@@ -2871,6 +2951,7 @@ function setDeepSeekSettingsOpen(open: boolean): void {
 async function requestAiContent(
   messages: AiConversationMessage[],
   context: AiStreamStartMessage["context"] = {},
+  configOverride?: Pick<AiConfig, "model" | "reasoning" | "maxOutputTokens">,
 ): Promise<string> {
   if (!aiConfig.apiKey) {
     setDeepSeekSettingsOpen(true);
@@ -2882,6 +2963,7 @@ async function requestAiContent(
   const response = (await browser.runtime.sendMessage({
     type: "pdf-helper:ai-chat",
     messages,
+    configOverride,
     context: {
       ...context,
       readingMode: context.readingMode ?? resolvedReadingMode,
@@ -4253,6 +4335,7 @@ function readDeepSeekConfigFromForm(): AiConfig {
     apiKey: deepSeekApiKeyInput.value.trim(),
     baseUrl: normalizeAiBaseUrl(deepSeekBaseUrlInput.value, providerId),
     model: deepSeekModelSelect.value,
+    translationModel: translationModelSelect.value,
     reasoning: deepSeekThinkingSelect.value as AiReasoningMode,
     maxOutputTokens: normalizeAiMaxOutputTokens(
       deepSeekMaxOutputTokensInput.value,
@@ -5280,6 +5363,7 @@ function populateDeepSeekConfigForm(config: AiConfig): void {
   aiProviderSelect.value = config.providerId;
   deepSeekApiKeyInput.value = config.apiKey;
   deepSeekModelSelect.value = config.model;
+  translationModelSelect.value = config.translationModel || config.model;
   deepSeekMaxOutputTokensInput.value = String(config.maxOutputTokens);
   deepSeekThinkingSelect.value = config.reasoning;
   deepSeekBaseUrlInput.value = config.baseUrl;
@@ -5313,6 +5397,10 @@ async function loadDeepSeekConfig(): Promise<void> {
     ),
     reasoning:
       value?.reasoning ?? legacy?.thinking ?? DEFAULT_AI_CONFIG.reasoning,
+    translationModel:
+      value?.translationModel?.trim()
+      || value?.model?.trim()
+      || DEFAULT_AI_CONFIG.translationModel,
     maxOutputTokens: normalizeAiMaxOutputTokens(value?.maxOutputTokens),
   };
   if (!current && legacy)
@@ -6141,8 +6229,8 @@ function getRangeBoundaryTextNode(
   let current: Node = child;
   while (current.childNodes.length) {
     current = preferStart
-      ? current.childNodes[0]
-      : current.childNodes[current.childNodes.length - 1];
+      ? current.childNodes[0]!
+      : current.childNodes[current.childNodes.length - 1]!;
   }
   if (current.nodeType !== Node.TEXT_NODE) return null;
 
@@ -6151,40 +6239,49 @@ function getRangeBoundaryTextNode(
 }
 
 function getEnglishWordSelection(text: string): EnglishWordSelection | null {
-  const selectedWords = text.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? [];
-  if (selectedWords.length !== 1) return null;
+  const selectedWord = getSelectedEnglishWord(text);
+  if (!selectedWord) return null;
 
-  const selectedWord = selectedWords[0];
+  let word = selectedWord;
   const selection = window.getSelection();
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-    return ENGLISH_WORD_SELECTION_PATTERN.test(selectedWord)
-      ? { word: selectedWord, wasExpanded: selectedWord !== text.trim() }
+  if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0);
+    const rawSelectedText =
+      getSelectionSurroundingText().selected || selection.toString();
+    const selectionStartsInsideWord = /^[\p{L}\p{M}’'-]/u.test(
+      rawSelectedText,
+    );
+    const selectionEndsInsideWord = /[\p{L}\p{M}’'-]$/u.test(
+      rawSelectedText,
+    );
+
+    // Complete a fragment only inside the exact text nodes where the drag
+    // started and ended. Never cross into a neighbouring PDF.js span: those
+    // spans may be visually separated words even when Range#toString omits the
+    // space (the previous `data` -> `dataand` bug). A selected boundary space
+    // is also authoritative: if the user included it, the word ended there.
+    const startNode = range.startContainer instanceof Text
+      ? range.startContainer
       : null;
+    const endNode = range.endContainer instanceof Text
+      ? range.endContainer
+      : null;
+    const prefix = startNode && selectionStartsInsideWord
+      ? startNode.data
+          .slice(0, range.startOffset)
+          .match(/[\p{L}\p{M}’'-]+$/u)?.[0] ?? ""
+      : "";
+    const suffix = endNode && selectionEndsInsideWord
+      ? endNode.data
+          .slice(range.endOffset)
+          .match(/^[\p{L}\p{M}’'-]+/u)?.[0] ?? ""
+      : "";
+    const completedWord = `${prefix}${selectedWord}${suffix}`;
+    if (ENGLISH_WORD_SELECTION_PATTERN.test(completedWord)) {
+      word = completedWord;
+    }
   }
 
-  const range = selection.getRangeAt(0);
-  const start = getRangeBoundaryTextNode(
-    range.startContainer,
-    range.startOffset,
-    true,
-  );
-  const end = getRangeBoundaryTextNode(
-    range.endContainer,
-    range.endOffset,
-    false,
-  );
-
-  // PDF.js may place visible spaces between separate text spans without an
-  // actual whitespace character. Inspect only the text node at each edge.
-  const prefix = start && start.offset > 0
-    ? (start.node.data.slice(0, start.offset).match(/[\p{L}\p{M}’'-]+$/u)?.[0] ?? "")
-    : "";
-  const suffix = end && end.offset > 0
-    ? (end.node.data.slice(end.offset).match(/^[\p{L}\p{M}’'-]+/u)?.[0] ?? "")
-    : "";
-  const word = `${prefix}${selectedWord}${suffix}`;
-
-  if (!ENGLISH_WORD_SELECTION_PATTERN.test(word)) return null;
   return {
     word,
     wasExpanded: normalizeLearningInlineText(text) !== word,
@@ -6193,11 +6290,12 @@ function getEnglishWordSelection(text: string): EnglishWordSelection | null {
 
 function getSelectionSurroundingText(): {
   before: string;
+  selected: string;
   after: string;
 } {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0)
-    return { before: "", after: "" };
+    return { before: "", selected: "", after: "" };
 
   const range = selection.getRangeAt(0);
   const anchorElement =
@@ -6206,35 +6304,96 @@ function getSelectionSurroundingText(): {
       : (selection.anchorNode as Element | null);
   const textLayer = anchorElement?.closest<HTMLElement>(".textLayer");
   if (!textLayer || !textLayer.contains(range.startContainer)) {
-    return { before: "", after: "" };
+    return { before: "", selected: selection.toString(), after: "" };
   }
 
-  try {
-    const beforeRange = document.createRange();
-    beforeRange.selectNodeContents(textLayer);
-    beforeRange.setEnd(range.startContainer, range.startOffset);
-    const afterRange = document.createRange();
-    afterRange.selectNodeContents(textLayer);
-    afterRange.setStart(range.endContainer, range.endOffset);
-    return {
-      before: beforeRange.toString(),
-      after: afterRange.toString(),
-    };
-  } catch {
-    return { before: "", after: "" };
+  const start = getRangeBoundaryTextNode(range.startContainer, range.startOffset, true);
+  const end = getRangeBoundaryTextNode(range.endContainer, range.endOffset, false);
+  if (!start || !end) {
+    return { before: "", selected: selection.toString(), after: "" };
   }
+
+  // Range#toString concatenates adjacent PDF.js spans without their visual
+  // spacing. Rebuild the text layer with separators so the source sentence is
+  // faithful to what the reader sees on the page.
+  const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    nodes.push(node as Text);
+  }
+  const starts = new Map<Text, number>();
+  let combined = "";
+  nodes.forEach((node, index) => {
+    if (index > 0) {
+      const previousElement = nodes[index - 1]?.parentElement;
+      const currentElement = node.parentElement;
+      const previousRect = previousElement?.getBoundingClientRect();
+      const currentRect = currentElement?.getBoundingClientRect();
+      const changedLine = Boolean(
+        previousRect
+        && currentRect
+        && Math.abs(currentRect.top - previousRect.top)
+          > Math.max(2, Math.min(previousRect.height, currentRect.height) * 0.45),
+      );
+      const alreadyHasWhitespace = Boolean(
+        /\s$/u.test(nodes[index - 1]?.data ?? "")
+        || /^\s/u.test(node.data),
+      );
+      const visualWordGap = Boolean(
+        previousRect
+        && currentRect
+        && currentRect.left - previousRect.right
+          > Math.max(
+            0.75,
+            Math.min(previousRect.height, currentRect.height) * 0.06,
+          ),
+      );
+      combined += changedLine
+        ? "\n"
+        : alreadyHasWhitespace
+          ? ""
+          : visualWordGap
+            ? " "
+            : "";
+    }
+    starts.set(node, combined.length);
+    combined += node.data;
+  });
+  if (!starts.has(start.node) || !starts.has(end.node)) {
+    return { before: "", selected: selection.toString(), after: "" };
+  }
+  const startIndex = (starts.get(start.node) ?? 0) + start.offset;
+  const endIndex = (starts.get(end.node) ?? startIndex) + end.offset;
+  return {
+    before: combined.slice(0, startIndex),
+    selected: combined.slice(startIndex, endIndex),
+    after: combined.slice(endIndex),
+  };
+}
+
+function normalizeSelectionContextFragment(value: string): string {
+  if (!value) return "";
+  const hadLeadingWhitespace = /^\s/u.test(value);
+  const hadTrailingWhitespace = /\s$/u.test(value);
+  const normalized = normalizeCopiedText(value).replace(/\s+/g, " ");
+  if (!normalized) return hadLeadingWhitespace || hadTrailingWhitespace ? " " : "";
+  return `${hadLeadingWhitespace ? " " : ""}${normalized}${hadTrailingWhitespace ? " " : ""}`;
 }
 
 function getSelectionSentenceContext(selectedText: string): string {
-  const { before, after } = getSelectionSurroundingText();
+  const { before, selected: reconstructedSelection, after } =
+    getSelectionSurroundingText();
   if (!before && !after) return selectedText;
 
-  const beforeText = before.replace(/\s+/g, " ");
-  const selected = selectedText.replace(/\s+/g, " ").trim();
-  const afterText = after.replace(/\s+/g, " ");
+  const liveSelectionText = reconstructedSelection
+    || window.getSelection()?.toString()
+    || selectedText;
+  const beforeText = normalizeSelectionContextFragment(before);
+  const selected = normalizeSelectionContextFragment(liveSelectionText);
+  const afterText = normalizeSelectionContextFragment(after);
   const combined = beforeText + selected + afterText;
   const selectionStart = beforeText.length;
-  const sentenceStart = Math.max(
+  const punctuationStart = Math.max(
     0,
     combined.lastIndexOf(".", Math.max(0, selectionStart - 1)) + 1,
     combined.lastIndexOf("!", Math.max(0, selectionStart - 1)) + 1,
@@ -6243,15 +6402,137 @@ function getSelectionSentenceContext(selectedText: string): string {
     combined.lastIndexOf("！", Math.max(0, selectionStart - 1)) + 1,
     combined.lastIndexOf("？", Math.max(0, selectionStart - 1)) + 1,
   );
+  const sentenceStart = Math.max(
+    punctuationStart,
+    selectionStart - 520,
+  );
   const afterSelection = combined.slice(selectionStart + selected.length);
   const sentenceEndMatch = afterSelection.match(/[.!?。！？](?:\s|$)/);
   const sentenceEnd = sentenceEndMatch?.index === undefined
     ? Math.min(combined.length, selectionStart + selected.length + 520)
     : selectionStart + selected.length + sentenceEndMatch.index + 1;
-  const sentence = normalizeLearningInlineText(
+  const sentence = normalizeCopiedText(
     combined.slice(sentenceStart, sentenceEnd),
-  );
+  ).replace(/\s+/g, " ").trim();
   return sentence.length >= selected.length ? sentence : selectedText;
+}
+
+function getTranslationScopeFromSelection(
+  selectedText: string,
+  sentenceContext: string,
+): string {
+  const selected = normalizeLearningInlineText(selectedText);
+  const context = normalizeLearningInlineText(sentenceContext);
+  if (!selected || !context || context.length <= selected.length) return selected;
+
+  const terminalMarks = selected.match(/[.!?。！？]/g)?.length ?? 0;
+  const endsAtSentenceBoundary = /[.!?。！？]["'”’）)\]]*$/.test(selected);
+  const isLongOrMultiSentenceSelection = selected.length > 360
+    || terminalMarks >= 2
+    || (terminalMarks >= 1 && endsAtSentenceBoundary);
+  if (isLongOrMultiSentenceSelection) return selected;
+
+  // Only repair a genuinely short, cut-off sentence. Large expansions usually
+  // mean the PDF text layer crossed a heading, column or paragraph boundary.
+  const expansionIsPlausible = context.length <= 700
+    && context.length - selected.length <= 420
+    && context.length <= selected.length * 3 + 180;
+  return expansionIsPlausible ? context : selected;
+}
+
+function autoResizeTranslationTextarea(
+  textarea: HTMLTextAreaElement,
+): void {
+  const resize = (): void => {
+    textarea.style.height = "auto";
+    const borderHeight = Math.max(
+      0,
+      textarea.offsetHeight - textarea.clientHeight,
+    );
+    const minimumHeight = textarea === selectedSnippetElement ? 58 : 44;
+    textarea.style.height = `${Math.max(
+      minimumHeight,
+      Math.ceil(textarea.scrollHeight + borderHeight + 10),
+    )}px`;
+    textarea.scrollTop = 0;
+  };
+
+  resize();
+  // Fonts and the right-panel width can settle one frame after content is
+  // assigned. Re-measure then so the final one or two lines are never clipped.
+  requestAnimationFrame(resize);
+}
+
+function containsLatexMath(value: string): boolean {
+  return /\$\$[\s\S]+?\$\$|\$[^$\n]+\$|\\\[[\s\S]+?\\\]|\\\([^\n]+?\\\)|\\(?:frac|sum|prod|int|sqrt|log|alpha|beta|gamma|lambda|sigma|mathbf|mathbb|mathrm)\b|[_^]\{/.test(
+    value,
+  );
+}
+
+function renderTranslationMathPreview(
+  container: HTMLElement,
+  value: string,
+): void {
+  const text = value.trim();
+  container.hidden = !containsLatexMath(text);
+  if (container.hidden) {
+    container.replaceChildren();
+    return;
+  }
+  const hasDelimiter = /\$|\\\[|\\\(/.test(text);
+  renderChatMarkdown(
+    container,
+    hasDelimiter ? text : `$$${text}$$`,
+    false,
+  );
+}
+
+function renderLearningRichText(
+  element: HTMLElement,
+  value: string,
+): HTMLElement {
+  renderChatMarkdown(element, value, false);
+  return element;
+}
+
+function setTranslationSelectionEditor(
+  text: string,
+  sourceSentence = "",
+  sourceSentenceTranslation = "",
+): void {
+  const normalizedText = normalizeCopiedText(text);
+  const normalizedSourceSentence = normalizeLearningInlineText(
+    sourceSentence || normalizedText,
+  );
+  selectedSnippetElement.value = normalizedText;
+  selectedSnippetElement.removeAttribute("title");
+  autoResizeTranslationTextarea(selectedSnippetElement);
+  renderTranslationMathPreview(selectedSnippetMathPreview, normalizedText);
+  const isWord = Boolean(getSelectedEnglishWord(normalizedText));
+  translationSourceSentenceField.hidden = !isWord;
+  translationSourceSentenceInput.value = isWord
+    ? normalizedSourceSentence
+    : "";
+  autoResizeTranslationTextarea(translationSourceSentenceInput);
+  renderTranslationMathPreview(
+    translationSourceSentenceMathPreview,
+    translationSourceSentenceInput.value,
+  );
+  renderLearningRichText(
+    translationSourceSentenceTranslation,
+    sourceSentenceTranslation || "查询后显示原句的完整翻译",
+  );
+  currentEnglishLearningSourceSentence = normalizedSourceSentence;
+  applyTranslationEditButton.disabled = !normalizedText;
+}
+
+function markTranslationEditorChanged(): void {
+  const text = normalizeCopiedText(selectedSnippetElement.value);
+  autoResizeTranslationTextarea(selectedSnippetElement);
+  renderTranslationMathPreview(selectedSnippetMathPreview, text);
+  const isWord = Boolean(getSelectedEnglishWord(text));
+  translationSourceSentenceField.hidden = !isWord;
+  applyTranslationEditButton.disabled = !text;
 }
 
 function readVocabularyExamples(value: unknown): VocabularyExample[] {
@@ -6282,21 +6563,38 @@ function parseVocabularyLearningResult(
   sentence: string,
 ): VocabularyLearningResult {
   const value = parseAiJson(content);
-  const partsOfSpeech = readLearningArray(value.partsOfSpeech)
-    .map((item): VocabularyPartOfSpeech | null => {
+  const senses = readLearningArray(value.senses ?? value.partsOfSpeech)
+    .map((item): VocabularySense | null => {
       if (!item || typeof item !== "object") return null;
       const record = item as Record<string, unknown>;
       const label = readLearningString(record.label)
         || readLearningString(record.partOfSpeech)
         || readLearningString(record.pos);
       const meaning = readLearningString(record.meaning)
-        || readLearningString(record.definition);
-      return label && meaning ? { label, meaning } : null;
+        || readLearningString(record.definition)
+        || readLearningString(record.translation);
+      if (!label || !meaning) return null;
+      return {
+        label,
+        meaning,
+        definitionEn: readLearningString(record.definitionEn)
+          || readLearningString(record.englishDefinition)
+          || readLearningString(record.enDefinition),
+      };
     })
-    .filter((item): item is VocabularyPartOfSpeech => Boolean(item));
-  // The first example must always be the exact sentence selected from the PDF,
-  // rather than a sentence reconstructed by the model.
-  const sourceSentence = sentence;
+    .filter((item): item is VocabularySense => Boolean(item));
+  const forms = readLearningArray(value.forms)
+    .map((item): VocabularyWordForm | null => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const label = readLearningString(record.label) || readLearningString(record.name);
+      const form = readLearningString(record.value) || readLearningString(record.form);
+      return label && form ? { label, value: form } : null;
+    })
+    .filter((item): item is VocabularyWordForm => Boolean(item));
+  const sourceSentence = readLearningString(value.sourceSentenceLatex)
+    || readLearningString(value.sourceSentence)
+    || sentence;
   const sentenceTranslation = readLearningString(value.sentenceTranslation)
     || readLearningString(value.contextTranslation);
   const meaningInSentence = readLearningString(value.meaningInSentence)
@@ -6311,33 +6609,39 @@ function parseVocabularyLearningResult(
       normalizeLearningInlineText(example.sentence).toLocaleLowerCase()
         !== normalizeLearningInlineText(sourceSentence).toLocaleLowerCase(),
     )
-    .slice(0, 2);
+    .slice(0, 3);
 
   return {
     kind: "word",
-    selectionComplete: value.selectionComplete !== false,
+    // The viewer has already expanded the user's selection to a complete
+    // lexical token. The model may classify its form, but must not reject it.
+    selectionComplete: true,
+    selectedWord: word,
     word: readLearningString(value.headword)
+      || readLearningString(value.lemma)
       || readLearningString(value.word)
       || word,
+    wordForm: readLearningString(value.wordForm)
+      || readLearningString(value.inflection)
+      || readLearningString(value.selectedFormType),
+    namedEntityType: readLearningString(value.namedEntityType)
+      || readLearningString(value.entityType),
     pronunciation: readLearningString(value.pronunciation)
       || readLearningString(value.phonetic),
-    partsOfSpeech,
+    partsOfSpeech: senses.map(({ label, meaning }) => ({ label, meaning })),
+    senses,
+    forms,
     meaningInSentence,
     sentence: sourceSentence,
     sentenceTranslation,
-    examples: [
-      {
-        sentence: sourceSentence,
-        translation: sentenceTranslation,
-        usage: "文中用法",
-        source: "document",
-      },
-      ...generatedExamples,
-    ],
+    examples: generatedExamples,
   };
 }
 
-function parseSentenceLearningResult(content: string): SentenceLearningResult {
+function parseSentenceLearningResult(
+  content: string,
+  sourceText: string,
+): SentenceLearningResult {
   const value = parseAiJson(content);
   const translation = readLearningString(value.translation);
   if (!translation) throw new Error("模型没有返回句子翻译。");
@@ -6360,16 +6664,35 @@ function parseSentenceLearningResult(content: string): SentenceLearningResult {
     })
     .filter((item): item is SentenceKeyword => Boolean(item))
     .slice(0, 8);
-  return { kind: "sentence", translation, keywords };
+  return {
+    kind: "sentence",
+    sourceText: readLearningString(value.sourceTextLatex)
+      || readLearningString(value.sourceText)
+      || sourceText,
+    translation,
+    keywords,
+  };
 }
 
 function renderVocabularyLearningResult(result: VocabularyLearningResult): void {
   setTranslationLearningTitle("单词学习");
   translationLearningHintElement.textContent =
-    "已按当前文中句子释义；例句 1 为论文原句，后续例句用于扩展不同用法。";
+    "原句与完整翻译显示在上方；下方例句只用于扩展不同用法。";
+  translationSourceSentenceField.hidden = false;
+  translationSourceSentenceInput.value = result.sentence;
+  autoResizeTranslationTextarea(translationSourceSentenceInput);
+  renderTranslationMathPreview(
+    translationSourceSentenceMathPreview,
+    result.sentence,
+  );
+  renderLearningRichText(
+    translationSourceSentenceTranslation,
+    result.sentenceTranslation,
+  );
   const card = createLearningElement("article", "english-learning-card word-card");
   const header = createLearningElement("div", "english-learning-header");
-  const word = createLearningElement("strong", "english-learning-word", result.word);
+  const displayWord = result.selectedWord || result.word;
+  const word = createLearningElement("strong", "english-learning-word", displayWord);
   header.append(word);
   if (result.pronunciation) {
     header.append(
@@ -6378,10 +6701,25 @@ function renderVocabularyLearningResult(result: VocabularyLearningResult): void 
   }
   card.append(header);
 
+  const meta = createLearningElement("div", "english-learning-meta");
+  if (result.word && result.word.toLocaleLowerCase() !== displayWord.toLocaleLowerCase()) {
+    meta.append(createLearningElement("span", "english-learning-chip", `原形：${result.word}`));
+  }
+  if (result.wordForm) {
+    meta.append(createLearningElement("span", "english-learning-chip", `当前词形：${result.wordForm}`));
+  }
+  if (result.namedEntityType) {
+    meta.append(createLearningElement("span", "english-learning-chip", result.namedEntityType));
+  }
+  if (meta.childElementCount) card.append(meta);
+
   const meaning = createLearningElement("section", "english-learning-block");
   meaning.append(createLearningElement("h4", "english-learning-label", "文中含义"));
   meaning.append(
-    createLearningElement("p", "english-learning-context-meaning", result.meaningInSentence),
+    renderLearningRichText(
+      createLearningElement("div", "english-learning-context-meaning"),
+      result.meaningInSentence,
+    ),
   );
   if (result.partsOfSpeech.length) {
     const list = createLearningElement("dl", "english-pos-list");
@@ -6397,39 +6735,104 @@ function renderVocabularyLearningResult(result: VocabularyLearningResult): void 
   }
   card.append(meaning);
 
+  const senses = createLearningElement("section", "english-learning-block");
+  senses.append(createLearningElement("h4", "english-learning-label", "全部义项与英英释义"));
+  const allSenses = result.senses.length
+    ? result.senses
+    : result.partsOfSpeech.map((part) => ({ ...part, definitionEn: "" }));
+  if (!allSenses.length) {
+    senses.append(createLearningElement("p", "english-learning-empty", "未返回可用义项。"));
+  } else {
+    const list = createLearningElement("div", "english-sense-list");
+    allSenses.forEach((sense) => {
+      const item = createLearningElement("article", "english-sense-card");
+      const title = createLearningElement("div", "english-sense-title");
+      title.append(
+        createLearningElement("span", "english-pos-tag", sense.label),
+        createLearningElement("strong", "english-sense-meaning", sense.meaning),
+      );
+      item.append(title);
+      if (sense.definitionEn) {
+        item.append(createLearningElement("p", "english-sense-definition", sense.definitionEn));
+      }
+      list.append(item);
+    });
+    senses.append(list);
+  }
+  card.append(senses);
+
+  if (result.forms.length) {
+    const forms = createLearningElement("section", "english-learning-block");
+    forms.append(createLearningElement("h4", "english-learning-label", "词形变化"));
+    const list = createLearningElement("div", "english-form-list");
+    result.forms.forEach((form) => {
+      const item = createLearningElement("span", "english-form-chip");
+      item.append(
+        createLearningElement("strong", "english-form-label", form.label),
+        document.createTextNode(` ${form.value}`),
+      );
+      list.append(item);
+    });
+    forms.append(list);
+    card.append(forms);
+  }
+
   const examples = createLearningElement("section", "english-learning-block");
   examples.append(createLearningElement("h4", "english-learning-label", "例句"));
   result.examples.forEach((example, index) => {
     const item = createLearningElement("article", "english-example-card");
-    const label = index === 0
-      ? "例句 1 · 文中原句"
-      : "例句 " + String(index + 1) + " · " + example.usage;
+    const label = "例句 " + String(index + 1) + " · " + example.usage;
     item.append(createLearningElement("span", "english-example-label", label));
-    item.append(createLearningElement("p", "english-example-en", example.sentence));
-    item.append(createLearningElement("p", "english-example-zh", example.translation));
+    item.append(
+      renderLearningRichText(
+        createLearningElement("div", "english-example-en"),
+        example.sentence,
+      ),
+    );
+    item.append(
+      renderLearningRichText(
+        createLearningElement("div", "english-example-zh"),
+        example.translation,
+      ),
+    );
     examples.append(item);
   });
   card.append(examples);
 
   translationResultElement.replaceChildren(card);
   translationResultElement.classList.remove("error");
-  setMoreExamplesButtonVisible(result.selectionComplete);
+  setMoreExamplesButtonVisible(true);
 }
 
 function renderSentenceLearningResult(result: SentenceLearningResult): void {
   setTranslationLearningTitle("句子翻译");
   translationLearningHintElement.textContent =
     "已给出整句译文，并仅挑选值得学习的术语、学术表达或较难词汇。";
+  if (result.sourceText) {
+    renderTranslationMathPreview(
+      selectedSnippetMathPreview,
+      result.sourceText,
+    );
+  }
   const card = createLearningElement("article", "english-learning-card sentence-card");
   const translation = createLearningElement("section", "english-learning-block");
   translation.append(createLearningElement("h4", "english-learning-label", "中文翻译"));
   translation.append(
-    createLearningElement("p", "english-sentence-translation", result.translation),
+    renderLearningRichText(
+      createLearningElement("div", "english-sentence-translation"),
+      result.translation,
+    ),
   );
   card.append(translation);
 
   const keywords = createLearningElement("section", "english-learning-block");
-  keywords.append(createLearningElement("h4", "english-learning-label", "重点词汇"));
+  keywords.append(
+    createLearningElement(
+      "h4",
+      "english-learning-label",
+      "重点单词",
+    ),
+  );
   if (!result.keywords.length) {
     keywords.append(
       createLearningElement("p", "english-learning-empty", "这句话以常用词为主，暂时没有需要额外记忆的难词。"),
@@ -6445,13 +6848,11 @@ function renderSentenceLearningResult(result: SentenceLearningResult): void {
       );
       item.append(title);
       item.append(
-        createLearningElement("p", "english-keyword-meaning", keyword.meaningInSentence),
+        renderLearningRichText(
+          createLearningElement("div", "english-keyword-meaning"),
+          keyword.meaningInSentence,
+        ),
       );
-      if (keyword.reason) {
-        item.append(
-          createLearningElement("p", "english-keyword-reason", keyword.reason),
-        );
-      }
       list.append(item);
     });
     keywords.append(list);
@@ -6471,7 +6872,7 @@ function getEnglishLearningPlainText(): string {
       ? result.keywords
           .map(
             (keyword) =>
-              `- ${keyword.word}（${keyword.partOfSpeech}）：${keyword.meaningInSentence}${keyword.reason ? `；${keyword.reason}` : ""}`,
+              `- ${keyword.word}（${keyword.partOfSpeech}）：${keyword.meaningInSentence}`,
           )
           .join("\n")
       : "- 暂无需要额外记忆的难词";
@@ -6486,11 +6887,15 @@ function getEnglishLearningPlainText(): string {
   const examples = result.examples
     .map(
       (example, index) =>
-        `例句 ${index + 1}${index === 0 ? "（文中原句）" : `（${example.usage}）`}\n${example.sentence}\n${example.translation}`,
+        `例句 ${index + 1}（${example.usage}）\n${example.sentence}\n${example.translation}`,
     )
     .join("\n\n");
   return [
     `${result.word}${result.pronunciation ? ` ${result.pronunciation}` : ""}`,
+    "",
+    "文中原句",
+    result.sentence,
+    result.sentenceTranslation,
     "",
     "文中含义",
     result.meaningInSentence,
@@ -6501,6 +6906,262 @@ function getEnglishLearningPlainText(): string {
     "例句",
     examples,
   ].join("\n");
+}
+
+function getTranslationHistoryDocumentKey(): string {
+  if (pdfDocument) return getDocumentChatId(pdfDocument);
+  return `source:${sourceName || "untitled"}`;
+}
+
+function isStoredEnglishLearningResult(value: unknown): value is EnglishLearningResult {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  if (record.kind === "sentence") return typeof record.translation === "string";
+  return record.kind === "word"
+    && typeof record.word === "string"
+    && typeof record.meaningInSentence === "string"
+    && typeof record.sentence === "string";
+}
+
+function readTranslationHistoryEntries(value: unknown): TranslationHistoryEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
+    .map((entry): TranslationHistoryEntry | null => {
+      if (
+        typeof entry.id !== "string"
+        || typeof entry.sourceText !== "string"
+        || !isStoredEnglishLearningResult(entry.result)
+      ) return null;
+      const storedResult = entry.result;
+      const result: EnglishLearningResult = storedResult.kind === "word"
+        ? {
+            ...storedResult,
+            selectedWord:
+              typeof storedResult.selectedWord === "string"
+                ? storedResult.selectedWord
+                : storedResult.word,
+            wordForm:
+              typeof storedResult.wordForm === "string"
+                ? storedResult.wordForm
+                : "",
+            namedEntityType:
+              typeof storedResult.namedEntityType === "string"
+                ? storedResult.namedEntityType
+                : "",
+            partsOfSpeech: Array.isArray(storedResult.partsOfSpeech)
+              ? storedResult.partsOfSpeech
+              : [],
+            senses: Array.isArray(storedResult.senses)
+              ? storedResult.senses
+              : [],
+            forms: Array.isArray(storedResult.forms)
+              ? storedResult.forms
+              : [],
+            examples: Array.isArray(storedResult.examples)
+              ? storedResult.examples.filter(
+                  (example) => example?.source !== "document",
+                )
+              : [],
+          }
+        : {
+            ...storedResult,
+            sourceText:
+              typeof storedResult.sourceText === "string"
+                ? storedResult.sourceText
+                : entry.sourceText,
+            keywords: Array.isArray(storedResult.keywords)
+              ? storedResult.keywords
+              : [],
+          };
+      return {
+        id: entry.id,
+        sourceText: entry.sourceText,
+        pageNumber:
+          typeof entry.pageNumber === "number" && Number.isFinite(entry.pageNumber)
+            ? Math.max(1, entry.pageNumber)
+            : 1,
+        result,
+        updatedAt:
+          typeof entry.updatedAt === "number" && Number.isFinite(entry.updatedAt)
+            ? entry.updatedAt
+            : 0,
+      };
+    })
+    .filter((entry): entry is TranslationHistoryEntry => Boolean(entry))
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .slice(0, MAX_TRANSLATION_HISTORY_PER_DOCUMENT);
+}
+
+function getTranslationHistoryLabel(entry: TranslationHistoryEntry): string {
+  if (entry.result.kind === "word") {
+    return entry.result.selectedWord || entry.result.word || entry.sourceText;
+  }
+  return entry.sourceText.replace(/\s+/g, " ").trim().slice(0, 42);
+}
+
+function restoreTranslationHistoryEntry(entry: TranslationHistoryEntry): void {
+  const restoredText = entry.result.kind === "word"
+    ? entry.result.selectedWord || entry.result.word || entry.sourceText
+    : entry.sourceText;
+  selectedTextForAi = restoredText;
+  selectedTextPageNumber = entry.pageNumber;
+  lastTranslatedText = restoredText;
+  currentEnglishLearningResult = entry.result;
+  currentEnglishLearningSourceText = restoredText;
+  setTranslationSelectionEditor(
+    restoredText,
+    entry.result.kind === "word" ? entry.result.sentence : "",
+    entry.result.kind === "word" ? entry.result.sentenceTranslation : "",
+  );
+  if (entry.result.kind === "word") {
+    renderVocabularyLearningResult(entry.result);
+  } else {
+    renderSentenceLearningResult(entry.result);
+  }
+}
+
+function createTranslationHistoryRow(
+  entry: TranslationHistoryEntry,
+): HTMLElement {
+  const row = createLearningElement("div", "translation-history-row");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "translation-history-item";
+  const title = getTranslationHistoryLabel(entry);
+  button.append(
+    createLearningElement(
+      "strong",
+      "translation-history-item-title",
+      entry.result.kind === "word" ? title : `句子 · ${title}`,
+    ),
+    createLearningElement(
+      "span",
+      "translation-history-item-meta",
+      `第 ${entry.pageNumber} 页 · 点击恢复`,
+    ),
+  );
+  button.addEventListener("click", () => {
+    restoreTranslationHistoryEntry(entry);
+    translationHistoryDialog.hidden = true;
+  });
+
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "translation-history-delete";
+  deleteButton.textContent = "×";
+  deleteButton.title = `删除“${title}”`;
+  deleteButton.setAttribute("aria-label", `删除“${title}”`);
+  deleteButton.addEventListener("click", () => {
+    void deleteTranslationHistoryEntry(entry.id);
+  });
+  row.append(button, deleteButton);
+  return row;
+}
+
+function getFilteredTranslationHistoryEntries(): TranslationHistoryEntry[] {
+  const query = translationHistorySearchInput.value
+    .toLocaleLowerCase("zh-CN")
+    .trim();
+  if (!query) return translationHistoryEntries;
+  return translationHistoryEntries.filter((entry) =>
+    `${entry.sourceText}\n${JSON.stringify(entry.result)}`
+      .toLocaleLowerCase("zh-CN")
+      .includes(query),
+  );
+}
+
+function renderTranslationHistoryDialog(): void {
+  const entries = getFilteredTranslationHistoryEntries();
+  translationHistoryDialogCount.textContent = translationHistorySearchInput.value.trim()
+    ? `${entries.length} / ${translationHistoryEntries.length} 条记录`
+    : `${translationHistoryEntries.length} 条记录`;
+  if (!entries.length) {
+    translationHistoryDialogList.replaceChildren(
+      createLearningElement(
+        "p",
+        "translation-history-empty",
+        translationHistoryEntries.length
+          ? "没有找到匹配的历史记录。"
+          : "当前 PDF 还没有英语学习历史。",
+      ),
+    );
+    return;
+  }
+  translationHistoryDialogList.replaceChildren(
+    ...entries.map(createTranslationHistoryRow),
+  );
+}
+
+function renderTranslationHistory(): void {
+  translationHistoryCountElement.textContent = String(translationHistoryEntries.length);
+  clearTranslationHistoryButton.hidden = translationHistoryEntries.length === 0;
+  openTranslationHistoryButton.classList.toggle(
+    "has-records",
+    translationHistoryEntries.length > 0,
+  );
+  if (!translationHistoryDialog.hidden) renderTranslationHistoryDialog();
+}
+
+async function persistTranslationHistoryEntries(): Promise<void> {
+  const stored = await browser.storage.local.get(TRANSLATION_HISTORY_STORAGE_KEY);
+  const store = { ...(stored[TRANSLATION_HISTORY_STORAGE_KEY] ?? {}) } as TranslationHistoryStore;
+  if (translationHistoryEntries.length) {
+    store[translationHistoryDocumentKey] = translationHistoryEntries;
+  } else {
+    delete store[translationHistoryDocumentKey];
+  }
+  await browser.storage.local.set({ [TRANSLATION_HISTORY_STORAGE_KEY]: store });
+}
+
+async function deleteTranslationHistoryEntry(id: string): Promise<void> {
+  translationHistoryEntries = translationHistoryEntries.filter(
+    (entry) => entry.id !== id,
+  );
+  await persistTranslationHistoryEntries();
+  renderTranslationHistory();
+  if (!translationHistoryDialog.hidden) renderTranslationHistoryDialog();
+}
+
+async function ensureTranslationHistoryLoaded(): Promise<void> {
+  const documentKey = getTranslationHistoryDocumentKey();
+  if (documentKey === translationHistoryDocumentKey) return;
+  const stored = await browser.storage.local.get(TRANSLATION_HISTORY_STORAGE_KEY);
+  const store = stored[TRANSLATION_HISTORY_STORAGE_KEY] as TranslationHistoryStore | undefined;
+  translationHistoryDocumentKey = documentKey;
+  translationHistoryEntries = readTranslationHistoryEntries(store?.[documentKey]);
+  renderTranslationHistory();
+}
+
+async function storeTranslationHistoryResult(
+  sourceText: string,
+  result: EnglishLearningResult,
+): Promise<void> {
+  await ensureTranslationHistoryLoaded();
+  const normalizedSource = sourceText.replace(/\s+/g, " ").trim();
+  if (!normalizedSource) return;
+  const id = `${result.kind}:${normalizedSource.toLocaleLowerCase()}`;
+  const entry: TranslationHistoryEntry = {
+    id,
+    sourceText: normalizedSource,
+    pageNumber: Math.max(1, selectedTextPageNumber || pdfViewer.currentPageNumber || 1),
+    result,
+    updatedAt: Date.now(),
+  };
+  translationHistoryEntries = [
+    entry,
+    ...translationHistoryEntries.filter((item) => item.id !== id),
+  ].slice(0, MAX_TRANSLATION_HISTORY_PER_DOCUMENT);
+  await persistTranslationHistoryEntries();
+  renderTranslationHistory();
+}
+
+async function clearCurrentTranslationHistory(): Promise<void> {
+  await ensureTranslationHistoryLoaded();
+  translationHistoryEntries = [];
+  await persistTranslationHistoryEntries();
+  renderTranslationHistory();
+  setStatus("已清空当前 PDF 的英语学习历史。");
 }
 
 function setSummaryState(
@@ -10205,18 +10866,30 @@ function scheduleAutomaticTranslation(text: string): void {
 }
 
 function updateAiSelectedSnippet(): void {
-  const text = getViewerSelectionText();
+  const rawSelectedText = getViewerSelectionText();
   const pageNumber = Math.max(1, pdfViewer.currentPageNumber || 1);
-  if (
-    !text ||
-    (text === selectedTextForAi && pageNumber === selectedTextPageNumber)
-  )
+  if (!rawSelectedText) {
+    lastViewerSelectionText = "";
     return;
+  }
+  if (
+    rawSelectedText === lastViewerSelectionText
+    && pageNumber === selectedTextPageNumber
+  ) return;
 
+  const automaticWordSelection = getEnglishWordSelection(rawSelectedText);
+  const sourceSentence = getSelectionSentenceContext(rawSelectedText);
+  const text = automaticWordSelection?.word
+    || getTranslationScopeFromSelection(rawSelectedText, sourceSentence)
+    || rawSelectedText;
+
+  lastViewerSelectionText = rawSelectedText;
   selectedTextForAi = text;
   selectedTextPageNumber = pageNumber;
-  selectedSnippetElement.textContent = text;
-  selectedSnippetElement.title = text;
+  setTranslationSelectionEditor(
+    text,
+    automaticWordSelection ? sourceSentence : text,
+  );
   translationAbortController?.abort();
   moreExamplesAbortController?.abort();
   cancelPendingAutomaticTranslation();
@@ -10256,20 +10929,28 @@ function scheduleAiSelectedSnippetUpdate(): void {
 async function translateSelectedText(text: string): Promise<void> {
   if (!text || text !== selectedTextForAi) return;
 
-  const automaticWordSelection = getEnglishWordSelection(text);
-  const selectedWord = automaticWordSelection?.word ?? getSelectedEnglishWord(text);
+  void ensureTranslationHistoryLoaded();
+
+  const selectedWord = getSelectedEnglishWord(text);
   const isWord = Boolean(selectedWord);
-  const sourceSentence = getSelectionSentenceContext(text);
+  const sourceSentence = normalizeLearningInlineText(
+    currentEnglishLearningSourceSentence || text,
+  );
   translationAbortController?.abort();
   const controller = new AbortController();
   translationAbortController = controller;
+  currentEnglishLearningSourceText = text;
   currentEnglishLearningResult = null;
   setMoreExamplesButtonVisible(false);
   setTranslationLearningTitle(isWord ? "单词学习" : "句子翻译");
   translationLearningHintElement.textContent = isWord
     ? "正在结合该单词所在的原句查询语境词义、词性和例句。"
     : "正在翻译句子，并筛选其中值得学习的重点词汇。";
-  if (isWord && automaticWordSelection?.wasExpanded) {
+  if (
+    isWord
+    && lastViewerSelectionText
+    && normalizeLearningInlineText(lastViewerSelectionText) !== selectedWord
+  ) {
     translationLearningHintElement.textContent = `已自动识别为完整单词 “${selectedWord}”，正在查询其语境词义、词性和例句。`;
   }
   setTranslationState(
@@ -10282,32 +10963,59 @@ async function translateSelectedText(text: string): Promise<void> {
           "你是严谨的英汉词典与英语教师。请为一个英文单词制作学习卡。",
           `当前选中单词：${selectedWord}`,
           `该单词所在的 PDF 原句：${sourceSentence}`,
+          "原句或释义中出现数学公式时，使用标准 LaTeX，并用 $...$（行内）或 $$...$$（独立公式）包裹；不要把公式改写成乱码或纯文字。",
           "先核验当前选中内容是否完整单词；若不是，selectionComplete 必须为 false。",
           "严格只输出 JSON 对象，不要 Markdown、代码块或额外说明。",
           "JSON 格式：",
-          '{"selectionComplete":true,"headword":"单词原形或当前词形","pronunciation":"音标或空字符串","partsOfSpeech":[{"label":"词性缩写","meaning":"常见中文义"}],"meaningInSentence":"该词在原句中的准确中文含义","sentenceTranslation":"原句完整中文翻译","examples":[{"sentence":"例句","translation":"中文翻译","usage":"该例句展示的不同用法"},{"sentence":"例句","translation":"中文翻译","usage":"该例句展示的不同用法"}]}',
+          '{"selectionComplete":true,"headword":"单词原形或当前词形","sourceSentenceLatex":"保留英文原句并把公式重建为 $...$ 或 $$...$$","pronunciation":"音标或空字符串","partsOfSpeech":[{"label":"词性缩写","meaning":"常见中文义"}],"meaningInSentence":"该词在原句中的准确中文含义","sentenceTranslation":"原句完整中文翻译","examples":[{"sentence":"例句","translation":"中文翻译","usage":"该例句展示的不同用法"},{"sentence":"例句","translation":"中文翻译","usage":"该例句展示的不同用法"}]}',
           "规则：examples 必须正好给出 2 个原创例句，且尽量覆盖不同常见用法；不要把 PDF 原句放进 examples。",
         ].join("\n")
       : [
           "你是面向英语学习者的论文句子翻译助手。",
-          `当前选中的 PDF 句子或短段：${text}`,
+          `需要翻译的完整 PDF 句子或短段：${sourceSentence}`,
+          "即使用户最初只框选了句子的一部分，也必须翻译这里提供的完整句子，译文不得在句中截断。",
+          "保留原文中的数学关系；所有公式使用标准 LaTeX，并用 $...$（行内）或 $$...$$（独立公式）包裹，以便客户端渲染。",
           "严格只输出 JSON 对象，不要 Markdown、代码块或额外说明。",
           "JSON 格式：",
-          '{"translation":"忠实、自然的简体中文翻译","keywords":[{"word":"原文词或短语","partOfSpeech":"词性","meaningInSentence":"在本句中的准确含义","reason":"为什么值得学习（可为空字符串）"}]}',
-          "keywords 只保留 0–8 个术语、学术表达、低频词或容易误解的词；不要列入 the、is、and、have 等基础词。",
+          '{"sourceTextLatex":"保留完整英文原句并把公式重建为 $...$ 或 $$...$$","translation":"忠实、自然的简体中文翻译并保留 LaTeX 公式","keywords":[{"word":"原文词或短语","partOfSpeech":"词性","meaningInSentence":"在本句中的准确含义","reason":"内部筛选依据，不向用户展示"}]}',
+          "keywords 最多保留 6 个真正值得学习的重点单词或固定短语；没有合格项时返回空数组，不要为了数量凑词。",
+          "通用筛选标准：候选项至少满足一项——大学英语六级（CET-6）及以上或 CEFR B2+ 难度；在当前学科中具有区别于日常含义的专业义；属于理解本句所必需的规范术语；属于低频、不可按字面直接理解的学术固定搭配。",
+          "通用排除标准：高频基础词、常见功能词、仅因复数或时态变化而显得复杂的普通词、可由组成词直接推断含义的常用组合，以及一般研究生读者无需查词即可理解的表达。",
+          "对每个候选项先在 reason 中给出内部判定依据，并据此复核是否符合上述标准；不符合就不要放入 keywords。reason 仅供内部筛选，客户端不会展示。",
         ].join("\n");
     const content = await requestAiContent(
-      [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+      isWord
+        ? [
+            { role: "user", content: prompt },
+            {
+              role: "user",
+              content: [
+                "补充且优先执行以下要求：当前选区已由客户端识别为完整英文词形，绝不能因为过去式、过去分词、现在分词、复数、连字符词或专有名词而拒绝解释。",
+                "请识别原形 headword、选中的实际词形 selectedWord、wordForm（如过去分词、过去式、现在分词、复数、专有名词等）和 namedEntityType（人名、地名、机构、作品名；没有则为空字符串）。",
+                "必须返回 sourceSentenceLatex：保留英文原句的全部普通文字和标点，只把 PDF 中的数学公式重建为标准 LaTeX，并用 $...$ 或 $$...$$ 包裹；不得翻译、概括或删减英文原句。",
+                "请返回该词的全部常用义项，每个义项都要有词性 label、中文 meaning 和简洁英文释义 definitionEn；文中义项放在最前。",
+                "请给出 forms 词形变化列表，例如原形、第三人称单数、现在分词、过去式、过去分词、复数。",
+                "examples 必须包含 3 个新的不同用法例句；PDF 原句由客户端另行展示，不要放进 examples。",
+                "严格只输出 JSON，对象必须符合：{\"selectionComplete\":true,\"headword\":\"...\",\"selectedWord\":\"...\",\"sourceSentenceLatex\":\"英文原句与 $LaTeX$ 公式\",\"wordForm\":\"...\",\"namedEntityType\":\"\",\"pronunciation\":\"\",\"senses\":[{\"label\":\"v.\",\"meaning\":\"\",\"definitionEn\":\"\"}],\"forms\":[{\"label\":\"过去式\",\"value\":\"\"}],\"meaningInSentence\":\"\",\"sentenceTranslation\":\"\",\"examples\":[{\"sentence\":\"\",\"translation\":\"\",\"usage\":\"\"}]}",
+              ].join("\\n"),
+            },
+          ]
+        : [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
       {
         documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
         pageNumber: selectedTextPageNumber || pdfViewer.currentPageNumber || 1,
-        selectedText: text,
+        selectedText: isWord ? text : sourceSentence,
         task: isWord ? "英语学习：单词语境释义" : "英语学习：句子翻译",
+      },
+      {
+        model: aiConfig.translationModel || aiConfig.model,
+        reasoning: "disabled",
+        maxOutputTokens: Math.min(4096, aiConfig.maxOutputTokens),
       },
     );
 
@@ -10322,7 +11030,7 @@ async function translateSelectedText(text: string): Promise<void> {
         selectedWord,
         sourceSentence,
       );
-      if (!result.selectionComplete) {
+      if (false && !result.selectionComplete) {
         currentEnglishLearningResult = null;
         translationLearningHintElement.textContent =
           "模型判断当前内容不是完整英文单词，请重新完整选中后再查询。";
@@ -10331,10 +11039,12 @@ async function translateSelectedText(text: string): Promise<void> {
       }
       currentEnglishLearningResult = result;
       renderVocabularyLearningResult(result);
+      void storeTranslationHistoryResult(text, result);
     } else {
-      const result = parseSentenceLearningResult(content);
+      const result = parseSentenceLearningResult(content, sourceSentence);
       currentEnglishLearningResult = result;
       renderSentenceLearningResult(result);
+      void storeTranslationHistoryResult(text, result);
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
@@ -10384,6 +11094,11 @@ async function generateMoreVocabularyExamples(): Promise<void> {
         selectedText: result.word,
         task: "英语学习：扩展单词例句",
       },
+      {
+        model: aiConfig.translationModel || aiConfig.model,
+        reasoning: "disabled",
+        maxOutputTokens: Math.min(4096, aiConfig.maxOutputTokens),
+      },
     );
     if (controller.signal.aborted || currentEnglishLearningResult !== result) return;
 
@@ -10400,8 +11115,12 @@ async function generateMoreVocabularyExamples(): Promise<void> {
       setStatus("没有生成新的非重复例句，请再试一次。", true);
       return;
     }
-    result.examples.push(...newExamples.slice(0, 2));
+    result.examples.push(...newExamples.slice(0, 3));
     renderVocabularyLearningResult(result);
+    void storeTranslationHistoryResult(
+      currentEnglishLearningSourceText || result.selectedWord || result.word,
+      result,
+    );
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
     const message = error instanceof Error ? error.message : String(error);
@@ -11917,10 +12636,15 @@ async function openPdf(
     findController.setDocument(documentProxy);
     selectedTextForAi = "";
     selectedTextPageNumber = 0;
+    lastViewerSelectionText = "";
     lastTranslatedText = "";
     currentEnglishLearningResult = null;
-    selectedSnippetElement.textContent = "请在左侧 PDF 中选择文字";
-    selectedSnippetElement.title = "";
+    currentEnglishLearningSourceSentence = "";
+    setTranslationSelectionEditor("", "");
+    translationHistoryDocumentKey = "";
+    translationHistoryEntries = [];
+    renderTranslationHistory();
+    void ensureTranslationHistoryLoaded();
     setTranslationLearningTitle("学习结果");
     translationLearningHintElement.textContent =
       "选一个单词可查看语境词义、词性和例句；选一句话可获得翻译与重点词讲解。";
@@ -12409,8 +13133,13 @@ function activateAiTab(tabName: string): void {
     const text = selectedTextForAi || getViewerSelectionText();
     if (text) {
       selectedTextForAi = text;
-      selectedSnippetElement.textContent = text;
-      selectedSnippetElement.title = text;
+      setTranslationSelectionEditor(
+        text,
+        currentEnglishLearningSourceSentence || text,
+        currentEnglishLearningResult?.kind === "word"
+          ? currentEnglishLearningResult.sentenceTranslation
+          : "",
+      );
       scheduleAutomaticTranslation(text);
     } else {
       currentEnglishLearningResult = null;
@@ -13065,6 +13794,11 @@ document.addEventListener(
       hideRecentFilesDialog();
       return;
     }
+    if (event.key === "Escape" && !translationHistoryDialog.hidden) {
+      event.preventDefault();
+      translationHistoryDialog.hidden = true;
+      return;
+    }
     if (event.key === "Escape" && !findBar.hidden) {
       event.preventDefault();
       closeFindBar();
@@ -13121,6 +13855,73 @@ saveTranslationNoteButton.addEventListener(
 
 generateMoreExamplesButton.addEventListener("click", () => {
   void generateMoreVocabularyExamples();
+});
+
+selectedSnippetElement.addEventListener("input", markTranslationEditorChanged);
+translationSourceSentenceInput.addEventListener("input", () => {
+  autoResizeTranslationTextarea(translationSourceSentenceInput);
+  renderTranslationMathPreview(
+    translationSourceSentenceMathPreview,
+    translationSourceSentenceInput.value,
+  );
+  currentEnglishLearningSourceSentence = normalizeLearningInlineText(
+    translationSourceSentenceInput.value,
+  );
+  renderLearningRichText(
+    translationSourceSentenceTranslation,
+    "原句已修改，重新查询后更新翻译",
+  );
+  applyTranslationEditButton.disabled = !normalizeCopiedText(
+    selectedSnippetElement.value,
+  );
+});
+applyTranslationEditButton.addEventListener("click", () => {
+  const text = normalizeCopiedText(selectedSnippetElement.value);
+  if (!text) {
+    setTranslationState("请先填写需要翻译或解释的英文。", true);
+    selectedSnippetElement.focus();
+    return;
+  }
+
+  translationAbortController?.abort();
+  moreExamplesAbortController?.abort();
+  cancelPendingAutomaticTranslation();
+  selectedTextForAi = text;
+  selectedTextPageNumber = Math.max(
+    1,
+    selectedTextPageNumber || pdfViewer.currentPageNumber || 1,
+  );
+  currentEnglishLearningSourceSentence = getSelectedEnglishWord(text)
+    ? normalizeLearningInlineText(translationSourceSentenceInput.value || text)
+    : text;
+  setTranslationSelectionEditor(text, currentEnglishLearningSourceSentence);
+  lastTranslatedText = "";
+  currentEnglishLearningResult = null;
+  void translateSelectedText(text);
+});
+
+openTranslationHistoryButton.addEventListener("click", async () => {
+  await ensureTranslationHistoryLoaded();
+  translationHistorySearchInput.value = "";
+  renderTranslationHistoryDialog();
+  translationHistoryDialog.hidden = false;
+  requestAnimationFrame(() => translationHistorySearchInput.focus());
+});
+closeTranslationHistoryButton.addEventListener("click", () => {
+  translationHistoryDialog.hidden = true;
+});
+translationHistoryDialog.addEventListener("pointerdown", (event) => {
+  if (event.target === translationHistoryDialog) {
+    translationHistoryDialog.hidden = true;
+  }
+});
+translationHistorySearchInput.addEventListener(
+  "input",
+  renderTranslationHistoryDialog,
+);
+
+clearTranslationHistoryButton.addEventListener("click", () => {
+  void clearCurrentTranslationHistory();
 });
 
 copyTranslationButton.addEventListener("click", async () => {
@@ -13205,6 +14006,12 @@ viewerContainer.addEventListener(
   { passive: true },
 );
 window.addEventListener("resize", scheduleCustomSelectionRender);
+window.addEventListener("resize", () => {
+  autoResizeTranslationTextarea(selectedSnippetElement);
+  if (!translationSourceSentenceField.hidden) {
+    autoResizeTranslationTextarea(translationSourceSentenceInput);
+  }
+});
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     cancelReadingPositionSave();

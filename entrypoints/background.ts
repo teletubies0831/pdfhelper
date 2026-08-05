@@ -123,6 +123,10 @@ async function getAiConfig(): Promise<AiConfig> {
     baseUrl: normalizeAiBaseUrl(source?.baseUrl ?? '', providerId),
     reasoning: source?.reasoning ?? legacy?.thinking ?? DEFAULT_AI_CONFIG.reasoning,
     model: source?.model || DEFAULT_AI_CONFIG.model,
+    translationModel:
+      source?.translationModel?.trim()
+      || source?.model?.trim()
+      || DEFAULT_AI_CONFIG.translationModel,
     maxOutputTokens: normalizeAiMaxOutputTokens(source?.maxOutputTokens),
   };
 
@@ -997,7 +1001,20 @@ async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResp
       return { ok: true, content: result.content, model: result.model };
     }
 
-    const config = await getAiConfig();
+    const savedConfig = await getAiConfig();
+    const requestOverride =
+      message.type === 'pdf-helper:ai-chat' ? message.configOverride : undefined;
+    const config: AiConfig = requestOverride
+      ? {
+          ...savedConfig,
+          ...requestOverride,
+          model: requestOverride.model?.trim() || savedConfig.model,
+          reasoning: requestOverride.reasoning ?? savedConfig.reasoning,
+          maxOutputTokens: normalizeAiMaxOutputTokens(
+            requestOverride.maxOutputTokens ?? savedConfig.maxOutputTokens,
+          ),
+        }
+      : savedConfig;
     const adapter = getProviderAdapter(config);
 
     if (message.type === 'pdf-helper:ai-test') {

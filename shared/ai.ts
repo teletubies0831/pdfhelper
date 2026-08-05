@@ -57,6 +57,8 @@ export interface AiConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
+  /** Dedicated fast model for dictionary-style translation requests. */
+  translationModel: string;
   reasoning: AiReasoningMode;
   maxOutputTokens: number;
 }
@@ -114,6 +116,11 @@ export interface AiChatRequest {
   type: 'pdf-helper:ai-chat';
   messages: AiConversationMessage[];
   context?: AiDocumentContext;
+  /**
+   * Per-request settings for specialised flows such as translation.  The API
+   * key and provider always remain the user's saved configuration.
+   */
+  configOverride?: Pick<AiConfig, 'model' | 'reasoning' | 'maxOutputTokens'>;
 }
 
 export interface AiTestRequest {
@@ -316,6 +323,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   apiKey: '',
   baseUrl: 'https://api.deepseek.com',
   model: 'deepseek-v4-flash',
+  translationModel: 'deepseek-v4-flash',
   reasoning: 'disabled',
   maxOutputTokens: 8192,
 };
