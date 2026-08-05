@@ -87,12 +87,18 @@ export interface AiConversationMessage {
 }
 
 export interface AiDocumentContext {
+  task?: string;
   documentName?: string;
   pageNumber?: number;
   totalPages?: number;
   selectedText?: string;
   pageText?: string;
   documentText?: string;
+  agentEvidence?: string;
+  sourceScope?: 'document' | 'page' | 'selection' | 'image' | 'general';
+  sourceLabel?: string;
+  sourcePages?: number[];
+  contextNote?: string;
   imageAnalysis?: string;
   conversationSummary?: string;
   longTermMemory?: string;
@@ -164,6 +170,13 @@ export interface AiPlanLongTermMemoryToolsRequest {
   existingMemories?: Array<{ key: string; content: string; scope: LongTermMemoryScope; scopeId?: string }>;
 }
 
+export interface AiPlanKnowledgeToolsRequest {
+  type: 'pdf-helper:ai-plan-knowledge-tools';
+  userMessage: string;
+  documentId?: string;
+  documentName?: string;
+}
+
 export interface AiNativeToolCall {
   id: string;
   name: string;
@@ -189,6 +202,19 @@ export interface AiStreamStartMessage {
   context?: AiDocumentContext;
 }
 
+export interface AiStreamToolResult {
+  toolCallId: string;
+  name: string;
+  ok: boolean;
+  content: string;
+}
+
+export interface AiStreamToolResultsMessage {
+  type: 'tool-results';
+  requestId: string;
+  results: AiStreamToolResult[];
+}
+
 export interface AiStreamDebugInfo {
   providerId: AiProviderId;
   model: string;
@@ -196,14 +222,19 @@ export interface AiStreamDebugInfo {
   reasoning: AiReasoningMode;
   maxOutputTokens: number;
   messages: Array<{
-    role: 'system' | 'user' | 'assistant';
+    role: 'system' | 'user' | 'assistant' | 'tool';
     content: string;
+    toolCalls?: AiNativeToolCall[];
+    toolCallId?: string;
   }>;
   availableTools: Array<{
     name: string;
     description: string;
     parameters: string;
   }>;
+  /** The exact native OpenAI-compatible tools payload sent separately from messages. */
+  nativeTools?: Array<Record<string, unknown>>;
+  toolChoice?: 'auto' | 'none' | 'required';
   completedTools: Array<{
     name: string;
     arguments?: Record<string, unknown>;
@@ -242,6 +273,12 @@ export type AiStreamServerMessage =
   | { type: 'delta'; requestId: string; content: string }
   | { type: 'reasoning-delta'; requestId: string; content: string }
   | {
+      type: 'tool-calls';
+      requestId: string;
+      calls: AiNativeToolCall[];
+      round: number;
+    }
+  | {
       type: 'done';
       requestId: string;
       model: string;
@@ -257,6 +294,7 @@ export type AiRuntimeRequest =
   | AiGeneratePaperOverviewRequest
   | AiCompressConversationRequest
   | AiPlanLongTermMemoryToolsRequest
+  | AiPlanKnowledgeToolsRequest
   | AiExtractLongTermMemoryRequest
   | AiVisionRequest
   | AiVisionTestRequest;
@@ -310,6 +348,7 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
     || type === 'pdf-helper:ai-generate-paper-overview'
     || type === 'pdf-helper:ai-compress-conversation'
     || type === 'pdf-helper:ai-plan-long-term-memory-tools'
+    || type === 'pdf-helper:ai-plan-knowledge-tools'
     || type === 'pdf-helper:ai-extract-long-term-memory'
     || type === 'pdf-helper:ai-vision'
     || type === 'pdf-helper:ai-vision-test';

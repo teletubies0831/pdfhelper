@@ -385,7 +385,7 @@ function resolveSectionRange(
   };
 }
 
-async function executeToolCalls(
+export async function executeDocumentToolCalls(
   calls: DocumentToolCall[],
   options: BuildRetrievalContextOptions,
 ): Promise<DocumentToolResult[]> {
@@ -604,7 +604,7 @@ export async function buildDocumentRetrievalContext(
       }
       calls.forEach((call) => seenToolCalls.add(toolCallKey(call)));
 
-      const roundResults = await executeToolCalls(calls, options);
+      const roundResults = await executeDocumentToolCalls(calls, options);
       toolResults.push(...roundResults);
       console.debug(`[PDF Helper Agent] 第 ${round} 轮工具结果`, roundResults.map((result) => ({
         name: result.name,
@@ -639,7 +639,7 @@ export async function buildDocumentRetrievalContext(
       arguments: { query: options.question, limit: 5 },
     };
     seenToolCalls.add(toolCallKey(fallbackCall));
-    toolResults.push(...await executeToolCalls([fallbackCall], options));
+    toolResults.push(...await executeDocumentToolCalls([fallbackCall], options));
     plannerReason = `工具规划失败，已执行通用全文语义检索：${plannerReason}`;
   }
 

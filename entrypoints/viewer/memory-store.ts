@@ -26,6 +26,15 @@ const normalizeLimit = (value: number | undefined, fallback = 8): number =>
 
 const normalizeText = (value: string | undefined): string => value?.trim().replace(/\s+/g, ' ') ?? '';
 
+function normalizeSearchTerms(value: string | undefined): string[] {
+  const normalized = normalizeText(value).toLocaleLowerCase();
+  if (!normalized) return [];
+  return normalized
+    .split(/[\s,，。.!！?？:：;；、|/]+/u)
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 1);
+}
+
 const createId = (prefix: string): string =>
   `${prefix}:${typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}:${Math.random()}`}`;
 
@@ -51,13 +60,23 @@ function memoryMatches(memory: LongTermMemory, options: LongTermMemorySearchOpti
   if (options.scopeId && memory.scopeId !== options.scopeId) return false;
   if (memory.confidence < (options.minimumConfidence ?? 0)) return false;
   const query = normalizeText(options.query).toLocaleLowerCase();
-  return !query || memory.content.toLocaleLowerCase().includes(query);
+  if (!query) return true;
+  const haystack = `${memory.content} ${memory.key}`.toLocaleLowerCase();
+  const terms = normalizeSearchTerms(query);
+  // Natural-language planners often return unordered keywords (e.g.
+  // "香菜 不喜欢"). Treat those as an AND query instead of requiring one
+  // exact contiguous substring.
+  return terms.length > 1
+    ? terms.every((term) => haystack.includes(term))
+    : haystack.includes(query);
 }
 
 function scoreMemory(memory: LongTermMemory, query: string): number {
   const normalizedQuery = query.toLocaleLowerCase();
-  const content = memory.content.toLocaleLowerCase();
-  const exactBoost = normalizedQuery && content.includes(normalizedQuery) ? 2 : 0;
+  const content = `${memory.content} ${memory.key}`.toLocaleLowerCase();
+  const terms = normalizeSearchTerms(normalizedQuery);
+  const matchedTerms = terms.filter((term) => content.includes(term)).length;
+  const exactBoost = normalizedQuery && content.includes(normalizedQuery) ? 2 : matchedTerms * 0.4;
   const recency = Math.max(0, 1 - (Date.now() - memory.updatedAt) / (180 * 24 * 60 * 60 * 1000));
   return exactBoost + memory.importance + memory.confidence + recency * 0.25;
 }

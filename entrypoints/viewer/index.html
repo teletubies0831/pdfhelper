@@ -848,15 +848,31 @@
                   <strong>Agent 工具</strong>
                   <p>这些工具会真实发送给模型，并由 PDF Helper 执行。</p>
                 </div>
-                <span class="settings-agent-tools-count">1 个已启用</span>
+                <span class="settings-agent-tools-count">12 个已启用</span>
               </div>
               <div class="settings-agent-tools-list">
                 <article class="settings-agent-tool-item">
                   <span class="settings-agent-tool-status">已启用</span>
                   <div>
-                    <strong>memory.upsert</strong>
-                    <p>写入长期记忆。用户明确要求记住偏好、研究方向或持续项目目标时调用。</p>
-                    <small>参数：key、category、content、scope、confidence?、importance?</small>
+                    <strong>PDF 文档工具 · 6 个</strong>
+                    <p>document.search、document.readPages、document.readSection、document.getProfile、document.getOutline、document.inspectPageImage</p>
+                    <small>Agent 按需搜索全文、读取页或章节，并可用视觉模型检查页面图表与公式。</small>
+                  </div>
+                </article>
+                <article class="settings-agent-tool-item">
+                  <span class="settings-agent-tool-status">已启用</span>
+                  <div>
+                    <strong>长期记忆工具 · 4 个</strong>
+                    <p>memory.search、memory.list、memory.upsert、memory.forget</p>
+                    <small>搜索、查看、写入和删除用户长期记忆；删除仅在用户明确要求时执行。</small>
+                  </div>
+                </article>
+                <article class="settings-agent-tool-item">
+                  <span class="settings-agent-tool-status">已启用</span>
+                  <div>
+                    <strong>历史文献工具 · 2 个</strong>
+                    <p>library.searchPapers、library.getPaper</p>
+                    <small>搜索用户以前打开过的 PDF，并读取指定文献的记录与摘要。</small>
                   </div>
                 </article>
               </div>
@@ -905,34 +921,29 @@
             <div id="assistant-tools-runtime" class="legacy-ai-runtime" aria-hidden="true">
 
             <div class="ai-tabs">
-              <button class="active" data-ai-tab="translate" type="button">解释 · 翻译</button>
+              <button class="active" data-ai-tab="translate" type="button">英语学习</button>
               <button data-ai-tab="summary" type="button">总结</button>
               <button data-ai-tab="cards" type="button">保存卡片</button>
             </div>
 
             <div class="ai-tab-panel" data-ai-panel="translate">
               <section class="ai-section">
-                <h3>1. 选中内容</h3>
+                <h3>1. 选中英文</h3>
                 <div id="selected-snippet" class="selected-snippet">请在左侧 PDF 中选择文字</div>
+                <p id="translation-learning-hint" class="translation-learning-hint">选一个单词可查看语境词义、词性和例句；选一句话可获得翻译与重点词讲解。</p>
               </section>
 
               <section class="ai-section">
-                <h3>2. 中文翻译</h3>
+                <h3 id="translation-learning-title">2. 学习结果</h3>
                 <div id="translation-result" class="ai-result-box" aria-live="polite">
-                  选中英文后将自动翻译。
-                </div>
-              </section>
-
-              <section class="ai-section">
-                <h3>3. AI 解释</h3>
-                <div id="explanation-result" class="ai-result-box" aria-live="polite">
-                  选中英文后将自动生成解释。
+                  选中英文后将自动生成学习卡片。
                 </div>
               </section>
 
               <div class="ai-actions">
                 <button id="save-translation-note" type="button">保存为笔记</button>
-                <button id="copy-translation" class="primary-button" type="button">复制翻译</button>
+                <button id="generate-more-examples" type="button" hidden>生成更多例句</button>
+                <button id="copy-translation" class="primary-button" type="button">复制学习结果</button>
               </div>
             </div>
 

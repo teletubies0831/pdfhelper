@@ -39,8 +39,10 @@ import {
   type AiProviderId,
   type AiReasoningMode,
   type AiRuntimeResponse,
+  type AiNativeToolCall,
   type AiStreamServerMessage,
   type AiStreamStartMessage,
+  type AiStreamToolResult,
   type VisionAiConfig,
   type VisionAiMode,
 } from "../../shared/ai";
@@ -52,19 +54,32 @@ import {
   type ReadingModeState,
   type ResolvedReadingMode,
 } from "../../shared/reading-mode";
-import { createDocumentAgentId } from "../../shared/document-agent";
+import {
+  createDocumentAgentId,
+  type DocumentAgentRecord,
+  type DocumentChunk,
+  type DocumentOutlineItem,
+} from "../../shared/document-agent";
+import { getAgentToolDefinitionByApiName } from "../../shared/agent-tools";
 import {
   CONVERSATION_MEMORY_CONFIG_STORAGE_KEY,
   DEFAULT_CONVERSATION_MEMORY_CONFIG,
   normalizeConversationMemoryConfig,
   type ConversationMemoryConfig,
   type LongTermMemory,
+  type MemoryToolCall,
 } from "../../shared/memory";
 import {
+  getDocumentAgentRecord,
+  getDocumentChunks,
   getLatestDocumentSession,
   putDocumentSession,
 } from "./document-agent-store";
-import { memoryTools } from "./memory-store";
+import { executeMemoryTool, memoryTools } from "./memory-store";
+import {
+  buildDocumentRetrievalContext,
+  initializeDocumentKnowledge,
+} from "./document-agent-runtime";
 
 import "./style.css";
 
@@ -690,12 +705,19 @@ const aiTabPanels = Array.from(
   document.querySelectorAll<HTMLElement>("[data-ai-panel]"),
 );
 const selectedSnippetElement = requiredElement<HTMLElement>("selected-snippet");
+const translationLearningHintElement = requiredElement<HTMLElement>(
+  "translation-learning-hint",
+);
+const translationLearningTitleElement = requiredElement<HTMLElement>(
+  "translation-learning-title",
+);
 const translationResultElement =
   requiredElement<HTMLElement>("translation-result");
-const explanationResultElement =
-  requiredElement<HTMLElement>("explanation-result");
 const saveTranslationNoteButton = requiredElement<HTMLButtonElement>(
   "save-translation-note",
+);
+const generateMoreExamplesButton = requiredElement<HTMLButtonElement>(
+  "generate-more-examples",
 );
 const copyTranslationButton =
   requiredElement<HTMLButtonElement>("copy-translation");
@@ -760,6 +782,14 @@ linkService.setViewer(pdfViewer);
 
 let pdfDocument: PDFDocumentProxy | null = null;
 let sourceName = "";
+const documentKnowledgeCache = new Map<string, {
+  record: DocumentAgentRecord;
+  chunks: DocumentChunk[];
+}>();
+const documentKnowledgeTasks = new Map<string, Promise<{
+  record: DocumentAgentRecord;
+  chunks: DocumentChunk[];
+}>>();
 let annotationEditor: AnnotationEditorUIManager | null = null;
 let activeEditorMode = AnnotationEditorType.NONE;
 let canUndoAnnotation = false;
@@ -2422,10 +2452,9 @@ let aiSelectionUpdateFrame = 0;
 let selectedTextForAi = "";
 let selectedTextPageNumber = 0;
 let lastTranslatedText = "";
-let lastExplainedText = "";
 let autoTranslateTimer: ReturnType<typeof setTimeout> | null = null;
 let translationAbortController: AbortController | null = null;
-let explanationAbortController: AbortController | null = null;
+let moreExamplesAbortController: AbortController | null = null;
 let summaryAbortController: AbortController | null = null;
 let activeSummaryScope: SummaryScope = "selection";
 let lastSummaryRequestKey = "";
@@ -2455,6 +2484,47 @@ let activeKnowledgeYear = "all";
 let activeKnowledgeVenue = "all";
 let activeKnowledgeReadingStatus = "all";
 let activeKnowledgePriority = "all";
+
+interface VocabularyExample {
+  sentence: string;
+  translation: string;
+  usage: string;
+  source?: "document" | "generated";
+}
+
+interface VocabularyPartOfSpeech {
+  label: string;
+  meaning: string;
+}
+
+interface VocabularyLearningResult {
+  kind: "word";
+  selectionComplete: boolean;
+  word: string;
+  pronunciation: string;
+  partsOfSpeech: VocabularyPartOfSpeech[];
+  meaningInSentence: string;
+  sentence: string;
+  sentenceTranslation: string;
+  examples: VocabularyExample[];
+}
+
+interface SentenceKeyword {
+  word: string;
+  partOfSpeech: string;
+  meaningInSentence: string;
+  reason: string;
+}
+
+interface SentenceLearningResult {
+  kind: "sentence";
+  translation: string;
+  keywords: SentenceKeyword[];
+}
+
+type EnglishLearningResult = VocabularyLearningResult | SentenceLearningResult;
+
+let currentEnglishLearningResult: EnglishLearningResult | null = null;
 
 const APP_VIEW_SESSION_STORAGE_KEY = "pdf-helper-app-view-state-v1";
 
@@ -2612,7 +2682,7 @@ function persistCurrentAppViewState(): void {
     knowledgeInsightQuestion: knowledgeInsightQuestionInput.value,
     selectedKnowledgeRecordKey,
     selectedKnowledgeResearchKeys: Array.from(selectedKnowledgeResearchKeys),
-    knowledgeScrollTop: knowledgeMainElement.scrollTop,
+    knowledgeScrollTop: knowledgeMainElement?.scrollTop ?? 0,
     reviewPaperOverviewId: editingPaperOverviewId || "",
     paperCardScrollTop: paperCardPageElement.scrollTop,
   };
@@ -2669,7 +2739,9 @@ function restoreAppViewAfterRefresh(): void {
   openKnowledgeBasePage();
   setKnowledgePageMode(state.knowledgeMode);
   requestAnimationFrame(() => {
-    knowledgeMainElement.scrollTop = Math.max(0, state.knowledgeScrollTop);
+    if (knowledgeMainElement) {
+      knowledgeMainElement.scrollTop = Math.max(0, state.knowledgeScrollTop);
+    }
   });
 }
 
@@ -3180,6 +3252,31 @@ function updateChatActivity(
     activity = document.createElement("div");
     activity.className = "chat-message-activity";
     activity.setAttribute("aria-live", "polite");
+    const summary = document.createElement("button");
+    summary.type = "button";
+    summary.className = "chat-activity-summary";
+    summary.setAttribute("aria-expanded", "false");
+    summary.setAttribute("aria-label", "展开工具活动详情");
+    const summaryIcon = document.createElement("span");
+    summaryIcon.className = "chat-activity-summary-icon";
+    summaryIcon.setAttribute("aria-hidden", "true");
+    const summaryText = document.createElement("span");
+    summaryText.className = "chat-activity-summary-label";
+    const summaryDetail = document.createElement("small");
+    summaryDetail.className = "chat-activity-summary-detail";
+    const summaryChevron = document.createElement("span");
+    summaryChevron.className = "chat-activity-summary-chevron";
+    summaryChevron.setAttribute("aria-hidden", "true");
+    summaryChevron.textContent = "›";
+    summary.append(summaryIcon, summaryText, summaryDetail, summaryChevron);
+    summary.addEventListener("click", () => {
+      const expanded = !activity?.classList.contains("is-expanded");
+      activity?.classList.toggle("is-expanded", expanded);
+      summary.setAttribute("aria-expanded", String(expanded));
+    });
+    const details = document.createElement("div");
+    details.className = "chat-activity-details";
+    activity.append(summary, details);
     const firstContent = message.querySelector(
       ".chat-message-reasoning, .chat-message-content",
     );
@@ -3187,8 +3284,35 @@ function updateChatActivity(
     else message.append(activity);
   }
 
+  // Keep the DOM resilient when an activity was created by an older build or
+  // survived a hot reload. Existing rows are moved under the collapsible body.
+  let summary = activity.querySelector<HTMLButtonElement>(".chat-activity-summary");
+  let details = activity.querySelector<HTMLElement>(".chat-activity-details");
+  if (!summary) {
+    summary = document.createElement("button");
+    summary.type = "button";
+    summary.className = "chat-activity-summary";
+    summary.setAttribute("aria-expanded", "false");
+    summary.setAttribute("aria-label", "展开工具活动详情");
+    summary.innerHTML = '<span class="chat-activity-summary-icon" aria-hidden="true"></span><span class="chat-activity-summary-label"></span><small class="chat-activity-summary-detail"></small><span class="chat-activity-summary-chevron" aria-hidden="true">›</span>';
+    summary.addEventListener("click", () => {
+      const expanded = !activity?.classList.contains("is-expanded");
+      activity?.classList.toggle("is-expanded", expanded);
+      summary?.setAttribute("aria-expanded", String(expanded));
+    });
+    activity.prepend(summary);
+  }
+  if (!details) {
+    details = document.createElement("div");
+    details.className = "chat-activity-details";
+    for (const oldRow of Array.from(activity.querySelectorAll<HTMLElement>(".chat-activity-row"))) {
+      details.append(oldRow);
+    }
+    activity.append(details);
+  }
+
   let row = Array.from(
-    activity.querySelectorAll<HTMLElement>(".chat-activity-row"),
+    details.querySelectorAll<HTMLElement>(".chat-activity-row"),
   ).find((item) => item.dataset.activityKey === key);
   if (!row) {
     row = document.createElement("div");
@@ -3202,7 +3326,7 @@ function updateChatActivity(
     const secondary = document.createElement("small");
     secondary.className = "chat-activity-detail";
     row.append(icon, text, secondary);
-    activity.append(row);
+    details.append(row);
   }
 
   row.dataset.state = state;
@@ -3213,14 +3337,60 @@ function updateChatActivity(
     secondary.textContent = detail;
     secondary.hidden = !detail;
   }
+  const rows = Array.from(details.querySelectorAll<HTMLElement>(".chat-activity-row"));
+  const latest = [...rows].reverse().find((item) => item.dataset.state === "active") ?? rows.at(-1);
+  if (latest) {
+    const summaryLabel = summary.querySelector<HTMLElement>(".chat-activity-summary-label");
+    const summaryDetail = summary.querySelector<HTMLElement>(".chat-activity-summary-detail");
+    const summaryIcon = summary.querySelector<HTMLElement>(".chat-activity-summary-icon");
+    const latestLabel = latest.querySelector<HTMLElement>(".chat-activity-label")?.textContent ?? label;
+    const latestDetail = latest.querySelector<HTMLElement>(".chat-activity-detail")?.textContent ?? "";
+    summaryLabel && (summaryLabel.textContent = latestLabel);
+    summaryDetail && (summaryDetail.textContent = rows.length > 1 ? `+${rows.length - 1} 个步骤` : latestDetail);
+    if (summaryDetail) summaryDetail.hidden = rows.length <= 1 && !latestDetail;
+    summary.dataset.state = latest.dataset.state ?? state;
+    summaryIcon?.setAttribute("aria-label", latest.dataset.state ?? state);
+    activity.dataset.stepCount = String(rows.length);
+  }
   chatMessagesElement.scrollTop = chatMessagesElement.scrollHeight;
 }
 
-function failActiveChatActivities(message: HTMLElement): void {
-  for (const row of message.querySelectorAll<HTMLElement>(
-    '.chat-activity-row[data-state="active"]',
+function failActiveChatActivities(
+  message: HTMLElement,
+  detail = "本轮请求失败，已停止等待。",
+): void {
+  for (const activity of message.querySelectorAll<HTMLElement>(
+    ".chat-message-activity",
   )) {
-    row.dataset.state = "error";
+    let hadActiveRow = false;
+    for (const row of activity.querySelectorAll<HTMLElement>(
+      '.chat-activity-row[data-state="active"]',
+    )) {
+      hadActiveRow = true;
+      row.dataset.state = "error";
+    }
+
+    // The spinner is driven by the compact summary, not only by its detail
+    // rows.  Mark both states so an error cannot leave the summary rotating.
+    const summary = activity.querySelector<HTMLButtonElement>(
+      ".chat-activity-summary",
+    );
+    if (hadActiveRow || summary?.dataset.state === "active") {
+      activity.dataset.state = "error";
+      summary?.setAttribute("data-state", "error");
+      summary?.setAttribute("aria-label", "请求失败，展开查看详情");
+      const label = summary?.querySelector<HTMLElement>(
+        ".chat-activity-summary-label",
+      );
+      const summaryDetail = summary?.querySelector<HTMLElement>(
+        ".chat-activity-summary-detail",
+      );
+      if (label) label.textContent = "请求失败";
+      if (summaryDetail) {
+        summaryDetail.textContent = detail;
+        summaryDetail.hidden = false;
+      }
+    }
   }
 }
 
@@ -3527,16 +3697,69 @@ async function inspectChatImageWithVision(
   return response.content.trim();
 }
 
+async function executeNativeToolCalls(
+  calls: AiNativeToolCall[],
+  context: AiStreamStartMessage["context"],
+): Promise<AiStreamToolResult[]> {
+  return Promise.all(calls.map(async (call): Promise<AiStreamToolResult> => {
+    const definition = getAgentToolDefinitionByApiName(call.name);
+    const toolName = definition?.name ?? call.name;
+    console.info("[PDF Helper Agent] native tool call", {
+      toolCallId: call.id,
+      requestedName: call.name,
+      toolName,
+      arguments: call.arguments,
+    });
+    try {
+      if (toolName.startsWith("memory.") || toolName.startsWith("library.")) {
+        const args = { ...(call.arguments ?? {}) } as Record<string, unknown>;
+        if (toolName === "library.getPaper" && typeof args.documentId === "string" && !args.id) {
+          args.id = args.documentId;
+          delete args.documentId;
+        }
+        const result = await executeMemoryTool({
+          name: toolName as MemoryToolCall["name"],
+          arguments: args as never,
+        });
+        const content = JSON.stringify(result, null, 2).slice(0, 16000);
+        console.info("[PDF Helper Agent] native tool result", { toolCallId: call.id, toolName, result });
+        return { toolCallId: call.id, name: toolName, ok: result.ok, content };
+      }
+      const evidence = context?.agentEvidence?.trim()
+        || context?.pageText?.trim()
+        || context?.documentText?.trim()
+        || "当前轮次没有可用的文档证据。";
+      const content = JSON.stringify({
+        tool: toolName,
+        status: "already_prepared",
+        sourcePages: context?.sourcePages ?? [],
+        evidence: evidence.slice(0, 14000),
+      });
+      console.info("[PDF Helper Agent] native document tool result", { toolCallId: call.id, toolName });
+      return { toolCallId: call.id, name: toolName, ok: true, content };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[PDF Helper Agent] native tool failed", { toolCallId: call.id, toolName, error: message });
+      return { toolCallId: call.id, name: toolName, ok: false, content: message };
+    }
+  }));
+}
+
 function requestAiStream(
   messages: AiConversationMessage[],
   context: AiStreamStartMessage["context"],
-  onDelta: (delta: { content?: string; reasoningContent?: string }) => void,
+  onDelta: (delta: {
+    content?: string;
+    reasoningContent?: string;
+    toolCalls?: AiNativeToolCall[];
+    toolResults?: AiStreamToolResult[];
+  }) => void,
 ): Promise<{
   content: string;
   reasoningContent: string;
   requestId: string;
   requestMessages: Array<{
-    role: "system" | "user" | "assistant";
+    role: "system" | "user" | "assistant" | "tool";
     content: string;
   }>;
 }> {
@@ -3548,9 +3771,12 @@ function requestAiStream(
     let content = "";
     let reasoningContent = "";
     let debugConversation: Array<{
-      role: "system" | "user" | "assistant";
+      role: "system" | "user" | "assistant" | "tool";
       content: string;
+      toolCalls?: AiNativeToolCall[];
+      toolCallId?: string;
     }> = [];
+    const handledToolRounds = new Set<number>();
 
     const finish = (callback: () => void): void => {
       if (settled) return;
@@ -3579,12 +3805,16 @@ function requestAiStream(
             reasoning: debug.reasoning,
             maxOutputTokens: debug.maxOutputTokens,
           });
+          console.log("Native tools payload", {
+            toolChoice: debug.toolChoice ?? "none",
+            tools: debug.nativeTools ?? [],
+          });
           const [systemMessage, ...conversationMessages] = debug.messages;
           if (systemMessage)
             console.log("System Prompt\n", systemMessage.content);
           conversationMessages.forEach((item, index) => {
             console.log(
-              `${item.role === "user" ? "User" : "Assistant"} Prompt #${index + 1}\n`,
+              `${item.role === "user" ? "User" : item.role === "tool" ? "Tool" : "Assistant"} Prompt #${index + 1}\n`,
               item.content,
             );
           });
@@ -3615,8 +3845,53 @@ function requestAiStream(
         onDelta({ reasoningContent: message.content });
         return;
       }
+      if (message.type === "tool-calls") {
+        if (handledToolRounds.has(message.round)) return;
+        handledToolRounds.add(message.round);
+        console.info("[PDF Helper AI] native Agent tool calls", {
+          requestId,
+          round: message.round,
+          calls: message.calls,
+        });
+        debugConversation.push({
+          role: "assistant",
+          content: "",
+          toolCalls: message.calls,
+        });
+        onDelta({ toolCalls: message.calls });
+        void executeNativeToolCalls(message.calls, context).then((results) => {
+          console.info("[PDF Helper AI] native Agent tool results", { requestId, round: message.round, results });
+          onDelta({ toolResults: results });
+          results.forEach((result) => {
+            debugConversation.push({
+              role: "tool",
+              content: result.content,
+              toolCallId: result.toolCallId,
+            });
+          });
+          port.postMessage({ type: "tool-results", requestId, results });
+        }).catch((error) => {
+          const errorText = error instanceof Error ? error.message : String(error);
+          const results = message.calls.map((call) => ({
+            toolCallId: call.id,
+            name: call.name,
+            ok: false,
+            content: errorText,
+          }));
+          onDelta({ toolResults: results });
+          results.forEach((result) => {
+            debugConversation.push({
+              role: "tool",
+              content: result.content,
+              toolCallId: result.toolCallId,
+            });
+          });
+          port.postMessage({ type: "tool-results", requestId, results });
+        });
+        return;
+      }
       if (message.type === "done") {
-        if (debugConversation.length === 0 && message.debug) {
+        if (message.debug) {
           debugConversation = message.debug.messages.map((item) => ({
             ...item,
           }));
@@ -3698,7 +3973,7 @@ function requestAiStream(
       messages,
       context: {
         ...context,
-        readingMode: context.readingMode ?? resolvedReadingMode,
+        readingMode: context?.readingMode ?? resolvedReadingMode,
       },
     };
     port.postMessage(startMessage);
@@ -4284,11 +4559,149 @@ interface ImmediateMemoryWriteResult {
   }>;
 }
 
+function isExplicitMemoryForgetRequest(value: string): boolean {
+  const hasAction = /删除|删掉|移除|忘记|(?:不要|别|不再)\s*记住/u.test(value);
+  const hasTargetCue = /记忆|这条|这个|喜欢|不喜欢|偏好|习惯|研究方向|项目|设置|内容|列表|残留|条目|记住|memory\.(?:search|list|forget)|工具/u.test(value);
+  return hasAction && hasTargetCue;
+}
+
+function extractMemoryForgetTarget(value: string): string {
+  const candidates = [
+    value.match(/(?:把|将)\s*(.+?)(?:这条|这个(?:长期)?记忆)?\s*(?:删除|删掉|移除|忘记)(?:了|吧)?/u)?.[1],
+    value.match(/(?:请)?(?:删除|删掉|移除|忘记)\s*(.+?)(?:这条|这个(?:长期)?记忆)?(?:了|吧)?$/u)?.[1],
+    value.match(/(?:不要|别|不再)\s*记住\s*(.+?)(?:这条|这个(?:长期)?记忆)?(?:了|吧|吗)?$/u)?.[1],
+    value.match(/(.+?)(?:这条|这个(?:长期)?记忆)?\s*(?:删除|删掉|移除|忘记)(?:了|吧)?$/u)?.[1],
+  ];
+  return (candidates.find((candidate) => candidate?.trim()) ?? "")
+    .replace(/^(?:请|帮我)\s*/u, "")
+    .trim();
+}
+
+function normalizeMemoryForgetText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/用户明确(?:表示|要求(?:长期)?记住)|用户(?:说|表示)|长期记忆|这条记忆|这个记忆|那条记忆|这条|这个|那条|那个|偏好|记录|记忆|请|帮我|把|将|删除|删掉|移除|忘记|了|吧/gu, "")
+    .replace(/^[我吾]想?要?/u, "")
+    .replace(/[\s,，。.!！?？:：;；"“”'‘’、]/gu, "")
+    .trim();
+}
+
+async function executeExplicitMemoryForget(
+  userMessage: string,
+  assistantElement: HTMLElement,
+): Promise<ImmediateMemoryWriteResult> {
+  const operationId = crypto.randomUUID();
+  const target = extractMemoryForgetTarget(userMessage);
+  updateChatActivity(
+    assistantElement,
+    "long-term-memory",
+    "Agent 正在调用工具 · memory.list",
+    "active",
+    target || "memory.list",
+  );
+  try {
+    const existing = await memoryTools.list({ limit: 100 });
+    const normalizedTarget = normalizeMemoryForgetText(target);
+    const matches = normalizedTarget.length >= 2
+      ? existing.filter((memory) => {
+        const normalizedMemory = normalizeMemoryForgetText(`${memory.content} ${memory.key}`);
+        return normalizedMemory.length >= 2
+          && (normalizedMemory.includes(normalizedTarget) || normalizedTarget.includes(normalizedMemory));
+      })
+      : [];
+    if (!matches.length) {
+      updateChatActivity(
+        assistantElement,
+        "long-term-memory",
+        "Agent 未找到可删除的记忆",
+        "done",
+        target || "请提供要删除的内容",
+      );
+      return {
+        stored: [],
+        contextText: `用户要求删除长期记忆${target ? `“${target}”` : ""}，但当前没有找到可匹配的已有条目，因此没有新增或修改任何记忆。`,
+        completedTools: [{ name: "memory.list", arguments: { limit: 100 } }],
+      };
+    }
+
+    const deleted: LongTermMemory[] = [];
+    const completedTools: ImmediateMemoryWriteResult["completedTools"] = [
+      { name: "memory.list", arguments: { limit: 100 } },
+    ];
+    for (const memory of matches.slice(0, 5)) {
+      const toolKey = `memory-forget-${memory.id}`;
+      updateChatActivity(
+        assistantElement,
+        toolKey,
+        "Agent 正在调用工具 · memory.forget",
+        "active",
+        memory.content,
+      );
+      console.info("[PDF Helper Agent 工具调用] memory.forget", {
+        operationId,
+        id: memory.id,
+        content: memory.content,
+      });
+      const result = await executeMemoryTool({
+        name: "memory.forget",
+        arguments: { id: memory.id },
+      });
+      console.info("[PDF Helper Agent 工具结果] memory.forget", { operationId, result });
+      if (result.ok && result.data === true) {
+        deleted.push(memory);
+        completedTools.push({ name: "memory.forget", arguments: { id: memory.id } });
+        updateChatActivity(assistantElement, toolKey, "Agent 已完成 · memory.forget", "done", memory.content);
+      } else {
+        updateChatActivity(
+          assistantElement,
+          toolKey,
+          "Agent 工具失败 · memory.forget",
+          "error",
+          result.error || "记忆条目不存在",
+        );
+      }
+    }
+    updateChatActivity(
+      assistantElement,
+      "long-term-memory",
+      deleted.length ? "Agent 已删除长期记忆" : "Agent 未删除任何记忆",
+      deleted.length ? "done" : "error",
+      `${deleted.length} 条`,
+    );
+    if (!assistantSettingsPanel.hidden) void refreshLongTermMemoryList();
+    return {
+      stored: [],
+      contextText: deleted.length
+        ? [
+          `Agent 已在最终回答前调用 memory.forget，删除 ${deleted.length} 条长期记忆：`,
+          ...deleted.map((memory) => `- ${memory.content}`),
+          "请明确告诉用户删除了哪些内容。",
+        ].join("\n")
+        : "Agent 尝试调用 memory.forget，但没有成功删除匹配条目。",
+      completedTools,
+    };
+  } catch (error) {
+    console.error("[PDF Helper Agent 工具失败] memory.forget", { operationId, error });
+    updateChatActivity(
+      assistantElement,
+      "long-term-memory",
+      "Agent 工具失败 · memory.forget",
+      "error",
+      error instanceof Error ? error.message : String(error),
+    );
+    return { stored: [], contextText: "Agent 删除长期记忆失败。", completedTools: [] };
+  }
+}
+
 async function persistImmediateExplicitMemories(
   userMessage: string,
   documentProxy: PDFDocumentProxy | null,
   assistantElement: HTMLElement,
 ): Promise<ImmediateMemoryWriteResult> {
+  if (isExplicitMemoryForgetRequest(userMessage)) {
+    return executeExplicitMemoryForget(userMessage, assistantElement);
+  }
   const currentUserIndex = chatHistory.findLastIndex(
     (message) => message.role === "user" && message.content.trim() === userMessage.trim(),
   );
@@ -4313,7 +4726,7 @@ async function persistImmediateExplicitMemories(
   updateChatActivity(
     assistantElement,
     "long-term-memory",
-    "模型正在判断是否写入长期记忆",
+    "Agent 正在判断是否调用 memory.upsert",
     "active",
   );
   const documentId = documentProxy ? getDocumentChatId(documentProxy) : undefined;
@@ -4396,7 +4809,7 @@ async function persistImmediateExplicitMemories(
     updateChatActivity(
       assistantElement,
       "long-term-memory",
-      "模型已调用长期记忆工具",
+      "Agent 正在调用工具 · memory.upsert",
       "active",
       `${candidates.length} 条待写入`,
     );
@@ -4430,7 +4843,7 @@ async function persistImmediateExplicitMemories(
     updateChatActivity(
       assistantElement,
       "long-term-memory",
-      "长期记忆写入完成",
+      "Agent 已完成 · memory.upsert",
       "done",
       `${stored.length} 条`,
     );
@@ -4469,11 +4882,106 @@ async function persistImmediateExplicitMemories(
     updateChatActivity(
       assistantElement,
       "long-term-memory",
-      "长期记忆工具写入失败",
+      "Agent 工具失败 · memory.upsert",
       "error",
       error instanceof Error ? error.message : String(error),
     );
     return { stored: [], contextText: "", completedTools: [] };
+  }
+}
+
+interface KnowledgeAgentResult {
+  contextText: string;
+  completedTools: Array<{ name: string; arguments?: Record<string, unknown> }>;
+}
+
+async function runKnowledgeAgentTools(
+  userMessage: string,
+  documentProxy: PDFDocumentProxy | null,
+  assistantElement: HTMLElement,
+): Promise<KnowledgeAgentResult> {
+  // Explicit deletion is handled by the guarded memory.forget path above so
+  // the planner cannot accidentally turn a forget request into memory.upsert.
+  if (isExplicitMemoryForgetRequest(userMessage)) {
+    return { contextText: "", completedTools: [] };
+  }
+  const relevantIntent = /长期记忆|记住了什么|你记得|忘记|删除.{0,8}记忆|以前|历史|读过|看过|文献库|相关文献|哪篇论文/i;
+  if (!relevantIntent.test(userMessage)) {
+    return { contextText: "", completedTools: [] };
+  }
+  const documentId = documentProxy ? getDocumentChatId(documentProxy) : undefined;
+  updateChatActivity(assistantElement, "knowledge-agent", "Agent 正在规划工具 · memory/library", "active");
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: "pdf-helper:ai-plan-knowledge-tools",
+      userMessage,
+      documentId,
+      documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
+    }) as AiRuntimeResponse;
+    if (!response?.ok) throw new Error(response?.error || "记忆/文献工具规划失败。");
+    const calls = response.toolCalls ?? [];
+    const results: Array<{ call: typeof calls[number]; result: Awaited<ReturnType<typeof executeMemoryTool>> }> = [];
+    for (const call of calls.slice(0, 5)) {
+      const args = { ...call.arguments };
+      if (call.name === "library.getPaper" && !args.id && typeof args.documentId === "string") {
+        args.id = args.documentId;
+      }
+      if (call.name === "memory.forget" && !/(?:忘记|删除|移除)/i.test(userMessage)) {
+        console.warn("[PDF Helper Agent] 已阻止没有用户明确授权的 memory.forget", call);
+        continue;
+      }
+      const executable = { name: call.name, arguments: args } as MemoryToolCall;
+      updateChatActivity(
+        assistantElement,
+        `knowledge-tool-${call.id}`,
+        `Agent 正在调用工具 · ${call.name}`,
+        "active",
+        call.name.startsWith("library.") ? "历史文献" : "长期记忆",
+      );
+      console.info(`[PDF Helper 工具调用] ${call.name}`, executable.arguments);
+      const result = await executeMemoryTool(executable);
+      console.info(`[PDF Helper 工具结果] ${call.name}`, result);
+      results.push({ call, result });
+      updateChatActivity(
+        assistantElement,
+        `knowledge-tool-${call.id}`,
+        result.ok ? `Agent 已完成 · ${call.name}` : `Agent 工具失败 · ${call.name}`,
+        result.ok ? "done" : "error",
+        result.ok ? "" : result.error || "未知错误",
+      );
+    }
+    updateChatActivity(
+      assistantElement,
+      "knowledge-agent",
+      results.length ? "记忆/文献工具执行完成" : "本轮无需调用记忆/文献工具",
+      "done",
+      results.length ? `${results.length} 次调用` : "",
+    );
+    return {
+      contextText: results.length
+        ? [
+          "【Agent 记忆/历史文献工具结果】",
+          ...results.map(({ call, result }) => [
+            `${call.name}：${result.ok ? "成功" : "失败"}`,
+            JSON.stringify(result.ok ? result.data : { error: result.error }, null, 2).slice(0, 10000),
+          ].join("\n")),
+        ].join("\n\n")
+        : "",
+      completedTools: results.filter(({ result }) => result.ok).map(({ call }) => ({
+        name: call.name,
+        arguments: call.arguments,
+      })),
+    };
+  } catch (error) {
+    console.error("[PDF Helper Agent] 记忆/文献工具流程失败", error);
+    updateChatActivity(
+      assistantElement,
+      "knowledge-agent",
+      "记忆/文献工具流程失败",
+      "error",
+      error instanceof Error ? error.message : String(error),
+    );
+    return { contextText: "", completedTools: [] };
   }
 }
 
@@ -5173,7 +5681,7 @@ async function sendChatMessage(): Promise<void> {
     requestImages.length > 0
       ? "正在准备截图分析"
       : documentAtRequestStart
-        ? "正在读取 PDF 全文"
+        ? "正在准备 Agent 文档检索"
         : "正在准备对话上下文",
     "active",
   );
@@ -5206,25 +5714,21 @@ async function sendChatMessage(): Promise<void> {
     const longTermMemoryPromise = loadLongTermMemoryContext(
       documentAtRequestStart,
     );
-    const documentText = documentAtRequestStart
-      ? await extractFullDocumentText(documentAtRequestStart)
-      : "";
-    if (pdfDocument !== documentAtRequestStart) {
-      throw new Error("PDF 已切换，请在新文档中重新发送问题。");
-    }
-    updateChatActivity(
+    const knowledgeAgentPromise = runKnowledgeAgentTools(
+      userPrompt,
+      documentAtRequestStart,
       assistantMessage,
-      "context",
-      requestImages.length > 0
-        ? "截图与 PDF 全文上下文已准备"
-        : documentAtRequestStart
-          ? "已读取 PDF 全文"
-          : "对话上下文已准备",
-      "done",
-      documentText && documentAtRequestStart
-        ? `${documentAtRequestStart.numPages} 页`
-        : "",
     );
+    const agentEvidencePromise = documentAtRequestStart
+      ? buildAgentEvidence(
+        userPrompt,
+        documentAtRequestStart,
+        pageNumber,
+        requestImages.length === 0 ? selectedTextForAi : "",
+        requestImages.length > 0,
+        assistantMessage,
+      )
+      : Promise.resolve(null);
     const preparedChatHistoryPromise = prepareChatRequestHistory(
       assistantMessage,
       documentAtRequestStart,
@@ -5245,7 +5749,7 @@ async function sendChatMessage(): Promise<void> {
       updateChatActivity(
         assistantMessage,
         activityKey,
-        `调用视觉工具 · 分析截图 ${index + 1}/${requestImages.length}`,
+        `Agent 正在调用工具 · vision.analyze_screenshot ${index + 1}/${requestImages.length}`,
         "active",
         attachment.name,
       );
@@ -5270,7 +5774,7 @@ async function sendChatMessage(): Promise<void> {
         updateChatActivity(
           assistantMessage,
           activityKey,
-          `视觉工具已完成 · 截图 ${index + 1}/${requestImages.length}`,
+          `Agent 已完成 · vision.analyze_screenshot ${index + 1}/${requestImages.length}`,
           "done",
           attachment.name,
         );
@@ -5280,7 +5784,7 @@ async function sendChatMessage(): Promise<void> {
         updateChatActivity(
           assistantMessage,
           activityKey,
-          `视觉工具失败 · 截图 ${index + 1}/${requestImages.length}`,
+          `Agent 工具失败 · vision.analyze_screenshot ${index + 1}/${requestImages.length}`,
           "error",
           message,
         );
@@ -5292,7 +5796,17 @@ async function sendChatMessage(): Promise<void> {
         throw error;
       }
     });
-    const visionResults = await Promise.allSettled(visionTasks);
+    // 文档工具规划、截图分析、会话压缩和长期记忆读取互不依赖，全部并行执行。
+    const [visionResults, agentEvidence, preparedChatHistory, longTermMemoryContext, knowledgeAgentResult] = await Promise.all([
+      Promise.allSettled(visionTasks),
+      agentEvidencePromise,
+      preparedChatHistoryPromise,
+      longTermMemoryPromise,
+      knowledgeAgentPromise,
+    ]);
+    if (pdfDocument !== documentAtRequestStart) {
+      throw new Error("PDF 已切换，请在新文档中重新发送问题。");
+    }
     const visionFailures = visionResults.filter(
       (result): result is PromiseRejectedResult => result.status === "rejected",
     );
@@ -5306,8 +5820,19 @@ async function sendChatMessage(): Promise<void> {
       (result) => (result as PromiseFulfilledResult<string>).value,
     );
 
-    const preparedChatHistory = await preparedChatHistoryPromise;
-    const longTermMemoryContext = await longTermMemoryPromise;
+    updateChatActivity(
+      assistantMessage,
+      "context",
+      requestImages.length > 0
+        ? "截图与 Agent 证据已准备"
+        : documentAtRequestStart
+          ? "Agent 文档证据已准备"
+          : "对话上下文已准备",
+      "done",
+      agentEvidence?.sourcePages.length
+        ? `证据页：${agentEvidence.sourcePages.join("、")}`
+        : "",
+    );
     const requestHistory = preparedChatHistory.messages.map((message) => ({
       role: message.role,
       content: message.content,
@@ -5342,7 +5867,13 @@ async function sendChatMessage(): Promise<void> {
           : undefined,
         pageNumber,
         totalPages: documentAtRequestStart?.numPages,
-        documentText: documentText || undefined,
+        agentEvidence: agentEvidence?.text || undefined,
+        sourceScope: agentEvidence ? "document" : undefined,
+        sourceLabel: agentEvidence ? "Agent 按需检索证据" : undefined,
+        sourcePages: agentEvidence?.sourcePages,
+        contextNote: agentEvidence
+          ? `文档内容由 Agent 经过 ${agentEvidence.planningRounds} 轮规划、按需调用工具获得；未向本轮模型注入整篇 PDF。`
+          : undefined,
         selectedText:
           requestImages.length === 0
             ? selectedTextForAi || undefined
@@ -5350,16 +5881,60 @@ async function sendChatMessage(): Promise<void> {
         imageAnalysis: imageAnalyses.join("\n\n") || undefined,
         conversationSummary: preparedChatHistory.summary,
         longTermMemory: longTermMemoryContext.text || undefined,
-        memoryOperationResult: immediateMemoryResult.contextText || undefined,
-        completedTools: immediateMemoryResult.completedTools.length
-          ? immediateMemoryResult.completedTools
-          : undefined,
+        memoryOperationResult: [
+          immediateMemoryResult.contextText,
+          knowledgeAgentResult.contextText,
+        ].filter(Boolean).join("\n\n") || undefined,
+        completedTools: [
+          ...immediateMemoryResult.completedTools,
+          ...knowledgeAgentResult.completedTools,
+          ...(agentEvidence?.toolResults.map((tool) => ({
+            name: tool.name,
+            arguments: { pages: tool.pages, label: tool.label },
+          })) ?? []),
+        ],
         readingMode: documentAtRequestStart ? "paper" : resolvedReadingMode,
       },
       (delta) => {
         if (delta.content) streamedContent += delta.content;
         if (delta.reasoningContent)
           streamedReasoningContent += delta.reasoningContent;
+        if (delta.toolCalls?.length) {
+          for (const call of delta.toolCalls) {
+            updateChatActivity(
+              assistantMessage,
+              `native-tool-${call.id}`,
+              `Agent 正在调用工具 · ${getAgentToolDefinitionByApiName(call.name)?.label ?? call.name}`,
+              "active",
+              call.name,
+            );
+          }
+          updateChatActivity(
+            assistantMessage,
+            "model",
+            "Agent 正在等待工具结果",
+            "active",
+            aiConfig.model,
+          );
+        }
+        if (delta.toolResults?.length) {
+          for (const result of delta.toolResults) {
+            updateChatActivity(
+              assistantMessage,
+              `native-tool-${result.toolCallId}`,
+              result.ok ? `工具已完成 · ${result.name}` : `工具失败 · ${result.name}`,
+              result.ok ? "done" : "error",
+              result.ok ? "" : result.content.slice(0, 160),
+            );
+          }
+          updateChatActivity(
+            assistantMessage,
+            "model",
+            "主模型继续生成回答",
+            "active",
+            aiConfig.model,
+          );
+        }
         if (delta.content) {
           updateChatActivity(
             assistantMessage,
@@ -5472,11 +6047,16 @@ async function sendChatMessage(): Promise<void> {
       reasoningLength: streamedReasoningContent.length,
     });
     console.groupEnd();
-    failActiveChatActivities(assistantMessage);
+    const failureMessage =
+      error instanceof Error ? error.message : String(error);
+    failActiveChatActivities(
+      assistantMessage,
+      `${failureMessage.slice(0, 180)}${failureMessage.length > 180 ? "…" : ""}`,
+    );
     updateChatReasoning(assistantMessage, streamedReasoningContent, false);
     updateChatMessage(
       assistantMessage,
-      `请求失败：${error instanceof Error ? error.message : String(error)}`,
+      `请求失败：${failureMessage}`,
       { error: true },
     );
   } finally {
@@ -5494,22 +6074,433 @@ function setTranslationState(message: string, isError = false): void {
   translationResultElement.classList.toggle("error", isError);
 }
 
-function setExplanationState(message: string, isError = false): void {
-  explanationResultElement.textContent = message;
-  explanationResultElement.classList.toggle("error", isError);
+function setTranslationLearningTitle(title: string): void {
+  translationLearningTitleElement.textContent = "2. " + title;
 }
 
-function renderExplanationPoints(points: string[]): void {
-  const list = document.createElement("ul");
+function setMoreExamplesButtonVisible(visible: boolean): void {
+  generateMoreExamplesButton.hidden = !visible;
+  generateMoreExamplesButton.disabled = false;
+  generateMoreExamplesButton.textContent = "生成更多例句";
+}
 
-  for (const point of points) {
-    const item = document.createElement("li");
-    item.textContent = point;
-    list.append(item);
+function createLearningElement<T extends keyof HTMLElementTagNameMap>(
+  tagName: T,
+  className: string,
+  text = "",
+): HTMLElementTagNameMap[T] {
+  const element = document.createElement(tagName);
+  element.className = className;
+  if (text) element.textContent = text;
+  return element;
+}
+
+function readLearningString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readLearningArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeLearningInlineText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+const ENGLISH_WORD_SELECTION_PATTERN =
+  /^[\p{L}]+(?:[’'-][\p{L}]+)*$/u;
+
+function getSelectedEnglishWord(text: string): string {
+  const candidate = text
+    .trim()
+    .replace(/^[“”"'([{<\s]+|[”"'!?,.;:)\]}>，。！？；：\s]+$/g, "");
+  return ENGLISH_WORD_SELECTION_PATTERN.test(candidate) ? candidate : "";
+}
+
+interface EnglishWordSelection {
+  word: string;
+  wasExpanded: boolean;
+}
+
+function getRangeBoundaryTextNode(
+  container: Node,
+  offset: number,
+  preferStart: boolean,
+): { node: Text; offset: number } | null {
+  if (container.nodeType === Node.TEXT_NODE) {
+    const node = container as Text;
+    return { node, offset: Math.max(0, Math.min(offset, node.data.length)) };
   }
 
-  explanationResultElement.replaceChildren(list);
-  explanationResultElement.classList.remove("error");
+  const children = Array.from(container.childNodes);
+  const child = preferStart
+    ? children[Math.min(offset, Math.max(0, children.length - 1))]
+    : children[Math.max(0, Math.min(offset - 1, children.length - 1))];
+  if (!child) return null;
+
+  let current: Node = child;
+  while (current.childNodes.length) {
+    current = preferStart
+      ? current.childNodes[0]
+      : current.childNodes[current.childNodes.length - 1];
+  }
+  if (current.nodeType !== Node.TEXT_NODE) return null;
+
+  const node = current as Text;
+  return { node, offset: preferStart ? 0 : node.data.length };
+}
+
+function getEnglishWordSelection(text: string): EnglishWordSelection | null {
+  const selectedWords = text.match(/[\p{L}]+(?:[’'-][\p{L}]+)*/gu) ?? [];
+  if (selectedWords.length !== 1) return null;
+
+  const selectedWord = selectedWords[0];
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    return ENGLISH_WORD_SELECTION_PATTERN.test(selectedWord)
+      ? { word: selectedWord, wasExpanded: selectedWord !== text.trim() }
+      : null;
+  }
+
+  const range = selection.getRangeAt(0);
+  const start = getRangeBoundaryTextNode(
+    range.startContainer,
+    range.startOffset,
+    true,
+  );
+  const end = getRangeBoundaryTextNode(
+    range.endContainer,
+    range.endOffset,
+    false,
+  );
+
+  // PDF.js may place visible spaces between separate text spans without an
+  // actual whitespace character. Inspect only the text node at each edge.
+  const prefix = start && start.offset > 0
+    ? (start.node.data.slice(0, start.offset).match(/[\p{L}\p{M}’'-]+$/u)?.[0] ?? "")
+    : "";
+  const suffix = end && end.offset > 0
+    ? (end.node.data.slice(end.offset).match(/^[\p{L}\p{M}’'-]+/u)?.[0] ?? "")
+    : "";
+  const word = `${prefix}${selectedWord}${suffix}`;
+
+  if (!ENGLISH_WORD_SELECTION_PATTERN.test(word)) return null;
+  return {
+    word,
+    wasExpanded: normalizeLearningInlineText(text) !== word,
+  };
+}
+
+function getSelectionSurroundingText(): {
+  before: string;
+  after: string;
+} {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0)
+    return { before: "", after: "" };
+
+  const range = selection.getRangeAt(0);
+  const anchorElement =
+    selection.anchorNode?.nodeType === Node.TEXT_NODE
+      ? selection.anchorNode.parentElement
+      : (selection.anchorNode as Element | null);
+  const textLayer = anchorElement?.closest<HTMLElement>(".textLayer");
+  if (!textLayer || !textLayer.contains(range.startContainer)) {
+    return { before: "", after: "" };
+  }
+
+  try {
+    const beforeRange = document.createRange();
+    beforeRange.selectNodeContents(textLayer);
+    beforeRange.setEnd(range.startContainer, range.startOffset);
+    const afterRange = document.createRange();
+    afterRange.selectNodeContents(textLayer);
+    afterRange.setStart(range.endContainer, range.endOffset);
+    return {
+      before: beforeRange.toString(),
+      after: afterRange.toString(),
+    };
+  } catch {
+    return { before: "", after: "" };
+  }
+}
+
+function getSelectionSentenceContext(selectedText: string): string {
+  const { before, after } = getSelectionSurroundingText();
+  if (!before && !after) return selectedText;
+
+  const beforeText = before.replace(/\s+/g, " ");
+  const selected = selectedText.replace(/\s+/g, " ").trim();
+  const afterText = after.replace(/\s+/g, " ");
+  const combined = beforeText + selected + afterText;
+  const selectionStart = beforeText.length;
+  const sentenceStart = Math.max(
+    0,
+    combined.lastIndexOf(".", Math.max(0, selectionStart - 1)) + 1,
+    combined.lastIndexOf("!", Math.max(0, selectionStart - 1)) + 1,
+    combined.lastIndexOf("?", Math.max(0, selectionStart - 1)) + 1,
+    combined.lastIndexOf("。", Math.max(0, selectionStart - 1)) + 1,
+    combined.lastIndexOf("！", Math.max(0, selectionStart - 1)) + 1,
+    combined.lastIndexOf("？", Math.max(0, selectionStart - 1)) + 1,
+  );
+  const afterSelection = combined.slice(selectionStart + selected.length);
+  const sentenceEndMatch = afterSelection.match(/[.!?。！？](?:\s|$)/);
+  const sentenceEnd = sentenceEndMatch?.index === undefined
+    ? Math.min(combined.length, selectionStart + selected.length + 520)
+    : selectionStart + selected.length + sentenceEndMatch.index + 1;
+  const sentence = normalizeLearningInlineText(
+    combined.slice(sentenceStart, sentenceEnd),
+  );
+  return sentence.length >= selected.length ? sentence : selectedText;
+}
+
+function readVocabularyExamples(value: unknown): VocabularyExample[] {
+  return readLearningArray(value)
+    .map((example): VocabularyExample | null => {
+      if (!example || typeof example !== "object") return null;
+      const record = example as Record<string, unknown>;
+      const sentence = readLearningString(record.sentence)
+        || readLearningString(record.en);
+      const translation = readLearningString(record.translation)
+        || readLearningString(record.zh);
+      if (!sentence || !translation) return null;
+      return {
+        sentence,
+        translation,
+        usage: readLearningString(record.usage)
+          || readLearningString(record.note)
+          || "常见用法",
+        source: record.source === "document" ? "document" : "generated",
+      };
+    })
+    .filter((example): example is VocabularyExample => Boolean(example));
+}
+
+function parseVocabularyLearningResult(
+  content: string,
+  word: string,
+  sentence: string,
+): VocabularyLearningResult {
+  const value = parseAiJson(content);
+  const partsOfSpeech = readLearningArray(value.partsOfSpeech)
+    .map((item): VocabularyPartOfSpeech | null => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const label = readLearningString(record.label)
+        || readLearningString(record.partOfSpeech)
+        || readLearningString(record.pos);
+      const meaning = readLearningString(record.meaning)
+        || readLearningString(record.definition);
+      return label && meaning ? { label, meaning } : null;
+    })
+    .filter((item): item is VocabularyPartOfSpeech => Boolean(item));
+  // The first example must always be the exact sentence selected from the PDF,
+  // rather than a sentence reconstructed by the model.
+  const sourceSentence = sentence;
+  const sentenceTranslation = readLearningString(value.sentenceTranslation)
+    || readLearningString(value.contextTranslation);
+  const meaningInSentence = readLearningString(value.meaningInSentence)
+    || readLearningString(value.contextMeaning);
+
+  if (!meaningInSentence || !sentenceTranslation) {
+    throw new Error("模型没有返回完整的单词学习结果。");
+  }
+
+  const generatedExamples = readVocabularyExamples(value.examples)
+    .filter((example) =>
+      normalizeLearningInlineText(example.sentence).toLocaleLowerCase()
+        !== normalizeLearningInlineText(sourceSentence).toLocaleLowerCase(),
+    )
+    .slice(0, 2);
+
+  return {
+    kind: "word",
+    selectionComplete: value.selectionComplete !== false,
+    word: readLearningString(value.headword)
+      || readLearningString(value.word)
+      || word,
+    pronunciation: readLearningString(value.pronunciation)
+      || readLearningString(value.phonetic),
+    partsOfSpeech,
+    meaningInSentence,
+    sentence: sourceSentence,
+    sentenceTranslation,
+    examples: [
+      {
+        sentence: sourceSentence,
+        translation: sentenceTranslation,
+        usage: "文中用法",
+        source: "document",
+      },
+      ...generatedExamples,
+    ],
+  };
+}
+
+function parseSentenceLearningResult(content: string): SentenceLearningResult {
+  const value = parseAiJson(content);
+  const translation = readLearningString(value.translation);
+  if (!translation) throw new Error("模型没有返回句子翻译。");
+  const keywords = readLearningArray(value.keywords)
+    .map((item): SentenceKeyword | null => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const word = readLearningString(record.word);
+      const partOfSpeech = readLearningString(record.partOfSpeech)
+        || readLearningString(record.pos);
+      const meaningInSentence = readLearningString(record.meaningInSentence)
+        || readLearningString(record.meaning);
+      if (!word || !partOfSpeech || !meaningInSentence) return null;
+      return {
+        word,
+        partOfSpeech,
+        meaningInSentence,
+        reason: readLearningString(record.reason),
+      };
+    })
+    .filter((item): item is SentenceKeyword => Boolean(item))
+    .slice(0, 8);
+  return { kind: "sentence", translation, keywords };
+}
+
+function renderVocabularyLearningResult(result: VocabularyLearningResult): void {
+  setTranslationLearningTitle("单词学习");
+  translationLearningHintElement.textContent =
+    "已按当前文中句子释义；例句 1 为论文原句，后续例句用于扩展不同用法。";
+  const card = createLearningElement("article", "english-learning-card word-card");
+  const header = createLearningElement("div", "english-learning-header");
+  const word = createLearningElement("strong", "english-learning-word", result.word);
+  header.append(word);
+  if (result.pronunciation) {
+    header.append(
+      createLearningElement("span", "english-learning-pronunciation", result.pronunciation),
+    );
+  }
+  card.append(header);
+
+  const meaning = createLearningElement("section", "english-learning-block");
+  meaning.append(createLearningElement("h4", "english-learning-label", "文中含义"));
+  meaning.append(
+    createLearningElement("p", "english-learning-context-meaning", result.meaningInSentence),
+  );
+  if (result.partsOfSpeech.length) {
+    const list = createLearningElement("dl", "english-pos-list");
+    result.partsOfSpeech.forEach((part) => {
+      const row = createLearningElement("div", "english-pos-row");
+      row.append(
+        createLearningElement("dt", "english-pos-tag", part.label),
+        createLearningElement("dd", "english-pos-meaning", part.meaning),
+      );
+      list.append(row);
+    });
+    meaning.append(list);
+  }
+  card.append(meaning);
+
+  const examples = createLearningElement("section", "english-learning-block");
+  examples.append(createLearningElement("h4", "english-learning-label", "例句"));
+  result.examples.forEach((example, index) => {
+    const item = createLearningElement("article", "english-example-card");
+    const label = index === 0
+      ? "例句 1 · 文中原句"
+      : "例句 " + String(index + 1) + " · " + example.usage;
+    item.append(createLearningElement("span", "english-example-label", label));
+    item.append(createLearningElement("p", "english-example-en", example.sentence));
+    item.append(createLearningElement("p", "english-example-zh", example.translation));
+    examples.append(item);
+  });
+  card.append(examples);
+
+  translationResultElement.replaceChildren(card);
+  translationResultElement.classList.remove("error");
+  setMoreExamplesButtonVisible(result.selectionComplete);
+}
+
+function renderSentenceLearningResult(result: SentenceLearningResult): void {
+  setTranslationLearningTitle("句子翻译");
+  translationLearningHintElement.textContent =
+    "已给出整句译文，并仅挑选值得学习的术语、学术表达或较难词汇。";
+  const card = createLearningElement("article", "english-learning-card sentence-card");
+  const translation = createLearningElement("section", "english-learning-block");
+  translation.append(createLearningElement("h4", "english-learning-label", "中文翻译"));
+  translation.append(
+    createLearningElement("p", "english-sentence-translation", result.translation),
+  );
+  card.append(translation);
+
+  const keywords = createLearningElement("section", "english-learning-block");
+  keywords.append(createLearningElement("h4", "english-learning-label", "重点词汇"));
+  if (!result.keywords.length) {
+    keywords.append(
+      createLearningElement("p", "english-learning-empty", "这句话以常用词为主，暂时没有需要额外记忆的难词。"),
+    );
+  } else {
+    const list = createLearningElement("div", "english-keyword-list");
+    result.keywords.forEach((keyword) => {
+      const item = createLearningElement("article", "english-keyword-card");
+      const title = createLearningElement("div", "english-keyword-title");
+      title.append(
+        createLearningElement("strong", "english-keyword-word", keyword.word),
+        createLearningElement("span", "english-pos-tag", keyword.partOfSpeech),
+      );
+      item.append(title);
+      item.append(
+        createLearningElement("p", "english-keyword-meaning", keyword.meaningInSentence),
+      );
+      if (keyword.reason) {
+        item.append(
+          createLearningElement("p", "english-keyword-reason", keyword.reason),
+        );
+      }
+      list.append(item);
+    });
+    keywords.append(list);
+  }
+  card.append(keywords);
+  translationResultElement.replaceChildren(card);
+  translationResultElement.classList.remove("error");
+  setMoreExamplesButtonVisible(false);
+}
+
+function getEnglishLearningPlainText(): string {
+  const result = currentEnglishLearningResult;
+  if (!result) return "";
+
+  if (result.kind === "sentence") {
+    const keywordText = result.keywords.length
+      ? result.keywords
+          .map(
+            (keyword) =>
+              `- ${keyword.word}（${keyword.partOfSpeech}）：${keyword.meaningInSentence}${keyword.reason ? `；${keyword.reason}` : ""}`,
+          )
+          .join("\n")
+      : "- 暂无需要额外记忆的难词";
+    return ["中文翻译", result.translation, "", "重点词汇", keywordText].join("\n");
+  }
+
+  const partsOfSpeech = result.partsOfSpeech.length
+    ? result.partsOfSpeech
+        .map((part) => `- ${part.label}：${part.meaning}`)
+        .join("\n")
+    : "- 未返回词性释义";
+  const examples = result.examples
+    .map(
+      (example, index) =>
+        `例句 ${index + 1}${index === 0 ? "（文中原句）" : `（${example.usage}）`}\n${example.sentence}\n${example.translation}`,
+    )
+    .join("\n\n");
+  return [
+    `${result.word}${result.pronunciation ? ` ${result.pronunciation}` : ""}`,
+    "",
+    "文中含义",
+    result.meaningInSentence,
+    "",
+    "词性与释义",
+    partsOfSpeech,
+    "",
+    "例句",
+    examples,
+  ].join("\n");
 }
 
 function setSummaryState(
@@ -6015,34 +7006,158 @@ async function jumpToPdfCitations(
   );
 }
 
-const fullDocumentTextCache = new WeakMap<PDFDocumentProxy, Promise<string>>();
+function getDocumentAgentOutline(): DocumentOutlineItem[] {
+  return getOutlinePageItems().map((item) => ({ ...item, depth: 0 }));
+}
 
-function extractFullDocumentText(
+async function ensureDocumentKnowledge(
   documentProxy: PDFDocumentProxy,
-): Promise<string> {
-  const cached = fullDocumentTextCache.get(documentProxy);
+  assistantMessage: HTMLElement,
+): Promise<{ record: DocumentAgentRecord; chunks: DocumentChunk[] }> {
+  const fingerprint = getPdfFingerprint(documentProxy) || sourceName || "local-pdf";
+  const documentId = createDocumentAgentId(
+    fingerprint,
+    sourceName || "未命名 PDF",
+    documentProxy.numPages,
+  );
+  const cached = documentKnowledgeCache.get(documentId);
   if (cached) return cached;
+  const running = documentKnowledgeTasks.get(documentId);
+  if (running) return running;
 
-  const extraction = (async () => {
-    const pages: string[] = [];
-    for (
-      let pageNumber = 1;
-      pageNumber <= documentProxy.numPages;
-      pageNumber += 1
-    ) {
-      const pageText = await extractPageText(documentProxy, pageNumber).catch(
-        () => "",
+  const task = (async () => {
+    const storedRecord = await getDocumentAgentRecord(documentId);
+    const storedChunks = await getDocumentChunks(documentId);
+    if (storedRecord && storedChunks.length > 0) {
+      const restored = { record: storedRecord, chunks: storedChunks };
+      documentKnowledgeCache.set(documentId, restored);
+      updateChatActivity(
+        assistantMessage,
+        "document-index",
+        "已加载 PDF 本地索引",
+        "done",
+        `${storedChunks.length} 个文本块`,
       );
-      pages.push(
-        `[PDF 第 ${pageNumber} 页]\n${pageText || "（本页没有可提取文字）"}`,
-      );
+      return restored;
     }
-    return pages.join("\n\n").trim();
-  })();
 
-  fullDocumentTextCache.set(documentProxy, extraction);
-  void extraction.catch(() => fullDocumentTextCache.delete(documentProxy));
-  return extraction;
+    const initialized = await initializeDocumentKnowledge({
+      fingerprint,
+      name: sourceName || "未命名 PDF",
+      pageCount: documentProxy.numPages,
+      readingMode: "paper",
+      providerId: aiConfig.providerId,
+      model: aiConfig.model,
+      // 首次只建立本地索引；不在打开文档时额外消耗模型 Token 生成全文摘要。
+      hasApiKey: false,
+      extractPageText: (pageNumber) => extractPageText(documentProxy, pageNumber),
+      getOutline: getDocumentAgentOutline,
+      requestAi: requestAiContent,
+      isCurrent: () => pdfDocument === documentProxy,
+      onStatus: (status) => updateChatActivity(
+        assistantMessage,
+        "document-index",
+        status.text,
+        status.status === "error" ? "error" : status.status === "indexed" || status.status === "ready" || status.status === "needs-api-key" ? "done" : "active",
+        status.total ? `${status.completed ?? 0}/${status.total}` : "",
+      ),
+    });
+    const result = { record: initialized.record, chunks: initialized.chunks };
+    documentKnowledgeCache.set(documentId, result);
+    return result;
+  })();
+  documentKnowledgeTasks.set(documentId, task);
+  try {
+    return await task;
+  } finally {
+    documentKnowledgeTasks.delete(documentId);
+  }
+}
+
+async function inspectPdfPageWithVision(
+  documentProxy: PDFDocumentProxy,
+  pageNumber: number,
+  question: string,
+): Promise<{ content: string; model: string; cached: boolean }> {
+  const page = await documentProxy.getPage(pageNumber);
+  const viewport = page.getViewport({ scale: 1.65 });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(viewport.width));
+  canvas.height = Math.max(1, Math.round(viewport.height));
+  const canvasContext = canvas.getContext("2d", { alpha: false });
+  if (!canvasContext) throw new Error("浏览器无法渲染 PDF 页面图像。");
+  canvasContext.fillStyle = "#fff";
+  canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvas, canvasContext, viewport }).promise;
+  const attachment: AiImageAttachment = {
+    id: `pdf-page-${pageNumber}`,
+    name: `PDF 第 ${pageNumber} 页.png`,
+    mediaType: "image/jpeg",
+    dataUrl: canvas.toDataURL("image/jpeg", 0.88),
+    width: canvas.width,
+    height: canvas.height,
+  };
+  const content = await inspectChatImageWithVision(attachment, question, {
+    documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
+    pageNumber,
+    totalPages: documentProxy.numPages,
+    readingMode: "paper",
+  });
+  return { content, model: visionAiConfig.model, cached: false };
+}
+
+async function buildAgentEvidence(
+  question: string,
+  documentProxy: PDFDocumentProxy,
+  pageNumber: number,
+  selectedText: string,
+  userImageAttached: boolean,
+  assistantMessage: HTMLElement,
+): Promise<Awaited<ReturnType<typeof buildDocumentRetrievalContext>>> {
+  const knowledge = await ensureDocumentKnowledge(documentProxy, assistantMessage);
+  updateChatActivity(assistantMessage, "agent-plan", "Agent 正在规划工具 · document", "active");
+  const currentPageText = await extractPageText(documentProxy, pageNumber).catch(() => "");
+  const result = await buildDocumentRetrievalContext({
+    question,
+    currentPage: pageNumber,
+    currentPageText,
+    selectedText,
+    readingMode: "paper",
+    documentName: sourceName || "未命名 PDF",
+    pageCount: documentProxy.numPages,
+    record: knowledge.record,
+    chunks: knowledge.chunks,
+    outline: getDocumentAgentOutline(),
+    extractPageText: (targetPage) => extractPageText(documentProxy, targetPage),
+    requestAi: requestAiContent,
+    hasVisionModel: isVisionAiConfigured(visionAiConfig),
+    userImageAttached,
+    inspectPageImage: (targetPage, targetQuestion) => inspectPdfPageWithVision(
+      documentProxy,
+      targetPage,
+      targetQuestion,
+    ),
+  });
+  console.groupCollapsed(`[PDF Helper Agent] 证据检索完成 · ${result.planningRounds} 轮`);
+  console.log("规划原因", result.plannerReason);
+  console.log("工具调用结果", result.toolResults);
+  console.log("送入最终回答的证据", result.text);
+  console.groupEnd();
+  result.toolResults.forEach((tool, index) => updateChatActivity(
+    assistantMessage,
+    `document-tool-${index}`,
+    `Agent 已完成 · ${tool.name}`,
+    "done",
+    tool.pages.length ? `第 ${tool.pages.join("、")} 页` : tool.name,
+  ));
+  updateChatActivity(
+    assistantMessage,
+    "agent-plan",
+    result.toolResults.length ? "Agent 检索完成" : "Agent 判断无需追加检索",
+    "done",
+    `${result.planningRounds} 轮`,
+  );
+  return result;
 }
 
 async function buildSummaryContext(
@@ -9002,22 +10117,10 @@ async function importKnowledgeNotes(file: File): Promise<void> {
 
 function saveTranslationAndExplanationAsNote(): void {
   const sourceText = selectedTextForAi.trim();
-  const translation = translationResultElement.textContent?.trim() || "";
-  const explanationPoints = Array.from(
-    explanationResultElement.querySelectorAll("li"),
-  )
-    .map((item) => item.textContent?.trim() || "")
-    .filter(Boolean);
-  const explanation = explanationPoints.length
-    ? explanationPoints.map((point) => `• ${point}`).join("\n")
-    : explanationResultElement.textContent?.trim() || "";
-  const invalidTranslation =
-    !translation ||
-    translation.includes("自动翻译") ||
-    translation.startsWith("正在自动翻译") ||
-    translation.startsWith("翻译失败");
-  if (!sourceText || invalidTranslation) {
-    setStatus("当前没有可保存的翻译结果。", true);
+  const learningResult = currentEnglishLearningResult;
+  const learningText = getEnglishLearningPlainText();
+  if (!sourceText || !learningResult || !learningText) {
+    setStatus("当前没有可保存的英语学习结果。", true);
     return;
   }
 
@@ -9026,23 +10129,21 @@ function saveTranslationAndExplanationAsNote(): void {
     selectedTextPageNumber || pdfViewer.currentPageNumber || 1,
   );
   const chapter = getCurrentChapterContext(pageNumber).title;
+  const isWord = learningResult.kind === "word";
   const note = addKnowledgeNote({
-    title: `翻译与解释：${getKnowledgeExcerpt(sourceText).slice(0, 34)}`,
+    title: `${isWord ? "单词学习" : "句子翻译"}：${getKnowledgeExcerpt(sourceText).slice(0, 34)}`,
     content: [
       "原文",
       sourceText,
       "",
-      "中文翻译",
-      translation,
-      "",
-      "AI 解释",
-      explanation,
+      isWord ? "单词学习" : "句子学习",
+      learningText,
     ].join("\n"),
     documentName: sourceName ? getDisplayFileName(sourceName) : "未关联文档",
     pageNumber,
     positionLabel: `${chapter} · 第 ${pageNumber} 页`,
-    category: "AI 翻译",
-    tags: ["翻译", "AI 解释"],
+    category: "英语学习",
+    tags: isWord ? ["英语学习", "单词"] : ["英语学习", "句子翻译"],
   });
   setStatus(`已保存“${note.title}”到知识库。`);
 }
@@ -9100,7 +10201,6 @@ function scheduleAutomaticTranslation(text: string): void {
     }
 
     void translateSelectedText(text);
-    void explainSelectedText(text);
   }, AUTO_TRANSLATE_DELAY_MS);
 }
 
@@ -9118,15 +10218,18 @@ function updateAiSelectedSnippet(): void {
   selectedSnippetElement.textContent = text;
   selectedSnippetElement.title = text;
   translationAbortController?.abort();
-  explanationAbortController?.abort();
+  moreExamplesAbortController?.abort();
   cancelPendingAutomaticTranslation();
   lastTranslatedText = "";
-  lastExplainedText = "";
+  currentEnglishLearningResult = null;
+  setMoreExamplesButtonVisible(false);
   if (activeAssistantView === "translate") {
     scheduleAutomaticTranslation(text);
   } else {
-    setTranslationState("切换到“翻译/解释”后将自动处理当前选区。");
-    setExplanationState("当前选区也已同步到聊天上下文。");
+    setTranslationLearningTitle("学习结果");
+    translationLearningHintElement.textContent =
+      "切换到“英语学习”后将自动处理当前选区。";
+    setTranslationState("切换到“英语学习”后将自动生成学习卡片。");
   }
 
   if (activeSummaryScope === "selection") {
@@ -9153,38 +10256,92 @@ function scheduleAiSelectedSnippetUpdate(): void {
 async function translateSelectedText(text: string): Promise<void> {
   if (!text || text !== selectedTextForAi) return;
 
+  const automaticWordSelection = getEnglishWordSelection(text);
+  const selectedWord = automaticWordSelection?.word ?? getSelectedEnglishWord(text);
+  const isWord = Boolean(selectedWord);
+  const sourceSentence = getSelectionSentenceContext(text);
   translationAbortController?.abort();
   const controller = new AbortController();
   translationAbortController = controller;
-  setTranslationState("正在自动翻译，请稍候…");
+  currentEnglishLearningResult = null;
+  setMoreExamplesButtonVisible(false);
+  setTranslationLearningTitle(isWord ? "单词学习" : "句子翻译");
+  translationLearningHintElement.textContent = isWord
+    ? "正在结合该单词所在的原句查询语境词义、词性和例句。"
+    : "正在翻译句子，并筛选其中值得学习的重点词汇。";
+  if (isWord && automaticWordSelection?.wasExpanded) {
+    translationLearningHintElement.textContent = `已自动识别为完整单词 “${selectedWord}”，正在查询其语境词义、词性和例句。`;
+  }
+  setTranslationState(
+    isWord ? "正在生成单词学习卡片，请稍候…" : "正在翻译句子并整理重点词汇，请稍候…",
+  );
 
   try {
-    const translation = await requestAiContent(
+    const prompt = isWord
+      ? [
+          "你是严谨的英汉词典与英语教师。请为一个英文单词制作学习卡。",
+          `当前选中单词：${selectedWord}`,
+          `该单词所在的 PDF 原句：${sourceSentence}`,
+          "先核验当前选中内容是否完整单词；若不是，selectionComplete 必须为 false。",
+          "严格只输出 JSON 对象，不要 Markdown、代码块或额外说明。",
+          "JSON 格式：",
+          '{"selectionComplete":true,"headword":"单词原形或当前词形","pronunciation":"音标或空字符串","partsOfSpeech":[{"label":"词性缩写","meaning":"常见中文义"}],"meaningInSentence":"该词在原句中的准确中文含义","sentenceTranslation":"原句完整中文翻译","examples":[{"sentence":"例句","translation":"中文翻译","usage":"该例句展示的不同用法"},{"sentence":"例句","translation":"中文翻译","usage":"该例句展示的不同用法"}]}',
+          "规则：examples 必须正好给出 2 个原创例句，且尽量覆盖不同常见用法；不要把 PDF 原句放进 examples。",
+        ].join("\n")
+      : [
+          "你是面向英语学习者的论文句子翻译助手。",
+          `当前选中的 PDF 句子或短段：${text}`,
+          "严格只输出 JSON 对象，不要 Markdown、代码块或额外说明。",
+          "JSON 格式：",
+          '{"translation":"忠实、自然的简体中文翻译","keywords":[{"word":"原文词或短语","partOfSpeech":"词性","meaningInSentence":"在本句中的准确含义","reason":"为什么值得学习（可为空字符串）"}]}',
+          "keywords 只保留 0–8 个术语、学术表达、低频词或容易误解的词；不要列入 the、is、and、have 等基础词。",
+        ].join("\n");
+    const content = await requestAiContent(
       [
         {
           role: "user",
-          content:
-            "请把当前选中的 PDF 原文准确翻译成简体中文。保留原意、术语和逻辑，只输出译文，不要添加说明。",
+          content: prompt,
         },
       ],
       {
         documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
         pageNumber: selectedTextPageNumber || pdfViewer.currentPageNumber || 1,
         selectedText: text,
+        task: isWord ? "英语学习：单词语境释义" : "英语学习：句子翻译",
       },
     );
 
-    // 只展示当前选区对应的结果，防止慢请求覆盖新选区。
+    // Only show the result for the current selection so a slow request cannot
+    // overwrite a newer word or sentence.
     if (controller.signal.aborted || text !== selectedTextForAi) return;
 
     lastTranslatedText = text;
-    setTranslationState(translation);
+    if (isWord) {
+      const result = parseVocabularyLearningResult(
+        content,
+        selectedWord,
+        sourceSentence,
+      );
+      if (!result.selectionComplete) {
+        currentEnglishLearningResult = null;
+        translationLearningHintElement.textContent =
+          "模型判断当前内容不是完整英文单词，请重新完整选中后再查询。";
+        setTranslationState("当前选区不是完整单词，请重新完整选中后再查询。");
+        return;
+      }
+      currentEnglishLearningResult = result;
+      renderVocabularyLearningResult(result);
+    } else {
+      const result = parseSentenceLearningResult(content);
+      currentEnglishLearningResult = result;
+      renderSentenceLearningResult(result);
+    }
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
     if (controller.signal.aborted || text !== selectedTextForAi) return;
 
     const message = error instanceof Error ? error.message : String(error);
-    setTranslationState(`翻译失败：${message}`, true);
+    setTranslationState(`英语学习结果生成失败：${message}`, true);
   } finally {
     if (translationAbortController === controller) {
       translationAbortController = null;
@@ -9192,48 +10349,68 @@ async function translateSelectedText(text: string): Promise<void> {
   }
 }
 
-async function explainSelectedText(text: string): Promise<void> {
-  if (!text || text !== selectedTextForAi || text === lastExplainedText) return;
+async function generateMoreVocabularyExamples(): Promise<void> {
+  const result = currentEnglishLearningResult;
+  if (!result || result.kind !== "word") return;
 
-  explanationAbortController?.abort();
+  moreExamplesAbortController?.abort();
   const controller = new AbortController();
-  explanationAbortController = controller;
-  setExplanationState("正在生成 AI 解释，请稍候…");
+  moreExamplesAbortController = controller;
+  generateMoreExamplesButton.disabled = true;
+  generateMoreExamplesButton.textContent = "正在生成…";
 
   try {
-    const explanation = await requestAiContent(
+    const existingExamples = result.examples
+      .map((example) => example.sentence)
+      .join("\n");
+    const content = await requestAiContent(
       [
         {
           role: "user",
-          content:
-            "请用简体中文解释当前选中的 PDF 原文，给出 3—5 条便于学习的核心要点，每行一条，不要添加标题。",
+          content: [
+            "你是英语教师，请为下面单词补充 2 个新的英语例句。",
+            `单词：${result.word}`,
+            `该词在论文中的语境含义：${result.meaningInSentence}`,
+            "以下例句已经展示过，禁止重复或只改写：",
+            existingExamples,
+            "严格只输出 JSON 对象，不要 Markdown、代码块或额外说明。",
+            'JSON 格式：{"examples":[{"sentence":"例句","translation":"中文翻译","usage":"不同含义或用法说明"},{"sentence":"例句","translation":"中文翻译","usage":"不同含义或用法说明"}]}',
+          ].join("\n"),
         },
       ],
       {
         documentName: sourceName ? getDisplayFileName(sourceName) : undefined,
         pageNumber: selectedTextPageNumber || pdfViewer.currentPageNumber || 1,
-        selectedText: text,
+        selectedText: result.word,
+        task: "英语学习：扩展单词例句",
       },
     );
-    const points = parseAiList(explanation).slice(0, 6);
+    if (controller.signal.aborted || currentEnglishLearningResult !== result) return;
 
-    if (!points.length) {
-      throw new Error("模型没有返回解释内容。");
+    const parsed = parseAiJson(content);
+    const newExamples = readVocabularyExamples(parsed.examples).filter(
+      (candidate) =>
+        !result.examples.some(
+          (existing) =>
+            normalizeLearningInlineText(existing.sentence).toLocaleLowerCase()
+            === normalizeLearningInlineText(candidate.sentence).toLocaleLowerCase(),
+        ),
+    );
+    if (!newExamples.length) {
+      setStatus("没有生成新的非重复例句，请再试一次。", true);
+      return;
     }
-
-    if (controller.signal.aborted || text !== selectedTextForAi) return;
-
-    lastExplainedText = text;
-    renderExplanationPoints(points);
+    result.examples.push(...newExamples.slice(0, 2));
+    renderVocabularyLearningResult(result);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
-    if (controller.signal.aborted || text !== selectedTextForAi) return;
-
     const message = error instanceof Error ? error.message : String(error);
-    setExplanationState(`解释失败：${message}`, true);
+    setStatus(`生成更多例句失败：${message}`, true);
   } finally {
-    if (explanationAbortController === controller) {
-      explanationAbortController = null;
+    if (moreExamplesAbortController === controller) {
+      moreExamplesAbortController = null;
+      generateMoreExamplesButton.disabled = false;
+      generateMoreExamplesButton.textContent = "生成更多例句";
     }
   }
 }
@@ -10683,7 +11860,7 @@ async function openPdf(
   cancelPendingSummaryGeneration();
   cancelPendingCardGeneration();
   translationAbortController?.abort();
-  explanationAbortController?.abort();
+  moreExamplesAbortController?.abort();
   summaryAbortController?.abort();
   cardAbortController?.abort();
   cancelReadingPositionSave();
@@ -10741,11 +11918,14 @@ async function openPdf(
     selectedTextForAi = "";
     selectedTextPageNumber = 0;
     lastTranslatedText = "";
-    lastExplainedText = "";
+    currentEnglishLearningResult = null;
     selectedSnippetElement.textContent = "请在左侧 PDF 中选择文字";
     selectedSnippetElement.title = "";
-    setTranslationState("选中英文后将自动翻译。");
-    setExplanationState("选中英文后将自动生成解释。");
+    setTranslationLearningTitle("学习结果");
+    translationLearningHintElement.textContent =
+      "选一个单词可查看语境词义、词性和例句；选一句话可获得翻译与重点词讲解。";
+    setTranslationState("选中英文后将自动生成学习卡片。");
+    setMoreExamplesButtonVisible(false);
     clearPendingChatImages();
     await restoreChatConversation(documentProxy);
     resetSummaryState();
@@ -11233,8 +12413,12 @@ function activateAiTab(tabName: string): void {
       selectedSnippetElement.title = text;
       scheduleAutomaticTranslation(text);
     } else {
-      setTranslationState("请先在 PDF 中选中需要翻译的原文。");
-      setExplanationState("选中原文后将自动生成解释。");
+      currentEnglishLearningResult = null;
+      setMoreExamplesButtonVisible(false);
+      setTranslationLearningTitle("学习结果");
+      translationLearningHintElement.textContent =
+        "选一个单词可查看语境词义、词性和例句；选一句话可获得翻译与重点词讲解。";
+      setTranslationState("请先在 PDF 中选中一个英文单词、句子或短段。");
     }
   } else if (tabName === "summary") {
     updateSummaryMetadata();
@@ -11935,20 +13119,20 @@ saveTranslationNoteButton.addEventListener(
   saveTranslationAndExplanationAsNote,
 );
 
+generateMoreExamplesButton.addEventListener("click", () => {
+  void generateMoreVocabularyExamples();
+});
+
 copyTranslationButton.addEventListener("click", async () => {
-  const translation = translationResultElement.textContent?.trim() ?? "";
-  if (
-    !translation ||
-    translation.includes("自动翻译") ||
-    translation.startsWith("正在自动翻译")
-  ) {
-    setTranslationState("当前没有可复制的翻译结果。", true);
+  const learningText = getEnglishLearningPlainText();
+  if (!currentEnglishLearningResult || !learningText) {
+    setTranslationState("当前没有可复制的英语学习结果。", true);
     return;
   }
 
-  await navigator.clipboard.writeText(translation);
+  await navigator.clipboard.writeText(learningText);
   setStatus(
-    `已复制 ${translation.length.toLocaleString("zh-CN")} 个中文字符。`,
+    `已复制 ${learningText.length.toLocaleString("zh-CN")} 个学习字符。`,
   );
 });
 
@@ -11988,7 +13172,7 @@ viewerElement.addEventListener("pointerdown", () => {
   // 开始新一轮拖选时，停止旧选区尚未发出的 AI 请求。
   cancelPendingAutomaticTranslation();
   translationAbortController?.abort();
-  explanationAbortController?.abort();
+  moreExamplesAbortController?.abort();
   if (activeSummaryScope === "selection") {
     cancelPendingSummaryGeneration();
     summaryAbortController?.abort();

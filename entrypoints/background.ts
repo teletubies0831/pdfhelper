@@ -10,7 +10,7 @@ import {
 import { extractPdfSource } from '../shared/pdf-source';
 import {
   AGENT_TOOL_DEFINITIONS,
-  formatAgentToolCatalogForPrompt,
+  getAgentToolDefinitionByApiName,
   getNativeAgentTools,
 } from '../shared/agent-tools';
 import {
@@ -30,9 +30,13 @@ import {
   type AiRuntimeRequest,
   type AiRuntimeResponse,
   type AiStreamCompletionInfo,
+  type AiStreamDebugInfo,
   type AiStreamErrorInfo,
   type AiStreamServerMessage,
   type AiStreamStartMessage,
+  type AiStreamToolResultsMessage,
+  type AiStreamToolResult,
+  type AiNativeToolCall,
   type VisionAiConfig,
 } from '../shared/ai';
 import {
@@ -151,14 +155,21 @@ function getProviderError(payload: unknown, fallback: string): string {
 }
 
 type ProviderMessage = {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: 'function';
+    function: { name: string; arguments: string };
+  }>;
 };
 
 interface ProviderChatResult {
   content: string;
   model: string;
   reasoningContent?: string;
+  toolCalls?: AiNativeToolCall[];
   completion?: AiStreamCompletionInfo;
 }
 
@@ -257,6 +268,10 @@ interface AiProviderAdapter {
     maxOutputTokens: number,
     signal: AbortSignal,
     onDelta: (delta: ProviderStreamDelta) => void,
+    options?: {
+      toolChoice?: 'auto' | 'none' | 'required';
+      tools?: Array<Record<string, unknown>>;
+    },
   ): Promise<ProviderChatResult>;
 }
 
@@ -331,6 +346,10 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
     maxOutputTokens: number,
     signal: AbortSignal,
     onDelta: (delta: ProviderStreamDelta) => void,
+    options: {
+      toolChoice?: 'auto' | 'none' | 'required';
+      tools?: Array<Record<string, unknown>>;
+    } = {},
   ): Promise<ProviderChatResult> {
     if (!config.apiKey) throw new Error('请先在 PDF Helper 的“设置”中配置 API Key。');
     let response: Response;
@@ -345,15 +364,23 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
           model: config.model,
           messages,
           thinking: { type: config.reasoning },
-          // Explicit memory writes are planned and executed before this main
-          // response. Still send the native definitions so the main model
-          // genuinely knows which Agent tools the application provides.
-          tools: getNativeAgentTools(),
-          tool_choice: 'none',
+          // Tool definitions are sent through the provider's native `tools`
+          // parameter. They are intentionally not duplicated in the system
+          // prompt, so the provider can emit standard tool_calls.
+          ...(options.tools?.length ? { tools: options.tools } : {}),
+          ...(options.tools?.length ? { tool_choice: options.toolChoice ?? 'auto' } : {}),
           stream: true,
           max_tokens: maxOutputTokens,
         }),
         signal,
+      });
+      console.info('[PDF Helper AI] native tools payload', {
+        toolChoice: options.tools?.length ? options.toolChoice ?? 'auto' : 'none',
+        tools: (options.tools ?? []).map((tool) => (
+          tool && typeof tool === 'object' && 'function' in tool
+            ? (tool as { function?: { name?: unknown } }).function?.name
+            : undefined
+        )).filter(Boolean),
       });
     } catch (error) {
       if (signal.aborted) throw error;
@@ -412,6 +439,7 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
     let promptTokens: number | undefined;
     let completionTokens: number | undefined;
     let totalTokens: number | undefined;
+    const toolCallParts = new Map<number, { id: string; name: string; arguments: string }>();
 
     const processEvent = (event: string): boolean => {
       const data = event
@@ -438,6 +466,12 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
           delta?: {
             content?: unknown;
             reasoning_content?: unknown;
+            tool_calls?: Array<{
+              index?: unknown;
+              id?: unknown;
+              type?: unknown;
+              function?: { name?: unknown; arguments?: unknown };
+            }>;
           };
         }>;
       };
@@ -493,6 +527,14 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
         completeContent += content;
         onDelta({ content });
       }
+      for (const part of delta?.tool_calls ?? []) {
+        const index = Number.isFinite(Number(part.index)) ? Number(part.index) : toolCallParts.size;
+        const existing = toolCallParts.get(index) ?? { id: '', name: '', arguments: '' };
+        if (typeof part.id === 'string' && part.id) existing.id = part.id;
+        if (typeof part.function?.name === 'string') existing.name += part.function.name;
+        if (typeof part.function?.arguments === 'string') existing.arguments += part.function.arguments;
+        toolCallParts.set(index, existing);
+      }
       return false;
     };
 
@@ -526,7 +568,25 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
       providerRequestId,
     };
 
-    if (!completeContent.trim()) {
+    const toolCalls: AiNativeToolCall[] = Array.from(toolCallParts.entries())
+      .sort(([left], [right]) => left - right)
+      .flatMap(([index, part]) => {
+        if (!part.name) return [];
+        let args: Record<string, unknown> = {};
+        try {
+          const parsed = part.arguments ? JSON.parse(part.arguments) : {};
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) args = parsed as Record<string, unknown>;
+        } catch {
+          // Keep malformed arguments visible to the caller as an empty object.
+        }
+        return [{
+          id: part.id || `tool-call-${index + 1}`,
+          name: part.name,
+          arguments: args,
+        }];
+      });
+
+    if (!completeContent.trim() && toolCalls.length === 0) {
       const reason = finishReason ? `finish_reason=${finishReason}` : '未返回 finish_reason';
       const message = finishReason === 'length'
         ? `模型在生成最终回答前已达到输出上限（${reason}）。本轮收到思考 ${completeReasoningContent.length} 字符、正文 0 字符；请提高“最大输出 Token”或关闭思考模式后重试。`
@@ -551,6 +611,7 @@ class DeepSeekProviderAdapter implements AiProviderAdapter {
       content: completeContent,
       model: config.model,
       reasoningContent: completeReasoningContent || undefined,
+      toolCalls: toolCalls.length ? toolCalls : undefined,
       completion,
     };
   }
@@ -594,7 +655,7 @@ function buildSystemContent(context?: AiDocumentContext): string {
     contextParts.push([
       '【本轮应用工具执行结果】',
       context.memoryOperationResult.trim().slice(0, 4000),
-      '这是本轮原生 Agent Tool 调用完成后的真实结果，优先级高于历史对话。必须据此确认写入成功并说明具体记住了什么；严禁再声称当前环境没有记忆工具、无法调用工具或只能口头记住。',
+      '这是本轮 Agent Tool 调用完成后的真实结果，优先级高于历史对话。请准确使用结果：只有结果明确包含 memory.upsert 成功时，才确认写入并说明具体记住了什么；查询类工具只用于回答查询，不得谎称发生了写入。严禁再声称当前环境没有这些工具。',
     ].join('\n'));
   }
   if (context?.selectedText?.trim()) {
@@ -602,6 +663,16 @@ function buildSystemContent(context?: AiDocumentContext): string {
   }
   if (context?.pageText?.trim()) {
     contextParts.push(`当前页完整正文（用于定位当前阅读位置）：\n${context.pageText.trim()}`);
+  }
+  if (context?.agentEvidence?.trim()) {
+    contextParts.push([
+      '【Agent 按需调用文档工具获得的证据】',
+      context.contextNote?.trim() || '以下内容由 Agent 根据用户问题自主检索，不是默认注入的整篇 PDF。',
+      context.sourceLabel ? `证据来源：${context.sourceLabel}` : '',
+      context.sourcePages?.length ? `涉及 PDF 页码：${context.sourcePages.join('、')}` : '',
+      context.agentEvidence.trim().slice(0, 32000),
+      '回答必须优先依据这些工具结果。若证据仍不足，应明确缺少什么，不得假装已经阅读了未检索的页面。',
+    ].filter(Boolean).join('\n'));
   }
   if (context?.documentText?.trim()) {
     const documentInstructions = context?.imageAnalysis?.trim()
@@ -632,18 +703,21 @@ function buildSystemContent(context?: AiDocumentContext): string {
 
   const hasPdfEvidence = Boolean(
     context?.documentText?.trim()
+    || context?.agentEvidence?.trim()
     || context?.pageText?.trim()
     || context?.selectedText?.trim(),
   );
   const primaryInstruction = context?.imageAnalysis?.trim()
     ? '你是 PDF Helper 的视觉问答助手。本轮首要对象是用户上传的截图，请依据视觉工具分析结果直接回答截图问题。'
-    : '你是 PDF Helper 的论文阅读助手。请阅读所提供的整篇论文全文，并用清晰、准确、可核验的中文回答。';
+    : context?.agentEvidence?.trim()
+      ? '你是 PDF Helper 的 Agent 论文阅读助手。应用已经在回答前自主调用文档工具，请依据返回的可核验证据回答。'
+      : '你是 PDF Helper 的论文阅读助手。请依据本轮实际提供的文档证据，用清晰、准确、可核验的中文回答。';
 
   return [
     primaryInstruction,
-    formatAgentToolCatalogForPrompt(),
+    'Agent tool definitions are sent separately in the native tools request parameter. Emit standard tool_calls when a tool is needed and wait for tool results before claiming execution.',
     '如果上下文不足，请明确说明，不要编造文档中不存在的内容。涉及翻译时忠实保留术语，涉及解释时优先给出直观含义。',
-    '长期记忆通过 Agent Tool 持久化。若上下文包含“本轮应用工具执行结果”，说明模型已完成工具调用且应用已返回结果：必须确认写入并列出记忆内容，不能被历史消息中旧的“没有工具”说法影响。若没有工具结果，不得谎称已经写入，也不要要求用户重复确认已经明确表达的要求。',
+    '长期记忆通过 Agent Tool 持久化。若工具结果包含 memory.upsert 成功，必须确认写入并列出记忆内容；若只是 search/list/get 等查询结果，则仅据此回答查询。用户明确要求删除或忘记时，禁止只用文字答复：必须先调用 memory.search 或 memory.list 获取真实 id，再调用 memory.forget(id)，收到删除结果后才能确认删除。不能被历史消息中旧的“没有工具”说法影响，也不得在没有写入或删除结果时谎称已经完成。',
     '请使用简洁的 Markdown 组织回答；不要给整个回答套一层 Markdown 代码围栏。数学变量和公式必须使用 LaTeX：行内公式用 $...$，独立公式用 $$...$$。',
     'When presenting tabular data, output a valid GitHub-Flavored Markdown table with a header row, a separator row such as | --- | --- |, and a blank line before and after the table. Do not imitate a table with spaces or tabs.',
     ...contextParts,
@@ -663,8 +737,8 @@ function buildSystemContent(context?: AiDocumentContext): string {
     ].join('\n') : '',
     // Keep the capability catalog at the very end as well. Long PDF text can
     // be large, and the model must not lose this authoritative runtime fact.
-    formatAgentToolCatalogForPrompt(),
-    '以上工具定义已作为本轮请求的原生 tools 参数发送给模型。memory.upsert 的写入由应用在主回答前执行；如本轮给出“工具执行结果”，说明该调用已经成功完成。',
+    'Available tools are supplied by the runtime through the native tools parameter. Only claim a tool was executed after receiving its result; otherwise state that execution has not happened.',
+    '以上工具属于当前 Agent 运行时。文档检索、视觉检查和记忆写入会在最终回答前由应用执行；如本轮给出工具执行结果，说明对应调用已经真实完成。',
   ].filter(Boolean).join('\n\n');
 }
 
@@ -712,6 +786,14 @@ function isAiStreamStartMessage(value: unknown): value is AiStreamStartMessage {
     && Array.isArray(candidate.messages);
 }
 
+function isAiStreamToolResultsMessage(value: unknown): value is AiStreamToolResultsMessage {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<AiStreamToolResultsMessage>;
+  return candidate.type === 'tool-results'
+    && typeof candidate.requestId === 'string'
+    && Array.isArray(candidate.results);
+}
+
 function postAiStreamMessage(
   port: RuntimePort,
   message: AiStreamServerMessage,
@@ -727,24 +809,52 @@ async function streamAiResponse(
   request: AiStreamStartMessage,
   port: RuntimePort,
   signal: AbortSignal,
+  waitForToolResults: (requestId: string, signal: AbortSignal) => Promise<AiStreamToolResult[]>,
 ): Promise<void> {
   const config = await getAiConfig();
   const adapter = getProviderAdapter(config);
   const maxOutputTokens = config.maxOutputTokens;
   const conversation = buildConversation(request.messages, request.context);
-  const debug = {
+  const nativeTools = getNativeAgentTools();
+  const workingConversation: ProviderMessage[] = [...conversation];
+  const toDebugMessage = (item: ProviderMessage): AiStreamDebugInfo['messages'][number] => ({
+    role: item.role,
+    content: item.content,
+    ...(item.tool_calls?.length
+      ? {
+        toolCalls: item.tool_calls.map((call) => ({
+          id: call.id,
+          name: call.function.name,
+          arguments: (() => {
+            try {
+              const parsed = JSON.parse(call.function.arguments);
+              return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+                ? parsed as Record<string, unknown>
+                : {};
+            } catch {
+              return {};
+            }
+          })(),
+        })),
+      }
+      : {}),
+    ...(item.tool_call_id ? { toolCallId: item.tool_call_id } : {}),
+  });
+  const debug: AiStreamDebugInfo = {
     providerId: config.providerId,
     model: config.model,
     baseUrl: config.baseUrl,
     reasoning: config.reasoning,
     maxOutputTokens,
-    messages: conversation,
+    messages: conversation.map(toDebugMessage),
     availableTools: AGENT_TOOL_DEFINITIONS.map((tool) => ({
       name: tool.name,
       description: tool.description,
       parameters: tool.parametersSummary,
     })),
     completedTools: request.context?.completedTools?.map((tool) => ({ ...tool })) ?? [],
+    nativeTools,
+    toolChoice: 'auto',
   };
   postAiStreamMessage(port, {
     type: 'started',
@@ -752,34 +862,99 @@ async function streamAiResponse(
     model: config.model,
     debug,
   });
-  const result = await adapter.stream(
-    config,
-    conversation,
-    maxOutputTokens,
-    signal,
-    (delta) => {
-      if (delta.reasoningContent) {
-        postAiStreamMessage(port, {
-          type: 'reasoning-delta',
-          requestId: request.requestId,
-          content: delta.reasoningContent,
-        });
-      }
-      if (delta.content) {
-        postAiStreamMessage(port, {
-          type: 'delta',
-          requestId: request.requestId,
-          content: delta.content,
-        });
-      }
-    },
-  );
-  postAiStreamMessage(port, {
-    type: 'done',
-    requestId: request.requestId,
-    model: result.model,
-    debug,
-    completion: result.completion,
+  const maxToolRounds = 8;
+  for (let round = 1; round <= maxToolRounds; round += 1) {
+    const result = await adapter.stream(
+      config,
+      workingConversation,
+      maxOutputTokens,
+      signal,
+      (delta) => {
+        if (delta.reasoningContent) {
+          postAiStreamMessage(port, {
+            type: 'reasoning-delta',
+            requestId: request.requestId,
+            content: delta.reasoningContent,
+          });
+        }
+        if (delta.content) {
+          postAiStreamMessage(port, {
+            type: 'delta',
+            requestId: request.requestId,
+            content: delta.content,
+          });
+        }
+      },
+      { tools: nativeTools, toolChoice: 'auto' },
+    );
+
+    if (!result.toolCalls?.length) {
+      postAiStreamMessage(port, {
+        type: 'done',
+        requestId: request.requestId,
+        model: result.model,
+        debug: {
+          ...debug,
+          messages: workingConversation.map(toDebugMessage),
+        },
+        completion: result.completion,
+      });
+      return;
+    }
+
+    console.info('[PDF Helper AI] 原生工具调用请求', {
+      requestId: request.requestId,
+      round,
+      calls: result.toolCalls,
+    });
+    postAiStreamMessage(port, {
+      type: 'tool-calls',
+      requestId: request.requestId,
+      calls: result.toolCalls,
+      round,
+    });
+    const toolResults = await waitForToolResults(request.requestId, signal);
+    if (signal.aborted) return;
+    if (!toolResults.length) {
+      throw new AiProviderRequestError('Agent 工具没有返回结果，无法继续生成回答。', {
+        name: 'MissingToolResultsError',
+        model: config.model,
+        baseUrl: config.baseUrl,
+      });
+    }
+    workingConversation.push({
+      role: 'assistant',
+      content: result.content || '',
+      tool_calls: result.toolCalls.map((call) => ({
+        id: call.id,
+        type: 'function',
+        function: {
+          name: call.name,
+          arguments: JSON.stringify(call.arguments ?? {}),
+        },
+      })),
+    });
+    for (const toolResult of toolResults) {
+      workingConversation.push({
+        role: 'tool',
+        tool_call_id: toolResult.toolCallId,
+        content: toolResult.content.slice(0, 16000),
+      });
+      debug.completedTools.push({
+        name: toolResult.name,
+        arguments: result.toolCalls.find((call) => call.id === toolResult.toolCallId)?.arguments,
+      });
+    }
+    console.info('[PDF Helper AI] 原生工具结果', {
+      requestId: request.requestId,
+      round,
+      results: toolResults,
+    });
+  }
+  throw new AiProviderRequestError(`Agent 工具调用超过 ${maxToolRounds} 轮，已停止继续请求。`, {
+    name: 'ToolRoundLimitError',
+    model: config.model,
+    baseUrl: config.baseUrl,
   });
 }
 
@@ -864,6 +1039,75 @@ async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResp
         ].join('\n\n'),
       }], Math.min(4096, config.maxOutputTokens));
       return { ok: true, content: result.content.slice(0, 12000), model: result.model };
+    }
+
+    if (message.type === 'pdf-helper:ai-plan-knowledge-tools') {
+      const availableNames = [
+        'memory.search',
+        'memory.list',
+        'memory.forget',
+        'library.searchPapers',
+        'library.getPaper',
+      ];
+      const payload = await fetchProviderJson('/chat/completions', config, {
+        method: 'POST',
+        body: JSON.stringify({
+          model: config.model,
+          messages: [{
+            role: 'system',
+            content: [
+              '你是 PDF Helper 的记忆与历史文献 Agent。根据用户本轮问题决定是否调用已通过原生 tools 参数提供的函数，不直接回答用户。',
+              '用户询问已保存的信息时调用记忆查询函数；需要查找某项偏好或资料时也调用记忆查询函数。',
+              '用户明确要求忘记或删除时，必须先查询并取得真实条目 id，再调用删除函数；没有删除函数结果时不能声称已删除。',
+              '询问以前看过、读过或相关的历史 PDF 时调用文献查询函数；获得 documentId 后可调用文献详情函数。',
+              '问题与长期记忆或历史文献无关时不要调用任何工具。',
+            ].join('\n'),
+          }, {
+            role: 'user',
+            content: [
+              message.documentName ? `当前 PDF：${message.documentName}` : '',
+              message.documentId ? `当前 PDF ID：${message.documentId}` : '',
+              `用户消息：${message.userMessage.slice(0, 6000)}`,
+            ].filter(Boolean).join('\n'),
+          }],
+          tools: getNativeAgentTools(availableNames),
+          tool_choice: 'auto',
+          stream: false,
+          max_tokens: Math.min(1024, config.maxOutputTokens),
+        }),
+      }) as {
+        choices?: Array<{ message?: { tool_calls?: Array<{
+          id?: unknown;
+          function?: { name?: unknown; arguments?: unknown };
+        }> } }>;
+        model?: unknown;
+      };
+      const toolCalls = (payload.choices?.[0]?.message?.tool_calls ?? []).flatMap((call, index) => {
+        const apiName = typeof call.function?.name === 'string' ? call.function.name : '';
+        const definition = getAgentToolDefinitionByApiName(apiName);
+        if (!definition || !availableNames.includes(definition.name)) return [];
+        let argumentsValue: Record<string, unknown> = {};
+        try {
+          argumentsValue = typeof call.function?.arguments === 'string'
+            ? JSON.parse(call.function.arguments) as Record<string, unknown>
+            : call.function?.arguments && typeof call.function.arguments === 'object'
+              ? call.function.arguments as Record<string, unknown>
+              : {};
+        } catch {
+          return [];
+        }
+        return [{
+          id: typeof call.id === 'string' && call.id ? call.id : `knowledge-call-${index + 1}`,
+          name: definition.name,
+          arguments: argumentsValue,
+        }];
+      });
+      console.info('[PDF Helper Agent] 记忆/历史文献工具规划完成', { toolCalls });
+      return {
+        ok: true,
+        model: typeof payload.model === 'string' ? payload.model : config.model,
+        toolCalls,
+      };
     }
 
     if (message.type === 'pdf-helper:ai-plan-long-term-memory-tools') {
@@ -1129,13 +1373,51 @@ export default defineBackground(() => {
     if (port.name !== AI_STREAM_PORT_NAME) return;
 
     let activeRequest: AbortController | undefined;
+    let pendingToolResults:
+      | { requestId: string; resolve: (results: AiStreamToolResult[]) => void }
+      | undefined;
+    const waitForToolResults = (
+      requestId: string,
+      signal: AbortSignal,
+    ): Promise<AiStreamToolResult[]> => new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        if (pendingToolResults?.requestId !== requestId) return;
+        pendingToolResults = undefined;
+        console.error('[PDF Helper AI] 工具结果等待超时', { requestId, timeoutMs: 45_000 });
+        resolve([]);
+      }, 45_000);
+      const finish = (results: AiStreamToolResult[]): void => {
+        clearTimeout(timeoutId);
+        resolve(results);
+      };
+      if (signal.aborted) {
+        finish([]);
+        return;
+      }
+      pendingToolResults = { requestId, resolve: finish };
+      signal.addEventListener('abort', () => {
+        if (pendingToolResults?.requestId === requestId) {
+          pendingToolResults = undefined;
+          finish([]);
+        }
+      }, { once: true });
+    });
     port.onMessage.addListener((message) => {
+      if (isAiStreamToolResultsMessage(message)) {
+        if (pendingToolResults?.requestId === message.requestId) {
+          const resolve = pendingToolResults.resolve;
+          pendingToolResults = undefined;
+          resolve(message.results);
+        }
+        return;
+      }
       if (!isAiStreamStartMessage(message)) return;
 
       activeRequest?.abort();
+      pendingToolResults = undefined;
       activeRequest = new AbortController();
       const { signal } = activeRequest;
-      void streamAiResponse(message, port, signal).catch((error) => {
+      void streamAiResponse(message, port, signal, waitForToolResults).catch((error) => {
         if (signal.aborted) return;
         const details = getSafeErrorDetails(error);
         console.error('[PDF Helper AI] 流式请求失败', {
@@ -1153,6 +1435,7 @@ export default defineBackground(() => {
     });
     port.onDisconnect.addListener(() => {
       activeRequest?.abort();
+      pendingToolResults = undefined;
       activeRequest = undefined;
     });
   });
