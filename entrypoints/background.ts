@@ -40,6 +40,15 @@ import {
   type VisionAiConfig,
 } from '../shared/ai';
 import {
+  isResearchRuntimeRequest,
+  type CcfLookupResponse,
+  type RelatedResearchResponse,
+} from '../shared/research';
+import {
+  runCcfLookupGraph,
+  runRelatedResearchGraph,
+} from '../shared/research-agent';
+import {
   getReadingModeStrategy,
   isResolvedReadingMode,
   type ResolvedReadingMode,
@@ -1382,6 +1391,17 @@ export default defineBackground(() => {
   });
 
   browser.runtime.onMessage.addListener((message) => {
+    if (isResearchRuntimeRequest(message)) {
+      if (message.type === 'pdf-helper:research-related') {
+        return runRelatedResearchGraph(message) satisfies Promise<RelatedResearchResponse>;
+      }
+      return runCcfLookupGraph(message)
+        .then((result): CcfLookupResponse => ({ ok: true, result }))
+        .catch((error): CcfLookupResponse => ({
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+    }
     if (!isAiRuntimeRequest(message)) return undefined;
     return handleAiRequest(message);
   });

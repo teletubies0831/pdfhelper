@@ -30,6 +30,12 @@ build/
 # Logs
 *.log
 
+# Temporary patches and backups
+*.zip
+*.backup-*
+apply-*.ps1
+使用说明.txt
+
 # OS files
 .DS_Store
 Thumbs.db

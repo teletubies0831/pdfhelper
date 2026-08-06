@@ -6836,3 +6836,1841 @@ button:disabled {
   color: var(--knowledge-input-text);
   color-scheme: light;
 }
+
+
+/* ==========================================================================
+   Paper card research workspace v3
+   Compact, action-oriented view for graduate-student paper reading.
+   ========================================================================== */
+
+.app-frame.paper-card-page-open .reading-mode-control,
+.app-frame.paper-card-page-open .annotation-tools,
+.app-frame.paper-card-page-open .document-name {
+  display: none;
+}
+
+.app-frame.paper-card-page-open .ai-tools {
+  margin-left: auto;
+}
+
+.paper-card-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: #fff;
+  padding: 22px 34px 34px;
+}
+
+.paper-card-shell {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+}
+
+.paper-card-page-header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 18px;
+}
+
+.paper-card-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.paper-card-page-header h1 {
+  margin: 0;
+  color: #14213a;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.paper-card-page-header p {
+  margin: 5px 0 0;
+  color: #7b8aa2;
+  font-size: 13px;
+}
+
+.paper-card-command-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.paper-card-command-actions button {
+  min-height: 38px;
+  border-color: #dfe7f2;
+  border-radius: 9px;
+  padding: 0 13px;
+}
+
+.paper-card-page-status {
+  margin: 0 0 12px;
+  border: 1px solid #cfe0ff;
+  border-radius: 10px;
+  background: #f3f7ff;
+  color: #315b9f;
+  padding: 10px 14px;
+}
+
+.paper-card-page-status.error {
+  border-color: #f3c6c6;
+  background: #fff5f5;
+  color: #b42318;
+}
+
+.paper-card-form {
+  width: 100%;
+}
+
+.paper-card-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 22px;
+  align-items: start;
+}
+
+.paper-card-main,
+.paper-card-sidebar {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.paper-card-sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+.paper-card-overview-card,
+.paper-card-insight,
+.paper-card-side-card {
+  border: 1px solid #dfe7f1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.paper-card-overview-card {
+  display: flex;
+  min-height: 122px;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+}
+
+.paper-card-document-icon {
+  display: grid;
+  width: 58px;
+  height: 64px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  background: #f0f4fa;
+  color: #14213a;
+  font-size: 29px;
+}
+
+.paper-card-overview-content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.paper-card-overview-card label,
+.paper-card-insight label,
+.paper-card-side-card label {
+  display: block;
+  min-width: 0;
+}
+
+.paper-card-field-label {
+  display: none;
+}
+
+.paper-card-title-field input {
+  width: 100%;
+  color: #111f39;
+  font-size: 19px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.paper-card-authors-field {
+  margin-top: 5px;
+}
+
+.paper-card-authors-field input {
+  width: 100%;
+  color: #55657d;
+  font-size: 12px;
+}
+
+.paper-card-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 20px;
+  margin-top: 7px;
+}
+
+.paper-card-meta-row label,
+.paper-card-source-file {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: #67768d;
+  font-size: 12px;
+}
+
+.paper-card-meta-row label > span {
+  color: #43516a;
+  font-weight: 700;
+}
+
+.paper-card-meta-row input {
+  width: 170px;
+  color: #34445f;
+  font-size: 12px;
+}
+
+.paper-card-source-file {
+  min-width: 0;
+  max-width: 310px;
+}
+
+.paper-card-source-file strong {
+  overflow: hidden;
+  color: #55657d;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paper-card-insight {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 78px;
+  padding: 13px 18px 13px 14px;
+}
+
+.paper-card-highlight {
+  border-color: #bfd5ff;
+  background: linear-gradient(90deg, #f6f9ff 0%, #fff 100%);
+}
+
+.paper-card-insight-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: #286eea;
+  font-size: 24px;
+}
+
+.paper-card-insight label > span,
+.paper-card-decision-reason > span {
+  display: block;
+  margin-bottom: 4px;
+  color: #12213d;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.paper-card-highlight label > span {
+  color: #2164df;
+}
+
+.paper-card-insight textarea {
+  width: 100%;
+  color: #53627a;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.paper-card-side-card {
+  overflow: hidden;
+  padding: 16px 18px;
+}
+
+.paper-card-side-card h2 {
+  margin: 0 0 14px;
+  color: #17243e;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.paper-card-decision-banner {
+  display: flex;
+  min-height: 102px;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 1px solid #cbe8d8;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f0fbf5, #f7fcf9);
+  padding: 14px;
+}
+
+.paper-card-decision-check {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #22a864;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.paper-card-decision-banner label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.paper-card-decision-banner label > span {
+  color: #244337;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.paper-card-decision-banner select {
+  min-width: 132px;
+  color: #168955;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.paper-card-decision-reason {
+  margin-top: 12px;
+  border-bottom: 1px solid #edf1f6;
+  padding-bottom: 12px;
+}
+
+.paper-card-decision-reason textarea {
+  width: 100%;
+  color: #5f6f84;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.paper-card-metrics {
+  display: flex;
+  flex-direction: column;
+}
+
+.paper-card-metric-row {
+  display: flex !important;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.paper-card-metric-row:last-child {
+  border-bottom: 0;
+}
+
+.paper-card-metric-row > span:first-child {
+  color: #40516b;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.paper-card-metric-row select,
+.paper-card-metric-row input {
+  width: 110px;
+  text-align: right;
+  color: #1766e8;
+  font-weight: 750;
+}
+
+.paper-card-metric-row:nth-child(1) select {
+  color: #1d9b61;
+}
+
+.paper-card-metric-row:nth-child(2) select {
+  color: #f08a15;
+}
+
+.paper-card-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.paper-card-score input {
+  width: 62px;
+  color: #1766e8;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.paper-card-score em {
+  color: #516078;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.paper-card-action-row {
+  display: grid !important;
+  grid-template-columns: 25px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  border-bottom: 1px solid #edf1f6;
+  padding: 9px 0;
+}
+
+.paper-card-action-row:last-child {
+  border-bottom: 0;
+}
+
+.paper-card-action-icon {
+  color: #405674;
+  font-size: 17px;
+  line-height: 24px;
+  text-align: center;
+}
+
+.paper-card-action-copy {
+  min-width: 0;
+}
+
+.paper-card-action-copy strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #24334d;
+  font-size: 13px;
+}
+
+.paper-card-action-copy textarea {
+  width: 100%;
+  color: #53637b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.paper-card-reading-list-card textarea {
+  width: 100%;
+  min-height: 118px;
+  color: #3f5069;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.paper-card-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.paper-card-form input,
+.paper-card-form textarea,
+.paper-card-form select {
+  max-width: 100%;
+  border: 1px solid #d9e2ef;
+  border-radius: 8px;
+  outline: none;
+  background: #fff;
+  padding: 7px 9px;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease-out),
+    box-shadow var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-form textarea {
+  resize: none;
+}
+
+.paper-card-form input:focus,
+.paper-card-form textarea:focus,
+.paper-card-form select:focus {
+  border-color: #7faaff;
+  box-shadow: 0 0 0 3px rgb(31 103 232 / 10%);
+}
+
+.paper-card-form.reading-view input,
+.paper-card-form.reading-view textarea,
+.paper-card-form.reading-view select {
+  appearance: none;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  pointer-events: none;
+}
+
+.paper-card-form.reading-view textarea {
+  overflow: hidden;
+}
+
+.paper-card-form.editing .paper-card-overview-card,
+.paper-card-form.editing .paper-card-insight,
+.paper-card-form.editing .paper-card-side-card {
+  box-shadow: 0 0 0 2px rgb(31 103 232 / 4%);
+}
+
+.paper-card-form.generating {
+  opacity: 0.64;
+  pointer-events: none;
+}
+
+.paper-card-legacy-fields {
+  display: none !important;
+}
+
+@media (max-width: 1120px) {
+  .paper-card-page {
+    padding: 18px;
+  }
+
+  .paper-card-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .paper-card-command-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .paper-card-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .paper-card-sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .paper-card-reading-list-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .paper-card-page {
+    padding: 12px;
+  }
+
+  .paper-card-page-header h1 {
+    font-size: 22px;
+  }
+
+  .paper-card-command-actions button {
+    flex: 1 1 auto;
+  }
+
+  .paper-card-overview-card {
+    align-items: flex-start;
+  }
+
+  .paper-card-meta-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .paper-card-meta-row input {
+    width: 100%;
+  }
+
+  .paper-card-sidebar {
+    display: flex;
+  }
+}
+
+/* ==========================================================================
+   Paper card final layout: independent left/right scrolling and gray palette
+   ========================================================================== */
+
+/* Reuse the complete PDF-reader toolbar on the paper-card page. */
+.app-frame.paper-card-page-open .reading-mode-control,
+.app-frame.paper-card-page-open .annotation-tools,
+.app-frame.paper-card-page-open .document-name {
+  display: inline-flex;
+}
+
+.app-frame.paper-card-page-open .document-name {
+  display: block;
+}
+
+.app-frame.paper-card-page-open .ai-tools {
+  margin-left: 0;
+}
+
+/* The paper-card page itself never scrolls. Each column owns its scrollbar. */
+.paper-card-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: #f2f4f7;
+  padding: 18px 22px 20px;
+}
+
+.paper-card-shell {
+  display: flex;
+  width: min(1540px, 100%);
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  margin: 0 auto;
+}
+
+.paper-card-page-header {
+  flex: 0 0 auto;
+  margin-bottom: 14px;
+}
+
+.paper-card-page-status {
+  flex: 0 0 auto;
+}
+
+.paper-card-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.paper-card-layout {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 410px;
+  gap: 18px;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.paper-card-main,
+.paper-card-sidebar {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #b9c3d1 transparent;
+  padding-right: 7px;
+}
+
+.paper-card-sidebar {
+  position: static;
+  top: auto;
+  align-self: stretch;
+}
+
+.paper-card-main::-webkit-scrollbar,
+.paper-card-sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.paper-card-main::-webkit-scrollbar-track,
+.paper-card-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.paper-card-main::-webkit-scrollbar-thumb,
+.paper-card-sidebar::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #b9c3d1;
+  background-clip: padding-box;
+}
+
+.paper-card-main::-webkit-scrollbar-thumb:hover,
+.paper-card-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #909fb4;
+  background-clip: padding-box;
+}
+
+/* Soft gray/blue card palette. */
+.paper-card-overview-card,
+.paper-card-insight,
+.paper-card-side-card {
+  border-color: #d9e0ea;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgb(51 65 85 / 4%);
+}
+
+.paper-card-highlight {
+  border-color: #c7d8f5;
+  background: #f7f9fc;
+}
+
+.paper-card-page-header h1,
+.paper-card-side-card h2,
+.paper-card-insight label > span,
+.paper-card-decision-reason > span,
+.paper-card-title-field input {
+  color: #26354d;
+}
+
+.paper-card-page-header p,
+.paper-card-authors-field input,
+.paper-card-source-file strong,
+.paper-card-insight textarea,
+.paper-card-decision-reason textarea,
+.online-related-paper-reason {
+  color: #66758a;
+}
+
+.paper-card-document-icon {
+  background: #eef1f5;
+  color: #4f6078;
+}
+
+.paper-card-insight-icon {
+  color: #5f82bd;
+}
+
+.paper-card-highlight label > span {
+  color: #3e6cac;
+}
+
+.paper-card-decision-banner {
+  border-color: #c9e2d3;
+  background: #f1f8f4;
+}
+
+.paper-card-decision-check {
+  background: #2eaa69;
+}
+
+
+.paper-card-main,
+.paper-card-sidebar {
+  height: 100%;
+  padding-bottom: 14px;
+}
+
+.paper-card-main > *,
+.paper-card-sidebar > * {
+  flex: 0 0 auto;
+}
+
+.paper-card-reading-list-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: visible;
+}
+
+.paper-card-reading-list-card,
+.online-related-paper-section,
+.online-related-paper-result,
+.online-related-paper-list,
+.online-related-paper-item {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.paper-card-highlight {
+  transition:
+    border-color var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-fast) var(--motion-ease-out),
+    box-shadow var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-highlight label > span {
+  color: #4c5f7d;
+  transition: color var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-inline-editable-card:hover {
+  border-color: #bfd1ee;
+  background: #f8fbff;
+}
+
+.paper-card-inline-editable-card:hover label > span,
+.paper-card-inline-editable-card:focus-within label > span {
+  color: #3e6cac;
+}
+
+.paper-card-inline-editable {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  cursor: text;
+  padding: 8px 10px;
+  margin: 2px -10px -4px;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-fast) var(--motion-ease-out),
+    box-shadow var(--motion-fast) var(--motion-ease-out),
+    color var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable[readonly] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable[readonly]:hover {
+  border-color: #c9d8ef;
+  background: #fbfcfe;
+}
+
+.paper-card-inline-editable.inline-editing {
+  border-color: #8ca8d4;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(137 168 214 / 15%);
+}
+
+/* Keep the knowledge-base action light, consistent with the other actions. */
+#paper-card-page #save-paper-card-page {
+  border-color: #a9c2ec;
+  background: #eef4ff;
+  color: #245fae;
+  box-shadow: none;
+  font-weight: 650;
+}
+
+#paper-card-page #save-paper-card-page:hover {
+  border-color: #86a9df;
+  background: #e4edfb;
+  color: #1f559d;
+}
+
+/* Hide the deprecated action block but keep its form controls in the DOM. */
+.paper-card-sidebar > .paper-card-side-card[hidden] {
+  display: none !important;
+}
+
+/* Online related papers: part of the right column, not a nested scroll area. */
+.online-related-paper-section {
+  display: block;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+}
+
+.online-related-paper-section > h2[hidden],
+.online-related-paper-section label[hidden] {
+  display: none !important;
+}
+
+.online-related-paper-toolbar {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #e5e9f0;
+  padding: 15px 17px 13px;
+  margin: 0;
+}
+
+.online-related-paper-toolbar strong {
+  color: #2b3b52;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.online-related-paper-refresh {
+  min-height: 30px;
+  border: 1px solid #bdcbe0;
+  border-radius: 9px;
+  background: #f3f5f8;
+  color: #49678f;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.online-related-paper-refresh:hover {
+  border-color: #9eb2d0;
+  background: #e9edf3;
+  color: #38587f;
+}
+
+.online-related-paper-result {
+  display: block;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+  padding: 13px 14px 16px;
+}
+
+.online-related-paper-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.online-related-paper-item {
+  flex: 0 0 auto;
+  border: 1px solid #dce3ed;
+  border-radius: 13px;
+  background: #f8f9fb;
+  padding: 12px 13px;
+  box-shadow: none;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-fast) var(--motion-ease-out);
+}
+
+.online-related-paper-item:hover {
+  border-color: #bdcbe0;
+  background: #f2f5f8;
+  transform: none;
+  box-shadow: none;
+}
+
+.online-related-paper-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.online-related-paper-label {
+  display: inline-flex;
+  min-height: 23px;
+  align-items: center;
+  border-radius: 999px;
+  background: #e8eef7;
+  color: #456a9f;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.online-related-paper-source {
+  color: #8b96a8;
+  font-size: 10px;
+}
+
+.online-related-paper-title {
+  display: block;
+  color: #33445c;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.48;
+  text-decoration: none;
+}
+
+.online-related-paper-title:hover {
+  color: #3f6597;
+  text-decoration: underline;
+}
+
+.online-related-paper-meta {
+  margin-top: 6px;
+  color: #687a92;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.online-related-paper-reason {
+  margin: 7px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.online-related-paper-footer {
+  margin-top: 12px;
+  border-top: 1px solid #e5e9f0;
+  color: #929dae;
+  font-size: 10px;
+  line-height: 1.5;
+  padding-top: 10px;
+}
+
+.online-related-paper-status {
+  border: 1px dashed #cdd5e1;
+  border-radius: 11px;
+  background: #f6f7f9;
+  color: #758398;
+  padding: 18px 13px;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.online-related-paper-status.error {
+  border-color: #e4c7c7;
+  background: #fbf5f5;
+  color: #9f4949;
+}
+
+@media (max-width: 1120px) {
+  .paper-card-page {
+    overflow: auto;
+  }
+
+  .paper-card-shell,
+  .paper-card-form,
+  .paper-card-layout {
+    height: auto;
+    overflow: visible;
+  }
+
+  .paper-card-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .paper-card-main,
+  .paper-card-sidebar {
+    min-height: auto;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .paper-card-sidebar {
+    display: flex;
+  }
+}
+
+
+/* ===== CCF official rank + summary inline editing v2 ===== */
+.paper-card-highlight.paper-card-inline-editable-card {
+  border-color: #d9e0ea !important;
+  background: #fff !important;
+}
+
+.paper-card-highlight.paper-card-inline-editable-card label > span {
+  color: #26354d !important;
+}
+
+.paper-card-highlight.paper-card-inline-editable-card:hover,
+.paper-card-highlight.paper-card-inline-editable-card:focus-within {
+  border-color: #a9c3eb !important;
+  background: #f8fbff !important;
+  box-shadow: 0 6px 18px rgb(64 105 167 / 8%) !important;
+}
+
+.paper-card-highlight.paper-card-inline-editable-card:hover label > span,
+.paper-card-highlight.paper-card-inline-editable-card:focus-within label > span {
+  color: #2f6fd6 !important;
+}
+
+.paper-card-form.reading-view
+  .paper-card-inline-editable[readonly] {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: #66758a !important;
+  cursor: text;
+}
+
+.paper-card-form.reading-view
+  .paper-card-inline-editable[readonly]:hover {
+  border-color: #bfd0ea !important;
+  background: #fff !important;
+  color: #425f8d !important;
+}
+
+.paper-card-inline-editable.inline-editing {
+  border-color: #7fa4dd !important;
+  background: #fff !important;
+  color: #26354d !important;
+  box-shadow: 0 0 0 3px rgb(86 132 201 / 14%) !important;
+}
+
+.paper-card-inline-editable-card::after {
+  display: block;
+  max-height: 0;
+  overflow: hidden;
+  color: #71829b;
+  content: "双击编辑，点击其他位置自动保存";
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0;
+  padding-left: 58px;
+  transform: translateY(-2px);
+  transition:
+    max-height var(--motion-fast) var(--motion-ease-out),
+    opacity var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-inline-editable-card:hover::after,
+.paper-card-inline-editable-card:focus-within::after {
+  max-height: 22px;
+  opacity: 1;
+}
+
+.paper-card-ccf-row {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.paper-card-ccf-rank,
+.online-related-paper-ccf {
+  display: inline-flex;
+  min-height: 27px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c8d4e5;
+  border-radius: 999px;
+  background: #f3f6fa;
+  color: #63748d;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.paper-card-ccf-rank:hover,
+.online-related-paper-ccf:hover {
+  border-color: #9fb7d8;
+  background: #edf3fb;
+  color: #355f99;
+}
+
+.ccf-rank-a {
+  border-color: #e8b4b4 !important;
+  background: #fff1f1 !important;
+  color: #b43e3e !important;
+}
+
+.ccf-rank-b {
+  border-color: #eacb9d !important;
+  background: #fff7e8 !important;
+  color: #a56a16 !important;
+}
+
+.ccf-rank-c {
+  border-color: #b8d3bd !important;
+  background: #eef8f0 !important;
+  color: #3f8150 !important;
+}
+
+.ccf-rank-not-listed,
+.ccf-rank-unavailable,
+.ccf-rank-loading {
+  border-color: #d3dae5 !important;
+  background: #f5f7fa !important;
+  color: #7b8799 !important;
+}
+
+.online-related-paper-meta-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 7px;
+}
+
+.online-related-paper-meta-row .online-related-paper-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+  margin-top: 0;
+}
+
+.online-related-paper-ccf {
+  min-height: 24px;
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  font-size: 10px;
+}
+
+.paper-card-reading-list-card,
+.online-related-paper-section {
+  height: max-content !important;
+  min-height: max-content !important;
+  max-height: none !important;
+  align-self: start;
+  overflow: visible !important;
+}
+
+.online-related-paper-result,
+.online-related-paper-list {
+  height: auto !important;
+  min-height: min-content !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* ===== Paper-card multi-field inline editing + ranked related papers v3 ===== */
+.paper-card-page-subtitle,
+#paper-card-page-subtitle {
+  display: none !important;
+}
+
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card {
+  border-color: #d9e0ea !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-fast) var(--motion-ease-out),
+    box-shadow var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card label > span,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card > span {
+  color: #26354d !important;
+  transition: color var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card:focus-within,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within {
+  border-color: #a9c3eb !important;
+  background: #f8fbff !important;
+  box-shadow: 0 6px 18px rgb(64 105 167 / 8%) !important;
+}
+
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card:hover label > span,
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card:focus-within label > span,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover > span,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within > span {
+  color: #2f6fd6 !important;
+}
+
+.paper-card-form.reading-view
+  .paper-card-inline-editable[readonly] {
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: #66758a !important;
+  cursor: text !important;
+}
+
+.paper-card-form.reading-view
+  .paper-card-inline-editable[readonly]:hover {
+  border-color: #bfd0ea !important;
+  background: #fff !important;
+  color: #425f8d !important;
+}
+
+.paper-card-inline-editable.inline-editing {
+  border-color: #7fa4dd !important;
+  background: #fff !important;
+  color: #26354d !important;
+  box-shadow: 0 0 0 3px rgb(86 132 201 / 14%) !important;
+}
+
+.paper-card-decision-reason.paper-card-inline-editable-card::after {
+  padding-left: 0;
+}
+
+.online-related-paper-top-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.online-related-paper-index {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #b9c9df;
+  border-radius: 999px;
+  background: #fff;
+  color: #3c5f91;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.online-related-paper-item:nth-child(1) .online-related-paper-index {
+  border-color: #e1bd73;
+  background: #fff8e8;
+  color: #996315;
+}
+
+.online-related-paper-footer {
+  line-height: 1.6;
+}
+
+/* ===== Editable, fully visible paper metadata header v5 ===== */
+.paper-card-overview-card {
+  min-height: 0 !important;
+  align-items: flex-start !important;
+  gap: 20px;
+  padding: 22px 24px !important;
+}
+
+.paper-card-document-icon {
+  margin-top: 18px;
+}
+
+.paper-card-overview-content {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.paper-card-overview-content textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #526176;
+  font-family: inherit;
+  line-height: 1.48;
+  overflow-wrap: anywhere;
+  padding: 5px 8px;
+  resize: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.paper-card-title-field textarea {
+  color: #23334d !important;
+  font-weight: 760;
+  letter-spacing: -0.01em;
+}
+
+.paper-card-title-field textarea.content-short {
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.paper-card-title-field textarea.content-medium {
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.paper-card-title-field textarea.content-long {
+  font-size: 16px;
+  line-height: 1.48;
+}
+
+.paper-card-authors-field {
+  margin-top: 2px;
+}
+
+.paper-card-authors-field textarea {
+  color: #687991 !important;
+}
+
+.paper-card-authors-field textarea.content-short {
+  font-size: 13px;
+}
+
+.paper-card-authors-field textarea.content-medium {
+  font-size: 12px;
+}
+
+.paper-card-authors-field textarea.content-long {
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.paper-card-meta-row.paper-card-meta-stack {
+  display: grid !important;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  gap: 4px !important;
+  margin-top: 10px !important;
+}
+
+.paper-card-meta-stack .paper-card-meta-field,
+.paper-card-meta-stack .paper-card-source-file {
+  display: grid !important;
+  width: 100%;
+  min-width: 0;
+  max-width: none !important;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: start !important;
+  gap: 12px !important;
+  border-top: 1px solid #edf1f6;
+  padding: 7px 0 4px;
+}
+
+.paper-card-meta-stack .paper-card-meta-field:first-child {
+  border-top: 0;
+}
+
+.paper-card-meta-stack .paper-card-meta-field > span {
+  color: #3e4f69;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.55;
+  padding: 5px 0 0 8px;
+}
+
+.paper-card-meta-stack textarea {
+  color: #4f6079 !important;
+  font-weight: 500;
+}
+
+.paper-card-meta-stack textarea.content-short {
+  font-size: 13px;
+}
+
+.paper-card-meta-stack textarea.content-medium {
+  font-size: 12px;
+}
+
+.paper-card-meta-stack textarea.content-long {
+  font-size: 11px;
+  line-height: 1.58;
+}
+
+.paper-card-source-file textarea {
+  color: #2768d8 !important;
+  font-weight: 650;
+}
+
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable[readonly] {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field:hover textarea[readonly],
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field:focus-within textarea {
+  border-color: #b8cbea !important;
+  background: #f8fbff !important;
+  color: #315e9f !important;
+}
+
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field:hover > span,
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field:focus-within > span {
+  color: #2f6fd6 !important;
+}
+
+.paper-card-overview-card .paper-card-inline-editable.inline-editing {
+  border-color: #7fa4dd !important;
+  background: #fff !important;
+  color: #26354d !important;
+  box-shadow: 0 0 0 3px rgb(86 132 201 / 14%) !important;
+}
+
+.paper-card-overview-card .paper-card-inline-editable-field {
+  border-radius: 10px;
+}
+
+.paper-card-overview-card .paper-card-inline-editable-field::after {
+  content: "双击编辑 · 点击其他位置自动保存";
+  display: block;
+  max-height: 0;
+  overflow: hidden;
+  color: #7f91ac;
+  font-size: 10px;
+  line-height: 1.4;
+  opacity: 0;
+  padding-left: 8px;
+  transition:
+    max-height var(--motion-fast) var(--motion-ease-out),
+    opacity var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-overview-card
+  .paper-card-inline-editable-field:hover::after,
+.paper-card-overview-card
+  .paper-card-inline-editable-field:focus-within::after {
+  max-height: 18px;
+  opacity: 1;
+}
+
+@media (max-width: 760px) {
+  .paper-card-overview-card {
+    gap: 12px;
+    padding: 16px !important;
+  }
+
+  .paper-card-document-icon {
+    width: 48px;
+    height: 54px;
+    margin-top: 8px;
+    font-size: 24px;
+  }
+
+  .paper-card-meta-stack .paper-card-meta-field,
+  .paper-card-meta-stack .paper-card-source-file {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px !important;
+  }
+
+  .paper-card-meta-stack .paper-card-meta-field > span {
+    padding-bottom: 0;
+  }
+}
+
+/* =========================================================
+   Edit mode interaction gate
+   Interactive blue hover/double-click editing appears only
+   after the user clicks the global "Edit card" button.
+   ========================================================= */
+
+/* Normal reading state: keep every quick-edit field visually neutral. */
+.paper-card-form.reading-view .paper-card-inline-editable,
+.paper-card-form.reading-view .paper-card-inline-editable[readonly],
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable[readonly] {
+  cursor: default !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable:hover,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-field:hover
+  .paper-card-inline-editable[readonly],
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field:hover
+  textarea[readonly],
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field:focus-within
+  textarea {
+  cursor: default !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable-card,
+.paper-card-form.reading-view .paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view .paper-card-inline-editable-card:focus-within,
+.paper-card-form.reading-view
+  .paper-card-highlight.paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view
+  .paper-card-highlight.paper-card-inline-editable-card:focus-within,
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card:focus-within,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within {
+  cursor: default !important;
+  border-color: #d9e3f0 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.paper-card-form.reading-view .paper-card-highlight label > span,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-card:hover
+  label
+  > span,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-card:focus-within
+  label
+  > span,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-field:hover
+  > span,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-field:focus-within
+  > span,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover
+  > span,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within
+  > span {
+  color: #3e4f69 !important;
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable-card::after,
+.paper-card-form.reading-view .paper-card-inline-editable-field::after,
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Edit mode: show the blue affordance only here. */
+.paper-card-form.editing .paper-card-inline-editable-card,
+.paper-card-form.editing .paper-card-inline-editable-field {
+  cursor: text !important;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-fast) var(--motion-ease-out),
+    box-shadow var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-form.editing .paper-card-inline-editable-card:hover,
+.paper-card-form.editing .paper-card-inline-editable-card:focus-within,
+.paper-card-form.editing
+  .paper-card-highlight.paper-card-inline-editable-card:hover,
+.paper-card-form.editing
+  .paper-card-highlight.paper-card-inline-editable-card:focus-within,
+.paper-card-form.editing
+  .paper-card-insight.paper-card-inline-editable-card:hover,
+.paper-card-form.editing
+  .paper-card-insight.paper-card-inline-editable-card:focus-within,
+.paper-card-form.editing
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover,
+.paper-card-form.editing
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within {
+  border-color: #9cb9e7 !important;
+  background: #f8fbff !important;
+  box-shadow: 0 0 0 3px rgb(85 130 201 / 9%) !important;
+}
+
+.paper-card-form.editing
+  .paper-card-inline-editable-field:hover
+  .paper-card-inline-editable[readonly],
+.paper-card-form.editing
+  .paper-card-inline-editable-field:focus-within
+  .paper-card-inline-editable,
+.paper-card-form.editing .paper-card-inline-editable[readonly]:hover {
+  cursor: text !important;
+  border-color: #b7cae8 !important;
+  background: #fff !important;
+  color: #315e9f !important;
+  box-shadow: none !important;
+}
+
+.paper-card-form.editing
+  .paper-card-inline-editable-card:hover
+  label
+  > span,
+.paper-card-form.editing
+  .paper-card-inline-editable-card:focus-within
+  label
+  > span,
+.paper-card-form.editing
+  .paper-card-inline-editable-field:hover
+  > span,
+.paper-card-form.editing
+  .paper-card-inline-editable-field:focus-within
+  > span,
+.paper-card-form.editing
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover
+  > span,
+.paper-card-form.editing
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within
+  > span {
+  color: #2f6fd6 !important;
+}
+
+.paper-card-form.editing .paper-card-inline-editable.inline-editing {
+  cursor: text !important;
+  border-color: #7099d8 !important;
+  background: #fff !important;
+  color: #26354d !important;
+  box-shadow: 0 0 0 3px rgb(86 132 201 / 15%) !important;
+}
+
+.paper-card-form.editing .paper-card-inline-editable-card::after,
+.paper-card-form.editing .paper-card-inline-editable-field::after,
+.paper-card-form.editing
+  .paper-card-overview-card
+  .paper-card-inline-editable-field::after {
+  content: "双击编辑 · 点击其他位置自动保存" !important;
+  display: block !important;
+  max-height: 0;
+  overflow: hidden;
+  color: #7f91ac;
+  font-size: 10px;
+  line-height: 1.4;
+  opacity: 0;
+  padding-left: 8px;
+  transition:
+    max-height var(--motion-fast) var(--motion-ease-out),
+    opacity var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-form.editing .paper-card-inline-editable-card:hover::after,
+.paper-card-form.editing .paper-card-inline-editable-card:focus-within::after,
+.paper-card-form.editing .paper-card-inline-editable-field:hover::after,
+.paper-card-form.editing .paper-card-inline-editable-field:focus-within::after {
+  max-height: 18px;
+  opacity: 1;
+}
+
+/* =========================================================
+   Stable edit mode: no hover/double-click visual effects.
+   Clicking the global Edit card button directly unlocks fields.
+   ========================================================= */
+.paper-card-form .paper-card-inline-editable-card,
+.paper-card-form .paper-card-inline-editable-card:hover,
+.paper-card-form .paper-card-inline-editable-card:focus-within,
+.paper-card-form .paper-card-inline-editable-field,
+.paper-card-form .paper-card-inline-editable-field:hover,
+.paper-card-form .paper-card-inline-editable-field:focus-within,
+.paper-card-form .paper-card-highlight.paper-card-inline-editable-card,
+.paper-card-form .paper-card-highlight.paper-card-inline-editable-card:hover,
+.paper-card-form .paper-card-highlight.paper-card-inline-editable-card:focus-within,
+.paper-card-form .paper-card-insight.paper-card-inline-editable-card,
+.paper-card-form .paper-card-insight.paper-card-inline-editable-card:hover,
+.paper-card-form .paper-card-insight.paper-card-inline-editable-card:focus-within,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card:hover,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card:focus-within {
+  border-color: #d9e3f0 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+.paper-card-form .paper-card-inline-editable-field::after,
+.paper-card-form .paper-card-inline-editable-card::after,
+.paper-card-form.editing .paper-card-inline-editable-field::after,
+.paper-card-form.editing .paper-card-inline-editable-card::after,
+.paper-card-form .paper-card-overview-card .paper-card-inline-editable-field::after {
+  content: none !important;
+  display: none !important;
+  max-height: 0 !important;
+  opacity: 0 !important;
+}
+
+.paper-card-form .paper-card-inline-editable,
+.paper-card-form .paper-card-inline-editable:hover,
+.paper-card-form .paper-card-inline-editable:focus,
+.paper-card-form .paper-card-inline-editable.inline-editing,
+.paper-card-form.editing .paper-card-inline-editable,
+.paper-card-form.editing .paper-card-inline-editable:hover,
+.paper-card-form.editing .paper-card-inline-editable:focus {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transition: none !important;
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable {
+  cursor: default !important;
+}
+
+.paper-card-form.editing .paper-card-inline-editable {
+  cursor: text !important;
+  user-select: text !important;
+  pointer-events: auto !important;
+}
+
+.paper-card-form .paper-card-inline-editable-field > span,
+.paper-card-form .paper-card-inline-editable-field:hover > span,
+.paper-card-form .paper-card-inline-editable-field:focus-within > span,
+.paper-card-form .paper-card-inline-editable-card label > span,
+.paper-card-form .paper-card-inline-editable-card:hover label > span,
+.paper-card-form .paper-card-inline-editable-card:focus-within label > span,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card > span,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card:hover > span,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card:focus-within > span {
+  color: #3e4f69 !important;
+  transition: none !important;
+}
+
+/* Multi-source literature tool badges */
+.online-related-paper-top-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.online-related-paper-order {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d5b36b;
+  border-radius: 999px;
+  background: #fff8e8;
+  color: #9a6710;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.online-related-paper-region {
+  display: inline-flex;
+  min-height: 23px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.online-related-paper-region.region-domestic {
+  background: #fff2e8;
+  color: #a85a17;
+}
+
+.online-related-paper-region.region-international {
+  background: #eef3fa;
+  color: #526a8e;
+}
+
+.online-related-paper-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.online-related-paper-meta-row .online-related-paper-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+}

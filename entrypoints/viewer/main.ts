@@ -83,6 +83,9 @@ import {
 
 import "./style.css";
 
+import { installOnlineRelatedPapers } from "./online-related-papers";
+import { installCurrentPaperCcfRank } from "./ccf-rank";
+
 type WritableFileStreamLike = {
   write(data: Blob | BufferSource | string): Promise<void>;
   close(): Promise<void>;
@@ -243,6 +246,8 @@ const paperCardPageSubtitleElement = requiredElement<HTMLElement>(
 );
 const paperCardBackButton =
   requiredElement<HTMLButtonElement>("paper-card-back");
+const editPaperCardButton =
+  requiredElement<HTMLButtonElement>("edit-paper-card");
 const returnToPdfButton = requiredElement<HTMLButtonElement>("return-to-pdf");
 const regeneratePaperCardButton = requiredElement<HTMLButtonElement>(
   "regenerate-paper-card",
@@ -252,7 +257,7 @@ const savePaperCardPageButton = requiredElement<HTMLButtonElement>(
 );
 const exportPaperCardButton =
   requiredElement<HTMLButtonElement>("export-paper-card");
-const paperCardDocumentNameElement = requiredElement<HTMLElement>(
+const paperCardDocumentNameElement = requiredElement<HTMLTextAreaElement>(
   "paper-card-document-name",
 );
 const paperCardPageStatusElement = requiredElement<HTMLElement>(
@@ -260,11 +265,11 @@ const paperCardPageStatusElement = requiredElement<HTMLElement>(
 );
 const paperCardFormElement =
   requiredElement<HTMLFormElement>("paper-card-form");
-const paperTitleInput = requiredElement<HTMLInputElement>("paper-title");
-const paperAuthorsInput = requiredElement<HTMLInputElement>("paper-authors");
+const paperTitleInput = requiredElement<HTMLTextAreaElement>("paper-title");
+const paperAuthorsInput = requiredElement<HTMLTextAreaElement>("paper-authors");
 const paperVenueYearInput =
-  requiredElement<HTMLInputElement>("paper-venue-year");
-const paperResearchAreaInput = requiredElement<HTMLInputElement>(
+  requiredElement<HTMLTextAreaElement>("paper-venue-year");
+const paperResearchAreaInput = requiredElement<HTMLTextAreaElement>(
   "paper-research-area",
 );
 const paperKeywordsInput = requiredElement<HTMLInputElement>("paper-keywords");
@@ -2305,6 +2310,7 @@ const SAVED_CARDS_STORAGE_KEY = "pdf-helper-saved-cards-v1";
 const SAVED_PAPER_OVERVIEWS_STORAGE_KEY = "pdf-helper-paper-overviews-v1";
 const KNOWLEDGE_NOTES_STORAGE_KEY = "pdf-helper-knowledge-notes-v1";
 const KNOWLEDGE_ITEM_META_STORAGE_KEY = "pdf-helper-knowledge-item-meta-v1";
+const PAPER_CARD_INLINE_DRAFT_STORAGE_KEY = "pdf-helper-paper-inline-drafts-v2";
 
 type SummaryScope = "selection" | "page" | "chapter";
 type CardType = "concept" | "method" | "experiment" | "viewpoint";
@@ -2398,6 +2404,10 @@ interface PaperOverviewApiResponse {
   recommend_deep_reading?: unknown;
   reading_difficulty?: unknown;
   reading_value_score?: unknown;
+  novelty_score?: unknown;
+  evidence_score?: unknown;
+  relevance_score?: unknown;
+  method_clarity_score?: unknown;
   reading_advice?: unknown;
   suitable_stages?: unknown;
   prerequisites?: unknown;
@@ -8302,10 +8312,23 @@ function resetCardState(): void {
   setCardState("选择原文后，将自动生成论文卡片。");
 }
 
+let paperCardPageStatusTimer: number | undefined;
+
 function setPaperCardPageStatus(message = "", isError = false): void {
+  window.clearTimeout(paperCardPageStatusTimer);
   paperCardPageStatusElement.textContent = message;
   paperCardPageStatusElement.classList.toggle("error", isError);
   paperCardPageStatusElement.hidden = !message;
+
+  if (message) {
+    paperCardPageStatusTimer = window.setTimeout(() => {
+      if (paperCardPageStatusElement.textContent === message) {
+        paperCardPageStatusElement.textContent = "";
+        paperCardPageStatusElement.classList.remove("error");
+        paperCardPageStatusElement.hidden = true;
+      }
+    }, 5000);
+  }
 }
 
 function setSelectValue(select: HTMLSelectElement, value: string): void {
@@ -8325,6 +8348,153 @@ function setSelectValue(select: HTMLSelectElement, value: string): void {
     select.append(option);
   }
   select.value = normalizedValue;
+}
+
+let paperCardEditMode = false;
+
+function getPaperCardInlineControls(): HTMLTextAreaElement[] {
+  return [
+    paperTitleInput,
+    paperAuthorsInput,
+    paperVenueYearInput,
+    paperResearchAreaInput,
+    paperCardDocumentNameElement,
+    paperOneSentenceSummaryInput,
+    paperResearchProblemInput,
+    paperCoreInnovationInput,
+    paperMainFindingsInput,
+    paperResearchConnectionInput,
+    paperWorthReadingInput,
+  ];
+}
+
+type PaperCardInlineDraft = {
+  values: Record<string, string>;
+  updatedAt: string;
+};
+
+type PaperCardInlineDraftStore = Record<string, PaperCardInlineDraft>;
+
+function getPaperCardInlineDraftKey(): string {
+  if (editingPaperOverviewId) return `saved:${editingPaperOverviewId}`;
+  const documentIdentity = sourceName
+    ? getDisplayFileName(sourceName)
+    : paperCardReviewDocumentName || "untitled";
+  return `document:${documentIdentity}`;
+}
+
+function getPaperCardInlineFieldKey(control: HTMLTextAreaElement): string {
+  return control.name || control.id;
+}
+
+function readPaperCardInlineDraftStore(): PaperCardInlineDraftStore {
+  try {
+    const value = JSON.parse(
+      localStorage.getItem(PAPER_CARD_INLINE_DRAFT_STORAGE_KEY) || "{}",
+    );
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as PaperCardInlineDraftStore)
+      : {};
+  }
+  catch {
+    return {};
+  }
+}
+
+function savePaperCardInlineDraft(control: HTMLTextAreaElement): void {
+  const store = readPaperCardInlineDraftStore();
+  const key = getPaperCardInlineDraftKey();
+  const current = store[key] ?? {
+    values: {},
+    updatedAt: new Date().toISOString(),
+  };
+
+  current.values[getPaperCardInlineFieldKey(control)] = control.value.trim();
+  current.updatedAt = new Date().toISOString();
+  store[key] = current;
+  localStorage.setItem(
+    PAPER_CARD_INLINE_DRAFT_STORAGE_KEY,
+    JSON.stringify(store),
+  );
+}
+
+function saveAllPaperCardInlineDrafts(): void {
+  for (const control of getPaperCardInlineControls()) {
+    savePaperCardInlineDraft(control);
+  }
+}
+
+function restorePaperCardInlineDrafts(): void {
+  const draft = readPaperCardInlineDraftStore()[getPaperCardInlineDraftKey()];
+  if (!draft?.values) return;
+
+  for (const control of getPaperCardInlineControls()) {
+    const savedValue = draft.values[getPaperCardInlineFieldKey(control)];
+    if (typeof savedValue === "string") control.value = savedValue;
+  }
+}
+
+function clearPaperCardInlineDrafts(): void {
+  const store = readPaperCardInlineDraftStore();
+  const key = getPaperCardInlineDraftKey();
+  if (!(key in store)) return;
+  delete store[key];
+  localStorage.setItem(
+    PAPER_CARD_INLINE_DRAFT_STORAGE_KEY,
+    JSON.stringify(store),
+  );
+}
+
+function installPaperCardInlineEditing(): void {
+  for (const control of getPaperCardInlineControls()) {
+    control.classList.add("paper-card-inline-editable");
+    control.closest("label")?.classList.add(
+      "paper-card-inline-editable-field",
+    );
+    control
+      .closest(".paper-card-insight, .paper-card-decision-reason")
+      ?.classList.add("paper-card-inline-editable-card");
+
+    control.addEventListener("input", () => {
+      autoResizePaperCardTextarea(control);
+    });
+
+    control.addEventListener("blur", () => {
+      if (!paperCardEditMode) return;
+      savePaperCardInlineDraft(control);
+    });
+  }
+}
+
+function setPaperCardEditMode(editing: boolean): void {
+  const wasEditing = paperCardEditMode;
+  paperCardEditMode = editing;
+
+  paperCardFormElement.classList.toggle("editing", editing);
+  paperCardFormElement.classList.toggle("reading-view", !editing);
+
+  const controls = paperCardFormElement.querySelectorAll<
+    HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+  >("input, textarea, select");
+
+  for (const control of controls) {
+    if (control instanceof HTMLSelectElement) {
+      control.disabled = !editing;
+    }
+    else {
+      control.readOnly = !editing;
+    }
+  }
+
+  if (wasEditing && !editing) {
+    saveAllPaperCardInlineDrafts();
+    if (editingPaperOverviewId) savePaperOverviewCard();
+  }
+
+  editPaperCardButton.textContent = editing ? "✓ 完成编辑" : "✎ 编辑卡片";
+  editPaperCardButton.classList.toggle("active", editing);
+  editPaperCardButton.setAttribute("aria-pressed", String(editing));
+  schedulePaperCardTextareaRefresh();
 }
 
 function collectPaperCardFormData(): PaperCardFormData {
@@ -8371,7 +8541,38 @@ function collectPaperCardFormData(): PaperCardFormData {
 
 const PAPER_CARD_TEXTAREA_MIN_HEIGHT = 44;
 
+function updatePaperCardOverviewFieldDensity(
+  textarea: HTMLTextAreaElement,
+): void {
+  const overviewFieldIds = new Set([
+    "paper-title",
+    "paper-authors",
+    "paper-venue-year",
+    "paper-research-area",
+    "paper-card-document-name",
+  ]);
+  if (!overviewFieldIds.has(textarea.id)) return;
+
+  const length = textarea.value.trim().length;
+  textarea.classList.remove(
+    "content-short",
+    "content-medium",
+    "content-long",
+  );
+
+  const shortLimit = textarea.id === "paper-title" ? 72 : 54;
+  const mediumLimit = textarea.id === "paper-title" ? 140 : 110;
+  textarea.classList.add(
+    length <= shortLimit
+      ? "content-short"
+      : length <= mediumLimit
+        ? "content-medium"
+        : "content-long",
+  );
+}
+
 function autoResizePaperCardTextarea(textarea: HTMLTextAreaElement): void {
+  updatePaperCardOverviewFieldDensity(textarea);
   // Reset first so the field can shrink when content becomes shorter.
   textarea.style.height = `${PAPER_CARD_TEXTAREA_MIN_HEIGHT}px`;
   textarea.style.height = "0px";
@@ -8451,34 +8652,39 @@ function renderPaperCardForm(
   paperResearchConnectionInput.value = data.researchConnection;
   paperFollowupQuestionsInput.value = data.followupQuestions;
   paperWeeklyPlanInput.value = data.weeklyPlan;
+  restorePaperCardInlineDrafts();
+  setPaperCardEditMode(false);
   schedulePaperCardTextareaRefresh();
 }
 
 function updatePaperCardDocumentName(): void {
   const currentName = sourceName ? getDisplayFileName(sourceName) : "";
   const name = paperCardReviewDocumentName || currentName || "尚未打开 PDF";
-  paperCardDocumentNameElement.textContent = name;
+  paperCardDocumentNameElement.value = name;
   paperCardDocumentNameElement.title =
     paperCardReviewDocumentName || sourceName || name;
+  autoResizePaperCardTextarea(paperCardDocumentNameElement);
 }
 
 function setPaperCardPageMode(mode: "generate" | "review"): void {
   const isReview = mode === "review";
   paperCardPageElement.classList.toggle("review-mode", isReview);
   paperCardPageTitleElement.textContent = isReview
-    ? "复习论文卡片"
-    : "生成论文卡片页面";
-  paperCardPageSubtitleElement.textContent = isReview
-    ? "从知识库打开已保存的论文卡片，可完整复习、修改并再次保存"
-    : "面向研究生论文阅读：先判断值不值得读，再理解方法、证据与和自己课题的关系";
+    ? "论文阅读卡片"
+    : "论文阅读卡片";
+  paperCardPageSubtitleElement.textContent = "";
+  paperCardPageSubtitleElement.hidden = true;
   regeneratePaperCardButton.hidden = isReview;
-  savePaperCardPageButton.textContent = isReview ? "▣ 保存修改" : "▣ 保存卡片";
+  savePaperCardPageButton.textContent = isReview
+    ? "▣ 保存修改"
+    : "▣ 加入知识库";
   paperCardBackButton.setAttribute(
     "aria-label",
     isReview && paperCardReturnTarget === "knowledge"
       ? "返回知识库"
       : "返回 PDF",
   );
+  setPaperCardEditMode(false);
 }
 
 function clearPaperCardReviewState(): void {
@@ -8495,6 +8701,7 @@ function resetPaperCardPageState(): void {
   paperCardPageSourceCache = null;
   paperCardFormElement.reset();
   paperCardFormElement.classList.remove("generating");
+  setPaperCardEditMode(false);
   regeneratePaperCardButton.disabled = false;
   setPaperCardPageStatus();
   if (!editingPaperOverviewId) updatePaperCardDocumentName();
@@ -8566,6 +8773,213 @@ function normalizePaperOverviewField(value: unknown): string {
     : "原文未明确出现";
 }
 
+function parsePaperScore(value: unknown): number | null {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value.trim())
+        : Number.NaN;
+
+  return Number.isFinite(numeric) && numeric >= 0 && numeric <= 10
+    ? numeric
+    : null;
+}
+
+function hasUsefulPaperField(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim();
+  return Boolean(
+    normalized &&
+    normalized !== "原文未明确出现" &&
+    normalized !== "未明确" &&
+    normalized !== "无",
+  );
+}
+
+function computePaperReadingValueScore(
+  payload: PaperOverviewApiResponse,
+): string {
+  const components = [
+    {
+      value: parsePaperScore(payload.relevance_score),
+      weight: 0.35,
+    },
+    {
+      value: parsePaperScore(payload.novelty_score),
+      weight: 0.25,
+    },
+    {
+      value: parsePaperScore(payload.evidence_score),
+      weight: 0.25,
+    },
+    {
+      value: parsePaperScore(payload.method_clarity_score),
+      weight: 0.15,
+    },
+  ].filter(
+    (component): component is { value: number; weight: number } =>
+      component.value !== null,
+  );
+
+  if (components.length >= 3) {
+    const totalWeight = components.reduce(
+      (sum, component) => sum + component.weight,
+      0,
+    );
+    const weightedScore = components.reduce(
+      (sum, component) =>
+        sum + component.value * component.weight,
+      0,
+    ) / totalWeight;
+
+    return Math.min(9.8, Math.max(1, weightedScore)).toFixed(1);
+  }
+
+  const modelScore = parsePaperScore(payload.reading_value_score);
+  const neutralModelScore = modelScore !== null && Math.abs(modelScore - 8.5) < 0.001;
+  let score = neutralModelScore ? 5.8 : (modelScore ?? 5.8);
+
+  const relevance = normalizePaperOverviewField(payload.suitable_stages);
+  if (relevance === "高") score += 1.0;
+  else if (relevance === "中") score += 0.25;
+  else if (relevance === "低") score -= 1.0;
+
+  const recommendation = normalizePaperOverviewField(
+    payload.recommend_deep_reading,
+  );
+  if (recommendation === "建议精读") score += 0.9;
+  else if (recommendation === "建议按需精读") score += 0.2;
+  else if (recommendation === "暂不建议精读") score -= 1.1;
+
+  const difficulty = normalizePaperOverviewField(payload.reading_difficulty);
+  if (difficulty === "较难") score -= 0.15;
+
+  if (hasUsefulPaperField(payload.core_innovation)) score += 0.45;
+  else score -= 0.6;
+
+  if (hasUsefulPaperField(payload.main_findings)) score += 0.35;
+  else score -= 0.35;
+
+  if (hasUsefulPaperField(payload.strongest_evidence)) score += 0.3;
+  else score -= 0.3;
+
+  if (hasUsefulPaperField(payload.research_connection)) score += 0.25;
+  if (hasUsefulPaperField(payload.citation_points)) score += 0.15;
+
+  return Math.min(9.8, Math.max(1, score)).toFixed(1);
+}
+
+function normalizeKnowledgeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[^\w\u4e00-\u9fff]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeKnowledgeSearchText(value: string): string[] {
+  const matches: string[] =
+    normalizeKnowledgeSearchText(value).match(
+      /[a-z0-9\u4e00-\u9fff]{2,}/g,
+    ) ?? [];
+
+  return Array.from(
+    new Set(matches.filter((token: string) => token.length >= 2)),
+  );
+}
+
+function collectRelevantKnowledgeContextForPaper(): string {
+  const title = paperTitleInput.value.trim();
+  const researchArea = paperResearchAreaInput.value.trim();
+  const keywords = paperKeywordsInput.value.trim();
+  const currentDocumentName = (
+    sourceName ? getDisplayFileName(sourceName) : ""
+  ).trim();
+
+  const queryTokens = new Set(
+    tokenizeKnowledgeSearchText(
+      [title, researchArea, keywords].filter(Boolean).join(" "),
+    ),
+  );
+
+  if (queryTokens.size === 0) return "";
+
+  const normalizedTitle = normalizeKnowledgeSearchText(title);
+  const normalizedDocumentName = normalizeKnowledgeSearchText(
+    currentDocumentName,
+  );
+
+  const matches = collectKnowledgeItems()
+    .filter((item) => {
+      const haystack = [
+        item.title,
+        item.content,
+        item.category,
+        item.documentName,
+        ...(item.tags || []),
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const normalizedHaystack = normalizeKnowledgeSearchText(haystack);
+      if (!normalizedHaystack) return false;
+
+      const isSameDocument =
+        (normalizedTitle &&
+          normalizeKnowledgeSearchText(item.title) === normalizedTitle) ||
+        (normalizedDocumentName &&
+          normalizeKnowledgeSearchText(item.documentName) ===
+            normalizedDocumentName);
+      if (isSameDocument) return false;
+
+      let score = 0;
+      for (const token of queryTokens) {
+        if (normalizedHaystack.includes(token)) {
+          score += token.length >= 5 ? 2 : 1;
+        }
+      }
+      return score > 0;
+    })
+    .map((item) => {
+      const haystack = [
+        item.title,
+        item.content,
+        item.category,
+        ...(item.tags || []),
+      ].join(" ");
+      const normalizedHaystack = normalizeKnowledgeSearchText(haystack);
+      let score = 0;
+      for (const token of queryTokens) {
+        if (normalizedHaystack.includes(token)) {
+          score += token.length >= 5 ? 2 : 1;
+        }
+      }
+      if (item.kind === "paper-card") score += 2;
+      if (item.kind === "reading-card") score += 1;
+      return { item, score };
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 4);
+
+  if (matches.length === 0) return "";
+
+  return matches
+    .map(({ item }, index) => {
+      const excerpt = item.content.replace(/\s+/g, " ").trim().slice(0, 260);
+      const tags = item.tags.slice(0, 5).join("、") || "无";
+      return [
+        `[知识库参考 ${index + 1}]`,
+        `标题：${item.title}`,
+        `类型：${getKnowledgeKindLabel(item.kind)}`,
+        `来源：${item.documentName} · ${item.positionLabel}`,
+        `标签：${tags}`,
+        `内容摘录：${excerpt}${item.content.length > 260 ? "…" : ""}`,
+      ].join("\n");
+    })
+    .join("\n\n");
+}
+
 async function generatePaperOverviewCard(force = false): Promise<void> {
   updatePaperCardDocumentName();
   if (!pdfDocument) {
@@ -8593,6 +9007,7 @@ async function generatePaperOverviewCard(force = false): Promise<void> {
   );
 
   try {
+    if (force) clearPaperCardInlineDrafts();
     if (!aiConfigLoaded) await loadDeepSeekConfig();
     if (!aiConfig.apiKey) {
       setDeepSeekSettingsOpen(true);
@@ -8605,18 +9020,87 @@ async function generatePaperOverviewCard(force = false): Promise<void> {
     const text = await extractPaperOverviewText(documentAtStart);
     if (controller.signal.aborted) return;
 
-    const response = (await browser.runtime.sendMessage({
-      type: "pdf-helper:ai-generate-paper-overview",
-      documentName: getDisplayFileName(sourceName),
-      pageCount: documentAtStart.numPages,
-      text,
-    })) as AiRuntimeResponse;
+    const knowledgeContext = collectRelevantKnowledgeContextForPaper();
 
-    if (!response?.ok || !response.content?.trim()) {
-      throw new Error(response?.error || "AI 模型没有返回有效的论文卡片内容。");
-    }
+    const paperCardPrompt = [
+      "你是严谨的科研论文阅读助手。请基于提供的论文全文片段，生成一张“一屏可读”的研究生论文阅读卡片。",
+      "只输出一个合法 JSON 对象，不要输出 Markdown、代码块或额外说明。",
+      "",
+      "总原则：",
+      "1. 内容必须简洁、具体、可验证；不要写空泛套话。",
+      "2. 不得编造作者、会议、数据、实验结果或参考文献；原文无法确认时填写“原文未明确出现”。",
+      "3. 一句话总结、核心问题、研究价值分别控制在 80 个中文字符以内。",
+      "4. 核心创新最多 3 点，关键实验结果最多 2 点；使用换行和“• ”组织。",
+      "5. 对我的研究价值必须有深度：优先结合原文证据，再参考用户知识库中的相关笔记，写出可迁移之处、适用边界以及需要复核的风险，避免空泛赞美。",
+      "6. comparison_with_prior_work 填写空字符串；延伸阅读由联网检索模块单独生成，禁止在此编造论文。",
+      "7. suitable_stages 在本页面表示“领域相关度”，只能填写“高”“中”“低”。",
+      "8. 不要把 8.5 当作默认分。先分别评估 relevance_score、novelty_score、evidence_score、method_clarity_score，再给出 reading_value_score。",
+      "9. 四个分项和总分都必须基于原文证据拉开差异：普通增量工作通常不应高于 8.0；证据不足或相关性低应低于 7.0；只有相关性、创新性和证据都很强时才可高于 9.0。",
+      "",
+      "JSON 字段必须完整，且所有值都必须是字符串：",
+      JSON.stringify({
+        title: "论文标题",
+        authors: "作者，逗号分隔",
+        venue_year: "会议/期刊与年份",
+        research_area: "研究领域",
+        keywords: "3~6 个关键词，逗号分隔",
+        one_sentence_summary: "一句话说清做了什么与核心结果",
+        research_problem: "论文解决的核心问题",
+        core_innovation: "最多 3 条核心思想与创新，用换行和“• ”组织",
+        worth_reading: "一句话说明是否值得投入时间及原因",
+        problem_setup: "一句话任务设定",
+        research_gap: "一句话研究空白",
+        why_important: "一句话说明重要性",
+        topic_tags: "主题标签，逗号分隔",
+        method_overview: "一句话方法概述",
+        method_intuition: "一句话方法直觉",
+        method_steps: "最多 4 步的方法流程",
+        key_assumptions: "关键假设",
+        notation_guide: "关键术语或符号",
+        datasets: "数据集或实验对象",
+        experiment_setup: "实验设置摘要",
+        metrics: "关键指标",
+        main_findings: "最多 2 条关键实验结果，用换行和“• ”组织",
+        strongest_evidence: "最强证据",
+        comparison_with_prior_work: "填写空字符串",
+        limitations: "最重要的局限",
+        reading_status: "待读",
+        recommend_deep_reading: "建议精读/建议按需精读/暂不建议精读 三选一",
+        reading_difficulty: "较易/中等/较难 三选一",
+        reading_value_score: "0~10 的总分数字字符串，不得固定使用 8.5",
+        novelty_score: "0~10，创新性分项数字字符串",
+        evidence_score: "0~10，实验或理论证据强度分项数字字符串",
+        relevance_score: "0~10，与当前研究方向相关度分项数字字符串",
+        method_clarity_score: "0~10，方法清晰度与可理解性分项数字字符串",
+        reading_advice: "先读哪些章节、图表或证明",
+        suitable_stages: "高/中/低 三选一",
+        prerequisites: "必要先修知识",
+        citation_points: "可用于相关工作、方法或实验分析的具体产出",
+        research_connection: "对研究设计可迁移的价值",
+        followup_questions: "最值得复现的实验与最小验证路径",
+        weekly_plan: "建议整理成什么笔记或比较表",
+      }),
+      "",
+      "知识库参考使用规则：如果下面提供了用户知识库中的相关笔记或卡片，请只把它们当作辅助背景。它们可能有误，必须与原文相互印证；若与原文冲突，以原文为准，并在“对我的研究价值”“可产出”“判断理由”里体现辩证判断，而不是直接照抄用户笔记。",
+      knowledgeContext
+        ? `用户知识库相关记录：
+${knowledgeContext}`
+        : "用户知识库相关记录：暂无可直接参考的历史笔记。",
+      "论文文件名：" + getDisplayFileName(sourceName),
+      "论文页数：" + String(documentAtStart.numPages),
+    ].join("\\n");
 
-    const payload = parseAiJson(response.content) as PaperOverviewApiResponse;
+    const aiContent = await requestAiContent(
+      [{ role: "user", content: paperCardPrompt }],
+      {
+        documentName: getDisplayFileName(sourceName),
+        totalPages: documentAtStart.numPages,
+        documentText: text,
+        readingMode: "paper",
+      },
+    );
+
+    const payload = parseAiJson(aiContent) as PaperOverviewApiResponse;
     if (pdfDocument !== documentAtStart || controller.signal.aborted) return;
 
     renderPaperCardForm({
@@ -8658,9 +9142,7 @@ async function generatePaperOverviewCard(force = false): Promise<void> {
       readingDifficulty: normalizePaperOverviewField(
         payload.reading_difficulty,
       ),
-      readingValueScore: normalizePaperOverviewField(
-        payload.reading_value_score,
-      ),
+      readingValueScore: computePaperReadingValueScore(payload),
       readingAdvice: normalizePaperOverviewField(payload.reading_advice),
       suitableStages: normalizePaperOverviewField(payload.suitable_stages),
       prerequisites: normalizePaperOverviewField(payload.prerequisites),
@@ -8675,12 +9157,9 @@ async function generatePaperOverviewCard(force = false): Promise<void> {
     });
 
     paperCardPageDocumentKey = documentKey;
-    const successMessage = "论文卡片已生成，可继续手动修改。";
-    setPaperCardPageStatus(successMessage);
-    window.setTimeout(() => {
-      if (paperCardPageStatusElement.textContent === successMessage)
-        setPaperCardPageStatus();
-    }, 1800);
+    setPaperCardPageStatus(
+      "论文阅读卡片已生成。点击“编辑卡片”后可直接修改内容。",
+    );
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
     if (controller.signal.aborted) return;
@@ -8705,6 +9184,7 @@ function openPaperCardPage(): void {
   paperCardEntryButton?.classList.add("active");
   aiPanelToggleButton?.classList.remove("active");
   updatePaperCardDocumentName();
+  setPaperCardEditMode(false);
   paperCardPageElement.scrollTop = 0;
   schedulePaperCardTextareaRefresh();
   void generatePaperOverviewCard();
@@ -8748,6 +9228,7 @@ function openSavedPaperOverviewReview(item: KnowledgeItem): void {
   updatePaperCardDocumentName();
   renderPaperCardForm(card);
   paperPersonalNotesInput.value = card.personalNotes || "";
+  setPaperCardEditMode(false);
   setPaperCardPageStatus();
   paperCardPageElement.scrollTop = 0;
   schedulePaperCardTextareaRefresh();
@@ -8812,7 +9293,10 @@ function savePaperOverviewCard(): void {
         ? {
             ...card,
             ...data,
-            documentName: paperCardReviewDocumentName || card.documentName,
+            documentName:
+              paperCardDocumentNameElement.value.trim() ||
+              paperCardReviewDocumentName ||
+              card.documentName,
             updatedAt: now,
           }
         : card,
@@ -8833,7 +9317,9 @@ function savePaperOverviewCard(): void {
 
   const card: SavedPaperOverview = {
     id: crypto.randomUUID(),
-    documentName: sourceName ? getDisplayFileName(sourceName) : "未命名论文",
+    documentName:
+      paperCardDocumentNameElement.value.trim() ||
+      (sourceName ? getDisplayFileName(sourceName) : "未命名论文"),
     ...data,
     createdAt: now,
     updatedAt: now,
@@ -8850,86 +9336,56 @@ function savePaperOverviewCard(): void {
 
 function formatPaperOverviewMarkdown(data: PaperCardFormData): string {
   return [
-    `# ${data.title || "论文卡片"}`,
+    `# ${data.title || "论文阅读卡片"}`,
     "",
     `- 作者：${data.authors || "原文未明确出现"}`,
-    `- 年份 / 会议 / 期刊：${data.venueYear || "原文未明确出现"}`,
+    `- 会议 / 期刊与年份：${data.venueYear || "原文未明确出现"}`,
     `- 研究领域：${data.researchArea || "原文未明确出现"}`,
     `- 关键词：${data.keywords || "原文未明确出现"}`,
     "",
-    "## 一、速读判断",
+    "## 一句话总结",
     "",
-    `**研究问题：** ${data.researchProblem}`,
+    data.oneSentenceSummary || "原文未明确出现",
     "",
-    `**一句话总结：** ${data.oneSentenceSummary}`,
+    "## 解决的核心问题",
     "",
-    `**核心贡献：** ${data.coreInnovation}`,
+    data.researchProblem || "原文未明确出现",
     "",
-    `**为什么值得读：** ${data.worthReading}`,
+    "## 核心思想与创新",
     "",
-    "## 二、论文定位",
+    data.coreInnovation || "原文未明确出现",
     "",
-    `**问题设定：** ${data.problemSetup}`,
+    "## 关键实验结果",
     "",
-    `**研究空白 / 未解决的问题：** ${data.researchGap}`,
+    data.mainFindings || "原文未明确出现",
     "",
-    `**为什么重要：** ${data.whyImportant}`,
+    "## 对我的研究价值",
     "",
-    `**相关主题标签：** ${data.topicTags}`,
+    data.researchConnection || "原文未明确出现",
     "",
-    "## 三、方法理解",
+    "## 阅读决策",
     "",
-    `**方法概述：** ${data.methodOverview}`,
+    `- 建议：${data.recommendDeepReading || "原文未明确出现"}`,
+    `- 领域相关度：${data.suitableStages || "原文未明确出现"}`,
+    `- 阅读难度：${data.readingDifficulty || "原文未明确出现"}`,
+    `- 价值评分：${data.readingValueScore || "原文未明确出现"} / 10`,
+    `- 判断理由：${data.worthReading || "原文未明确出现"}`,
     "",
-    `**方法直觉：** ${data.methodIntuition}`,
+    "## 下一步建议",
     "",
-    `**方法流程：** ${data.methodSteps}`,
+    `- 先看什么：${data.readingAdvice || "原文未明确出现"}`,
+    `- 实验复现：${data.followupQuestions || "原文未明确出现"}`,
+    `- 做笔记：${data.weeklyPlan || "原文未明确出现"}`,
+    `- 可产出：${data.citationPoints || "原文未明确出现"}`,
     "",
-    `**关键假设：** ${data.keyAssumptions}`,
+    "## 推荐延伸阅读",
     "",
-    `**符号 / 术语速览：** ${data.notationGuide}`,
+    data.comparisonWithPriorWork || "原文未明确列出可确认的延伸阅读",
     "",
-    "## 四、实验与证据",
+    "## 我的备注",
     "",
-    `**数据集：** ${data.datasets}`,
-    "",
-    `**实验设置：** ${data.experimentSetup}`,
-    "",
-    `**评估指标：** ${data.metrics}`,
-    "",
-    `**主要实验结论：** ${data.mainFindings}`,
-    "",
-    `**最强证据：** ${data.strongestEvidence}`,
-    "",
-    `**与已有工作对比：** ${data.comparisonWithPriorWork}`,
-    "",
-    `**局限性：** ${data.limitations}`,
-    "",
-    "## 五、阅读决策",
-    "",
-    `- 阅读状态：${data.readingStatus}`,
-    `- 是否建议精读：${data.recommendDeepReading}`,
-    `- 阅读难度：${data.readingDifficulty}`,
-    `- 阅读价值评分：${data.readingValueScore}`,
-    "",
-    `**阅读建议：** ${data.readingAdvice}`,
-    "",
-    `**适合什么阶段阅读：** ${data.suitableStages}`,
-    "",
-    `**先修知识：** ${data.prerequisites}`,
-    "",
-    "## 六、和我的研究的关系",
-    "",
-    `**适合引用的点：** ${data.citationPoints}`,
-    "",
-    `**与我的课题关联：** ${data.researchConnection}`,
-    "",
-    `**后续追问 / 复现计划：** ${data.followupQuestions}`,
-    "",
-    `**本周阅读计划：** ${data.weeklyPlan}`,
-    "",
-    `**我的备注：** ${data.personalNotes}`,
-  ].join("\n");
+    data.personalNotes || "",
+  ].join("\\n");
 }
 
 function exportPaperOverviewCard(): void {
@@ -13361,6 +13817,16 @@ paperCardBackButton.addEventListener("click", () =>
   closePaperCardPage(paperCardReturnTarget),
 );
 returnToPdfButton.addEventListener("click", () => closePaperCardPage("pdf"));
+editPaperCardButton.addEventListener("click", () => {
+  const enteringEditMode = !paperCardEditMode;
+  setPaperCardEditMode(enteringEditMode);
+  if (enteringEditMode) {
+    setPaperCardPageStatus("已进入编辑模式，可直接点击字段修改内容。");
+  }
+  else if (!editingPaperOverviewId) {
+    setPaperCardPageStatus("编辑完成，修改已保存到本地草稿。");
+  }
+});
 regeneratePaperCardButton.addEventListener("click", () => {
   paperCardPageDocumentKey = "";
   void generatePaperOverviewCard(true);
@@ -14080,3 +14546,7 @@ const source = new URLSearchParams(window.location.search).get("src");
 if (source?.startsWith("http://") || source?.startsWith("https://")) {
   void openRemotePdf(source);
 }
+
+installOnlineRelatedPapers();
+installCurrentPaperCcfRank();
+installPaperCardInlineEditing();

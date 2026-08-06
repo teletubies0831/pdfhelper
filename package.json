@@ -17,7 +17,10 @@
     "katex": "^0.18.1",
     "marked": "^16.3.0",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^5.4.624"
+    "pdfjs-dist": "^5.4.624",
+    "@langchain/core": "^1.0.0",
+    "zod": "^4.0.0",
+    "@langchain/langgraph": "^1.0.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
