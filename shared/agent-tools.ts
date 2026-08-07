@@ -92,6 +92,29 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
     parametersSummary: 'id', parameters: objectSchema({ id: { type: 'string' } }, ['id']),
   },
   {
+    name: 'journal.add', apiName: 'journal_add', label: '添加阅读札记',
+    description: '把当前对话中用户明确要求保存的单词、句子、摘录、解释或想法保存为当前阅读模式的 Markdown 阅读札记。',
+    trigger: '用户明确说“添加札记”“记到阅读札记”“把这个保存下来”时调用。',
+    parametersSummary: 'title, content, quote?, tags?, pageNumber?',
+    parameters: objectSchema({
+      title: { type: 'string' },
+      content: { type: 'string', description: 'Markdown 格式的札记正文' },
+      quote: { type: 'string' },
+      tags: { type: 'array', items: { type: 'string' } },
+      pageNumber: { type: 'integer', minimum: 1 },
+    }, ['title', 'content']),
+  },
+  {
+    name: 'journal.search', apiName: 'journal_search', label: '搜索阅读札记',
+    description: '只搜索当前阅读模式下保存的阅读札记，不读取其他模式的数据。',
+    trigger: '用户询问以前记录过的单词、句子、摘录或阅读想法时调用。',
+    parametersSummary: 'query, limit?',
+    parameters: objectSchema({
+      query: { type: 'string' },
+      limit: { type: 'integer', minimum: 1, maximum: 30 },
+    }, ['query']),
+  },
+  {
     name: 'library.searchPapers', apiName: 'library_search_papers', label: '搜索历史文献',
     description: '搜索用户以前打开或阅读过的 PDF 文献记录。',
     trigger: '用户询问以前读过什么、跨论文比较或寻找相关历史文献时。',
@@ -100,9 +123,22 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
   },
   {
     name: 'library.getPaper', apiName: 'library_get_paper', label: '读取历史文献记录',
-    description: '按文献 ID 读取一篇历史 PDF 的元数据、阅读记录和已有摘要。',
+    description: '按文献 ID 读取一篇历史 PDF 的元数据、阅读记录、论文阅读卡片和关联的片段卡片。',
     trigger: '已经从文献库搜索得到目标文献，需要查看详情时。',
     parametersSummary: 'documentId', parameters: objectSchema({ documentId: { type: 'string' } }, ['documentId']),
+  },
+  {
+    name: 'library.readPaper', apiName: 'library_read_paper', label: '读取历史论文原文',
+    description: '通过历史文献记录中保存的本地文件句柄或远程地址，读取指定页或检索整篇论文原文。',
+    trigger: '模型需要核对一篇历史论文的原文、具体方法、实验数据或结论，而阅读卡片信息不足时。',
+    parametersSummary: 'documentId, query?, startPage?, endPage?, limit?',
+    parameters: objectSchema({
+      documentId: { type: 'string' },
+      query: { type: 'string' },
+      startPage: { type: 'integer', minimum: 1 },
+      endPage: { type: 'integer', minimum: 1 },
+      limit: { type: 'integer', minimum: 1, maximum: 8 },
+    }, ['documentId']),
   },
 ];
 

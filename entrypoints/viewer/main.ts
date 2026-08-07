@@ -68,6 +68,7 @@ import {
   type ConversationMemoryConfig,
   type LongTermMemory,
   type MemoryToolCall,
+  type PaperLibraryRecord,
 } from "../../shared/memory";
 import {
   getDocumentAgentRecord,
@@ -133,7 +134,6 @@ const closeRecentFilesButton =
   requiredElement<HTMLButtonElement>("close-recent-files");
 const clearRecentFilesButton =
   requiredElement<HTMLButtonElement>("clear-recent-files");
-const documentNameElement = requiredElement<HTMLElement>("document-name");
 const previousButton = requiredElement<HTMLButtonElement>("previous-page");
 const nextButton = requiredElement<HTMLButtonElement>("next-page");
 const pageNumberInput = requiredElement<HTMLInputElement>("page-number");
@@ -223,6 +223,9 @@ const editorModeButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-editor-mode]"),
 );
 const appFrame = document.querySelector<HTMLElement>(".app-frame");
+const assistantPanelToggleButton = requiredElement<HTMLButtonElement>(
+  "assistant-panel-toggle",
+);
 const outlineToggleButton = document.getElementById("outline-toggle");
 const aiPanelToggleButton = document.getElementById("ai-panel-toggle");
 const focusModeButton = requiredElement<HTMLButtonElement>("focus-mode-toggle");
@@ -238,6 +241,30 @@ const aiSettingsButton =
   requiredElement<HTMLButtonElement>("ai-settings-button");
 const paperCardEntryButton = document.getElementById("paper-card-entry");
 const paperCardPageElement = requiredElement<HTMLElement>("paper-card-page");
+const paperCardSectionButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-paper-card-section]"),
+);
+const paperCardScrollContainers = Array.from(
+  document.querySelectorAll<HTMLElement>(".paper-card-main, .paper-card-sidebar"),
+);
+const readingJournalPageElement = requiredElement<HTMLElement>("reading-journal-page");
+const readingJournalBackButton = requiredElement<HTMLButtonElement>("reading-journal-back");
+const readingJournalNewButton = requiredElement<HTMLButtonElement>("reading-journal-new");
+const readingJournalDocumentElement = requiredElement<HTMLElement>("reading-journal-document");
+const readingJournalSearchInput = requiredElement<HTMLInputElement>("reading-journal-search");
+const readingJournalCountElement = requiredElement<HTMLElement>("reading-journal-count");
+const readingJournalListElement = requiredElement<HTMLElement>("reading-journal-list");
+const readingJournalEmptyElement = requiredElement<HTMLElement>("reading-journal-empty");
+const readingJournalEditorElement = requiredElement<HTMLElement>("reading-journal-editor");
+const readingJournalForm = requiredElement<HTMLFormElement>("reading-journal-form");
+const readingJournalEditorTitleElement = requiredElement<HTMLElement>("reading-journal-editor-title");
+const readingJournalEditorSourceElement = requiredElement<HTMLElement>("reading-journal-editor-source");
+const readingJournalEditorCloseButton = requiredElement<HTMLButtonElement>("reading-journal-editor-close");
+const readingJournalEditorCancelButton = requiredElement<HTMLButtonElement>("reading-journal-editor-cancel");
+const readingJournalTitleInput = requiredElement<HTMLInputElement>("reading-journal-title");
+const readingJournalQuoteInput = requiredElement<HTMLTextAreaElement>("reading-journal-quote");
+const readingJournalContentInput = requiredElement<HTMLTextAreaElement>("reading-journal-content");
+const readingJournalTagsInput = requiredElement<HTMLInputElement>("reading-journal-tags");
 const paperCardPageTitleElement = requiredElement<HTMLElement>(
   "paper-card-page-title",
 );
@@ -2311,6 +2338,7 @@ const SAVED_PAPER_OVERVIEWS_STORAGE_KEY = "pdf-helper-paper-overviews-v1";
 const KNOWLEDGE_NOTES_STORAGE_KEY = "pdf-helper-knowledge-notes-v1";
 const KNOWLEDGE_ITEM_META_STORAGE_KEY = "pdf-helper-knowledge-item-meta-v1";
 const PAPER_CARD_INLINE_DRAFT_STORAGE_KEY = "pdf-helper-paper-inline-drafts-v2";
+const READING_JOURNAL_STORAGE_KEY = "pdf-helper-reading-journal-v1";
 
 type SummaryScope = "selection" | "page" | "chapter";
 type CardType = "concept" | "method" | "experiment" | "viewpoint";
@@ -2318,6 +2346,7 @@ type KnowledgeKind = "note" | "reading-card" | "paper-card";
 type KnowledgeFilter = "all" | KnowledgeKind;
 type KnowledgeSource =
   | "knowledge-note"
+  | "reading-journal"
   | "summary-note"
   | "reading-card"
   | "paper-overview";
@@ -2371,6 +2400,10 @@ interface GeneratedCardContent {
 
 interface SavedPaperCard extends GeneratedCardContent, CardContext {
   id: string;
+  documentId?: string;
+  paperOverviewId?: string;
+  recentEntryId?: string;
+  sourceLocator?: string;
   createdAt: string;
 }
 
@@ -2461,6 +2494,9 @@ interface PaperCardFormData {
 interface SavedPaperOverview extends PaperCardFormData {
   id: string;
   documentName: string;
+  documentId?: string;
+  recentEntryId?: string;
+  sourceLocator?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -2474,6 +2510,24 @@ interface SavedKnowledgeNote {
   positionLabel?: string;
   category: string;
   tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  readingMode?: ResolvedReadingMode;
+}
+
+interface SavedReadingJournalEntry {
+  id: string;
+  readingMode: ResolvedReadingMode;
+  documentId: string;
+  documentName: string;
+  recentEntryId?: string;
+  pageNumber: number;
+  positionLabel: string;
+  title: string;
+  quote: string;
+  content: string;
+  tags: string[];
+  origin: "ai" | "translation" | "user";
   createdAt: string;
   updatedAt: string;
 }
@@ -2522,6 +2576,7 @@ let cardAbortController: AbortController | null = null;
 let activeCardType: CardType = "method";
 let lastCardRequestKey = "";
 let currentCardContext: CardContext | null = null;
+let editingReadingJournalId: string | null = null;
 let currentGeneratedCard: GeneratedCardContent | null = null;
 let cardGenerationTimer: ReturnType<typeof setTimeout> | null = null;
 let paperCardPageAbortController: AbortController | null = null;
@@ -3756,6 +3811,202 @@ async function addChatImageFiles(files: Iterable<Blob>): Promise<void> {
   chatInput.focus();
 }
 
+function setCurrentApplicationView(
+  view: "viewer" | "paper-card" | "journal" | "knowledge",
+): void {
+  const isViewer = view === "viewer";
+  aiPanelToggleButton?.classList.toggle("active", view === "viewer");
+  paperCardEntryButton?.classList.toggle(
+    "active",
+    view === "paper-card" || view === "journal",
+  );
+  knowledgeBaseEntryButton.classList.toggle("active", view === "knowledge");
+  if (outlineToggleButton instanceof HTMLButtonElement) {
+    outlineToggleButton.disabled = !isViewer;
+    outlineToggleButton.setAttribute("aria-disabled", String(!isViewer));
+  }
+  assistantPanelToggleButton.disabled = !isViewer;
+  assistantPanelToggleButton.setAttribute("aria-disabled", String(!isViewer));
+}
+
+function updateModeNavigation(): void {
+  const hasDocument = Boolean(pdfDocument);
+  readingModeSelect.disabled = !hasDocument;
+  if (!hasDocument) {
+    let emptyOption = readingModeSelect.querySelector<HTMLOptionElement>(
+      'option[value="unopened"]',
+    );
+    if (!emptyOption) {
+      emptyOption = document.createElement("option");
+      emptyOption.value = "unopened";
+      readingModeSelect.prepend(emptyOption);
+    }
+    emptyOption.textContent = "未打开 PDF";
+    readingModeSelect.value = "unopened";
+  } else {
+    readingModeSelect.querySelector('option[value="unopened"]')?.remove();
+    readingModeSelect.value = readingModePreference;
+  }
+
+  const isPaper = resolvedReadingMode === "paper";
+  if (paperCardEntryButton) {
+    paperCardEntryButton.textContent = isPaper ? "论文阅读卡片" : "阅读札记";
+    (paperCardEntryButton as HTMLButtonElement).disabled = !hasDocument;
+  }
+  knowledgeBaseEntryButton.textContent = isPaper
+    ? "论文知识库"
+    : resolvedReadingMode === "novel"
+      ? "小说知识库"
+      : "通用知识库";
+  knowledgeBaseEntryButton.disabled = !hasDocument;
+  if (hasDocument) {
+    if (isPaper && !readingJournalPageElement.hidden) closeReadingJournalPage();
+    if (!isPaper && !paperCardPageElement.hidden) closePaperCardPage();
+    if (!readingJournalPageElement.hidden) renderReadingJournal();
+    if (!knowledgeBasePageElement.hidden) renderKnowledgeBase();
+  }
+}
+
+function getPaperLibraryCardContext(record: PaperLibraryRecord): Record<string, unknown> {
+  const overviews = readSavedPaperOverviews().filter((card) =>
+    card.documentId === record.documentId
+    || card.documentName === record.sourceName
+    || card.documentName === record.title
+    || card.documentName.replace(/\.pdf$/i, "") === record.title.replace(/\.pdf$/i, ""),
+  );
+  const overviewIds = new Set(overviews.map((card) => card.id));
+  const readingCards = readSavedPaperCards().filter((card) =>
+    card.documentId === record.documentId
+    || (card.paperOverviewId ? overviewIds.has(card.paperOverviewId) : false)
+    || card.documentName === record.sourceName
+    || card.documentName.replace(/\.pdf$/i, "") === record.title.replace(/\.pdf$/i, ""),
+  );
+  return {
+    source: {
+      kind: record.sourceKind,
+      name: record.sourceName,
+      url: record.sourceUrl,
+      locator: record.sourceLocator,
+      recentEntryId: record.recentEntryId,
+      localPathAvailable: false,
+      note: record.sourceKind === "local"
+        ? "浏览器不暴露绝对路径；locator 对应持久化文件句柄，可由 library.readPaper 读取。"
+        : undefined,
+    },
+    paperCards: overviews,
+    readingCards,
+    paperCardCount: overviews.length,
+    readingCardCount: readingCards.length,
+  };
+}
+
+function enrichPaperLibraryData(data: unknown): unknown {
+  if (Array.isArray(data)) {
+    return data.map((item) => isRecord(item)
+      ? { ...item, ...getPaperLibraryCardContext(item as unknown as PaperLibraryRecord) }
+      : item);
+  }
+  return isRecord(data)
+    ? { ...data, ...getPaperLibraryCardContext(data as unknown as PaperLibraryRecord) }
+    : data;
+}
+
+async function getHistoricalPaperBytes(record: PaperLibraryRecord): Promise<Uint8Array> {
+  const entries = await readRecentFiles();
+  const entry = entries.find((item) => item.id === record.recentEntryId)
+    ?? entries.find((item) => item.name === record.sourceName);
+  if (entry?.kind === "local" && entry.fileHandle) {
+    const permission = await entry.fileHandle.queryPermission?.({ mode: "read" });
+    if (permission && permission !== "granted") {
+      throw new Error("该本地论文的读取权限已失效，请先从最近文件中重新打开一次。模型不会绕过浏览器权限。 ");
+    }
+    const file = await entry.fileHandle.getFile();
+    return new Uint8Array(await file.arrayBuffer());
+  }
+  const url = entry?.url || record.sourceUrl;
+  if (url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`历史论文下载失败：HTTP ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+  throw new Error("历史记录中没有可读取的文件句柄或远程地址，请重新打开这篇 PDF。 ");
+}
+
+async function extractLibraryPaperPageText(
+  documentProxy: PDFDocumentProxy,
+  pageNumber: number,
+): Promise<string> {
+  const page = await documentProxy.getPage(pageNumber);
+  const content = await page.getTextContent();
+  return content.items
+    .map((item) => "str" in item && typeof item.str === "string" ? item.str : "")
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function executeLibraryReadPaper(
+  args: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const documentId = typeof args.documentId === "string" ? args.documentId.trim() : "";
+  if (!documentId) throw new Error("library.readPaper 缺少 documentId。 ");
+  const paperResult = await executeMemoryTool({
+    name: "library.getPaper",
+    arguments: { id: documentId },
+  });
+  const record = paperResult.data as PaperLibraryRecord | null | undefined;
+  if (!record) throw new Error("没有找到对应的历史论文记录。 ");
+
+  const isCurrentDocument = Boolean(
+    pdfDocument && getDocumentChatId(pdfDocument) === record.documentId,
+  );
+  const loadedDocument = isCurrentDocument
+    ? pdfDocument!
+    : await getDocument({ data: await getHistoricalPaperBytes(record) }).promise;
+  try {
+    const query = typeof args.query === "string" ? args.query.trim() : "";
+    const limit = Math.min(8, Math.max(1, Number(args.limit) || 5));
+    const requestedStart = Math.max(1, Number(args.startPage) || 1);
+    const requestedEnd = Math.min(
+      loadedDocument.numPages,
+      Math.max(requestedStart, Number(args.endPage) || requestedStart + 2),
+    );
+    const pageNumbers = query
+      ? Array.from({ length: loadedDocument.numPages }, (_, index) => index + 1)
+      : Array.from(
+          { length: requestedEnd - requestedStart + 1 },
+          (_, index) => requestedStart + index,
+        );
+    const queryTerms = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const pages: Array<{ pageNumber: number; text: string; score: number }> = [];
+    for (const pageNumber of pageNumbers) {
+      const text = await extractLibraryPaperPageText(loadedDocument, pageNumber);
+      const normalized = text.toLocaleLowerCase();
+      const score = queryTerms.reduce(
+        (total, term) => total + (normalized.includes(term) ? 1 : 0),
+        0,
+      );
+      if (!query || score > 0) pages.push({ pageNumber, text, score });
+    }
+    const selectedPages = (query
+      ? pages.sort((left, right) => right.score - left.score || left.pageNumber - right.pageNumber)
+      : pages)
+      .slice(0, limit)
+      .map(({ pageNumber, text }) => ({ pageNumber, text: text.slice(0, 12000) }));
+    return {
+      documentId: record.documentId,
+      title: record.title,
+      pageCount: loadedDocument.numPages,
+      query: query || undefined,
+      pages: selectedPages,
+      ...getPaperLibraryCardContext(record),
+    };
+  } finally {
+    if (!isCurrentDocument) await loadedDocument.destroy();
+  }
+}
+
 function clearPendingChatImages(): void {
   pendingChatImages = [];
   chatImageInput.value = "";
@@ -3803,6 +4054,50 @@ async function executeNativeToolCalls(
       arguments: call.arguments,
     });
     try {
+      if (toolName === "journal.add") {
+        const args = (call.arguments ?? {}) as Record<string, unknown>;
+        const entry = saveReadingJournalEntry({
+          title: typeof args.title === "string" ? args.title : "阅读札记",
+          quote: typeof args.quote === "string" ? args.quote : "",
+          content: typeof args.content === "string" ? args.content : "",
+          tags: Array.isArray(args.tags)
+            ? args.tags.filter((tag): tag is string => typeof tag === "string")
+            : [],
+          origin: "ai",
+          pageNumber: typeof args.pageNumber === "number" ? args.pageNumber : undefined,
+        });
+        return {
+          toolCallId: call.id,
+          name: toolName,
+          ok: true,
+          content: JSON.stringify({ saved: true, entry }, null, 2),
+        };
+      }
+      if (toolName === "journal.search") {
+        const args = (call.arguments ?? {}) as Record<string, unknown>;
+        const query = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
+        const limit = typeof args.limit === "number" ? Math.min(30, Math.max(1, args.limit)) : 10;
+        const entries = readReadingJournalEntries()
+          .filter((entry) => entry.readingMode === resolvedReadingMode)
+          .filter((entry) => !query || [entry.title, entry.quote, entry.content, entry.tags.join(" ")]
+            .join(" ").toLowerCase().includes(query))
+          .slice(0, limit);
+        return {
+          toolCallId: call.id,
+          name: toolName,
+          ok: true,
+          content: JSON.stringify({ readingMode: resolvedReadingMode, entries }, null, 2),
+        };
+      }
+      if (toolName === "library.readPaper") {
+        const data = await executeLibraryReadPaper(call.arguments ?? {});
+        return {
+          toolCallId: call.id,
+          name: toolName,
+          ok: true,
+          content: JSON.stringify(data, null, 2).slice(0, 50000),
+        };
+      }
       if (toolName.startsWith("memory.") || toolName.startsWith("library.")) {
         const args = { ...(call.arguments ?? {}) } as Record<string, unknown>;
         if (toolName === "library.getPaper" && typeof args.documentId === "string" && !args.id) {
@@ -3813,7 +4108,10 @@ async function executeNativeToolCalls(
           name: toolName as MemoryToolCall["name"],
           arguments: args as never,
         });
-        const content = JSON.stringify(result, null, 2).slice(0, 16000);
+        if (result.ok && toolName.startsWith("library.")) {
+          result.data = enrichPaperLibraryData(result.data);
+        }
+        const content = JSON.stringify(result, null, 2).slice(0, 30000);
         console.info("[PDF Helper Agent] native tool result", { toolCallId: call.id, toolName, result });
         return { toolCallId: call.id, name: toolName, ok: result.ok, content };
       }
@@ -5033,6 +5331,9 @@ async function runKnowledgeAgentTools(
       );
       console.info(`[PDF Helper 工具调用] ${call.name}`, executable.arguments);
       const result = await executeMemoryTool(executable);
+      if (result.ok && call.name.startsWith("library.")) {
+        result.data = enrichPaperLibraryData(result.data);
+      }
       console.info(`[PDF Helper 工具结果] ${call.name}`, result);
       results.push({ call, result });
       updateChatActivity(
@@ -5557,12 +5858,20 @@ function getReadingModeDocumentKey(
 }
 
 function updateReadingModeUi(): void {
+  const autoOption = readingModeSelect.querySelector<HTMLOptionElement>(
+    'option[value="auto"]',
+  );
+  if (autoOption) {
+    autoOption.textContent = readingModeDetectionPending
+      ? "AI 自动识别（识别中…）"
+      : `AI 自动识别（${getReadingModeLabel(resolvedReadingMode)}）`;
+  }
   readingModeSelect.value = readingModePreference;
   detectReadingModeButton.disabled =
     !pdfDocument || readingModeDetectionPending;
   detectReadingModeButton.textContent = readingModeDetectionPending
-    ? "识别中…"
-    : "重新识别";
+    ? "…"
+    : "↻";
   const prefix = readingModePreference === "auto" ? "AI自动" : "手动";
   readingModeStatus.textContent = readingModeDetectionPending
     ? "正在识别…"
@@ -5575,6 +5884,7 @@ function updateReadingModeUi(): void {
       ? "由 AI 根据文件名、目录与正文样本识别，可手动切换"
       : "当前文档使用手动指定的阅读模式");
   readingModeStatus.classList.toggle("error", Boolean(readingModeError));
+  updateModeNavigation();
 }
 
 async function readReadingModeStore(): Promise<
@@ -8277,22 +8587,107 @@ function readSavedPaperCards(): SavedPaperCard[] {
   }
 }
 
+function getCurrentPaperSourceLocator(): string {
+  if (currentFileHandle && currentRecentEntryId) {
+    return `local-file-handle:${currentRecentEntryId}`;
+  }
+  if (sourceName.startsWith("http://") || sourceName.startsWith("https://")) {
+    return sourceName;
+  }
+  return currentRecentEntryId ? `recent-entry:${currentRecentEntryId}` : sourceName;
+}
+
+function createPaperOverviewFromReadingCard(
+  card: GeneratedCardContent & CardContext,
+  documentId: string,
+): SavedPaperOverview {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    documentName: card.documentName,
+    documentId,
+    recentEntryId: currentRecentEntryId ?? undefined,
+    sourceLocator: getCurrentPaperSourceLocator(),
+    title: card.documentName.replace(/\.pdf$/i, "") || card.title,
+    authors: "",
+    venueYear: "",
+    researchArea: "",
+    keywords: "",
+    oneSentenceSummary: card.explanation,
+    researchProblem: card.purpose,
+    coreInnovation: card.cardType === "method" ? card.explanation : "",
+    worthReading: "",
+    problemSetup: "",
+    researchGap: "",
+    whyImportant: "",
+    topicTags: getCardTypeLabel(card.cardType),
+    methodOverview: card.cardType === "method" ? card.keyPoints.join("\n") : "",
+    methodIntuition: "",
+    methodSteps: "",
+    keyAssumptions: "",
+    notationGuide: "",
+    datasets: "",
+    experimentSetup: card.cardType === "experiment" ? card.explanation : "",
+    metrics: "",
+    mainFindings: card.cardType === "viewpoint" ? card.explanation : "",
+    strongestEvidence: "",
+    comparisonWithPriorWork: "",
+    limitations: "",
+    readingStatus: "精读中",
+    recommendDeepReading: "建议按需精读",
+    readingDifficulty: "中等",
+    readingValueScore: "",
+    readingAdvice: "",
+    suitableStages: "",
+    prerequisites: "",
+    citationPoints: "",
+    researchConnection: "",
+    followupQuestions: "",
+    weeklyPlan: "",
+    personalNotes: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function saveCurrentPaperCard(): void {
   if (!currentCardContext || !currentGeneratedCard) {
     setStatus("当前没有可保存的论文卡片。", true);
     return;
   }
+  const cardContext = currentCardContext;
+  const generatedCard = currentGeneratedCard;
+
+  const documentId = pdfDocument ? getDocumentChatId(pdfDocument) : "";
+  const overviews = readSavedPaperOverviews();
+  let overview = overviews.find((item) =>
+    Boolean(documentId && item.documentId === documentId),
+  ) ?? overviews.find((item) => item.documentName === cardContext.documentName);
+  if (!overview) {
+    overview = createPaperOverviewFromReadingCard(
+      { ...cardContext, ...generatedCard },
+      documentId,
+    );
+    localStorage.setItem(
+      SAVED_PAPER_OVERVIEWS_STORAGE_KEY,
+      JSON.stringify([overview, ...overviews].slice(0, 100)),
+    );
+  }
 
   const card: SavedPaperCard = {
     id: crypto.randomUUID(),
-    ...currentCardContext,
-    ...currentGeneratedCard,
+    ...cardContext,
+    ...generatedCard,
+    documentId: documentId || overview.documentId,
+    paperOverviewId: overview.id,
+    recentEntryId: currentRecentEntryId ?? overview.recentEntryId,
+    sourceLocator: getCurrentPaperSourceLocator(),
     createdAt: new Date().toISOString(),
   };
   const cards = [card, ...readSavedPaperCards()].slice(0, 100);
   localStorage.setItem(SAVED_CARDS_STORAGE_KEY, JSON.stringify(cards));
   refreshKnowledgeBaseIfOpen();
-  setStatus(`已保存“${card.title}”论文卡片。`);
+  setStatus(`已保存“${card.title}”，并关联到论文阅读卡片。`);
 }
 
 function resetCardState(): void {
@@ -9174,7 +9569,177 @@ ${knowledgeContext}`
   }
 }
 
+function getCurrentJournalContext(): Pick<SavedReadingJournalEntry, "documentId" | "documentName" | "recentEntryId" | "pageNumber" | "positionLabel"> {
+  const pageNumber = Math.max(1, pdfViewer.currentPageNumber || 1);
+  const chapter = getCurrentChapterContext(pageNumber).title;
+  return {
+    documentId: pdfDocument ? getDocumentChatId(pdfDocument) : "",
+    documentName: sourceName ? getDisplayFileName(sourceName) : "未关联文档",
+    recentEntryId: currentRecentEntryId ?? undefined,
+    pageNumber,
+    positionLabel: `${chapter} · 第 ${pageNumber} 页`,
+  };
+}
+
+function closeReadingJournalEditor(): void {
+  readingJournalEditorElement.hidden = true;
+  editingReadingJournalId = null;
+  readingJournalForm.reset();
+}
+
+function openReadingJournalEditor(entry?: SavedReadingJournalEntry): void {
+  const context = entry ?? getCurrentJournalContext();
+  editingReadingJournalId = entry?.id ?? null;
+  readingJournalEditorTitleElement.textContent = entry ? "编辑阅读札记" : "新建阅读札记";
+  readingJournalEditorSourceElement.textContent = `${context.documentName} · ${context.positionLabel}`;
+  readingJournalTitleInput.value = entry?.title ?? "";
+  readingJournalQuoteInput.value = entry?.quote ?? "";
+  readingJournalContentInput.value = entry?.content ?? "";
+  readingJournalTagsInput.value = entry?.tags.join(", ") ?? "";
+  readingJournalEditorElement.hidden = false;
+  requestAnimationFrame(() => readingJournalTitleInput.focus());
+}
+
+function saveReadingJournalEntry(input: {
+  title: string;
+  quote?: string;
+  content: string;
+  tags?: string[];
+  origin: SavedReadingJournalEntry["origin"];
+  pageNumber?: number;
+}): SavedReadingJournalEntry {
+  if (!pdfDocument) throw new Error("请先打开 PDF。");
+  const now = new Date().toISOString();
+  const context = getCurrentJournalContext();
+  const pageNumber = Math.max(1, input.pageNumber ?? context.pageNumber);
+  const existing = editingReadingJournalId
+    ? readReadingJournalEntries().find((entry) => entry.id === editingReadingJournalId)
+    : undefined;
+  const entry: SavedReadingJournalEntry = {
+    id: existing?.id ?? crypto.randomUUID(),
+    readingMode: resolvedReadingMode,
+    documentId: context.documentId,
+    documentName: context.documentName,
+    recentEntryId: context.recentEntryId,
+    pageNumber,
+    positionLabel: pageNumber === context.pageNumber ? context.positionLabel : `第 ${pageNumber} 页`,
+    title: input.title.trim() || getKnowledgeExcerpt(input.quote || input.content).slice(0, 42) || "阅读札记",
+    quote: input.quote?.trim() ?? "",
+    content: input.content.trim(),
+    tags: normalizeKnowledgeTags(input.tags ?? []),
+    origin: input.origin,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+  writeReadingJournalEntries([
+    entry,
+    ...readReadingJournalEntries().filter((item) => item.id !== entry.id),
+  ]);
+  renderReadingJournal();
+  refreshKnowledgeBaseIfOpen();
+  return entry;
+}
+
+async function openReadingJournalSource(entry: SavedReadingJournalEntry): Promise<void> {
+  if (currentRecentEntryId !== entry.recentEntryId && entry.recentEntryId) {
+    const recent = (await readRecentFiles()).find((item) => item.id === entry.recentEntryId);
+    if (!recent) {
+      setStatus(`找不到“${entry.documentName}”的文件记录，请重新打开该 PDF。`, true);
+      return;
+    }
+    await openRecentFile(recent);
+  } else if (!pdfDocument || getDisplayFileName(sourceName) !== entry.documentName) {
+    setStatus(`请先打开来源文件“${entry.documentName}”。`, true);
+    return;
+  }
+  if (!pdfDocument) return;
+  closeReadingJournalPage();
+  const pageNumber = Math.min(pdfDocument.numPages, Math.max(1, entry.pageNumber));
+  pdfViewer.currentPageNumber = pageNumber;
+  requestAnimationFrame(() => pdfViewer.scrollPageIntoView({ pageNumber }));
+}
+
+function renderReadingJournal(): void {
+  const query = readingJournalSearchInput.value.trim().toLowerCase();
+  const entries = readReadingJournalEntries()
+    .filter((entry) => entry.readingMode === resolvedReadingMode)
+    .filter((entry) => !query || [entry.title, entry.quote, entry.content, entry.tags.join(" "), entry.documentName]
+      .join(" ").toLowerCase().includes(query));
+  readingJournalDocumentElement.textContent = sourceName ? getDisplayFileName(sourceName) : "当前阅读模式";
+  readingJournalCountElement.textContent = `${entries.length} 条札记`;
+  readingJournalEmptyElement.hidden = entries.length > 0;
+  const cards = entries.map((entry) => {
+    const article = document.createElement("article");
+    article.className = "reading-journal-card";
+    const head = document.createElement("header");
+    const title = document.createElement("strong");
+    title.textContent = entry.title;
+    const meta = document.createElement("small");
+    meta.textContent = `${entry.documentName} · ${entry.positionLabel}`;
+    head.append(title, meta);
+    article.append(head);
+    if (entry.quote) {
+      const quote = document.createElement("blockquote");
+      quote.textContent = entry.quote;
+      article.append(quote);
+    }
+    const body = document.createElement("div");
+    body.className = "reading-journal-markdown";
+    renderChatMarkdown(body, entry.content);
+    const footer = document.createElement("footer");
+    const tags = document.createElement("span");
+    tags.textContent = entry.tags.map((tag) => `#${tag}`).join(" ");
+    const actions = document.createElement("div");
+    const sourceButton = document.createElement("button");
+    sourceButton.type = "button";
+    sourceButton.textContent = "查看原文";
+    sourceButton.addEventListener("click", () => void openReadingJournalSource(entry));
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "编辑";
+    editButton.addEventListener("click", () => openReadingJournalEditor(entry));
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.textContent = "删除";
+    deleteButton.addEventListener("click", () => {
+      if (!window.confirm(`确定删除“${entry.title}”吗？`)) return;
+      writeReadingJournalEntries(readReadingJournalEntries().filter((item) => item.id !== entry.id));
+      renderReadingJournal();
+    });
+    actions.append(sourceButton, editButton, deleteButton);
+    footer.append(tags, actions);
+    article.append(body, footer);
+    return article;
+  });
+  readingJournalListElement.replaceChildren(...cards);
+}
+
+function openReadingJournalPage(): void {
+  paperCardPageElement.hidden = true;
+  knowledgeBasePageElement.hidden = true;
+  appFrame?.classList.remove("paper-card-page-open", "knowledge-base-page-open");
+  readingJournalPageElement.hidden = false;
+  appFrame?.classList.add("reading-journal-page-open");
+  setCurrentApplicationView("journal");
+  renderReadingJournal();
+}
+
+function closeReadingJournalPage(): void {
+  readingJournalPageElement.hidden = true;
+  appFrame?.classList.remove("reading-journal-page-open");
+  closeReadingJournalEditor();
+  setCurrentApplicationView("viewer");
+}
+
+function openModeSecondaryPage(): void {
+  if (!pdfDocument) return;
+  if (resolvedReadingMode === "paper") openPaperCardPage();
+  else openReadingJournalPage();
+}
+
 function openPaperCardPage(): void {
+  readingJournalPageElement.hidden = true;
+  appFrame?.classList.remove("reading-journal-page-open");
   clearPaperCardReviewState();
   knowledgeBasePageElement.hidden = true;
   appFrame?.classList.remove("knowledge-base-page-open");
@@ -9183,11 +9748,41 @@ function openPaperCardPage(): void {
   appFrame?.classList.add("paper-card-page-open");
   paperCardEntryButton?.classList.add("active");
   aiPanelToggleButton?.classList.remove("active");
+  setCurrentApplicationView("paper-card");
   updatePaperCardDocumentName();
   setPaperCardEditMode(false);
   paperCardPageElement.scrollTop = 0;
+  setActivePaperCardSection("paper-card-section-overview");
   schedulePaperCardTextareaRefresh();
   void generatePaperOverviewCard();
+}
+
+function setActivePaperCardSection(sectionId: string): void {
+  for (const button of paperCardSectionButtons) {
+    button.classList.toggle(
+      "active",
+      button.dataset.paperCardSection === sectionId,
+    );
+  }
+}
+
+function syncPaperCardSectionFromScroll(container: HTMLElement): void {
+  if (paperCardPageElement.hidden || !paperCardSectionButtons.length) return;
+  const containerTop = container.getBoundingClientRect().top;
+  let closestId = "";
+  let closestDistance = Number.POSITIVE_INFINITY;
+  for (const button of paperCardSectionButtons) {
+    const sectionId = button.dataset.paperCardSection;
+    if (!sectionId) continue;
+    const section = document.getElementById(sectionId);
+    if (!section || !container.contains(section)) continue;
+    const distance = Math.abs(section.getBoundingClientRect().top - containerTop - 12);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestId = sectionId;
+    }
+  }
+  if (closestId) setActivePaperCardSection(closestId);
 }
 
 function openSavedPaperOverviewReview(item: KnowledgeItem): void {
@@ -9223,6 +9818,7 @@ function openSavedPaperOverviewReview(item: KnowledgeItem): void {
   appFrame?.classList.add("paper-card-page-open");
   paperCardEntryButton?.classList.add("active");
   aiPanelToggleButton?.classList.remove("active");
+  setCurrentApplicationView("paper-card");
 
   setPaperCardPageMode("review");
   updatePaperCardDocumentName();
@@ -9249,6 +9845,7 @@ function closePaperCardPage(destination: "pdf" | "knowledge" = "pdf"): void {
     appFrame?.classList.add("knowledge-base-page-open");
     knowledgeBaseEntryButton.classList.add("active");
     aiPanelToggleButton?.classList.remove("active");
+    setCurrentApplicationView("knowledge");
     renderKnowledgeBase();
     return;
   }
@@ -9257,6 +9854,7 @@ function closePaperCardPage(destination: "pdf" | "knowledge" = "pdf"): void {
   appFrame?.classList.remove("knowledge-base-page-open");
   knowledgeBaseEntryButton.classList.remove("active");
   aiPanelToggleButton?.classList.add("active");
+  setCurrentApplicationView("viewer");
   persistCurrentAppViewState();
 }
 
@@ -9293,6 +9891,10 @@ function savePaperOverviewCard(): void {
         ? {
             ...card,
             ...data,
+            documentId:
+              card.documentId || (pdfDocument ? getDocumentChatId(pdfDocument) : undefined),
+            recentEntryId: card.recentEntryId || currentRecentEntryId || undefined,
+            sourceLocator: card.sourceLocator || getCurrentPaperSourceLocator(),
             documentName:
               paperCardDocumentNameElement.value.trim() ||
               paperCardReviewDocumentName ||
@@ -9320,6 +9922,9 @@ function savePaperOverviewCard(): void {
     documentName:
       paperCardDocumentNameElement.value.trim() ||
       (sourceName ? getDisplayFileName(sourceName) : "未命名论文"),
+    documentId: pdfDocument ? getDocumentChatId(pdfDocument) : undefined,
+    recentEntryId: currentRecentEntryId ?? undefined,
+    sourceLocator: getCurrentPaperSourceLocator(),
     ...data,
     createdAt: now,
     updatedAt: now,
@@ -9428,6 +10033,19 @@ function writeSavedKnowledgeNotes(notes: SavedKnowledgeNote[]): void {
   );
 }
 
+function readReadingJournalEntries(): SavedReadingJournalEntry[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(READING_JOURNAL_STORAGE_KEY) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeReadingJournalEntries(entries: SavedReadingJournalEntry[]): void {
+  localStorage.setItem(READING_JOURNAL_STORAGE_KEY, JSON.stringify(entries));
+}
+
 function readKnowledgeItemMetaStore(): KnowledgeItemMetaStore {
   try {
     const value = JSON.parse(
@@ -9491,6 +10109,7 @@ function collectKnowledgeItems(): KnowledgeItem[] {
 
   for (const note of readSavedKnowledgeNotes()) {
     if (!note || typeof note.id !== "string") continue;
+    if ((note.readingMode ?? "paper") !== resolvedReadingMode) continue;
     const createdAt =
       typeof note.createdAt === "string"
         ? note.createdAt
@@ -9535,7 +10154,34 @@ function collectKnowledgeItems(): KnowledgeItem[] {
     );
   }
 
+  for (const entry of readReadingJournalEntries()) {
+    if (!entry || entry.readingMode !== resolvedReadingMode) continue;
+    items.push(
+      applyKnowledgeMeta(
+        {
+          recordKey: getKnowledgeRecordKey("reading-journal", entry.id),
+          id: entry.id,
+          source: "reading-journal",
+          kind: "note",
+          title: entry.title || "未命名阅读札记",
+          content: [entry.quote ? `> ${entry.quote}` : "", entry.content]
+            .filter(Boolean)
+            .join("\n\n"),
+          documentName: entry.documentName,
+          pageNumber: entry.pageNumber,
+          positionLabel: entry.positionLabel,
+          category: "阅读札记",
+          tags: entry.tags,
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt,
+        },
+        metaStore,
+      ),
+    );
+  }
+
   for (const note of readSavedSummaryNotes()) {
+    if (resolvedReadingMode !== "paper") continue;
     if (!note || typeof note.id !== "string") continue;
     const points = Array.isArray(note.points)
       ? note.points.filter(
@@ -9583,6 +10229,7 @@ function collectKnowledgeItems(): KnowledgeItem[] {
   }
 
   for (const card of readSavedPaperCards()) {
+    if (resolvedReadingMode !== "paper") continue;
     if (!card || typeof card.id !== "string") continue;
     const createdAt =
       typeof card.createdAt === "string"
@@ -9625,6 +10272,7 @@ function collectKnowledgeItems(): KnowledgeItem[] {
   }
 
   for (const card of readSavedPaperOverviews()) {
+    if (resolvedReadingMode !== "paper") continue;
     if (!card || typeof card.id !== "string") continue;
     const createdAt =
       typeof card.createdAt === "string"
@@ -9639,6 +10287,20 @@ function collectKnowledgeItems(): KnowledgeItem[] {
       card.keywords,
       card.topicTags,
     ]);
+    const linkedReadingCards = readSavedPaperCards().filter((item) =>
+      item.paperOverviewId === card.id
+      || Boolean(card.documentId && item.documentId === card.documentId),
+    );
+    const linkedCardContent = linkedReadingCards.length
+      ? [
+          "## 关联阅读卡片",
+          ...linkedReadingCards.map((item) => [
+            `### ${item.title}`,
+            item.explanation,
+            `来源：${item.sourceLocation}`,
+          ].join("\n")),
+        ].join("\n\n")
+      : "";
     items.push(
       applyKnowledgeMeta(
         {
@@ -9647,7 +10309,9 @@ function collectKnowledgeItems(): KnowledgeItem[] {
           source: "paper-overview",
           kind: "paper-card",
           title: card.title?.trim() || card.documentName || "未命名论文卡片",
-          content: formatPaperOverviewMarkdown(card),
+          content: [formatPaperOverviewMarkdown(card), linkedCardContent]
+            .filter(Boolean)
+            .join("\n\n"),
           documentName: card.documentName || "未关联文档",
           positionLabel: "整篇论文",
           category: card.researchArea?.trim() || "论文卡片",
@@ -10926,6 +11590,7 @@ function saveKnowledgeResearchResult(): void {
 
 function renderKnowledgeBase(): void {
   const items = collectKnowledgeItems();
+  const modeLabel = getReadingModeLabel(resolvedReadingMode);
   const validKeys = new Set(items.map((item) => item.recordKey));
   selectedKnowledgeResearchKeys = new Set(
     Array.from(selectedKnowledgeResearchKeys).filter((key) =>
@@ -10942,7 +11607,7 @@ function renderKnowledgeBase(): void {
         ? "管理你的文献笔记、论文卡片与综述准备，一站式助力高效科研。"
         : "聚焦当前阅读目标，优先处理最值得研究生投入时间的文献内容。";
   }
-  knowledgePageTitleElement.textContent = "研究知识库";
+  knowledgePageTitleElement.textContent = `${modeLabel}知识库`;
   knowledgeTotalCountElement.textContent = String(filtered.length);
   knowledgeDocumentCountElement.textContent = String(
     new Set(filtered.map((item) => item.documentName)).size,
@@ -10960,6 +11625,8 @@ function refreshKnowledgeBaseIfOpen(): void {
 }
 
 function openKnowledgeBasePage(): void {
+  readingJournalPageElement.hidden = true;
+  appFrame?.classList.remove("reading-journal-page-open");
   paperCardPageAbortController?.abort();
   paperCardPageElement.hidden = true;
   appFrame?.classList.remove("paper-card-page-open");
@@ -10968,6 +11635,7 @@ function openKnowledgeBasePage(): void {
   appFrame?.classList.add("knowledge-base-page-open");
   knowledgeBaseEntryButton.classList.add("active");
   aiPanelToggleButton?.classList.remove("active");
+  setCurrentApplicationView("knowledge");
   knowledgeBasePageElement.scrollTop = 0;
   renderKnowledgeBase();
 }
@@ -10977,6 +11645,7 @@ function closeKnowledgeBasePage(): void {
   appFrame?.classList.remove("knowledge-base-page-open");
   knowledgeBaseEntryButton.classList.remove("active");
   aiPanelToggleButton?.classList.add("active");
+  setCurrentApplicationView("viewer");
   persistCurrentAppViewState();
 }
 
@@ -10992,6 +11661,7 @@ function addKnowledgeNote(
   const now = new Date().toISOString();
   const saved: SavedKnowledgeNote = {
     ...note,
+    readingMode: note.readingMode ?? resolvedReadingMode,
     id: crypto.randomUUID(),
     createdAt: now,
     updatedAt: now,
@@ -11006,6 +11676,14 @@ function addKnowledgeNote(
 }
 
 function openKnowledgeEditor(item?: KnowledgeItem): void {
+  if (item?.source === "reading-journal") {
+    const entry = readReadingJournalEntries().find((candidate) => candidate.id === item.id);
+    if (entry) {
+      openReadingJournalPage();
+      openReadingJournalEditor(entry);
+    }
+    return;
+  }
   knowledgeEditorTargetKey = item?.recordKey || null;
   knowledgeEditorHeading.textContent = item ? "编辑知识内容" : "新建笔记";
   knowledgeEditorSource.textContent = item
@@ -11110,6 +11788,10 @@ function deleteSelectedKnowledgeItem(): void {
     writeSavedKnowledgeNotes(
       readSavedKnowledgeNotes().filter((note) => note.id !== item.id),
     );
+  } else if (item.source === "reading-journal") {
+    writeReadingJournalEntries(
+      readReadingJournalEntries().filter((entry) => entry.id !== item.id),
+    );
   } else if (item.source === "summary-note") {
     localStorage.setItem(
       SUMMARY_NOTES_STORAGE_KEY,
@@ -11144,6 +11826,11 @@ function deleteSelectedKnowledgeItem(): void {
 
 function openSelectedKnowledgeSource(): void {
   const item = getSelectedKnowledgeItem();
+  if (item?.source === "reading-journal") {
+    const entry = readReadingJournalEntries().find((candidate) => candidate.id === item.id);
+    if (entry) void openReadingJournalSource(entry);
+    return;
+  }
   if (!item?.pageNumber) {
     setKnowledgePageStatus("这条内容没有可定位的页码。", true);
     return;
@@ -11247,6 +11934,21 @@ function saveTranslationAndExplanationAsNote(): void {
   );
   const chapter = getCurrentChapterContext(pageNumber).title;
   const isWord = learningResult.kind === "word";
+  if (resolvedReadingMode !== "paper") {
+    const entry = saveReadingJournalEntry({
+      title: `${isWord ? "单词" : "句子"}：${getKnowledgeExcerpt(sourceText).slice(0, 34)}`,
+      quote: sourceText,
+      content: [
+        isWord ? "## 单词学习" : "## 句子翻译",
+        learningText,
+      ].join("\n\n"),
+      tags: isWord ? ["英语学习", "单词"] : ["英语学习", "句子翻译"],
+      origin: "translation",
+      pageNumber,
+    });
+    setStatus(`已保存“${entry.title}”到阅读札记。`);
+    return;
+  }
   const note = addKnowledgeNote({
     title: `${isWord ? "单词学习" : "句子翻译"}：${getKnowledgeExcerpt(sourceText).slice(0, 34)}`,
     content: [
@@ -11279,6 +11981,20 @@ function attachChatSaveAction(
   button.textContent = "保存为笔记";
   button.addEventListener("click", () => {
     const chapter = getCurrentChapterContext(pageNumber).title;
+    if (resolvedReadingMode !== "paper") {
+      const entry = saveReadingJournalEntry({
+        title: question ? `AI 问答：${getKnowledgeExcerpt(question).slice(0, 34)}` : "AI 问答札记",
+        quote: question,
+        content: ["## AI 回答", answer].join("\n\n"),
+        tags: ["AI 问答"],
+        origin: "ai",
+        pageNumber,
+      });
+      button.disabled = true;
+      button.textContent = "已保存";
+      setStatus(`已保存“${entry.title}”到阅读札记。`);
+      return;
+    }
     const note = addKnowledgeNote({
       title: question
         ? `AI 问答：${getKnowledgeExcerpt(question).slice(0, 34)}`
@@ -13062,8 +13778,6 @@ async function openPdf(
     sourceName = name;
     currentFileHandle = fileHandle;
     const displayName = getDisplayFileName(name);
-    documentNameElement.textContent = displayName;
-    documentNameElement.title = name;
     annotationEditor = null;
     activeEditorMode = AnnotationEditorType.NONE;
     canUndoAnnotation = false;
@@ -13086,6 +13800,23 @@ async function openPdf(
     );
     currentRecentEntryId = recentEntry?.id ?? null;
     pendingReadingPosition = recentEntry?.readingPosition ?? null;
+    await executeMemoryTool({
+      name: "library.recordOpen",
+      arguments: {
+        documentId: getDocumentChatId(documentProxy),
+        fingerprint: getPdfFingerprint(documentProxy),
+        title: displayName.replace(/\.pdf$/i, ""),
+        pageCount: documentProxy.numPages,
+        currentPage: 1,
+        sourceName: name,
+        recentEntryId: recentEntry?.id,
+        sourceKind: recentEntry?.kind,
+        sourceUrl: recentEntry?.url,
+        sourceLocator: recentEntry?.kind === "local"
+          ? `local-file-handle:${recentEntry.id}`
+          : recentEntry?.url,
+      },
+    });
 
     pdfViewer.setDocument(documentProxy);
     linkService.setDocument(documentProxy);
@@ -13146,8 +13877,6 @@ async function openPdf(
     resetCardState();
     sourceName = "";
     resetPaperCardPageState();
-    documentNameElement.textContent = "打开失败";
-    documentNameElement.title = "";
     updateControls();
     setStatus(error instanceof Error ? error.message : String(error), true);
     textStatus.textContent = "PDF解析失败";
@@ -13364,15 +14093,29 @@ outlineToggleButton?.addEventListener("click", () => {
 });
 
 aiPanelToggleButton?.addEventListener("click", () => {
-  if (!paperCardPageElement.hidden) {
-    closePaperCardPage();
-    appFrame?.classList.remove("right-panel-collapsed");
-    setAssistantView("chat");
+  if (!readingJournalPageElement.hidden) {
+    closeReadingJournalPage();
     return;
   }
+  if (!paperCardPageElement.hidden) {
+    closePaperCardPage();
+    return;
+  }
+  if (!knowledgeBasePageElement.hidden) {
+    closeKnowledgeBasePage();
+    return;
+  }
+  setCurrentApplicationView("viewer");
+});
+
+assistantPanelToggleButton.addEventListener("click", () => {
+  if (!readingJournalPageElement.hidden) closeReadingJournalPage();
+  if (!paperCardPageElement.hidden) closePaperCardPage();
+  if (!knowledgeBasePageElement.hidden) closeKnowledgeBasePage();
   const willOpen =
     appFrame?.classList.contains("right-panel-collapsed") ?? false;
   appFrame?.classList.toggle("right-panel-collapsed");
+  assistantPanelToggleButton.classList.toggle("active", willOpen);
   if (willOpen) setAssistantView("chat");
 });
 
@@ -13623,8 +14366,31 @@ for (const button of aiTabButtons) {
 
 bindPaperCardTextareaAutoResize();
 
-paperCardEntryButton?.addEventListener("click", openPaperCardPage);
+paperCardEntryButton?.addEventListener("click", openModeSecondaryPage);
 knowledgeBaseEntryButton.addEventListener("click", openKnowledgeBasePage);
+readingJournalBackButton.addEventListener("click", closeReadingJournalPage);
+readingJournalNewButton.addEventListener("click", () => openReadingJournalEditor());
+readingJournalSearchInput.addEventListener("input", renderReadingJournal);
+readingJournalEditorCloseButton.addEventListener("click", closeReadingJournalEditor);
+readingJournalEditorCancelButton.addEventListener("click", closeReadingJournalEditor);
+readingJournalEditorElement.addEventListener("pointerdown", (event) => {
+  if (event.target === readingJournalEditorElement) closeReadingJournalEditor();
+});
+readingJournalForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!readingJournalContentInput.value.trim() && !readingJournalQuoteInput.value.trim()) {
+    setStatus("请填写札记内容或原文摘录。", true);
+    return;
+  }
+  saveReadingJournalEntry({
+    title: readingJournalTitleInput.value,
+    quote: readingJournalQuoteInput.value,
+    content: readingJournalContentInput.value,
+    tags: readingJournalTagsInput.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
+    origin: "user",
+  });
+  closeReadingJournalEditor();
+});
 knowledgeBaseBackButton.addEventListener("click", closeKnowledgeBasePage);
 for (const button of knowledgeModeButtons) {
   button.addEventListener("click", () => {
@@ -13713,9 +14479,25 @@ function scheduleAppViewStateSave(): void {
 knowledgeMainElement.addEventListener("scroll", scheduleAppViewStateSave, {
   passive: true,
 });
-paperCardPageElement.addEventListener("scroll", scheduleAppViewStateSave, {
-  passive: true,
-});
+paperCardPageElement.addEventListener("scroll", () => {
+  scheduleAppViewStateSave();
+}, { passive: true });
+for (const container of paperCardScrollContainers) {
+  container.addEventListener("scroll", () => {
+    scheduleAppViewStateSave();
+    syncPaperCardSectionFromScroll(container);
+  }, { passive: true });
+}
+for (const button of paperCardSectionButtons) {
+  button.addEventListener("click", () => {
+    const sectionId = button.dataset.paperCardSection;
+    if (!sectionId) return;
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    setActivePaperCardSection(sectionId);
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
 knowledgeResearchQuestionInput.addEventListener(
   "input",
   scheduleAppViewStateSave,
@@ -14534,6 +15316,7 @@ toggleNotesButton.addEventListener("click", () => {
 });
 
 updateNoteIndicatorsVisibility();
+setCurrentApplicationView("viewer");
 clearOutlineList("打开 PDF 后显示目录");
 setLeftPanelCollapsed(false);
 updateControls();

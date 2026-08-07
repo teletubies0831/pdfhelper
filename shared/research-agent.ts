@@ -642,7 +642,7 @@ function discoverOfficialLinks(html: string, baseUrl: string): { categoryUrls: s
   const pdfUrls = new Set<string>();
   for (const match of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
     try {
-      const url = new URL(decodeHtmlEntities(match[1]), baseUrl);
+      const url = new URL(decodeHtmlEntities(match[1] ?? ""), baseUrl);
       if (!/(^|\.)ccf\.org\.cn$/i.test(url.hostname)) continue;
       const value = url.toString();
       if (/\.pdf(?:$|[?#])/i.test(value) || /resource\/download|file\/download/i.test(value)) pdfUrls.add(value);
@@ -693,7 +693,7 @@ function createCcfRecord(
 
 function parseCcfHtml(html: string, sourceUrl: string): CcfDirectoryRecord[] {
   const markers = Array.from(html.matchAll(/(?:>|\s)([ABC])\s*类(?:<|\s)/gi)).map((match) => ({
-    rank: match[1].toUpperCase() as CcfRank,
+    rank: (match[1] ?? "").toUpperCase() as CcfRank,
     index: match.index ?? 0,
   }));
   const records: CcfDirectoryRecord[] = [];
@@ -701,8 +701,8 @@ function parseCcfHtml(html: string, sourceUrl: string): CcfDirectoryRecord[] {
     const rowIndex = row.index ?? 0;
     const marker = markers.filter((item) => item.index < rowIndex).at(-1);
     if (!marker) continue;
-    const cells = Array.from(row[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi))
-      .map((cell) => stripHtml(cell[1]))
+    const cells = Array.from((row[1] ?? "").matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi))
+      .map((cell) => stripHtml(cell[1] ?? ""))
       .filter(Boolean);
     if (cells.length < 2 || cells.some((cell) => /刊物名称|刊物全称|会议名称|序号/.test(cell))) continue;
     const record = createCcfRecord(marker.rank, cells, sourceUrl, "html");
@@ -809,11 +809,11 @@ function distinctiveCcfTokens(value: string): Set<string> {
 function explicitAcronymCandidates(value: string): string[] {
   const results: string[] = [];
   for (const match of value.matchAll(/\(([A-Za-z][A-Za-z0-9&+.-]{1,18})\)/g)) {
-    const acronym = match[1].replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+    const acronym = (match[1] ?? "").replace(/[^A-Za-z0-9]/g, "").toLowerCase();
     if (acronym.length >= 2 && !CCF_ACRONYM_IGNORE.has(acronym)) results.push(acronym);
   }
   for (const match of value.matchAll(/\b([A-Z][A-Z0-9&+.-]{1,15})\b/g)) {
-    const acronym = match[1].replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+    const acronym = (match[1] ?? "").replace(/[^A-Za-z0-9]/g, "").toLowerCase();
     if (acronym.length >= 2 && !CCF_ACRONYM_IGNORE.has(acronym)) results.push(acronym);
   }
   return Array.from(new Set(results));

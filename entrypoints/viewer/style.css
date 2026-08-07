@@ -546,7 +546,7 @@ input:disabled {
   --right-panel-width: 0px;
 }
 
-.app-frame.right-panel-collapsed #ai-panel-toggle {
+.app-frame.right-panel-collapsed #assistant-panel-toggle {
   border-color: #e0e7f1;
   background: #fff;
   color: #334155;
@@ -885,7 +885,7 @@ input:disabled {
 
 .ai-tabs {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -2863,7 +2863,7 @@ button:disabled {
 .assistant-tabs {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: 12px;
   border-radius: 10px;
@@ -8673,4 +8673,561 @@ button:disabled {
 .online-related-paper-meta-row .online-related-paper-meta {
   min-width: 0;
   flex: 1 1 auto;
+}
+
+/* Native-reader layout: the outline and AI assistant behave like edge
+   sidebars, leaving the document canvas as the visual center. */
+.toolbar {
+  height: 48px;
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.toolbar > #outline-toggle {
+  order: -2;
+  min-width: 72px;
+}
+
+.brand {
+  min-width: 104px;
+  order: -1;
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.reading-mode-control {
+  max-width: 190px;
+  padding: 0 3px 0 7px;
+}
+
+.reading-mode-control > span,
+.reading-mode-control small {
+  display: none;
+}
+
+.reading-mode-control select {
+  width: 150px;
+  min-width: 0;
+  max-width: 150px;
+  font-size: 11px;
+}
+
+.reading-mode-control button {
+  width: 26px;
+  min-width: 26px;
+  padding: 0;
+}
+
+.toolbar-pill,
+.toolbar-icon-button,
+.toolbar-group > button,
+.layout-button,
+.reading-mode-control,
+.highlight-color-control {
+  height: 32px;
+  min-height: 32px;
+}
+
+.workspace {
+  --left-panel-width: 252px;
+  --right-panel-width: 348px;
+  grid-template-columns:
+    var(--left-panel-width)
+    minmax(420px, 1fr)
+    var(--right-panel-width);
+  gap: 10px;
+  background: #f3f6fa;
+  padding: 10px;
+}
+
+.left-panel {
+  gap: 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgb(15 23 42 / 6%);
+  padding: 10px 8px;
+}
+
+.left-panel .side-tabs {
+  border-radius: 5px;
+  background: transparent;
+  padding: 0;
+}
+
+.left-panel .side-tabs button.active {
+  border-color: transparent;
+  background: transparent;
+  color: #1f2937;
+  font-size: 14px;
+  text-align: left;
+}
+
+.reader-card {
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: #e7e9ed;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 4%);
+}
+
+.right-panel {
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgb(15 23 42 / 6%);
+  padding: 10px;
+}
+
+.assistant-tabs {
+  margin-bottom: 10px;
+  border-radius: 7px;
+}
+
+.assistant-tabs button {
+  min-height: 32px;
+}
+
+.document-name {
+  display: none !important;
+}
+
+.assistant-entry {
+  margin-left: auto;
+}
+
+.toolbar-settings-button {
+  min-width: 34px;
+  padding: 0 8px;
+}
+
+/* Final toolbar polish: compact, text-led and visually balanced. */
+.toolbar {
+  gap: 7px;
+  padding-inline: 10px;
+}
+
+.reading-mode-control {
+  width: auto;
+  min-width: 0 !important;
+  max-width: none;
+  flex: 0 0 auto !important;
+  flex-basis: auto !important;
+  gap: 1px;
+  border-color: #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+  padding: 0 3px 0 9px;
+}
+
+.reading-mode-control select {
+  width: 164px;
+  min-width: 164px;
+  max-width: 164px;
+  border: 0;
+  background: transparent;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reading-mode-control button {
+  width: 26px;
+  min-width: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #94a3b8;
+}
+
+.reading-mode-control button:hover {
+  background: #eef2f7;
+  color: #475569;
+}
+
+.ai-tools {
+  gap: 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f7f9fc;
+  padding: 3px;
+}
+
+.ai-tools > button {
+  height: 26px;
+  min-height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0 10px;
+  color: #475569;
+  box-shadow: none;
+}
+
+.ai-tools > button:hover {
+  background: #eef2f7;
+}
+
+.ai-tools > button.active {
+  border: 0;
+  background: #fff;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 10%);
+}
+
+.assistant-entry {
+  height: 32px;
+  margin-left: auto;
+  border-radius: 9px;
+  padding: 0 12px;
+}
+
+.toolbar-settings-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  margin-left: 0;
+  border-radius: 9px;
+  padding: 0;
+}
+
+@media (max-width: 1280px) {
+  .workspace {
+    --left-panel-width: 220px;
+    --right-panel-width: 320px;
+  }
+
+}
+
+/* Lightweight, mode-scoped reading journal. */
+.reading-journal-page {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  background: #f4f7fb;
+  padding: 18px;
+}
+
+.reading-journal-page[hidden],
+.reading-journal-editor[hidden] {
+  display: none;
+}
+
+.app-frame.reading-journal-page-open .workspace {
+  display: none;
+}
+
+.reading-journal-shell {
+  width: min(1080px, 100%);
+  min-height: 100%;
+  margin: 0 auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgb(15 23 42 / 5%);
+  padding: 20px;
+}
+
+.reading-journal-header,
+.reading-journal-header > div,
+.reading-journal-search,
+.reading-journal-card header,
+.reading-journal-card footer,
+.reading-journal-card footer > div {
+  display: flex;
+  align-items: center;
+}
+
+.reading-journal-header {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reading-journal-header > div {
+  gap: 10px;
+}
+
+.reading-journal-header > div > span {
+  display: grid;
+  gap: 2px;
+}
+
+.reading-journal-header strong {
+  color: #172033;
+  font-size: 20px;
+}
+
+.reading-journal-header small,
+.reading-journal-card small,
+.reading-journal-count {
+  color: #7b879b;
+}
+
+.reading-journal-header button,
+.reading-journal-card button {
+  min-height: 32px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 11px;
+}
+
+.reading-journal-header .primary-button {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.reading-journal-search {
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.reading-journal-search input {
+  min-width: 0;
+  flex: 1;
+  height: 38px;
+  border: 1px solid #dce4ef;
+  border-radius: 9px;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.reading-journal-search span {
+  color: #7b879b;
+  font-size: 12px;
+}
+
+.reading-journal-list {
+  display: grid;
+  gap: 12px;
+}
+
+.reading-journal-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  padding: 15px 16px;
+}
+
+.reading-journal-card header {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reading-journal-card header strong {
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.reading-journal-card blockquote {
+  margin: 12px 0;
+  border-left: 3px solid #93c5fd;
+  background: #f8fafc;
+  padding: 9px 12px;
+  color: #526071;
+}
+
+.reading-journal-markdown {
+  color: #334155;
+  line-height: 1.7;
+}
+
+.reading-journal-card footer {
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #edf1f6;
+  padding-top: 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.reading-journal-card footer > div {
+  gap: 6px;
+}
+
+.reading-journal-card footer button {
+  min-height: 28px;
+  font-size: 12px;
+}
+
+.reading-journal-empty {
+  padding: 80px 20px;
+  text-align: center;
+  color: #7b879b;
+}
+
+.reading-journal-empty strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #334155;
+}
+
+.reading-journal-editor {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(15 23 42 / 32%);
+  padding: 22px;
+}
+
+.reading-journal-editor form {
+  display: grid;
+  width: min(680px, 100%);
+  max-height: min(820px, 92vh);
+  gap: 13px;
+  overflow: auto;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 24%);
+  padding: 20px;
+}
+
+.reading-journal-editor header,
+.reading-journal-editor footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reading-journal-editor header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.reading-journal-editor header small {
+  color: #7b879b;
+}
+
+.reading-journal-editor label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reading-journal-editor input,
+.reading-journal-editor textarea {
+  width: 100%;
+  border: 1px solid #dce4ef;
+  border-radius: 9px;
+  padding: 9px 11px;
+  color: #1e293b;
+  font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+  resize: vertical;
+}
+
+.reading-journal-editor footer {
+  justify-content: flex-end;
+}
+
+.reading-journal-editor button {
+  min-height: 34px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 14px;
+}
+
+.reading-journal-editor .primary-button {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+/* Paper-card section navigation */
+.paper-card-workspace {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 16px;
+  overflow: hidden;
+}
+
+.paper-card-workspace > .paper-card-form {
+  width: 100%;
+  min-width: 0;
+}
+
+.paper-card-section-nav {
+  display: flex;
+  min-height: 0;
+  align-self: start;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #e1e7ef;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 4%);
+}
+
+.paper-card-section-nav > strong {
+  padding: 6px 9px 9px;
+  color: #8994a6;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.paper-card-section-nav button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 10px;
+  color: #566277;
+  font-size: 13px;
+  text-align: left;
+  transition: background-color .16s ease, color .16s ease;
+}
+
+.paper-card-section-nav button:hover {
+  background: #f3f6fb;
+  color: #25324a;
+}
+
+.paper-card-section-nav button.active {
+  background: #eaf2ff;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.paper-card-nav-section {
+  scroll-margin-top: 12px;
+}
+
+@media (max-width: 1180px) {
+  .paper-card-workspace {
+    grid-template-columns: 142px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .paper-card-section-nav {
+    padding: 7px;
+  }
+
+  .paper-card-section-nav button {
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+}
+
+/* Preserve toolbar geometry outside the PDF viewer while making the
+   viewer-only controls clearly unavailable. */
+.app-frame.paper-card-page-open #outline-toggle,
+.app-frame.paper-card-page-open #assistant-panel-toggle,
+.app-frame.reading-journal-page-open #outline-toggle,
+.app-frame.reading-journal-page-open #assistant-panel-toggle,
+.app-frame.knowledge-base-page-open #outline-toggle,
+.app-frame.knowledge-base-page-open #assistant-panel-toggle {
+  border-color: #e2e8f0;
+  background: #f3f5f8;
+  color: #a3adbc;
+  box-shadow: none;
+  opacity: .72;
+  cursor: not-allowed;
 }

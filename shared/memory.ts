@@ -88,6 +88,11 @@ export interface PaperLibraryRecord {
   userSummary?: string;
   userRating?: number;
   sourceName?: string;
+  recentEntryId?: string;
+  sourceKind?: 'local' | 'remote';
+  sourceUrl?: string;
+  /** Browser-safe source locator. Local files use a persisted file-handle id. */
+  sourceLocator?: string;
 }
 
 export interface UpsertPaperLibraryInput extends Partial<Omit<PaperLibraryRecord, 'id' | 'documentId'>> {
@@ -121,6 +126,10 @@ export type MemoryToolCall =
       pageCount: number;
       currentPage: number;
       sourceName?: string;
+      recentEntryId?: string;
+      sourceKind?: 'local' | 'remote';
+      sourceUrl?: string;
+      sourceLocator?: string;
     };
   };
 

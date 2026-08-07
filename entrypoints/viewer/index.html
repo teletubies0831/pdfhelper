@@ -8,9 +8,10 @@
   <body>
     <div class="app-frame">
 <header class="toolbar">
-  <div class="brand">
-    <strong>PDF Helper</strong>
-  </div>
+  <button id="outline-toggle" class="toolbar-pill toolbar-nav-button toolbar-outline-button" type="button" title="显示或隐藏左侧目录">
+    <span class="toolbar-icon">☰</span>
+    目录
+  </button>
 
   <div class="toolbar-menu" data-toolbar-menu>
     <button
@@ -55,20 +56,14 @@
   </div>
   <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" />
 
-  <button id="outline-toggle" class="toolbar-pill toolbar-nav-button toolbar-outline-button" type="button" title="左侧目录面板">
-    <span class="toolbar-icon">☰</span>
-    目录
-  </button>
-
   <div class="reading-mode-control" aria-label="阅读模式">
-    <span>阅读模式</span>
     <select id="reading-mode-select" title="选择当前 PDF 的阅读策略">
-      <option value="auto">AI 自动识别</option>
+      <option value="auto">AI 自动识别（通用阅读）</option>
       <option value="general">通用阅读</option>
       <option value="paper">论文精读</option>
       <option value="novel">小说阅读</option>
     </select>
-    <button id="detect-reading-mode" type="button" title="使用当前 API Key 重新识别">重新识别</button>
+    <button id="detect-reading-mode" type="button" title="重新识别阅读模式" aria-label="重新识别阅读模式">↻</button>
     <small id="reading-mode-status">AI自动 · 通用阅读</small>
   </div>
 
@@ -93,13 +88,15 @@
 
   <div class="toolbar-group ai-tools expanded-toolbar-group" aria-label="AI 工具">
     <button id="ai-panel-toggle" class="toolbar-pill toolbar-nav-button ai-entry active" type="button">
-      ✦ AI 助手
+      PDF 阅读
     </button>
     <button id="paper-card-entry" class="toolbar-pill toolbar-nav-button" type="button">论文阅读卡片</button>
     <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button">知识库</button>
   </div>
 
-  <div id="document-name" class="document-name" title="尚未打开文件">尚未打开文件</div>
+  <button id="assistant-panel-toggle" class="toolbar-pill toolbar-nav-button assistant-entry active" type="button" title="显示或隐藏右侧 AI 助手">
+    AI 助手
+  </button>
   <button
     id="ai-settings-button"
     class="toolbar-icon-button toolbar-settings-button toolbar-nav-button"
@@ -107,7 +104,7 @@
     title="AI 设置"
     aria-label="打开 AI 设置"
   >
-    ⚙ 设置
+    ⚙
   </button>
 </header>
 
@@ -133,10 +130,21 @@
 
           <div id="paper-card-page-status" class="paper-card-page-status" hidden aria-live="polite"></div>
 
+          <div class="paper-card-workspace">
+            <nav class="paper-card-section-nav" aria-label="论文卡片栏目">
+              <strong>卡片栏目</strong>
+              <button class="active" type="button" data-paper-card-section="paper-card-section-overview">论文概览</button>
+              <button type="button" data-paper-card-section="paper-card-section-summary">核心摘要</button>
+              <button type="button" data-paper-card-section="paper-card-section-problem">问题与创新</button>
+              <button type="button" data-paper-card-section="paper-card-section-results">实验结果</button>
+              <button type="button" data-paper-card-section="paper-card-section-decision">阅读决策</button>
+              <button type="button" data-paper-card-section="paper-card-section-related">延伸阅读</button>
+            </nav>
+
           <form id="paper-card-form" class="paper-card-form reading-view">
             <div class="paper-card-layout">
               <main class="paper-card-main">
-                <section class="paper-card-overview-card">
+                <section id="paper-card-section-overview" class="paper-card-overview-card paper-card-nav-section">
                   <div class="paper-card-document-icon" aria-hidden="true">▤</div>
                   <div class="paper-card-overview-content">
                     <label class="paper-card-title-field paper-card-inline-editable-field">
@@ -164,7 +172,7 @@
                   </div>
                 </section>
 
-                <section class="paper-card-insight paper-card-highlight">
+                <section id="paper-card-section-summary" class="paper-card-insight paper-card-highlight paper-card-nav-section">
                   <div class="paper-card-insight-icon" aria-hidden="true">✦</div>
                   <label>
                     <span>一句话总结</span>
@@ -172,7 +180,7 @@
                   </label>
                 </section>
 
-                <section class="paper-card-insight">
+                <section id="paper-card-section-problem" class="paper-card-insight paper-card-nav-section">
                   <div class="paper-card-insight-icon" aria-hidden="true">◎</div>
                   <label>
                     <span>解决的核心问题</span>
@@ -188,7 +196,7 @@
                   </label>
                 </section>
 
-                <section class="paper-card-insight">
+                <section id="paper-card-section-results" class="paper-card-insight paper-card-nav-section">
                   <div class="paper-card-insight-icon" aria-hidden="true">↗</div>
                   <label>
                     <span>关键实验结果</span>
@@ -206,7 +214,7 @@
               </main>
 
               <aside class="paper-card-sidebar">
-                <section class="paper-card-side-card paper-card-decision-card">
+                <section id="paper-card-section-decision" class="paper-card-side-card paper-card-decision-card paper-card-nav-section">
                   <h2>阅读决策</h2>
                   <div class="paper-card-decision-banner">
                     <span class="paper-card-decision-check" aria-hidden="true">✓</span>
@@ -297,7 +305,7 @@
                   </label>
                 </section>
 
-                <section class="paper-card-side-card paper-card-reading-list-card">
+                <section id="paper-card-section-related" class="paper-card-side-card paper-card-reading-list-card paper-card-nav-section">
                   <h2>推荐延伸阅读</h2>
                   <label>
                     <span class="paper-card-visually-hidden">高质量相关论文</span>
@@ -336,8 +344,54 @@
               <label>我的备注<textarea id="paper-personal-notes" name="personalNotes"></textarea></label>
             </div>
           </form>
+          </div>
         </div>
       </section>
+
+
+      <section id="reading-journal-page" class="reading-journal-page" hidden aria-label="阅读札记页面">
+        <div class="reading-journal-shell">
+          <header class="reading-journal-header">
+            <div>
+              <button id="reading-journal-back" type="button" aria-label="返回 PDF">←</button>
+              <span>
+                <strong>阅读札记</strong>
+                <small id="reading-journal-document">当前 PDF</small>
+              </span>
+            </div>
+            <button id="reading-journal-new" class="primary-button" type="button">新建札记</button>
+          </header>
+          <div class="reading-journal-search">
+            <input id="reading-journal-search" type="search" placeholder="搜索原文、笔记内容或标签…" />
+            <span id="reading-journal-count">0 条札记</span>
+          </div>
+          <div id="reading-journal-list" class="reading-journal-list"></div>
+          <div id="reading-journal-empty" class="reading-journal-empty">
+            <strong>还没有阅读札记</strong>
+            <p>可在翻译结果或 AI 对话中保存，也可以手动创建 Markdown 札记。</p>
+          </div>
+        </div>
+      </section>
+
+      <div id="reading-journal-editor" class="reading-journal-editor" hidden>
+        <form id="reading-journal-form">
+          <header>
+            <div>
+              <strong id="reading-journal-editor-title">新建阅读札记</strong>
+              <small id="reading-journal-editor-source"></small>
+            </div>
+            <button id="reading-journal-editor-close" type="button" aria-label="关闭">×</button>
+          </header>
+          <label>标题<input id="reading-journal-title" type="text" placeholder="例如：人物第一次出场" /></label>
+          <label>原文或摘录<textarea id="reading-journal-quote" rows="3" placeholder="可选：记录对应的单词、句子或段落"></textarea></label>
+          <label>Markdown 笔记<textarea id="reading-journal-content" rows="12" placeholder="支持 Markdown，可记录解释、翻译、感想或问题"></textarea></label>
+          <label>标签<input id="reading-journal-tags" type="text" placeholder="用逗号分隔" /></label>
+          <footer>
+            <button id="reading-journal-editor-cancel" type="button">取消</button>
+            <button class="primary-button" type="submit">保存札记</button>
+          </footer>
+        </form>
+      </div>
 
 
       <section id="knowledge-base-page" class="knowledge-base-page" hidden aria-label="知识库页面">
@@ -686,7 +740,6 @@
                 <button id="next-page" type="button" title="下一页">下一页 ›</button>
               </div>
 
-              <button class="layout-button" type="button" title="视图布局">▦</button>
             </footer>
           </section>
         </main>
@@ -696,8 +749,6 @@
             <div class="assistant-tabs" role="tablist" aria-label="AI 阅读助手">
               <button id="assistant-chat-tab" class="active" data-assistant-view="chat" type="button" role="tab" aria-selected="true">聊天</button>
               <button data-assistant-view="translate" type="button" role="tab" aria-selected="false">翻译/解释</button>
-              <button data-assistant-view="summary" type="button" role="tab" aria-selected="false">总结</button>
-              <button data-assistant-view="cards" type="button" role="tab" aria-selected="false">保存卡片</button>
             </div>
 
             <section id="assistant-chat-panel" class="assistant-panel chat-panel" role="tabpanel">
@@ -914,8 +965,6 @@
 
             <div class="ai-tabs">
               <button class="active" data-ai-tab="translate" type="button">英语学习</button>
-              <button data-ai-tab="summary" type="button">总结</button>
-              <button data-ai-tab="cards" type="button">保存卡片</button>
             </div>
 
             <div class="ai-tab-panel" data-ai-panel="translate">
@@ -1178,6 +1227,5 @@
     <div id="settings-modal-backdrop" class="settings-modal-backdrop" hidden aria-hidden="true"></div>
 
     <script type="module" src="./main.ts"></script>
-  <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"45c2bf8136a245cd97f1c2e9a96c0730"}' crossorigin="anonymous"></script>
 </body>
 </html>

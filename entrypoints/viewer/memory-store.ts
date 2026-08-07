@@ -219,6 +219,10 @@ export const paperLibraryTools: PaperLibraryTools = {
         userSummary: input.userSummary ?? existing?.userSummary,
         userRating: input.userRating ?? existing?.userRating,
         sourceName: input.sourceName ?? existing?.sourceName,
+        recentEntryId: input.recentEntryId ?? existing?.recentEntryId,
+        sourceKind: input.sourceKind ?? existing?.sourceKind,
+        sourceUrl: input.sourceUrl ?? existing?.sourceUrl,
+        sourceLocator: input.sourceLocator ?? existing?.sourceLocator,
       };
       store.put(paper);
       await transactionDone(transaction);
@@ -238,6 +242,10 @@ export const paperLibraryTools: PaperLibraryTools = {
       pageCount: input.pageCount,
       currentPage: input.currentPage,
       sourceName: input.sourceName,
+      recentEntryId: input.recentEntryId,
+      sourceKind: input.sourceKind,
+      sourceUrl: input.sourceUrl,
+      sourceLocator: input.sourceLocator,
       firstOpenedAt: existing?.firstOpenedAt,
       lastOpenedAt: Date.now(),
       readingCount: (existing?.readingCount ?? 0) + 1,
