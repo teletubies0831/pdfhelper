@@ -136,9 +136,16 @@ export interface AiDetectReadingModeRequest {
 
 export interface AiGeneratePaperOverviewRequest {
   type: 'pdf-helper:ai-generate-paper-overview';
+  requestId: string;
   documentName: string;
   pageCount: number;
   text: string;
+  knowledgeContext?: string;
+}
+
+export interface AiCancelPaperOverviewRequest {
+  type: 'pdf-helper:ai-cancel-paper-overview';
+  requestId: string;
 }
 
 export interface AiCompressConversationRequest {
@@ -299,6 +306,7 @@ export type AiRuntimeRequest =
   | AiTestRequest
   | AiDetectReadingModeRequest
   | AiGeneratePaperOverviewRequest
+  | AiCancelPaperOverviewRequest
   | AiCompressConversationRequest
   | AiPlanLongTermMemoryToolsRequest
   | AiPlanKnowledgeToolsRequest
@@ -354,6 +362,7 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
     || type === 'pdf-helper:ai-test'
     || type === 'pdf-helper:ai-detect-reading-mode'
     || type === 'pdf-helper:ai-generate-paper-overview'
+    || type === 'pdf-helper:ai-cancel-paper-overview'
     || type === 'pdf-helper:ai-compress-conversation'
     || type === 'pdf-helper:ai-plan-long-term-memory-tools'
     || type === 'pdf-helper:ai-plan-knowledge-tools'
