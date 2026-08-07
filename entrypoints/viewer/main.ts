@@ -620,6 +620,23 @@ const knowledgeEditorCloseButton = requiredElement<HTMLButtonElement>(
 const knowledgeEditorCancelButton = requiredElement<HTMLButtonElement>(
   "knowledge-editor-cancel",
 );
+const knowledgeEditorDeleteButton = requiredElement<HTMLButtonElement>(
+  "knowledge-editor-delete",
+);
+const knowledgeEditorPreviewElement = requiredElement<HTMLElement>(
+  "knowledge-editor-preview",
+);
+const knowledgeEditorPreviewPane = requiredElement<HTMLElement>(
+  "knowledge-editor-preview-pane",
+);
+const knowledgeEditorEditPane = requiredElement<HTMLElement>(
+  "knowledge-editor-edit-pane",
+);
+const knowledgeEditorModeToggleButton =
+  requiredElement<HTMLButtonElement>("knowledge-editor-mode-toggle");
+const knowledgeEditorBodyModeLabel = requiredElement<HTMLElement>(
+  "knowledge-editor-body-mode-label",
+);
 const knowledgeEditorTitleInput = requiredElement<HTMLInputElement>(
   "knowledge-editor-title",
 );
@@ -713,9 +730,14 @@ const aiTabPanels = Array.from(
 );
 const selectedSnippetElement =
   requiredElement<HTMLTextAreaElement>("selected-snippet");
+const selectedSnippetShell = requiredElement<HTMLElement>(
+  "selected-snippet-shell",
+);
 const selectedSnippetMathPreview = requiredElement<HTMLElement>(
   "selected-snippet-math-preview",
 );
+const selectedSnippetModeToggleButton =
+  requiredElement<HTMLButtonElement>("selected-snippet-mode-toggle");
 const translationSourceSentenceField = requiredElement<HTMLElement>(
   "translation-source-sentence-field",
 );
@@ -2525,6 +2547,7 @@ let currentCardContext: CardContext | null = null;
 let currentGeneratedCard: GeneratedCardContent | null = null;
 let cardGenerationTimer: ReturnType<typeof setTimeout> | null = null;
 let paperCardPageAbortController: AbortController | null = null;
+let paperCardPageRequestId = "";
 let paperCardPageDocumentKey = "";
 let paperCardPageSourceCache: {
   document: PDFDocumentProxy;
@@ -6479,29 +6502,91 @@ function containsLatexMath(value: string): boolean {
   );
 }
 
+type SelectedSnippetDisplayMode = "preview" | "edit";
+
+let selectedSnippetDisplayMode: SelectedSnippetDisplayMode = "preview";
+
+function renderSelectedSnippetRichView(value: string): void {
+  const text = value.trim();
+  selectedSnippetMathPreview.replaceChildren();
+
+  if (!text) {
+    selectedSnippetMathPreview.innerHTML = `
+      <div class="selected-snippet-empty">
+        请在左侧 PDF 中选择英文内容
+      </div>
+    `;
+    return;
+  }
+
+  renderChatMarkdown(
+    selectedSnippetMathPreview,
+    prepareKnowledgeEditorMarkdown(text),
+    false,
+    true,
+  );
+}
+
+function setSelectedSnippetDisplayMode(
+  mode: SelectedSnippetDisplayMode,
+  focusEditor = false,
+): void {
+  selectedSnippetDisplayMode = mode;
+  const editing = mode === "edit";
+
+  selectedSnippetShell.classList.toggle("editing", editing);
+  selectedSnippetElement.hidden = !editing;
+  selectedSnippetMathPreview.hidden = editing;
+  selectedSnippetModeToggleButton.textContent = editing
+    ? "查看排版"
+    : "编辑英文";
+  selectedSnippetModeToggleButton.setAttribute(
+    "aria-pressed",
+    String(editing),
+  );
+
+  if (editing) {
+    autoResizeTranslationTextarea(selectedSnippetElement);
+    if (focusEditor) {
+      requestAnimationFrame(() => {
+        selectedSnippetElement.focus();
+        selectedSnippetElement.setSelectionRange(
+          selectedSnippetElement.value.length,
+          selectedSnippetElement.value.length,
+        );
+      });
+    }
+    return;
+  }
+
+  renderSelectedSnippetRichView(selectedSnippetElement.value);
+}
+
 function renderTranslationMathPreview(
   container: HTMLElement,
   value: string,
 ): void {
   const text = value.trim();
-  container.hidden = !containsLatexMath(text);
+  const formatted = text ? prepareKnowledgeEditorMarkdown(text) : "";
+  container.hidden = !formatted || !containsLatexMath(formatted);
   if (container.hidden) {
     container.replaceChildren();
     return;
   }
-  const hasDelimiter = /\$|\\\[|\\\(/.test(text);
-  renderChatMarkdown(
-    container,
-    hasDelimiter ? text : `$$${text}$$`,
-    false,
-  );
+
+  renderChatMarkdown(container, formatted, false, true);
 }
 
 function renderLearningRichText(
   element: HTMLElement,
   value: string,
 ): HTMLElement {
-  renderChatMarkdown(element, value, false);
+  renderChatMarkdown(
+    element,
+    prepareKnowledgeEditorMarkdown(value),
+    false,
+    true,
+  );
   return element;
 }
 
@@ -6517,7 +6602,8 @@ function setTranslationSelectionEditor(
   selectedSnippetElement.value = normalizedText;
   selectedSnippetElement.removeAttribute("title");
   autoResizeTranslationTextarea(selectedSnippetElement);
-  renderTranslationMathPreview(selectedSnippetMathPreview, normalizedText);
+  renderSelectedSnippetRichView(normalizedText);
+  setSelectedSnippetDisplayMode("preview");
   const isWord = Boolean(getSelectedEnglishWord(normalizedText));
   translationSourceSentenceField.hidden = !isWord;
   translationSourceSentenceInput.value = isWord
@@ -6539,7 +6625,7 @@ function setTranslationSelectionEditor(
 function markTranslationEditorChanged(): void {
   const text = normalizeCopiedText(selectedSnippetElement.value);
   autoResizeTranslationTextarea(selectedSnippetElement);
-  renderTranslationMathPreview(selectedSnippetMathPreview, text);
+  renderSelectedSnippetRichView(text);
   const isWord = Boolean(getSelectedEnglishWord(text));
   translationSourceSentenceField.hidden = !isWord;
   applyTranslationEditButton.disabled = !text;
@@ -6819,9 +6905,12 @@ function renderSentenceLearningResult(result: SentenceLearningResult): void {
   translationLearningHintElement.textContent =
     "已给出整句译文，并仅挑选值得学习的术语、学术表达或较难词汇。";
   if (result.sourceText) {
+    const normalizedSourceText = prepareKnowledgeEditorMarkdown(
+      result.sourceText,
+    );
     renderTranslationMathPreview(
       selectedSnippetMathPreview,
-      result.sourceText,
+      normalizedSourceText,
     );
   }
   const card = createLearningElement("article", "english-learning-card sentence-card");
@@ -8312,23 +8401,64 @@ function resetCardState(): void {
   setCardState("选择原文后，将自动生成论文卡片。");
 }
 
-let paperCardPageStatusTimer: number | undefined;
+interface PaperCardPageStatusOptions {
+  persistent?: boolean;
+  hideAfterMs?: number;
+}
 
-function setPaperCardPageStatus(message = "", isError = false): void {
+let paperCardPageStatusTimer: number | undefined;
+let paperCardPageStatusFadeTimer: number | undefined;
+
+function hidePaperCardPageStatus(message: string): void {
+  if (paperCardPageStatusElement.textContent !== message) return;
+
+  paperCardPageStatusElement.classList.add("fading");
+  window.clearTimeout(paperCardPageStatusFadeTimer);
+  paperCardPageStatusFadeTimer = window.setTimeout(() => {
+    if (paperCardPageStatusElement.textContent !== message) return;
+    paperCardPageStatusElement.textContent = "";
+    paperCardPageStatusElement.classList.remove("error", "fading");
+    paperCardPageStatusElement.hidden = true;
+  }, 260);
+}
+
+function setPaperCardPageStatus(
+  message = "",
+  isError = false,
+  options: PaperCardPageStatusOptions = {},
+): void {
   window.clearTimeout(paperCardPageStatusTimer);
+  window.clearTimeout(paperCardPageStatusFadeTimer);
+  paperCardPageStatusElement.classList.remove("fading");
   paperCardPageStatusElement.textContent = message;
   paperCardPageStatusElement.classList.toggle("error", isError);
+  paperCardPageStatusElement.classList.toggle(
+    "persistent",
+    Boolean(message && options.persistent),
+  );
   paperCardPageStatusElement.hidden = !message;
 
-  if (message) {
-    paperCardPageStatusTimer = window.setTimeout(() => {
-      if (paperCardPageStatusElement.textContent === message) {
-        paperCardPageStatusElement.textContent = "";
-        paperCardPageStatusElement.classList.remove("error");
-        paperCardPageStatusElement.hidden = true;
-      }
-    }, 5000);
-  }
+  if (!message || options.persistent) return;
+
+  const hideAfterMs =
+    options.hideAfterMs ?? (isError ? 9000 : 5000);
+  paperCardPageStatusTimer = window.setTimeout(
+    () => hidePaperCardPageStatus(message),
+    hideAfterMs,
+  );
+}
+
+function finishPaperCardGenerationStatus(): void {
+  // 等待文本框高度、CCF 和卡片布局完成两轮重排后再提示完成。
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      setPaperCardPageStatus(
+        "论文阅读卡片已完整生成。",
+        false,
+        { hideAfterMs: 1600 },
+      );
+    });
+  });
 }
 
 function setSelectValue(select: HTMLSelectElement, value: string): void {
@@ -8501,7 +8631,7 @@ function collectPaperCardFormData(): PaperCardFormData {
   return {
     title: paperTitleInput.value.trim(),
     authors: paperAuthorsInput.value.trim(),
-    venueYear: paperVenueYearInput.value.trim(),
+    venueYear: normalizePaperVenueYearDisplay(paperVenueYearInput.value),
     researchArea: paperResearchAreaInput.value.trim(),
     keywords: paperKeywordsInput.value.trim(),
     oneSentenceSummary: paperOneSentenceSummaryInput.value.trim(),
@@ -8609,8 +8739,30 @@ function bindPaperCardTextareaAutoResize(): void {
       autoResizePaperCardTextarea(textarea),
     );
   }
+
+  paperVenueYearInput.addEventListener("blur", () => {
+    paperVenueYearInput.value = normalizePaperVenueYearDisplay(
+      paperVenueYearInput.value,
+    );
+    autoResizePaperCardTextarea(paperVenueYearInput);
+  });
   window.addEventListener("resize", schedulePaperCardTextareaRefresh);
   schedulePaperCardTextareaRefresh();
+}
+
+function normalizePaperVenueYearDisplay(value: string): string {
+  let normalized = value.trim();
+  if (!normalized) return "";
+
+  normalized = normalized
+    .replace(/\s*[，,]\s*(?=(?:19|20)\d{2}\b)/g, " · ")
+    .replace(/\s*[·•]\s*/g, " · ")
+    .replace(/\s+((?:19|20)\d{2})\s*$/g, " · $1")
+    .replace(/(?:\s*·\s*){2,}/g, " · ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized;
 }
 
 function renderPaperCardForm(
@@ -8618,7 +8770,7 @@ function renderPaperCardForm(
 ): void {
   paperTitleInput.value = data.title;
   paperAuthorsInput.value = data.authors;
-  paperVenueYearInput.value = data.venueYear;
+  paperVenueYearInput.value = normalizePaperVenueYearDisplay(data.venueYear);
   paperResearchAreaInput.value = data.researchArea;
   paperKeywordsInput.value = data.keywords;
   paperOneSentenceSummaryInput.value = data.oneSentenceSummary;
@@ -8678,11 +8830,18 @@ function setPaperCardPageMode(mode: "generate" | "review"): void {
   savePaperCardPageButton.textContent = isReview
     ? "▣ 保存修改"
     : "▣ 加入知识库";
+  const returnToKnowledge =
+    isReview && paperCardReturnTarget === "knowledge";
+  const returnLabel = returnToKnowledge ? "← 返回知识库" : "← 返回 PDF";
+  returnToPdfButton.textContent = returnLabel;
+  returnToPdfButton.setAttribute(
+    "aria-label",
+    returnToKnowledge ? "返回知识库" : "返回 PDF",
+  );
+  paperCardBackButton.textContent = returnLabel;
   paperCardBackButton.setAttribute(
     "aria-label",
-    isReview && paperCardReturnTarget === "knowledge"
-      ? "返回知识库"
-      : "返回 PDF",
+    returnToKnowledge ? "返回知识库" : "返回 PDF",
   );
   setPaperCardEditMode(false);
 }
@@ -8694,13 +8853,37 @@ function clearPaperCardReviewState(): void {
   setPaperCardPageMode("generate");
 }
 
+function cancelActivePaperOverviewRequest(): void {
+  const requestId = paperCardPageRequestId;
+  paperCardPageRequestId = "";
+  if (!requestId) return;
+
+  void browser.runtime
+    .sendMessage({
+      type: "pdf-helper:ai-cancel-paper-overview",
+      requestId,
+    })
+    .catch(() => {
+      // 扩展后台可能正在重新加载；本地状态仍然必须立即恢复。
+    });
+}
+
 function resetPaperCardPageState(): void {
   paperCardPageAbortController?.abort();
+  cancelActivePaperOverviewRequest();
   paperCardPageAbortController = null;
   paperCardPageDocumentKey = "";
   paperCardPageSourceCache = null;
   paperCardFormElement.reset();
   paperCardFormElement.classList.remove("generating");
+  delete paperCardFormElement.dataset.paperReady;
+  document.dispatchEvent(
+    new CustomEvent("pdf-helper:paper-card-reset", {
+      detail: {
+        documentName: sourceName ? getDisplayFileName(sourceName) : "",
+      },
+    }),
+  );
   setPaperCardEditMode(false);
   regeneratePaperCardButton.disabled = false;
   setPaperCardPageStatus();
@@ -8998,12 +9181,25 @@ async function generatePaperOverviewCard(force = false): Promise<void> {
   }
 
   paperCardPageAbortController?.abort();
+  cancelActivePaperOverviewRequest();
   const controller = new AbortController();
   paperCardPageAbortController = controller;
   regeneratePaperCardButton.disabled = true;
+  delete paperCardFormElement.dataset.paperReady;
+  paperCardFormElement.dataset.generatingDocument =
+    sourceName ? getDisplayFileName(sourceName) : "当前论文";
   paperCardFormElement.classList.add("generating");
+  document.dispatchEvent(
+    new CustomEvent("pdf-helper:paper-card-reset", {
+      detail: {
+        documentName: paperCardFormElement.dataset.generatingDocument,
+      },
+    }),
+  );
   setPaperCardPageStatus(
-    "正在读取论文并直接调用 AI API 生成结构化卡片，请稍候…",
+    "正在读取当前论文并准备结构化卡片，请稍候…",
+    false,
+    { persistent: true },
   );
 
   try {
@@ -9020,86 +9216,61 @@ async function generatePaperOverviewCard(force = false): Promise<void> {
     const text = await extractPaperOverviewText(documentAtStart);
     if (controller.signal.aborted) return;
 
+    setPaperCardPageStatus(
+      `已读取 ${text.length.toLocaleString()} 个字符，正在生成结构化论文卡片…`,
+      false,
+      { persistent: true },
+    );
     const knowledgeContext = collectRelevantKnowledgeContextForPaper();
 
-    const paperCardPrompt = [
-      "你是严谨的科研论文阅读助手。请基于提供的论文全文片段，生成一张“一屏可读”的研究生论文阅读卡片。",
-      "只输出一个合法 JSON 对象，不要输出 Markdown、代码块或额外说明。",
-      "",
-      "总原则：",
-      "1. 内容必须简洁、具体、可验证；不要写空泛套话。",
-      "2. 不得编造作者、会议、数据、实验结果或参考文献；原文无法确认时填写“原文未明确出现”。",
-      "3. 一句话总结、核心问题、研究价值分别控制在 80 个中文字符以内。",
-      "4. 核心创新最多 3 点，关键实验结果最多 2 点；使用换行和“• ”组织。",
-      "5. 对我的研究价值必须有深度：优先结合原文证据，再参考用户知识库中的相关笔记，写出可迁移之处、适用边界以及需要复核的风险，避免空泛赞美。",
-      "6. comparison_with_prior_work 填写空字符串；延伸阅读由联网检索模块单独生成，禁止在此编造论文。",
-      "7. suitable_stages 在本页面表示“领域相关度”，只能填写“高”“中”“低”。",
-      "8. 不要把 8.5 当作默认分。先分别评估 relevance_score、novelty_score、evidence_score、method_clarity_score，再给出 reading_value_score。",
-      "9. 四个分项和总分都必须基于原文证据拉开差异：普通增量工作通常不应高于 8.0；证据不足或相关性低应低于 7.0；只有相关性、创新性和证据都很强时才可高于 9.0。",
-      "",
-      "JSON 字段必须完整，且所有值都必须是字符串：",
-      JSON.stringify({
-        title: "论文标题",
-        authors: "作者，逗号分隔",
-        venue_year: "会议/期刊与年份",
-        research_area: "研究领域",
-        keywords: "3~6 个关键词，逗号分隔",
-        one_sentence_summary: "一句话说清做了什么与核心结果",
-        research_problem: "论文解决的核心问题",
-        core_innovation: "最多 3 条核心思想与创新，用换行和“• ”组织",
-        worth_reading: "一句话说明是否值得投入时间及原因",
-        problem_setup: "一句话任务设定",
-        research_gap: "一句话研究空白",
-        why_important: "一句话说明重要性",
-        topic_tags: "主题标签，逗号分隔",
-        method_overview: "一句话方法概述",
-        method_intuition: "一句话方法直觉",
-        method_steps: "最多 4 步的方法流程",
-        key_assumptions: "关键假设",
-        notation_guide: "关键术语或符号",
-        datasets: "数据集或实验对象",
-        experiment_setup: "实验设置摘要",
-        metrics: "关键指标",
-        main_findings: "最多 2 条关键实验结果，用换行和“• ”组织",
-        strongest_evidence: "最强证据",
-        comparison_with_prior_work: "填写空字符串",
-        limitations: "最重要的局限",
-        reading_status: "待读",
-        recommend_deep_reading: "建议精读/建议按需精读/暂不建议精读 三选一",
-        reading_difficulty: "较易/中等/较难 三选一",
-        reading_value_score: "0~10 的总分数字字符串，不得固定使用 8.5",
-        novelty_score: "0~10，创新性分项数字字符串",
-        evidence_score: "0~10，实验或理论证据强度分项数字字符串",
-        relevance_score: "0~10，与当前研究方向相关度分项数字字符串",
-        method_clarity_score: "0~10，方法清晰度与可理解性分项数字字符串",
-        reading_advice: "先读哪些章节、图表或证明",
-        suitable_stages: "高/中/低 三选一",
-        prerequisites: "必要先修知识",
-        citation_points: "可用于相关工作、方法或实验分析的具体产出",
-        research_connection: "对研究设计可迁移的价值",
-        followup_questions: "最值得复现的实验与最小验证路径",
-        weekly_plan: "建议整理成什么笔记或比较表",
-      }),
-      "",
-      "知识库参考使用规则：如果下面提供了用户知识库中的相关笔记或卡片，请只把它们当作辅助背景。它们可能有误，必须与原文相互印证；若与原文冲突，以原文为准，并在“对我的研究价值”“可产出”“判断理由”里体现辩证判断，而不是直接照抄用户笔记。",
-      knowledgeContext
-        ? `用户知识库相关记录：
-${knowledgeContext}`
-        : "用户知识库相关记录：暂无可直接参考的历史笔记。",
-      "论文文件名：" + getDisplayFileName(sourceName),
-      "论文页数：" + String(documentAtStart.numPages),
-    ].join("\\n");
+    const requestId = crypto.randomUUID();
+    paperCardPageRequestId = requestId;
+    const paperOverviewResponsePromise = browser.runtime.sendMessage({
+      type: "pdf-helper:ai-generate-paper-overview",
+      requestId,
+      documentName: getDisplayFileName(sourceName),
+      pageCount: documentAtStart.numPages,
+      text,
+      knowledgeContext,
+    }) as Promise<AiRuntimeResponse>;
 
-    const aiContent = await requestAiContent(
-      [{ role: "user", content: paperCardPrompt }],
-      {
-        documentName: getDisplayFileName(sourceName),
-        totalPages: documentAtStart.numPages,
-        documentText: text,
-        readingMode: "paper",
-      },
-    );
+    let viewerTimeoutId: number | undefined;
+    const viewerTimeoutPromise = new Promise<never>((_resolve, reject) => {
+      viewerTimeoutId = window.setTimeout(() => {
+        reject(
+          new Error(
+            "论文卡片生成等待超时，已恢复页面。请检查网络或模型设置后重试。",
+          ),
+        );
+      }, 130_000);
+    });
 
+    let overviewResponse: AiRuntimeResponse;
+    try {
+      overviewResponse = await Promise.race([
+        paperOverviewResponsePromise,
+        viewerTimeoutPromise,
+      ]);
+    } finally {
+      if (viewerTimeoutId !== undefined) {
+        window.clearTimeout(viewerTimeoutId);
+      }
+    }
+
+    if (
+      controller.signal.aborted ||
+      pdfDocument !== documentAtStart ||
+      paperCardPageRequestId !== requestId
+    ) {
+      return;
+    }
+    if (!overviewResponse?.ok || !overviewResponse.content?.trim()) {
+      throw new Error(
+        overviewResponse?.error || "AI 模型没有返回有效的论文卡片内容。",
+      );
+    }
+
+    const aiContent = overviewResponse.content.trim();
     const payload = parseAiJson(aiContent) as PaperOverviewApiResponse;
     if (pdfDocument !== documentAtStart || controller.signal.aborted) return;
 
@@ -9157,9 +9328,18 @@ ${knowledgeContext}`
     });
 
     paperCardPageDocumentKey = documentKey;
-    setPaperCardPageStatus(
-      "论文阅读卡片已生成。点击“编辑卡片”后可直接修改内容。",
+    paperCardFormElement.dataset.paperReady = "true";
+    document.dispatchEvent(
+      new CustomEvent("pdf-helper:paper-card-ready", {
+        detail: {
+          title: paperTitleInput.value.trim(),
+          keywords: paperKeywordsInput.value.trim(),
+          researchArea: paperResearchAreaInput.value.trim(),
+          documentName: paperCardDocumentNameElement.value.trim(),
+        },
+      }),
     );
+    finishPaperCardGenerationStatus();
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
     if (controller.signal.aborted) return;
@@ -9169,8 +9349,12 @@ ${knowledgeContext}`
   } finally {
     if (paperCardPageAbortController === controller)
       paperCardPageAbortController = null;
+    if (paperCardPageRequestId) {
+      cancelActivePaperOverviewRequest();
+    }
     regeneratePaperCardButton.disabled = false;
     paperCardFormElement.classList.remove("generating");
+    delete paperCardFormElement.dataset.generatingDocument;
   }
 }
 
@@ -9209,6 +9393,7 @@ function openSavedPaperOverviewReview(item: KnowledgeItem): void {
   }
 
   paperCardPageAbortController?.abort();
+  cancelActivePaperOverviewRequest();
   paperCardPageAbortController = null;
   editingPaperOverviewId = card.id;
   paperCardReviewDocumentName = card.documentName || item.documentName;
@@ -9228,6 +9413,17 @@ function openSavedPaperOverviewReview(item: KnowledgeItem): void {
   updatePaperCardDocumentName();
   renderPaperCardForm(card);
   paperPersonalNotesInput.value = card.personalNotes || "";
+  paperCardFormElement.dataset.paperReady = "true";
+  document.dispatchEvent(
+    new CustomEvent("pdf-helper:paper-card-ready", {
+      detail: {
+        title: paperTitleInput.value.trim(),
+        keywords: paperKeywordsInput.value.trim(),
+        researchArea: paperResearchAreaInput.value.trim(),
+        documentName: paperCardDocumentNameElement.value.trim(),
+      },
+    }),
+  );
   setPaperCardEditMode(false);
   setPaperCardPageStatus();
   paperCardPageElement.scrollTop = 0;
@@ -9237,6 +9433,7 @@ function openSavedPaperOverviewReview(item: KnowledgeItem): void {
 
 function closePaperCardPage(destination: "pdf" | "knowledge" = "pdf"): void {
   paperCardPageAbortController?.abort();
+  cancelActivePaperOverviewRequest();
   paperCardPageElement.hidden = true;
   appFrame?.classList.remove("paper-card-page-open");
   paperCardEntryButton?.classList.remove("active");
@@ -9457,6 +9654,22 @@ function normalizeKnowledgeTags(value: unknown): string[] {
   ).slice(0, 12);
 }
 
+function normalizeKnowledgeCategory(
+  value: unknown,
+  fallback = "未分类",
+): string {
+  if (typeof value !== "string") return fallback;
+
+  const parts = value
+    .trim()
+    .split(/\s*(?:\/|／|,|，|、|;|；|\||｜)\s*/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const uniqueParts = Array.from(new Set(parts));
+  return uniqueParts.length ? uniqueParts.join(" / ") : fallback;
+}
+
 function getKnowledgeRecordKey(source: KnowledgeSource, id: string): string {
   return `${source}:${id}`;
 }
@@ -9477,7 +9690,7 @@ function applyKnowledgeMeta(
     ...item,
     title: meta.title?.trim() || item.title,
     content: meta.content?.trim() || item.content,
-    category: meta.category?.trim() || item.category,
+    category: normalizeKnowledgeCategory(meta.category || item.category),
     tags: normalizeKnowledgeTags(meta.tags).length
       ? normalizeKnowledgeTags(meta.tags)
       : item.tags,
@@ -9660,7 +9873,10 @@ function collectKnowledgeItems(): KnowledgeItem[] {
     );
   }
 
-  return items;
+  return items.map((item) => ({
+    ...item,
+    category: normalizeKnowledgeCategory(item.category),
+  }));
 }
 
 function getKnowledgeKindLabel(kind: KnowledgeKind): string {
@@ -10314,155 +10530,95 @@ function renderKnowledgeSidebar(items: KnowledgeItem[]): void {
     : "还没有保存内容";
 }
 
+function openKnowledgeItemFromLibrary(item: KnowledgeItem): void {
+  selectedKnowledgeRecordKey = item.recordKey;
+
+  // 整篇论文生成的论文卡片进入完整论文阅读卡片页。
+  if (item.source === "paper-overview") {
+    openSavedPaperOverviewReview(item);
+    return;
+  }
+
+  // 普通笔记、AI 总结和阅读卡片进入内容编辑页。
+  openKnowledgeEditor(item);
+}
+
 function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
   const card = document.createElement("article");
-  card.className = `knowledge-item-card knowledge-dashboard-card kind-${item.kind}`;
-  card.classList.toggle(
-    "selected-for-research",
-    selectedKnowledgeResearchKeys.has(item.recordKey),
-  );
+  card.className = `knowledge-item-card knowledge-simple-card kind-${item.kind}`;
   card.dataset.recordKey = item.recordKey;
   card.tabIndex = 0;
-
-  const status = deriveKnowledgeReadingStatus(item);
-  const priority = deriveKnowledgePriority(item);
-  const citationScore = getKnowledgeCitationScore(item);
-  const relevance = getKnowledgeRelevancePercent(item);
-  const venue = extractKnowledgeVenue(item);
-  const year = extractKnowledgeYear(item);
-  const excerpt = getKnowledgeExcerptForDashboard(item);
-
-  const top = document.createElement("div");
-  top.className = "knowledge-item-card-top";
-
-  const badges = document.createElement("div");
-  badges.className = "knowledge-card-badges";
-  const statusBadge = document.createElement("span");
-  statusBadge.className = `knowledge-badge status-${status === "精读中" ? "deep" : status === "已读完" || status === "略读完成" ? "done" : "todo"}`;
-  statusBadge.textContent = status;
-  const priorityBadge = document.createElement("span");
-  priorityBadge.className = `knowledge-badge priority-${priority === "高优先级" ? "high" : priority === "中优先级" ? "medium" : "normal"}`;
-  priorityBadge.textContent = priority;
-  badges.append(statusBadge, priorityBadge);
-
-  const meta = document.createElement("div");
-  meta.className = "knowledge-card-meta";
-  const time = document.createElement("time");
-  time.dateTime = item.updatedAt;
-  time.textContent = formatKnowledgeRelativeDate(item.updatedAt);
-  const selectionLabel = document.createElement("label");
-  selectionLabel.className = "knowledge-card-select";
-  selectionLabel.title = "加入跨文献分析";
-  const selectionInput = document.createElement("input");
-  selectionInput.type = "checkbox";
-  selectionInput.checked = selectedKnowledgeResearchKeys.has(item.recordKey);
-  selectionInput.setAttribute(
+  card.setAttribute("role", "button");
+  card.setAttribute(
     "aria-label",
-    `选择“${item.title}”用于跨文献分析`,
+    item.source === "paper-overview"
+      ? `打开论文卡片：${item.title}`
+      : `打开知识内容：${item.title}`,
   );
-  const selectionMark = document.createElement("span");
-  selectionMark.textContent = "✓";
-  selectionLabel.append(selectionInput, selectionMark);
-  selectionLabel.addEventListener("click", (event) => event.stopPropagation());
-  selectionInput.addEventListener("keydown", (event) =>
-    event.stopPropagation(),
-  );
-  selectionInput.addEventListener("change", () => {
-    if (selectionInput.checked)
-      selectedKnowledgeResearchKeys.add(item.recordKey);
-    else selectedKnowledgeResearchKeys.delete(item.recordKey);
-    card.classList.toggle("selected-for-research", selectionInput.checked);
-    updateKnowledgeResearchScopeSummary();
-  });
-  meta.append(time, selectionLabel);
-  top.append(badges, meta);
 
-  const title = document.createElement("strong");
+  const cardHeader = document.createElement("div");
+  cardHeader.className = "knowledge-simple-card-header";
+
+  const title = document.createElement("h3");
   title.className = "knowledge-card-title";
   title.textContent = item.title;
 
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "knowledge-card-delete-button";
+  deleteButton.textContent = "删除";
+  deleteButton.title = `删除“${item.title}”`;
+  deleteButton.setAttribute("aria-label", `删除“${item.title}”`);
+  deleteButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    deleteKnowledgeItem(item);
+  });
+  cardHeader.append(title, deleteButton);
+
   const subtitle = document.createElement("div");
   subtitle.className = "knowledge-card-subtitle";
+  const venue = extractKnowledgeVenue(item);
+  const year = extractKnowledgeYear(item);
+  const subtitleParts: string[] = [];
+  if (venue && venue !== "未标注") subtitleParts.push(venue);
+  if (year && year !== "未标注") subtitleParts.push(year);
   subtitle.textContent =
-    `${venue} ${year !== "未标注" ? year : ""} · ${getKnowledgeBaseDocumentName(item.documentName)}`.trim();
+    subtitleParts.join(" · ") || getKnowledgeKindLabel(item.kind);
 
-  const excerptElement = document.createElement("p");
-  excerptElement.className = "knowledge-card-excerpt";
-  excerptElement.textContent = excerpt;
+  const fileLine = document.createElement("div");
+  fileLine.className = "knowledge-card-file";
+  const fileIcon = document.createElement("span");
+  fileIcon.className = "knowledge-card-file-icon";
+  fileIcon.setAttribute("aria-hidden", "true");
+  fileIcon.textContent = "▧";
+  const fileName = document.createElement("span");
+  fileName.textContent = getKnowledgeBaseDocumentName(item.documentName);
+  fileLine.append(fileIcon, fileName);
+
+  const excerpt = document.createElement("p");
+  excerpt.className = "knowledge-card-excerpt";
+  excerpt.textContent = getKnowledgeExcerptForDashboard(item);
 
   const tags = document.createElement("div");
   tags.className = "knowledge-card-tags";
   for (const tag of item.tags.slice(0, 4)) {
     const tagElement = document.createElement("span");
-    tagElement.textContent = `# ${tag}`;
+    tagElement.textContent = tag;
     tags.append(tagElement);
   }
 
-  const metrics = document.createElement("div");
-  metrics.className = "knowledge-card-metrics";
-  metrics.innerHTML = `
-    <div><span>引用价值</span><strong>${createRatingStars(citationScore)} <em>${citationScore.toFixed(1)}</em></strong></div>
-    <div><span>研究关联度</span><strong>${relevance}%</strong></div>
-    <div><span>最近复习</span><strong>${formatKnowledgeRelativeDate(item.updatedAt)}</strong></div>
-  `;
+  card.append(cardHeader, subtitle, fileLine, excerpt, tags);
 
-  const actions = document.createElement("div");
-  actions.className = "knowledge-card-actions";
-
-  const primaryButton = document.createElement("button");
-  primaryButton.type = "button";
-  primaryButton.className = "knowledge-card-primary-button";
-  primaryButton.textContent =
-    item.source === "paper-overview" ? "打开复习页" : "查看详情";
-  primaryButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (item.source === "paper-overview") openSavedPaperOverviewReview(item);
-    else openKnowledgeEditor(item);
-  });
-
-  const secondButton = document.createElement("button");
-  secondButton.type = "button";
-  secondButton.textContent = "查看卡片";
-  secondButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (item.source === "paper-overview") openSavedPaperOverviewReview(item);
-    else openKnowledgeEditor(item);
-  });
-
-  const replicateButton = document.createElement("button");
-  replicateButton.type = "button";
-  replicateButton.textContent = isKnowledgeReplicable(item)
-    ? "已加入复现"
-    : "加入复现";
-  replicateButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    toggleKnowledgeSemanticTag(item, "待复现");
-  });
-
-  const citeButton = document.createElement("button");
-  citeButton.type = "button";
-  citeButton.textContent = isKnowledgeCitable(item)
-    ? "已标记可引用"
-    : "标记可引用";
-  citeButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    toggleKnowledgeSemanticTag(item, "可引用");
-  });
-
-  actions.append(primaryButton, secondButton, replicateButton, citeButton);
-  card.append(top, title, subtitle, excerptElement, tags, metrics, actions);
-
-  card.addEventListener("dblclick", () => {
-    if (item.source === "paper-overview") openSavedPaperOverviewReview(item);
-    else openKnowledgeEditor(item);
-  });
+  const openItem = (): void => openKnowledgeItemFromLibrary(item);
+  card.addEventListener("click", openItem);
   card.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      if (item.source === "paper-overview") openSavedPaperOverviewReview(item);
-      else openKnowledgeEditor(item);
+      openItem();
     }
   });
+
   return card;
 }
 
@@ -10486,7 +10642,7 @@ function renderKnowledgeList(items: KnowledgeItem[]): void {
     const empty = document.createElement("div");
     empty.className = "knowledge-list-empty";
     empty.innerHTML =
-      "<span>⌕</span><strong>没有找到匹配内容</strong><p>可以调整筛选条件，或从 AI 助手保存一条新笔记。</p>";
+      "<span>⌕</span><strong>没有找到匹配内容</strong><p>可以调整搜索条件，或新建一条笔记。</p>";
     knowledgeListElement.replaceChildren(empty);
     selectedKnowledgeRecordKey = "";
     renderKnowledgeDetail([], undefined);
@@ -10497,22 +10653,8 @@ function renderKnowledgeList(items: KnowledgeItem[]): void {
     selectedKnowledgeRecordKey = items[0]?.recordKey || "";
   }
 
-  const groupBy = knowledgeGroupSelect.value;
-  if (groupBy === "none") {
-    knowledgeListElement.replaceChildren(...items.map(createKnowledgeItemCard));
-  } else {
-    const groups = new Map<string, KnowledgeItem[]>();
-    for (const item of items) {
-      const key = groupBy === "source" ? item.documentName : item.category;
-      const group = groups.get(key) || [];
-      group.push(item);
-      groups.set(key, group);
-    }
-    const sections = Array.from(groups.entries()).map(([title, group]) =>
-      createKnowledgeGroup(group, title),
-    );
-    knowledgeListElement.replaceChildren(...sections);
-  }
+  // 始终使用两列平铺卡片，避免分组后宽度和高度不一致。
+  knowledgeListElement.replaceChildren(...items.map(createKnowledgeItemCard));
 
   renderKnowledgeDetail(
     items,
@@ -10932,24 +11074,27 @@ function renderKnowledgeBase(): void {
       validKeys.has(key),
     ),
   );
+
   renderKnowledgeSidebar(items);
   populateKnowledgeDashboardFilters(items);
   syncKnowledgeFocusCounts(items);
+
+  // 简洁知识库固定使用平铺模式，不再显示分组、任务和统计面板。
+  knowledgeGroupSelect.value = "none";
   const filtered = getFilteredKnowledgeItems(items);
+
+  knowledgePageTitleElement.textContent = "全部内容";
   if (knowledgePageSubtitleElement) {
     knowledgePageSubtitleElement.textContent =
-      activeKnowledgeFocus === "all"
-        ? "管理你的文献笔记、论文卡片与综述准备，一站式助力高效科研。"
-        : "聚焦当前阅读目标，优先处理最值得研究生投入时间的文献内容。";
+      "管理你的笔记、阅读卡片和论文卡片，助力高效科研。";
   }
-  knowledgePageTitleElement.textContent = "研究知识库";
+
   knowledgeTotalCountElement.textContent = String(filtered.length);
   knowledgeDocumentCountElement.textContent = String(
     new Set(filtered.map((item) => item.documentName)).size,
   );
-  renderKnowledgeMetricCards(items, filtered);
+
   renderKnowledgeList(filtered);
-  renderKnowledgeStudentPanels(filtered);
   setKnowledgePageMode(activeKnowledgePageMode);
   updateKnowledgeResearchScopeSummary();
   persistCurrentAppViewState();
@@ -10992,6 +11137,7 @@ function addKnowledgeNote(
   const now = new Date().toISOString();
   const saved: SavedKnowledgeNote = {
     ...note,
+    category: normalizeKnowledgeCategory(note.category),
     id: crypto.randomUUID(),
     createdAt: now,
     updatedAt: now,
@@ -11005,24 +11151,393 @@ function addKnowledgeNote(
   return saved;
 }
 
+type KnowledgeEditorBodyMode = "preview" | "edit";
+
+let knowledgeEditorPreviewTimer: number | undefined;
+let knowledgeEditorBodyMode: KnowledgeEditorBodyMode = "preview";
+
+function normalizeKnowledgeEditorSections(content: string): string {
+  const sectionNames = new Set([
+    "原文",
+    "原文内容",
+    "原文证据",
+    "翻译",
+    "句子翻译",
+    "中文翻译",
+    "重点词汇",
+    "重点词汇解析",
+    "词汇解析",
+    "语法解析",
+    "语法分析",
+    "核心观点",
+    "核心结论",
+    "我的判断",
+    "研究价值",
+    "下一步",
+    "下一步行动",
+    "复现计划",
+  ]);
+
+  return content
+    .split(/\r?\n/)
+    .map((line) => {
+      const trimmed = line.trim().replace(/[：:]$/, "");
+      if (
+        trimmed &&
+        sectionNames.has(trimmed) &&
+        !line.trimStart().startsWith("#")
+      ) {
+        return `## ${trimmed}`;
+      }
+      return line;
+    })
+    .join("\n");
+}
+
+function normalizeKnowledgeEditorMathIndex(value: string): string {
+  const normalized = value.trim();
+  if (/^[0-9]+$/.test(normalized)) return normalized;
+  return normalized.toLocaleLowerCase("en-US");
+}
+
+function normalizeKnowledgeEditorMathOperator(value: string): string {
+  return {
+    "≤": "\\le",
+    "≥": "\\ge",
+    "≠": "\\ne",
+    "!=": "\\ne",
+    "∈": "\\in",
+    "∉": "\\notin",
+    "⊆": "\\subseteq",
+    "⊂": "\\subset",
+    "∪": "\\cup",
+    "∩": "\\cap",
+  }[value] || value;
+}
+
+function normalizeKnowledgeEditorFormulaArguments(value: string): string {
+  return value
+    .replace(/[“”]/g, '"')
+    .replace(/[⋯…]|(?:\.\s*){3}/g, String.raw`\ldots `)
+    .replace(/·\s*·\s*·/g, String.raw`\ldots `)
+    .replace(/\b([A-Za-z])\s*_?\s*([0-9]+)\b/g, "$1_{$2}")
+    .replace(
+      /\b([qQxXyYmMkKuUvV])\s*_?\s*([iIjJkKnNmMuUvVbB])\b/g,
+      "$1_{$2}",
+    )
+    .replace(/\s*,\s*/g, ", ")
+    .trim();
+}
+
+function normalizeKnowledgeEditorMathExpression(value: string): string {
+  let expression = value
+    .replace(/[“”]/g, '"')
+    .replace(/[⋯…]|(?:\.\s*){3}/g, String.raw`\ldots `)
+    .replace(/·\s*·\s*·/g, String.raw`\ldots `)
+    .replace(/\bfor\s+all\b/gi, String.raw`\forall `)
+    .replace(/∀/g, String.raw`\forall `)
+    .replace(/∈/g, String.raw`\in `)
+    .replace(/∉/g, String.raw`\notin `)
+    .replace(/⊆/g, String.raw`\subseteq `)
+    .replace(/⊂/g, String.raw`\subset `)
+    .replace(/∪/g, String.raw`\cup `)
+    .replace(/∩/g, String.raw`\cap `);
+
+  // PDF 文本抽取常把 F_k(x_i) 拆成 F k (x i)。
+  expression = expression.replace(
+    /\b([A-Z])\s+(key|hint|oprf|prf|[a-z])\s*\(\s*([^()\n]{1,180})\s*\)/gi,
+    (_match, fn: string, subscript: string, args: string) =>
+      `${fn}_{${subscript.toLocaleLowerCase("en-US")}}(${normalizeKnowledgeEditorFormulaArguments(args)})`,
+  );
+
+  // F opr f 这类被拆开的多字母下标。
+  expression = expression.replace(
+    /\bF\s+opr\s*f\b/gi,
+    String.raw`F_{\mathrm{oprf}}`,
+  );
+
+  // F(·)(·) 与普通 F(x)。
+  expression = expression.replace(
+    /\b([A-Z])\s*\(\s*[·.]\s*\)\s*\(\s*[·.]\s*\)/g,
+    (_match, fn: string) => `${fn}(\\cdot)(\\cdot)`,
+  );
+  expression = expression.replace(
+    /\b([A-Z][A-Za-z0-9]*)\s*\(\s*([^()\n]{1,180})\s*\)/g,
+    (_match, fn: string, args: string) =>
+      `${fn}(${normalizeKnowledgeEditorFormulaArguments(args)})`,
+  );
+
+  // 连写或带空格的下标变量：x1、x i、q_v、y u。
+  expression = expression.replace(
+    /\b([qQxXyYmMkKuUvV])\s*_?\s*([0-9]+|[iIjJkKnNmMuUvVbB])\b/g,
+    (_match, variable: string, index: string) =>
+      `${variable.toLocaleLowerCase("en-US")}_{${normalizeKnowledgeEditorMathIndex(index)}}`,
+  );
+
+  // 数学区间和集合。
+  expression = expression
+    .replace(/\[\s*([0-9A-Za-z]+)\s*,\s*([0-9A-Za-z]+)\s*\]/g, "[$1,$2]")
+    .replace(/\{\s*/g, String.raw`\{`)
+    .replace(/\s*\}/g, String.raw`\}`)
+    .replace(/\s*\|\s*/g, String.raw`\mid `);
+
+  // 统一运算符周围空格。
+  expression = expression
+    .replace(/\s*(=|≤|≥|≠|!=|<|>)\s*/g, (_match, operator: string) =>
+      normalizeKnowledgeEditorMathOperator(operator),
+    )
+    .replace(/\s*\\in\s*/g, String.raw`\in `)
+    .replace(/\s*\\notin\s*/g, String.raw`\notin `)
+    .replace(/\s*\\forall\s*/g, String.raw`\forall `)
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return expression;
+}
+
+function looksLikeKnowledgeEditorMath(value: string): boolean {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (!compact) return false;
+
+  const hasMathSymbol =
+    /[=<>≤≥≠∈∉∀∩∪{}[\]|⋯…]/.test(compact) ||
+    /(?:\.\s*){3}/.test(compact);
+  const hasIndexedVariable =
+    /\b[qQxXyYmMkKuUvV]\s*_?\s*(?:[0-9]+|[iIjJkKnNmMuUvVbB])\b/.test(
+      compact,
+    );
+  const hasFunction =
+    /\b[A-Z]\s+(?:key|hint|oprf|prf|[a-z])\s*\(/i.test(compact) ||
+    /\b[A-Z][A-Za-z0-9]*\s*\(/.test(compact);
+
+  return hasMathSymbol || hasIndexedVariable || hasFunction;
+}
+
+function normalizeKnowledgeEditorBareMath(content: string): string {
+  const preserved: string[] = [];
+  const preserve = (value: string): string => {
+    const index = preserved.push(value) - 1;
+    return `PDFHELPERKEEPMATH${index}END`;
+  };
+  const preserveInline = (expression: string): string =>
+    preserve(`$${expression.trim()}$`);
+
+  let normalized = content
+    .replace(/\$\$[\s\S]+?\$\$/g, preserve)
+    .replace(/\\\[[\s\S]+?\\\]/g, preserve)
+    .replace(/\\\([\s\S]+?\\\)/g, preserve)
+    .replace(/(^|[^\\$])\$[^$\r\n]+?\$/g, (match) => preserve(match));
+
+  // 1. 先处理完整赋值和集合构造式：
+  // V = {F_k(y_i) | ∀ y_i ∈ Y}
+  // I = {x | F_k(x_i) ∈ V, ∀ i ∈ [m]}
+  normalized = normalized.replace(
+    /\b([A-Z])\s*=\s*(\{[^{}\n]{2,520}\})/g,
+    (match) =>
+      looksLikeKnowledgeEditorMath(match)
+        ? preserveInline(normalizeKnowledgeEditorMathExpression(match))
+        : match,
+  );
+
+  // 2. 单独出现的集合和点序列。
+  normalized = normalized.replace(
+    /\{[^{}\n]{2,520}\}/g,
+    (match) =>
+      looksLikeKnowledgeEditorMath(match)
+        ? preserveInline(normalizeKnowledgeEditorMathExpression(match))
+        : match,
+  );
+
+  // 3. 量词和成员关系：
+  // x_i, ∀i∈[m]
+  // ∀ y_i ∈ Y \ I
+  normalized = normalized.replace(
+    /(?:\b[qQxXyYmMuUvV]\s*_?\s*[iIjJkKnNmMuUvV]\s*,?\s*)?(?:∀|for\s+all)\s*[iIjJkKnNmMuUvV]\s*(?:∈|\\in|\bin\b)\s*(?:\[[^\]\n]{1,60}\]|[A-Z](?:\s*[\\\-]\s*[A-Z])?)/gi,
+    (match) =>
+      preserveInline(normalizeKnowledgeEditorMathExpression(match)),
+  );
+
+  // 4. 带索引范围：
+  // x_i, i∈[1,u]
+  normalized = normalized.replace(
+    /\b([qQxXyYmMuUvV])\s*_?\s*([iIjJkKnNmMuUvV])\s*,\s*\2\s*(?:∈|\\in|\bin\b)\s*\[\s*([0-9A-Za-z]+)\s*,\s*([0-9A-Za-z]+)\s*\]/g,
+    (match) =>
+      preserveInline(normalizeKnowledgeEditorMathExpression(match)),
+  );
+
+  // 5. 函数序列：
+  // F k (x1), F k (x2), ..., F k (xm)
+  normalized = normalized.replace(
+    /\b[A-Z]\s+(?:key|hint|oprf|prf|[a-z])\s*\([^()\n]{1,80}\)(?:\s*,\s*(?:\.\s*){3}\s*,\s*[A-Z]\s+(?:key|hint|oprf|prf|[a-z])\s*\([^()\n]{1,80}\)|(?:\s*,\s*[A-Z]\s+(?:key|hint|oprf|prf|[a-z])\s*\([^()\n]{1,80}\)){1,8})/gi,
+    (match) =>
+      preserveInline(normalizeKnowledgeEditorMathExpression(match)),
+  );
+
+  // 6. 单个带下标函数：
+  // F k(x_i)、F hint(q_i)、F_key(x)
+  normalized = normalized.replace(
+    /\b([A-Z])\s+(key|hint|oprf|prf|[a-z])\s*\(\s*([^()\n]{1,180})\s*\)/gi,
+    (match) =>
+      preserveInline(normalizeKnowledgeEditorMathExpression(match)),
+  );
+
+  // 7. 普通函数，但排除 e.g. 和纯参考文献括号。
+  normalized = normalized.replace(
+    /\b([A-Z][A-Za-z0-9]*)\s*\(\s*([^()\n]{1,180})\s*\)/g,
+    (match, _functionName: string, args: string) => {
+      if (/\be\.?\s*g\.?\b/i.test(args) || /^\s*\d+(?:\s*,\s*\d+)*\s*$/.test(args)) {
+        return match;
+      }
+      return looksLikeKnowledgeEditorMath(match)
+        ? preserveInline(normalizeKnowledgeEditorMathExpression(match))
+        : match;
+    },
+  );
+
+  // 8. 同一变量序列：
+  // x1, x2, ..., xm
+  normalized = normalized.replace(
+    /\b([qQxXyYmMuUvV])\s*_?\s*([0-9]+|[iIjJkKnNmMuUvV])(?:\s*,\s*\1\s*_?\s*([0-9]+|[iIjJkKnNmMuUvV]))?\s*,?\s*(?:\.\s*){3}\s*,?\s*\1\s*_?\s*([0-9]+|[iIjJkKnNmMuUvV])\b/g,
+    (match) =>
+      preserveInline(normalizeKnowledgeEditorMathExpression(match)),
+  );
+
+  // 9. 索引变量相等、成员关系和简单赋值。
+  normalized = normalized.replace(
+    /\b[qQxXyYmMuUvV]\s*_?\s*(?:[0-9]+|[iIjJkKnNmMuUvV])\s*(?:=|equals?|∈|∉|\\in|\\notin)\s*(?:[qQxXyYmMuUvV]\s*_?\s*(?:[0-9]+|[iIjJkKnNmMuUvV])|[A-Z]|\[[^\]\n]{1,50}\])/gi,
+    (match) =>
+      preserveInline(normalizeKnowledgeEditorMathExpression(match)),
+  );
+
+  normalized = normalized.replace(
+    /\b([a-zA-Z])\s*(=|≤|≥|<|>|!=|≠)\s*([0-9]+|[a-zA-Z])\b/g,
+    (match) =>
+      preserveInline(normalizeKnowledgeEditorMathExpression(match)),
+  );
+
+  // 10. 剩余单独索引变量。
+  normalized = normalized.replace(
+    /\b([qQxXyYmMkKuUvV])\s*_?\s*([0-9]+|[iIjJkKnNmMuUvVbB])\b/g,
+    (match) =>
+      preserveInline(normalizeKnowledgeEditorMathExpression(match)),
+  );
+
+  return normalized.replace(
+    /PDFHELPERKEEPMATH(\d+)END/g,
+    (_match, index: string) => preserved[Number(index)] || "",
+  );
+}
+
+function prepareKnowledgeEditorMarkdown(content: string): string {
+  return normalizeKnowledgeEditorBareMath(
+    normalizeKnowledgeEditorSections(content),
+  );
+}
+
+function renderKnowledgeEditorPreview(): void {
+  window.clearTimeout(knowledgeEditorPreviewTimer);
+  const content = knowledgeEditorBodyInput.value.trim();
+  if (!content) {
+    knowledgeEditorPreviewElement.innerHTML = `
+      <div class="knowledge-editor-preview-empty">
+        <span aria-hidden="true">∑</span>
+        <strong>正文排版会显示在这里</strong>
+        <p>支持 Markdown、原文与翻译分节，以及 LaTeX 公式。</p>
+      </div>
+    `;
+    return;
+  }
+
+  renderChatMarkdown(
+    knowledgeEditorPreviewElement,
+    prepareKnowledgeEditorMarkdown(content),
+    false,
+    true,
+  );
+}
+
+function scheduleKnowledgeEditorPreview(): void {
+  window.clearTimeout(knowledgeEditorPreviewTimer);
+  knowledgeEditorPreviewTimer = window.setTimeout(
+    renderKnowledgeEditorPreview,
+    120,
+  );
+}
+
+function setKnowledgeEditorBodyMode(
+  mode: KnowledgeEditorBodyMode,
+  focusEditor = false,
+): void {
+  knowledgeEditorBodyMode = mode;
+  const editing = mode === "edit";
+
+  knowledgeEditorEditPane.hidden = !editing;
+  knowledgeEditorPreviewPane.hidden = editing;
+  knowledgeEditorModeToggleButton.textContent = editing
+    ? "查看排版"
+    : "编辑正文";
+  knowledgeEditorModeToggleButton.setAttribute(
+    "aria-pressed",
+    String(editing),
+  );
+  knowledgeEditorBodyModeLabel.textContent = editing
+    ? "编辑正文"
+    : "排版正文";
+
+  if (editing) {
+    if (focusEditor) {
+      requestAnimationFrame(() => {
+        knowledgeEditorBodyInput.focus();
+        knowledgeEditorBodyInput.setSelectionRange(
+          knowledgeEditorBodyInput.value.length,
+          knowledgeEditorBodyInput.value.length,
+        );
+      });
+    }
+    return;
+  }
+
+  renderKnowledgeEditorPreview();
+}
+
+
 function openKnowledgeEditor(item?: KnowledgeItem): void {
   knowledgeEditorTargetKey = item?.recordKey || null;
-  knowledgeEditorHeading.textContent = item ? "编辑知识内容" : "新建笔记";
+  knowledgeEditorDialog.dataset.kind = item?.kind || "note";
+  document.documentElement.classList.add("knowledge-editor-open");
+  knowledgeEditorHeading.textContent = item
+    ? item.kind === "note"
+      ? "编辑笔记"
+      : "编辑阅读卡片"
+    : "新建笔记";
   knowledgeEditorSource.textContent = item
     ? `${item.documentName} · ${item.positionLabel}`
     : sourceName
       ? `${getDisplayFileName(sourceName)} · 第 ${Math.max(1, pdfViewer.currentPageNumber || 1)} 页`
       : "保存到本地知识库";
   knowledgeEditorTitleInput.value = item?.title || "";
-  knowledgeEditorCategoryInput.value = item?.category || "AI 笔记";
+  knowledgeEditorCategoryInput.value = normalizeKnowledgeCategory(
+    item?.category || "AI 笔记",
+  );
   knowledgeEditorTagsInput.value = item?.tags.join(", ") || "";
   knowledgeEditorBodyInput.value = item?.content || "";
+  knowledgeEditorDeleteButton.hidden = !item;
   knowledgeEditorDialog.hidden = false;
-  requestAnimationFrame(() => knowledgeEditorTitleInput.focus());
+  requestAnimationFrame(() => {
+    setKnowledgeEditorBodyMode(item ? "preview" : "edit");
+    if (!item) knowledgeEditorTitleInput.focus();
+  });
 }
 
 function closeKnowledgeEditor(): void {
+  window.clearTimeout(knowledgeEditorPreviewTimer);
   knowledgeEditorDialog.hidden = true;
+  knowledgeEditorDialog.removeAttribute("data-kind");
+  document.documentElement.classList.remove("knowledge-editor-open");
+  knowledgeEditorDeleteButton.hidden = true;
+  knowledgeEditorPreviewElement.replaceChildren();
+  knowledgeEditorBodyMode = "preview";
   knowledgeEditorTargetKey = null;
   knowledgeEditorForm.reset();
 }
@@ -11030,7 +11545,9 @@ function closeKnowledgeEditor(): void {
 function saveKnowledgeEditor(): void {
   const title = knowledgeEditorTitleInput.value.trim();
   const content = knowledgeEditorBodyInput.value.trim();
-  const category = knowledgeEditorCategoryInput.value.trim() || "未分类";
+  const category = normalizeKnowledgeCategory(
+    knowledgeEditorCategoryInput.value,
+  );
   const tags = normalizeKnowledgeTags(
     knowledgeEditorTagsInput.value.split(/[,，]/).map((tag) => tag.trim()),
   );
@@ -11097,14 +11614,17 @@ function saveKnowledgeEditor(): void {
   }
 
   closeKnowledgeEditor();
-  setKnowledgePageStatus("内容已保存。");
+  setKnowledgePageStatus("笔记内容已保存。");
   renderKnowledgeBase();
 }
 
-function deleteSelectedKnowledgeItem(): void {
-  const item = getSelectedKnowledgeItem();
-  if (!item) return;
-  if (!window.confirm(`确定删除“${item.title}”吗？此操作不可撤销。`)) return;
+function deleteKnowledgeItem(
+  item: KnowledgeItem,
+  closeEditorAfterDelete = false,
+): boolean {
+  if (!window.confirm(`确定删除“${item.title}”吗？此操作不可撤销。`)) {
+    return false;
+  }
 
   if (item.source === "knowledge-note") {
     writeSavedKnowledgeNotes(
@@ -11137,9 +11657,21 @@ function deleteSelectedKnowledgeItem(): void {
   delete metaStore[item.recordKey];
   writeKnowledgeItemMetaStore(metaStore);
   selectedKnowledgeResearchKeys.delete(item.recordKey);
-  selectedKnowledgeRecordKey = "";
-  setKnowledgePageStatus("内容已删除。");
+
+  if (selectedKnowledgeRecordKey === item.recordKey) {
+    selectedKnowledgeRecordKey = "";
+  }
+
+  if (closeEditorAfterDelete) closeKnowledgeEditor();
+  setKnowledgePageStatus(`已删除“${item.title}”。`);
   renderKnowledgeBase();
+  return true;
+}
+
+function deleteSelectedKnowledgeItem(): void {
+  const item = getSelectedKnowledgeItem();
+  if (!item) return;
+  deleteKnowledgeItem(item);
 }
 
 function openSelectedKnowledgeSource(): void {
@@ -11251,10 +11783,10 @@ function saveTranslationAndExplanationAsNote(): void {
     title: `${isWord ? "单词学习" : "句子翻译"}：${getKnowledgeExcerpt(sourceText).slice(0, 34)}`,
     content: [
       "原文",
-      sourceText,
+      prepareKnowledgeEditorMarkdown(sourceText),
       "",
       isWord ? "单词学习" : "句子学习",
-      learningText,
+      prepareKnowledgeEditorMarkdown(learningText),
     ].join("\n"),
     documentName: sourceName ? getDisplayFileName(sourceName) : "未关联文档",
     pageNumber,
@@ -13806,6 +14338,33 @@ knowledgeDeleteItemButton.addEventListener(
 );
 knowledgeEditorCloseButton.addEventListener("click", closeKnowledgeEditor);
 knowledgeEditorCancelButton.addEventListener("click", closeKnowledgeEditor);
+knowledgeEditorBodyInput.addEventListener(
+  "input",
+  scheduleKnowledgeEditorPreview,
+);
+knowledgeEditorModeToggleButton.addEventListener("click", () => {
+  setKnowledgeEditorBodyMode(
+    knowledgeEditorBodyMode === "preview" ? "edit" : "preview",
+    true,
+  );
+});
+knowledgeEditorCategoryInput.addEventListener("blur", () => {
+  knowledgeEditorCategoryInput.value = normalizeKnowledgeCategory(
+    knowledgeEditorCategoryInput.value,
+  );
+});
+knowledgeEditorDeleteButton.addEventListener("click", () => {
+  if (!knowledgeEditorTargetKey) return;
+  const item = collectKnowledgeItems().find(
+    (candidate) => candidate.recordKey === knowledgeEditorTargetKey,
+  );
+  if (!item) {
+    setKnowledgePageStatus("这条内容已经不存在，请刷新知识库。", true);
+    closeKnowledgeEditor();
+    return;
+  }
+  deleteKnowledgeItem(item, true);
+});
 knowledgeEditorDialog.addEventListener("pointerdown", (event) => {
   if (event.target === knowledgeEditorDialog) closeKnowledgeEditor();
 });
@@ -13816,7 +14375,9 @@ knowledgeEditorForm.addEventListener("submit", (event) => {
 paperCardBackButton.addEventListener("click", () =>
   closePaperCardPage(paperCardReturnTarget),
 );
-returnToPdfButton.addEventListener("click", () => closePaperCardPage("pdf"));
+returnToPdfButton.addEventListener("click", () =>
+  closePaperCardPage(paperCardReturnTarget),
+);
 editPaperCardButton.addEventListener("click", () => {
   const enteringEditMode = !paperCardEditMode;
   setPaperCardEditMode(enteringEditMode);
@@ -14324,6 +14885,20 @@ generateMoreExamplesButton.addEventListener("click", () => {
 });
 
 selectedSnippetElement.addEventListener("input", markTranslationEditorChanged);
+selectedSnippetModeToggleButton.addEventListener("click", () => {
+  setSelectedSnippetDisplayMode(
+    selectedSnippetDisplayMode === "preview" ? "edit" : "preview",
+    true,
+  );
+});
+selectedSnippetMathPreview.addEventListener("dblclick", () => {
+  setSelectedSnippetDisplayMode("edit", true);
+});
+selectedSnippetMathPreview.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  setSelectedSnippetDisplayMode("edit", true);
+});
 translationSourceSentenceInput.addEventListener("input", () => {
   autoResizeTranslationTextarea(translationSourceSentenceInput);
   renderTranslationMathPreview(
@@ -14361,6 +14936,7 @@ applyTranslationEditButton.addEventListener("click", () => {
     ? normalizeLearningInlineText(translationSourceSentenceInput.value || text)
     : text;
   setTranslationSelectionEditor(text, currentEnglishLearningSourceSentence);
+  setSelectedSnippetDisplayMode("preview");
   lastTranslatedText = "";
   currentEnglishLearningResult = null;
   void translateSelectedText(text);

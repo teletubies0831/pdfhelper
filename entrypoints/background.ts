@@ -56,6 +56,8 @@ import {
 
 const MENU_ROOT_ID = 'pdf-helper-selection';
 const MENU_PREFIX = 'pdf-helper-action-';
+const PAPER_OVERVIEW_TIMEOUT_MS = 120_000;
+const paperOverviewRequestControllers = new Map<string, AbortController>();
 
 async function registerContextMenus() {
   await browser.contextMenus.removeAll();
@@ -994,6 +996,12 @@ function parseReadingModeDetection(content: string): {
 
 async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResponse> {
   try {
+    if (message.type === 'pdf-helper:ai-cancel-paper-overview') {
+      paperOverviewRequestControllers.get(message.requestId)?.abort();
+      paperOverviewRequestControllers.delete(message.requestId);
+      return { ok: true };
+    }
+
     if (message.type === 'pdf-helper:ai-vision' || message.type === 'pdf-helper:ai-vision-test') {
       const visionConfig = await getVisionAiConfig();
       const result = await requestVisionCompletion(
@@ -1333,36 +1341,155 @@ async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResp
     }
 
     if (message.type === 'pdf-helper:ai-generate-paper-overview') {
-      const sourceText = message.text.trim().slice(0, 55_000);
+      const sourceText = message.text.trim().slice(0, 52_000);
       if (!sourceText) throw new Error('论文原文不能为空。');
 
-      const result = await adapter.chat(config, [{
-        role: 'system',
-        content: [
-          '你是一名严谨的中文论文阅读助手，服务对象是研究生论文阅读。请根据用户提供的整篇论文或论文采样文本，生成一张更适合研究生使用的结构化论文卡片。',
-          '事实类信息必须忠于原文，不能编造作者、数据集、指标、实验结果、局限性、会议等级等；原文没有明确说明的字段必须填写“原文未明确出现”。',
-          '标题和作者尽量从论文首页识别；年份、会议或期刊只有明确出现时才填写。keywords、topic_tags 可以根据原文标题、摘要与正文关键词概括。',
-          'reading_status 固定填写“略读完成”。recommend_deep_reading 只能填写“建议精读”“建议按需精读”或“暂不建议精读”。reading_difficulty 只能填写“较易”“中等”或“较难”。reading_value_score 填 0 到 10 的数字，可以带 1 位小数，它是基于论文内容做出的阅读辅助判断，不属于论文原始事实。',
-          'worth_reading、reading_advice、suitable_stages、prerequisites、research_connection、followup_questions、weekly_plan 属于“研究生阅读辅助建议”，允许你基于论文内容做合理判断，但要简洁、具体、可执行。',
-          'method_steps 尽量写成 1/2/3/4 结构；citation_points 应概括最值得在后续写作中引用的 1 到 3 个观点，并说明其用途。',
-          '只返回一个 JSON 对象，不要使用 Markdown，不要添加解释。JSON 字段必须是：',
-          '{"title":"","authors":"","venue_year":"","research_area":"","keywords":"","one_sentence_summary":"","research_problem":"","core_innovation":"","worth_reading":"","problem_setup":"","research_gap":"","why_important":"","topic_tags":"","method_overview":"","method_intuition":"","method_steps":"","key_assumptions":"","notation_guide":"","datasets":"","experiment_setup":"","metrics":"","main_findings":"","strongest_evidence":"","comparison_with_prior_work":"","limitations":"","reading_status":"略读完成","recommend_deep_reading":"建议按需精读","reading_difficulty":"中等","reading_value_score":"8.0","reading_advice":"","suitable_stages":"","prerequisites":"","citation_points":"","research_connection":"","followup_questions":"","weekly_plan":""}',
-        ].join('\n'),
-      }, {
-        role: 'user',
-        content: [
-          `文件名：${message.documentName || '未提供'}`,
-          `PDF 页数：${Math.max(1, Math.trunc(message.pageCount || 1))}`,
-          '论文原文：',
-          sourceText,
-        ].join('\n\n'),
-      }], 4096);
+      // 同一个扩展页面只需要保留最新一次论文卡片生成。
+      // 切换 PDF 或重新生成时，立即中止之前仍在后台等待的网络请求。
+      for (const [requestId, activeController] of paperOverviewRequestControllers) {
+        if (requestId === message.requestId) continue;
+        activeController.abort();
+        paperOverviewRequestControllers.delete(requestId);
+      }
 
-      return {
-        ok: true,
-        content: result.content,
-        model: result.model,
-      };
+      const controller = new AbortController();
+      paperOverviewRequestControllers.set(message.requestId, controller);
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, PAPER_OVERVIEW_TIMEOUT_MS);
+
+      try {
+        const knowledgeContext = message.knowledgeContext?.trim().slice(0, 8_000) || '';
+        const response = await fetch(`${config.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: config.model,
+            messages: [
+              {
+                role: 'system',
+                content: [
+                  '你是严谨的中文科研论文阅读助手，服务对象是研究生。',
+                  '请根据提供的论文采样正文生成结构化论文阅读卡片。',
+                  '只输出一个合法 JSON 对象，不要输出 Markdown、代码块或额外说明。',
+                  '不得编造作者、会议、数据、实验结果、结论或局限；原文无法确认时填写“原文未明确出现”。',
+                  '内容必须具体、简洁、可验证。核心创新最多 3 点，关键实验结果最多 2 点。',
+                  'comparison_with_prior_work 必须填写空字符串，相关论文由独立联网模块检索。',
+                  'suitable_stages 在页面中表示领域相关度，只能填写“高”“中”“低”。',
+                  '不要固定给 8.5 分。必须分别评估相关度、创新性、证据强度和方法清晰度。',
+                  '用户知识库记录只可作为辅助背景；若与论文原文冲突，以原文为准。',
+                  'JSON 所有字段值必须是字符串，字段必须完整：',
+                  JSON.stringify({
+                    title: '',
+                    authors: '',
+                    venue_year: '',
+                    research_area: '',
+                    keywords: '',
+                    one_sentence_summary: '',
+                    research_problem: '',
+                    core_innovation: '',
+                    worth_reading: '',
+                    problem_setup: '',
+                    research_gap: '',
+                    why_important: '',
+                    topic_tags: '',
+                    method_overview: '',
+                    method_intuition: '',
+                    method_steps: '',
+                    key_assumptions: '',
+                    notation_guide: '',
+                    datasets: '',
+                    experiment_setup: '',
+                    metrics: '',
+                    main_findings: '',
+                    strongest_evidence: '',
+                    comparison_with_prior_work: '',
+                    limitations: '',
+                    reading_status: '待读',
+                    recommend_deep_reading: '建议按需精读',
+                    reading_difficulty: '中等',
+                    reading_value_score: '',
+                    novelty_score: '',
+                    evidence_score: '',
+                    relevance_score: '',
+                    method_clarity_score: '',
+                    reading_advice: '',
+                    suitable_stages: '',
+                    prerequisites: '',
+                    citation_points: '',
+                    research_connection: '',
+                    followup_questions: '',
+                    weekly_plan: '',
+                  }),
+                ].join('\n'),
+              },
+              {
+                role: 'user',
+                content: [
+                  `文件名：${message.documentName || '未提供'}`,
+                  `PDF 页数：${Math.max(1, Math.trunc(message.pageCount || 1))}`,
+                  knowledgeContext
+                    ? `用户知识库相关记录（仅作辅助，必须与原文核验）：\n${knowledgeContext}`
+                    : '用户知识库相关记录：暂无。',
+                  `论文采样正文：\n${sourceText}`,
+                ].join('\n\n'),
+              },
+            ],
+            // 结构化 JSON 任务关闭思考模式，避免长时间只生成 reasoning_content。
+            thinking: { type: 'disabled' },
+            stream: false,
+            max_tokens: Math.min(6144, Math.max(2048, config.maxOutputTokens)),
+          }),
+          signal: controller.signal,
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(
+            getProviderError(
+              payload,
+              `论文卡片 AI 请求失败：HTTP ${response.status}`,
+            ),
+          );
+        }
+
+        const content = (payload as {
+          choices?: Array<{ message?: { content?: unknown } }>;
+        })?.choices?.[0]?.message?.content;
+
+        if (typeof content !== 'string' || !content.trim()) {
+          throw new Error('AI 模型没有返回有效的论文卡片 JSON。');
+        }
+
+        return {
+          ok: true,
+          content: content.trim(),
+          model:
+            typeof (payload as { model?: unknown })?.model === 'string'
+              ? String((payload as { model?: unknown }).model)
+              : config.model,
+        };
+      } catch (error) {
+        if (timedOut) {
+          throw new Error(
+            '论文卡片生成超过 120 秒，已自动停止。请检查网络或模型配置后重试。',
+          );
+        }
+        if (controller.signal.aborted) {
+          throw new Error('已取消上一篇论文的卡片生成。');
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+        if (paperOverviewRequestControllers.get(message.requestId) === controller) {
+          paperOverviewRequestControllers.delete(message.requestId);
+        }
+      }
     }
 
     const result = await adapter.chat(

@@ -148,9 +148,24 @@
                       <textarea id="paper-authors" name="authors" rows="1" aria-label="作者" placeholder="请输入作者"></textarea>
                     </label>
                     <div class="paper-card-meta-row paper-card-meta-stack">
-                      <label class="paper-card-meta-field paper-card-inline-editable-field">
+                      <label class="paper-card-meta-field paper-card-inline-editable-field paper-card-venue-field">
                         <span>会议 / 期刊 · 年份</span>
-                        <textarea id="paper-venue-year" name="venueYear" rows="1" placeholder="例如 NDSS 2026"></textarea>
+                        <div class="paper-card-venue-value-row">
+                          <textarea
+                            id="paper-venue-year"
+                            name="venueYear"
+                            rows="1"
+                            placeholder="例如 NDSS · 2026"
+                          ></textarea>
+                          <a
+                            id="paper-ccf-rank"
+                            class="paper-card-ccf-rank paper-card-inline-ccf-rank ccf-rank-loading"
+                            href="https://www.ccf.org.cn/Academic_Evaluation/By_category/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="查看 CCF 等级来源"
+                          >CCF查询中…</a>
+                        </div>
                       </label>
                       <label class="paper-card-meta-field paper-card-inline-editable-field">
                         <span>研究领域</span>
@@ -206,7 +221,11 @@
               </main>
 
               <aside class="paper-card-sidebar">
-                <section class="paper-card-side-card paper-card-decision-card">
+                <section
+                  class="paper-card-side-card paper-card-decision-card"
+                  hidden
+                  aria-hidden="true"
+                >
                   <h2>阅读决策</h2>
                   <div class="paper-card-decision-banner">
                     <span class="paper-card-decision-check" aria-hidden="true">✓</span>
@@ -227,16 +246,6 @@
                   </label>
 
                   <div class="paper-card-metrics">
-                    <div class="paper-card-metric-row paper-card-ccf-row">
-                      <span>CCF等级</span>
-                      <a
-                        id="paper-ccf-rank"
-                        class="paper-card-ccf-rank ccf-rank-loading"
-                        href="https://www.ccf.org.cn/Academic_Evaluation/By_category/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >CCF查询中…</a>
-                    </div>
                     <label class="paper-card-metric-row">
                       <span>领域相关度</span>
                       <select id="paper-suitable-stages" name="suitableStages">
@@ -374,7 +383,7 @@
               <div id="knowledge-category-list" class="knowledge-sidebar-list"></div>
             </section>
 
-            <section class="knowledge-sidebar-section">
+            <section class="knowledge-sidebar-section" hidden>
               <div class="knowledge-sidebar-section-heading">
                 <strong>标签</strong>
               </div>
@@ -395,7 +404,7 @@
               <div>
                 <h1 id="knowledge-page-title">研究知识库</h1>
                 <p id="knowledge-page-subtitle">管理你的文献笔记、论文卡片与综述准备，一站式助力高效科研。</p>
-                <p class="knowledge-page-meta">共 <strong id="knowledge-total-count">0</strong> 条内容，来自 <strong id="knowledge-document-count">0</strong> 篇文档</p>
+                <p class="knowledge-page-meta" hidden>共 <strong id="knowledge-total-count">0</strong> 条内容，来自 <strong id="knowledge-document-count">0</strong> 篇文档</p>
               </div>
               <div class="knowledge-main-actions">
                 <button id="knowledge-refresh" type="button">↻ 刷新</button>
@@ -413,7 +422,7 @@
             </div>
 
             <div id="knowledge-library-view">
-            <div class="knowledge-focus-tabs" role="tablist" aria-label="研究阅读快捷视图">
+            <div class="knowledge-focus-tabs" role="tablist" aria-label="研究阅读快捷视图" hidden>
               <button class="active" data-knowledge-focus="all" type="button">全部</button>
               <button data-knowledge-focus="todo" type="button">待读 <strong id="knowledge-focus-count-todo">0</strong></button>
               <button data-knowledge-focus="deep" type="button">精读中 <strong id="knowledge-focus-count-deep">0</strong></button>
@@ -440,14 +449,14 @@
               <select id="knowledge-venue-filter" aria-label="会议或期刊筛选">
                 <option value="all">会议/期刊</option>
               </select>
-              <select id="knowledge-reading-status-filter" aria-label="阅读状态筛选">
+              <select id="knowledge-reading-status-filter" aria-label="阅读状态筛选" hidden>
                 <option value="all">阅读状态</option>
               </select>
-              <select id="knowledge-priority-filter" aria-label="优先级筛选">
+              <select id="knowledge-priority-filter" aria-label="优先级筛选" hidden>
                 <option value="all">优先级</option>
               </select>
               <button id="knowledge-clear-filters" type="button">清空</button>
-              <select id="knowledge-group-select" aria-label="分组方式">
+              <select id="knowledge-group-select" aria-label="分组方式" hidden>
                 <option value="none">不分组</option>
                 <option value="source">按来源文档</option>
                 <option value="category">按分类</option>
@@ -461,11 +470,11 @@
               <button data-knowledge-filter="paper-card" type="button">论文卡片</button>
             </div>
 
-            <div id="knowledge-dashboard-metrics" class="knowledge-dashboard-metrics" aria-label="研究统计"></div>
+            <div id="knowledge-dashboard-metrics" class="knowledge-dashboard-metrics" aria-label="研究统计" hidden></div>
             <div id="knowledge-page-status" class="knowledge-page-status" hidden aria-live="polite"></div>
             <div id="knowledge-list" class="knowledge-card-grid" aria-live="polite"></div>
 
-            <div class="knowledge-student-panels">
+            <div class="knowledge-student-panels" hidden>
               <section class="knowledge-student-panel">
                 <header class="knowledge-student-panel-header">
                   <strong>研究生阅读视角</strong>
@@ -921,9 +930,33 @@
             <div class="ai-tab-panel" data-ai-panel="translate">
               <div class="translation-scroll-content">
                 <section class="ai-section">
-                  <h3>1. 选中英文</h3>
-                  <textarea id="selected-snippet" class="selected-snippet" rows="2" spellcheck="false" placeholder="请在左侧 PDF 中选择文字"></textarea>
-                  <div id="selected-snippet-math-preview" class="translation-math-preview" hidden></div>
+                  <div class="selected-snippet-heading-row">
+                    <h3>1. 选中英文</h3>
+                    <button
+                      id="selected-snippet-mode-toggle"
+                      class="selected-snippet-mode-toggle"
+                      type="button"
+                      aria-pressed="false"
+                    >编辑英文</button>
+                  </div>
+
+                  <div id="selected-snippet-shell" class="selected-snippet-shell">
+                    <textarea
+                      id="selected-snippet"
+                      class="selected-snippet"
+                      rows="2"
+                      spellcheck="false"
+                      placeholder="请在左侧 PDF 中选择文字"
+                      hidden
+                    ></textarea>
+                    <div
+                      id="selected-snippet-math-preview"
+                      class="selected-snippet-rich-view chat-markdown"
+                      role="textbox"
+                      tabindex="0"
+                      aria-label="选中英文排版内容"
+                    ></div>
+                  </div>
                   <label id="translation-source-sentence-field" class="translation-source-sentence-field" hidden>
                     <span>文中原句（可修改）</span>
                     <textarea id="translation-source-sentence" rows="1" spellcheck="false" placeholder="当前单词所在的原句"></textarea>
@@ -1106,39 +1139,165 @@
     </div>
 
 
-    <div id="knowledge-editor-dialog" class="modal-backdrop" hidden>
-      <form id="knowledge-editor-form" class="knowledge-editor-panel" role="dialog" aria-modal="true" aria-labelledby="knowledge-editor-heading">
-        <header>
-          <div>
-            <strong id="knowledge-editor-heading">新建笔记</strong>
-            <p id="knowledge-editor-source">保存到本地知识库</p>
+    <div id="knowledge-editor-dialog" class="modal-backdrop knowledge-editor-backdrop" hidden>
+      <form
+        id="knowledge-editor-form"
+        class="knowledge-editor-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="knowledge-editor-heading"
+      >
+        <header class="knowledge-editor-header">
+          <div class="knowledge-editor-heading-group">
+            <div class="knowledge-editor-page-icon" aria-hidden="true">▧</div>
+            <div>
+              <strong id="knowledge-editor-heading">新建笔记</strong>
+              <p id="knowledge-editor-source">保存到本地知识库</p>
+            </div>
           </div>
-          <button id="knowledge-editor-close" type="button" aria-label="关闭">×</button>
+
+          <div class="knowledge-editor-header-actions">
+            <button id="knowledge-editor-cancel" type="button">← 返回知识库</button>
+            <button
+              id="knowledge-editor-delete"
+              class="knowledge-editor-delete-button"
+              type="button"
+              hidden
+            >删除</button>
+            <button class="primary-button knowledge-editor-save-button" type="submit">▣ 保存修改</button>
+            <button id="knowledge-editor-close" class="knowledge-editor-close-button" type="button" aria-label="关闭">×</button>
+          </div>
         </header>
-        <div class="knowledge-editor-fields">
-          <label>
-            <span>标题</span>
-            <input id="knowledge-editor-title" type="text" maxlength="160" placeholder="输入笔记标题" />
-          </label>
-          <div class="knowledge-editor-inline-fields">
-            <label>
-              <span>分类</span>
-              <input id="knowledge-editor-category" type="text" maxlength="60" placeholder="例如：深度学习" />
-            </label>
-            <label>
-              <span>标签</span>
-              <input id="knowledge-editor-tags" type="text" maxlength="240" placeholder="使用逗号分隔" />
-            </label>
-          </div>
-          <label>
-            <span>正文</span>
-            <textarea id="knowledge-editor-body" rows="14" placeholder="记录你的理解、问题、引用或后续计划…"></textarea>
-          </label>
+
+        <div class="knowledge-editor-workspace">
+          <main class="knowledge-editor-document">
+            <section class="knowledge-editor-title-card">
+              <label>
+                <span>笔记标题</span>
+                <input
+                  id="knowledge-editor-title"
+                  type="text"
+                  maxlength="160"
+                  placeholder="输入一个清晰、可检索的笔记标题"
+                />
+              </label>
+            </section>
+
+            <section class="knowledge-editor-body-card">
+              <div class="knowledge-editor-section-heading">
+                <div>
+                  <strong id="knowledge-editor-body-mode-label">排版正文</strong>
+                  <span>原文、翻译、重点词汇与 LaTeX 公式会自动整理</span>
+                </div>
+                <button
+                  id="knowledge-editor-mode-toggle"
+                  class="knowledge-editor-mode-toggle"
+                  type="button"
+                >编辑正文</button>
+              </div>
+
+              <div class="knowledge-editor-body-workspace knowledge-editor-single-workspace">
+                <label
+                  id="knowledge-editor-edit-pane"
+                  class="knowledge-editor-body-label knowledge-editor-edit-pane"
+                  hidden
+                >
+                  <span class="sr-only">编辑正文</span>
+                  <textarea
+                    id="knowledge-editor-body"
+                    rows="20"
+                    placeholder="建议结构：
+
+原文
+记录论文原文、页码和关键公式。
+
+翻译
+写下准确、通顺的中文翻译。
+
+重点词汇
+- oblivious：不经意的
+- programmable：可编程的
+
+我的判断
+说明这段内容为什么重要。
+
+公式可使用：
+$F(k,q_i)$
+或
+$$
+F(x)=\sum_{i=1}^{n} w_i x_i
+$$"
+                  ></textarea>
+                </label>
+
+                <section
+                  id="knowledge-editor-preview-pane"
+                  class="knowledge-editor-preview-pane knowledge-editor-single-preview"
+                  aria-label="笔记排版正文"
+                >
+                  <div
+                    id="knowledge-editor-preview"
+                    class="knowledge-editor-preview chat-markdown"
+                    aria-live="polite"
+                  ></div>
+                </section>
+              </div>
+            </section>
+          </main>
+
+          <aside class="knowledge-editor-sidebar">
+            <section class="knowledge-editor-side-card">
+              <header>
+                <strong>知识属性</strong>
+                <span>便于后续检索和跨文献整理</span>
+              </header>
+
+              <div class="knowledge-editor-fields">
+                <label>
+                  <span>分类</span>
+                  <input
+                    id="knowledge-editor-category"
+                    type="text"
+                    maxlength="60"
+                    placeholder="例如：安全多方计算 / 密码学协议"
+                  />
+                </label>
+
+                <label>
+                  <span>标签</span>
+                  <input
+                    id="knowledge-editor-tags"
+                    type="text"
+                    maxlength="240"
+                    placeholder="例如：OPRF, PSI, 复现"
+                  />
+                  <small>多个标签使用逗号分隔</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="knowledge-editor-side-card knowledge-editor-source-card">
+              <header>
+                <strong>来源与使用方式</strong>
+                <span>保留可追溯性，避免笔记脱离论文语境</span>
+              </header>
+              <div class="knowledge-editor-guidance">
+                <p><strong>来源：</strong><span>当前来源显示在页面标题下方。</span></p>
+                <p><strong>引用：</strong><span>记录页码、图表或实验编号。</span></p>
+                <p><strong>判断：</strong><span>区分论文原文、你的推断和待验证事项。</span></p>
+              </div>
+            </section>
+
+            <section class="knowledge-editor-side-card knowledge-editor-tip-card">
+              <strong>研究生笔记建议</strong>
+              <ul>
+                <li>只保留能支持研究决策的信息。</li>
+                <li>把结论和证据放在一起。</li>
+                <li>明确下一次阅读或实验动作。</li>
+              </ul>
+            </section>
+          </aside>
         </div>
-        <footer>
-          <button id="knowledge-editor-cancel" type="button">取消</button>
-          <button class="primary-button" type="submit">保存</button>
-        </footer>
       </form>
     </div>
 

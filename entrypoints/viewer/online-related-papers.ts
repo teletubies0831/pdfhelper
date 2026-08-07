@@ -3,9 +3,10 @@ import { runRelatedResearch, type RelatedPaper } from "./research-tools";
 
 const UI = {
   title: "近期高质量相关工作",
-  loading: "LangGraph 正在调用多源学术检索工具，并核验 CCF 官方目录…",
-  empty: "暂未找到通过质量与相关性筛选的结果。",
-  error: "多源文献检索失败，请检查网络后重试。",
+  waiting: "等待当前论文卡片生成完成后检索相关工作…",
+  loading: "正在根据当前论文标题、关键词和研究领域检索相关工作…",
+  empty: "暂未找到与当前论文同时满足质量和相关性要求的结果。",
+  error: "当前论文的相关工作检索失败，请检查网络后重试。",
   refresh: "刷新",
 };
 
@@ -193,10 +194,13 @@ async function load(force = false): Promise<void> {
   const researchArea = (
     document.getElementById("paper-research-area") as HTMLInputElement | null
   )?.value.trim() ?? "";
-  if (!title) return;
 
   const target = getSection();
   if (!target) return;
+  if (!title) {
+    renderStatus(target.result, UI.waiting);
+    return;
+  }
   renderStatus(target.result, UI.loading);
 
   const response = await runRelatedResearch({
@@ -230,7 +234,13 @@ export function installOnlineRelatedPapers(): void {
         document.getElementById("paper-research-area") as HTMLInputElement | null
       )?.value.trim() ?? "";
       const key = `${title}\u0000${keywords}\u0000${researchArea}`;
-      if (!title || (!force && key === lastKey)) return;
+      if (!title) {
+        lastKey = "";
+        const target = getSection();
+        if (target) renderStatus(target.result, UI.waiting);
+        return;
+      }
+      if (!force && key === lastKey) return;
       lastKey = key;
       void load(force);
     }, 550);
@@ -239,6 +249,22 @@ export function installOnlineRelatedPapers(): void {
   const initialize = (): void => {
     const page = document.getElementById("paper-card-page");
     if (!page) return;
+
+    const initialTarget = getSection();
+    if (initialTarget) renderStatus(initialTarget.result, UI.waiting);
+
+    document.addEventListener("pdf-helper:paper-card-reset", () => {
+      lastKey = "";
+      window.clearTimeout(timer);
+      const target = getSection();
+      if (target) renderStatus(target.result, UI.waiting);
+    });
+
+    document.addEventListener("pdf-helper:paper-card-ready", () => {
+      lastKey = "";
+      schedule(true);
+    });
+
     page.addEventListener("click", (event) => {
       const target = event.target;
       if (
@@ -264,8 +290,6 @@ export function installOnlineRelatedPapers(): void {
     });
     observer.observe(page, {
       attributes: true,
-      childList: true,
-      subtree: true,
       attributeFilter: ["hidden"],
     });
     schedule(false);
