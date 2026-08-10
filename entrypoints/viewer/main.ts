@@ -911,6 +911,7 @@ const internalNavigationHistory: InternalNavigationEntry[] = [];
 let areNoteIndicatorsHidden = false;
 let sourcePdfBytes: Uint8Array | null = null;
 let selectionRenderFrame = 0;
+let selectionRenderSettleFrame = 0;
 let contextSelectionRanges: Range[] = [];
 let contextSelectionText = "";
 let selectedAnnotationEditor: any | null = null;
@@ -2333,6 +2334,13 @@ function normalizeCopiedText(text: string): string {
     .join("\n\n");
 }
 
+function trimSelectionBoundaryWhitespace(text: string): string {
+  // PDF.js text layers commonly place whitespace in separate boundary nodes.
+  // Keep the user's meaningful internal spacing/line breaks, while making a
+  // word or sentence selection behave identically in the UI and on Ctrl+C.
+  return text.replace(/^\s+|\s+$/gu, "");
+}
+
 function getViewerSelectionRawText(): string {
   const selection = window.getSelection();
   if (
@@ -2343,7 +2351,7 @@ function getViewerSelectionRawText(): string {
     return "";
   }
   const reconstructed = getSelectionSurroundingText().selected;
-  return reconstructed || selection.toString();
+  return trimSelectionBoundaryWhitespace(reconstructed || selection.toString());
 }
 
 function getViewerSelectionText(): string {
@@ -12847,6 +12855,64 @@ interface SelectionRect {
   height: number;
 }
 
+function trimSelectionRangeWhitespace(range: Range): Range {
+  const trimmed = range.cloneRange();
+
+  // PDF.js text items frequently keep the whitespace beside a word in the
+  // same text node. Browsers can retain that whitespace in a double-click
+  // range, so remove it before asking the browser for the visual rectangles.
+  if (trimmed.startContainer.nodeType === Node.TEXT_NODE) {
+    const text = trimmed.startContainer.textContent ?? "";
+    let offset = trimmed.startOffset;
+    while (offset < text.length && /\s/.test(text.charAt(offset))) {
+      offset += 1;
+    }
+    if (offset !== trimmed.startOffset) {
+      trimmed.setStart(trimmed.startContainer, offset);
+    }
+  }
+
+  if (trimmed.endContainer.nodeType === Node.TEXT_NODE) {
+    const text = trimmed.endContainer.textContent ?? "";
+    let offset = trimmed.endOffset;
+    while (offset > 0 && /\s/.test(text.charAt(offset - 1))) {
+      offset -= 1;
+    }
+    if (offset !== trimmed.endOffset) {
+      // Avoid creating an inverted range for selections that contain only
+      // whitespace. In that rare case we keep the browser's original range.
+      try {
+        trimmed.setEnd(trimmed.endContainer, offset);
+      } catch {
+        return range;
+      }
+    }
+  }
+
+  return trimmed.collapsed ? range : trimmed;
+}
+
+function isPageSizedSelectionArtifact(
+  rect: DOMRect,
+  pageBounds: DOMRect,
+): boolean {
+  // Chrome can briefly expose the PDF.js page/text-layer container as an
+  // additional range rectangle when a drag selection is being finalized. It
+  // is not a selected glyph fragment; accepting it would paint the entire
+  // page blue until a later selection update replaces the geometry.
+  const overlapWidth = Math.max(
+    0,
+    Math.min(rect.right, pageBounds.right) - Math.max(rect.left, pageBounds.left),
+  );
+  const overlapHeight = Math.max(
+    0,
+    Math.min(rect.bottom, pageBounds.bottom) - Math.max(rect.top, pageBounds.top),
+  );
+  const widthCoverage = overlapWidth / Math.max(pageBounds.width, 1);
+  const heightCoverage = overlapHeight / Math.max(pageBounds.height, 1);
+  return widthCoverage >= 0.9 && heightCoverage >= 0.65;
+}
+
 function clearCustomSelection() {
   document
     .querySelectorAll(".pdf-helper-selection-overlay")
@@ -12860,165 +12926,122 @@ function getSelectionHeightRatio(): number {
   return Math.min(1, Math.max(0.35, Number.parseFloat(ratioValue) || 0.68));
 }
 
-function mergeSelectionRects(rects: SelectionRect[]): SelectionRect[] {
-  const validRects = rects.filter(
-    (rect) =>
-      Number.isFinite(rect.left) &&
-      Number.isFinite(rect.top) &&
-      rect.width > 0.5 &&
-      rect.height > 1,
-  );
-  if (validRects.length === 0) return [];
+/**
+ * Mirrors the browser's selection geometry instead of reconstructing it from
+ * individual PDF.js text nodes. A PDF text layer often splits a visual word
+ * into several spans; rebuilding ranges from those spans can widen the first
+ * or last fragment and can join unrelated lines. `Range#getClientRects()` is
+ * the browser's authoritative list of selected visual fragments.
+ */
+function collectNativeSelectionRects(
+  range: Range,
+  pages: readonly HTMLElement[],
+): Map<HTMLElement, SelectionRect[]> {
+  const visualRange = trimSelectionRangeWhitespace(range);
+  const pageBounds = pages.map((page) => ({
+    page,
+    bounds: page.getBoundingClientRect(),
+  }));
+  const rectsByPage = new Map<HTMLElement, SelectionRect[]>();
 
-  const median = (values: number[]): number => {
-    const sortedValues = [...values].sort((left, right) => left - right);
-    const middle = Math.floor(sortedValues.length / 2);
-    return sortedValues.length % 2
-      ? (sortedValues[middle] ?? 0)
-      : ((sortedValues[middle - 1] ?? 0) + (sortedValues[middle] ?? 0)) / 2;
-  };
-  const typicalHeight = Math.max(
-    4,
-    median(validRects.map((rect) => rect.height)),
-  );
-  const lineClusters: SelectionRect[][] = [];
-  const byCenter = [...validRects].sort(
-    (left, right) =>
-      left.top + left.height / 2 - (right.top + right.height / 2) ||
-      left.left - right.left,
-  );
+  for (const rect of Array.from(visualRange.getClientRects())) {
+    if (rect.width <= 0.5 || rect.height <= 1) continue;
 
-  for (const rect of byCenter) {
-    const center = rect.top + rect.height / 2;
-    let bestCluster: SelectionRect[] | undefined;
-    let bestDistance = Number.POSITIVE_INFINITY;
-    for (const cluster of lineClusters) {
-      const clusterCenter = median(
-        cluster.map((item) => item.top + item.height / 2),
+    let matchedPage: HTMLElement | undefined;
+    let matchedBounds: DOMRect | undefined;
+    let greatestOverlap = 0;
+    for (const { page, bounds } of pageBounds) {
+      const overlapWidth = Math.max(
+        0,
+        Math.min(rect.right, bounds.right) - Math.max(rect.left, bounds.left),
       );
-      const distance = Math.abs(center - clusterCenter);
-      // Formula superscripts/subscripts may have different boxes, but their
-      // visual centers still remain closer than the next body-text baseline.
-      if (distance <= typicalHeight * 0.82 && distance < bestDistance) {
-        bestCluster = cluster;
-        bestDistance = distance;
+      const overlapHeight = Math.max(
+        0,
+        Math.min(rect.bottom, bounds.bottom) - Math.max(rect.top, bounds.top),
+      );
+      const overlap = overlapWidth * overlapHeight;
+      if (overlap > greatestOverlap) {
+        greatestOverlap = overlap;
+        matchedPage = page;
+        matchedBounds = bounds;
       }
     }
-    if (bestCluster) bestCluster.push(rect);
-    else lineClusters.push([rect]);
+    if (!matchedPage || !matchedBounds) continue;
+    if (isPageSizedSelectionArtifact(rect, matchedBounds)) continue;
+
+    const pageRects = rectsByPage.get(matchedPage) ?? [];
+    // `getBoundingClientRect()` is expressed in viewport pixels, while an
+    // absolutely-positioned child of the page uses the page's local CSS
+    // pixels. They normally match, but diverge at some zoom/transform states.
+    // Convert explicitly so the custom overlay stays aligned at every zoom.
+    const scaleX = matchedPage.clientWidth / matchedBounds.width || 1;
+    const scaleY = matchedPage.clientHeight / matchedBounds.height || 1;
+    const left = (rect.left - matchedBounds.left) * scaleX;
+    const top = (rect.top - matchedBounds.top) * scaleY;
+    const width = rect.width * scaleX;
+    const height = rect.height * scaleY;
+    pageRects.push({
+      left,
+      top,
+      right: left + width,
+      bottom: top + height,
+      width,
+      height,
+    });
+    rectsByPage.set(matchedPage, pageRects);
   }
 
-  const merged: SelectionRect[] = [];
-  for (const cluster of lineClusters) {
-    const centers = cluster.map((rect) => rect.top + rect.height / 2);
-    const center = median(centers);
-    const lineHeight = Math.min(
-      typicalHeight * 1.3,
-      Math.max(
-        typicalHeight * 0.78,
-        median(cluster.map((rect) => rect.height)),
-      ),
-    );
-    const horizontal = [...cluster].sort(
-      (left, right) => left.left - right.left,
-    );
-    let segmentLeft = horizontal[0]?.left ?? 0;
-    let segmentRight = horizontal[0]?.right ?? segmentLeft;
+  return rectsByPage;
+}
 
-    const pushSegment = () => {
-      const top = center - lineHeight / 2;
-      merged.push({
-        left: segmentLeft,
-        top,
-        right: segmentRight,
-        bottom: top + lineHeight,
-        width: segmentRight - segmentLeft,
-        height: lineHeight,
-      });
-    };
+function deduplicateSelectionRects(rects: readonly SelectionRect[]) {
+  const seen = new Set<string>();
+  return rects.filter((rect) => {
+    // A range spanning nested text-layer nodes may report an identical visual
+    // fragment more than once. Remove only exact (sub-pixel) duplicates; do
+    // not merge neighbouring rectangles, because their gap is part of the
+    // browser's real selection geometry.
+    const key = [rect.left, rect.top, rect.width, rect.height]
+      .map((value) => value.toFixed(2))
+      .join(":");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
-    for (const rect of horizontal.slice(1)) {
-      if (rect.left <= segmentRight + typicalHeight * 1.25) {
-        segmentRight = Math.max(segmentRight, rect.right);
-      } else {
-        pushSegment();
-        segmentLeft = rect.left;
-        segmentRight = rect.right;
-      }
-    }
-    pushSegment();
-  }
-
-  return merged.sort(
-    (left, right) => left.top - right.top || left.left - right.left,
+function getSelectionOverlayColor(): string {
+  return (
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--pdf-selection-color")
+      .trim() || "rgb(19 75 135 / 22%)"
   );
 }
 
-function getTextNodeSelectionOffsets(
-  range: Range,
-  textNode: Text,
-): { start: number; end: number } | null {
-  const textLength = textNode.data.length;
-  if (textLength === 0 || !range.intersectsNode(textNode)) return null;
-
-  let start = 0;
-  let end = textLength;
-
-  if (range.startContainer === textNode) {
-    start = Math.min(textLength, Math.max(0, range.startOffset));
-  }
-  if (range.endContainer === textNode) {
-    end = Math.min(textLength, Math.max(0, range.endOffset));
-  }
-
-  if (start >= end) return null;
-  return { start, end };
-}
-
-function collectSelectionRectsFromTextLayer(
-  range: Range,
-  textLayer: HTMLElement,
+function drawCustomSelectionRect(
+  context: CanvasRenderingContext2D,
+  rect: SelectionRect,
+  color: string,
 ) {
-  const page = textLayer.closest<HTMLElement>(".pdfViewer .page");
-  if (!page) return [];
+  const height = rect.height * getSelectionHeightRatio();
+  const top = rect.top + (rect.height - height) / 2;
+  // Native PDF text rectangles already include the exact glyph advance. Do
+  // not add horizontal "breathing room": on a double-click it looks like the
+  // adjacent left/right spaces were selected as well.
+  const left = rect.left;
+  const width = rect.width;
 
-  const pageRect = page.getBoundingClientRect();
-  const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT, {
-    acceptNode: (node) => {
-      if (!node.textContent?.trim()) return NodeFilter.FILTER_REJECT;
-      return range.intersectsNode(node)
-        ? NodeFilter.FILTER_ACCEPT
-        : NodeFilter.FILTER_REJECT;
-    },
-  });
-  const rects: SelectionRect[] = [];
-
-  while (walker.nextNode()) {
-    const textNode = walker.currentNode as Text;
-    const offsets = getTextNodeSelectionOffsets(range, textNode);
-    if (!offsets) continue;
-
-    const textRange = document.createRange();
-    textRange.setStart(textNode, offsets.start);
-    textRange.setEnd(textNode, offsets.end);
-
-    for (const rect of Array.from(textRange.getClientRects())) {
-      if (rect.width <= 0 || rect.height <= 0) continue;
-
-      rects.push({
-        left: rect.left - pageRect.left,
-        top: rect.top - pageRect.top,
-        right: rect.right - pageRect.left,
-        bottom: rect.bottom - pageRect.top,
-        width: rect.width,
-        height: rect.height,
-      });
-    }
-
-    textRange.detach();
-  }
-
-  return rects;
+  // A native Range may include overlapping rectangles for nested PDF.js text
+  // spans. Painting the new rectangle after erasing its own area forms a true
+  // visual union: overlaps have the same opacity as the rest of the selection,
+  // without guessing line baselines or joining unrelated text fragments.
+  context.save();
+  context.globalCompositeOperation = "destination-out";
+  context.fillRect(left, top, width, height);
+  context.globalCompositeOperation = "source-over";
+  context.fillStyle = color;
+  context.fillRect(left, top, width, height);
+  context.restore();
 }
 
 function renderCustomSelection() {
@@ -13032,25 +13055,19 @@ function renderCustomSelection() {
   )
     return;
 
-  const ratio = getSelectionHeightRatio();
+  const pages = Array.from(
+    viewerElement.querySelectorAll<HTMLElement>(".pdfViewer .page"),
+  );
   const rectsByPage = new Map<HTMLElement, SelectionRect[]>();
 
   for (let rangeIndex = 0; rangeIndex < selection.rangeCount; rangeIndex += 1) {
     const range = selection.getRangeAt(rangeIndex);
     if (range.collapsed) continue;
 
-    for (const textLayer of Array.from(
-      viewerElement.querySelectorAll<HTMLElement>(".textLayer"),
+    for (const [page, selectedRects] of collectNativeSelectionRects(
+      range,
+      pages,
     )) {
-      if (!range.intersectsNode(textLayer)) continue;
-      const page = textLayer.closest<HTMLElement>(".pdfViewer .page");
-      if (!page) continue;
-
-      const selectedRects = collectSelectionRectsFromTextLayer(
-        range,
-        textLayer,
-      );
-      if (selectedRects.length === 0) continue;
       const pageRects = rectsByPage.get(page) ?? [];
       pageRects.push(...selectedRects);
       rectsByPage.set(page, pageRects);
@@ -13061,15 +13078,21 @@ function renderCustomSelection() {
     const overlay = document.createElement("div");
     overlay.className = "pdf-helper-selection-overlay";
 
-    for (const rect of mergeSelectionRects(pageRects)) {
-      const height = rect.height * ratio;
-      const marker = document.createElement("span");
-      marker.style.left = `${rect.left}px`;
-      marker.style.top = `${rect.top + (rect.height - height) / 2}px`;
-      marker.style.width = `${rect.width}px`;
-      marker.style.height = `${height}px`;
-      overlay.append(marker);
+    const canvas = document.createElement("canvas");
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.max(1, page.clientWidth);
+    const height = Math.max(1, page.clientHeight);
+    canvas.width = Math.round(width * pixelRatio);
+    canvas.height = Math.round(height * pixelRatio);
+    const context = canvas.getContext("2d");
+    if (!context) continue;
+
+    context.scale(pixelRatio, pixelRatio);
+    const color = getSelectionOverlayColor();
+    for (const rect of deduplicateSelectionRects(pageRects)) {
+      drawCustomSelectionRect(context, rect, color);
     }
+    overlay.append(canvas);
 
     page.append(overlay);
   }
@@ -13077,7 +13100,17 @@ function renderCustomSelection() {
 
 function scheduleCustomSelectionRender() {
   cancelAnimationFrame(selectionRenderFrame);
-  selectionRenderFrame = requestAnimationFrame(renderCustomSelection);
+  cancelAnimationFrame(selectionRenderSettleFrame);
+  // `selectionchange` can fire before Chromium has finished resolving PDF.js
+  // text-layer fragments. Wait for the next paint as well so we sample the
+  // stable, text-level rectangles instead of that transient container rect.
+  selectionRenderFrame = requestAnimationFrame(() => {
+    selectionRenderFrame = 0;
+    selectionRenderSettleFrame = requestAnimationFrame(() => {
+      selectionRenderSettleFrame = 0;
+      renderCustomSelection();
+    });
+  });
 }
 
 function mergeHighlightBoxes<
@@ -14117,7 +14150,7 @@ function saveContextSelection() {
   )
     return;
 
-  contextSelectionText = selection.toString();
+  contextSelectionText = getViewerSelectionRawText();
   for (let index = 0; index < selection.rangeCount; index += 1) {
     contextSelectionRanges.push(selection.getRangeAt(index).cloneRange());
   }
@@ -15794,6 +15827,11 @@ document.addEventListener("selectionchange", () => {
 });
 
 viewerElement.addEventListener("pointerdown", () => {
+  // Do not leave the previous selection canvas visible while a new native
+  // selection is being established.
+  cancelAnimationFrame(selectionRenderFrame);
+  cancelAnimationFrame(selectionRenderSettleFrame);
+  clearCustomSelection();
   // 开始新一轮拖选时，停止旧选区尚未发出的 AI 请求。
   cancelPendingAutomaticTranslation();
   translationAbortController?.abort();
@@ -15806,9 +15844,11 @@ viewerElement.addEventListener("pointerdown", () => {
   cardAbortController?.abort();
 });
 
-viewerElement.addEventListener("pointerup", () =>
-  scheduleAiSelectedSnippetUpdate(),
-);
+viewerElement.addEventListener("pointerup", () => {
+  // The final browser selection geometry is available only after pointerup.
+  scheduleCustomSelectionRender();
+  scheduleAiSelectedSnippetUpdate();
+});
 viewerElement.addEventListener("keyup", () =>
   scheduleAiSelectedSnippetUpdate(),
 );

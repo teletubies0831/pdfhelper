@@ -11,10 +11,11 @@
   --motion-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
   --scrollbar-thumb: rgb(76 96 126 / 18%);
   --scrollbar-thumb-hover: rgb(76 96 126 / 38%);
+  --font-ui: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 
   color: #172033;
   background: #edf3fb;
-  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-synthesis: none;
 }
 
@@ -1006,7 +1007,7 @@ input:disabled {
   background: linear-gradient(180deg, #fffaf4 0%, #fff6ea 100%);
   box-shadow: inset 0 1px 2px rgb(120 70 20 / 4%);
   color: #9c4707;
-  font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 550;
   letter-spacing: 0;
@@ -1050,7 +1051,7 @@ input:disabled {
   border-radius: 8px;
   background: #fff;
   color: #334155;
-  font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.55;
   padding: 10px 12px;
@@ -1273,7 +1274,7 @@ input:disabled {
 .english-sense-definition {
   margin: 6px 0 0;
   color: #65728a;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -1558,7 +1559,7 @@ input:disabled {
 
 .english-example-en {
   color: #1e293b;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-ui);
   line-height: 1.55;
 }
 
@@ -1991,10 +1992,12 @@ input:disabled {
   pointer-events: none;
 }
 
-.pdfViewer .page .pdf-helper-selection-overlay > span {
+.pdfViewer .page .pdf-helper-selection-overlay > canvas {
   position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   border-radius: 2px;
-  background: var(--pdf-selection-color);
   mix-blend-mode: multiply;
 }
 
@@ -3662,7 +3665,7 @@ button:disabled {
   box-shadow: 0 2px 6px rgb(15 23 42 / 24%);
   color: #fff;
   cursor: pointer;
-  font-family: Arial, sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 400;
   line-height: 1;
@@ -9245,8 +9248,7 @@ html.knowledge-editor-open body {
   -webkit-text-fill-color: #2f425f !important;
   caret-color: #2d70db;
   color-scheme: light !important;
-  font-family:
-    Inter, "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-family: var(--font-ui);
   outline: none;
   box-shadow: inset 0 1px 2px rgb(44 82 138 / 3%) !important;
 }
@@ -10126,7 +10128,7 @@ html.knowledge-editor-open body {
   border-radius: 17px;
   background: #edf5ff;
   color: #3971bd;
-  font-family: Georgia, serif;
+  font-family: var(--font-ui);
   font-size: 28px;
 }
 
