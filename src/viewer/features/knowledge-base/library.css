@@ -4,6 +4,7 @@
 
 .knowledge-page-meta,
 .knowledge-focus-tabs,
+.knowledge-workspace-tabs,
 .knowledge-dashboard-metrics,
 .knowledge-student-panels,
 #knowledge-reading-status-filter,
@@ -183,6 +184,95 @@
   grid-column: 1 / -1;
 }
 
+
+/* Source-oriented knowledge navigation. */
+.knowledge-source-tree {
+  gap: 8px;
+}
+
+.knowledge-source-tree .knowledge-tree-root {
+  min-height: 40px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.knowledge-source-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 1px;
+}
+
+.knowledge-source-tree .knowledge-source-heading {
+  min-height: 34px;
+  padding-left: 16px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.knowledge-source-tree .knowledge-source-heading > span::before {
+  margin-right: 7px;
+  color: #9aabc2;
+  content: "▸";
+  font-size: 9px;
+}
+
+.knowledge-source-children {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 3px 21px;
+  padding-left: 12px;
+}
+
+.knowledge-source-children::before {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 0;
+  width: 1px;
+  background: #dce6f4;
+  content: "";
+}
+
+.knowledge-type-nav .knowledge-source-children button {
+  position: relative;
+  min-height: 30px;
+  border-radius: 8px;
+  padding: 3px 8px 3px 12px;
+  color: #718197;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.knowledge-type-nav .knowledge-source-children button::before {
+  position: absolute;
+  top: 50%;
+  left: -12px;
+  width: 9px;
+  height: 1px;
+  background: #dce6f4;
+  content: "";
+}
+
+.knowledge-source-tree .knowledge-source-heading.active,
+.knowledge-type-nav .knowledge-source-children button.active {
+  border-color: #d8e6ff;
+  background: #eaf2ff;
+  color: #1f67e8;
+}
+
+.knowledge-source-tree .knowledge-source-heading.active > span::before {
+  color: #1f67e8;
+  content: "▾";
+}
+
+.knowledge-type-nav .knowledge-source-children button strong {
+  font-size: 10px;
+}
+
 @media (max-width: 1180px) {
   .research-search-row {
     grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(110px, 1fr)) 82px;
@@ -209,4 +299,14 @@
   .knowledge-card-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Simplified knowledge sidebar / toolbar: keep legacy DOM for compatibility,
+   but never surface the retired category/filter actions in the UI. */
+.knowledge-sidebar-section:has(#knowledge-category-list),
+#knowledge-refresh,
+#knowledge-import,
+#knowledge-batch-organize,
+.knowledge-workspace-tabs {
+  display: none !important;
 }

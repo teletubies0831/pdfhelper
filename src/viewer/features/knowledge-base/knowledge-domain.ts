@@ -18,7 +18,7 @@
 import { activeKnowledgeFilter, activeKnowledgePageMode } from "../../core/pdf-reader/public";
 
 
-import { knowledgeDashboardMetricsElement, knowledgeFilterButtons, knowledgePageStatusElement, knowledgePageTitleElement, knowledgeStudentWorkbenchElement, knowledgeWeeklyTasksElement } from "../../app/viewer-elements";
+import { knowledgeDashboardMetricsElement, knowledgeFilterButtons, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgePageStatusElement, knowledgePageTitleElement, knowledgeStudentWorkbenchElement, knowledgeWeeklyTasksElement } from "../../app/viewer-elements";
 
 
 
@@ -26,6 +26,7 @@ import { knowledgeDashboardMetricsElement, knowledgeFilterButtons, knowledgePage
 
 
 import type { KnowledgeFilter, KnowledgeFocus, KnowledgeItem, KnowledgeKind } from "../../core/pdf-reader/public";
+import type { ResolvedReadingMode } from "../../../modules/reading-mode/public";
 import { setKnowledgePageMode } from './library-view';
 import { renderKnowledgeBase } from './research-controller';
 import { normalizeKnowledgeTags, readKnowledgeItemMetaStore, readSavedKnowledgeNotes, writeKnowledgeItemMetaStore, writeSavedKnowledgeNotes } from './knowledge-repository';
@@ -103,22 +104,83 @@ export function setKnowledgePageStatus(message = "", isError = false): void {
 
 
 
-export function setKnowledgeFilter(filter: KnowledgeFilter): void {
-  activeKnowledgeFilter.value = filter;
-  if (activeKnowledgePageMode.value !== "library") setKnowledgePageMode("library");
+
+export type KnowledgeOriginFilter = "all" | ResolvedReadingMode;
+export type KnowledgeOriginContentFilter = "all" | "reading-card" | "note";
+
+export const activeKnowledgeOrigin: { value: KnowledgeOriginFilter } = { value: "all" };
+export const activeKnowledgeOriginContent: { value: KnowledgeOriginContentFilter } = { value: "all" };
+
+export function getKnowledgeOriginContentType(
+  item: KnowledgeItem,
+): Exclude<KnowledgeOriginContentFilter, "all"> {
+  if (item.source === "knowledge-note" || item.source === "summary-note") {
+    return "note";
+  }
+  return "reading-card";
+}
+
+export function syncKnowledgeOriginButtons(): void {
+  for (const button of knowledgeOriginButtons) {
+    button.classList.toggle(
+      "active",
+      button.dataset.knowledgeOrigin === activeKnowledgeOrigin.value &&
+        activeKnowledgeOriginContent.value === "all",
+    );
+  }
+
+  for (const button of knowledgeOriginFilterButtons) {
+    const [origin, content] = (button.dataset.knowledgeOriginFilter || "").split(":");
+    button.classList.toggle(
+      "active",
+      origin === activeKnowledgeOrigin.value &&
+        content === activeKnowledgeOriginContent.value,
+    );
+  }
+
   for (const button of knowledgeFilterButtons) {
     button.classList.toggle(
       "active",
-      button.dataset.knowledgeFilter === filter,
+      button.dataset.knowledgeFilter === "all" && activeKnowledgeOrigin.value === "all",
     );
   }
-  const labels: Record<KnowledgeFilter, string> = {
-    all: "全部内容",
-    note: "保存的笔记",
-    "reading-card": "阅读卡片",
-    "paper-card": "论文卡片",
-  };
-  knowledgePageTitleElement.textContent = labels[filter];
+}
+
+export function resetKnowledgeOriginFilter(): void {
+  activeKnowledgeOrigin.value = "all";
+  activeKnowledgeOriginContent.value = "all";
+  syncKnowledgeOriginButtons();
+}
+
+export function setKnowledgeOrigin(
+  origin: Exclude<KnowledgeOriginFilter, "all">,
+): void {
+  activeKnowledgeOrigin.value = origin;
+  activeKnowledgeOriginContent.value = "all";
+  activeKnowledgeFilter.value = "all";
+  if (activeKnowledgePageMode.value !== "library") setKnowledgePageMode("library");
+  syncKnowledgeOriginButtons();
+  renderKnowledgeBase();
+}
+
+export function setKnowledgeOriginContent(
+  origin: Exclude<KnowledgeOriginFilter, "all">,
+  content: Exclude<KnowledgeOriginContentFilter, "all">,
+): void {
+  activeKnowledgeOrigin.value = origin;
+  activeKnowledgeOriginContent.value = content;
+  activeKnowledgeFilter.value = "all";
+  if (activeKnowledgePageMode.value !== "library") setKnowledgePageMode("library");
+  syncKnowledgeOriginButtons();
+  renderKnowledgeBase();
+}
+
+export function setKnowledgeFilter(filter: KnowledgeFilter): void {
+  activeKnowledgeFilter.value = filter;
+  activeKnowledgeOrigin.value = "all";
+  activeKnowledgeOriginContent.value = "all";
+  if (activeKnowledgePageMode.value !== "library") setKnowledgePageMode("library");
+  syncKnowledgeOriginButtons();
   renderKnowledgeBase();
 }
 

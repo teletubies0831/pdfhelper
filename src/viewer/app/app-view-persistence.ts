@@ -177,21 +177,21 @@ export function persistCurrentAppViewState(): void {
 
 
 export function applyPersistedKnowledgeState(state: PersistedAppViewState): void {
-  activeKnowledgePageMode.value = state.knowledgeMode;
-  activeKnowledgeFilter.value = state.knowledgeFilter;
-  activeKnowledgeCategory.value = state.knowledgeCategory;
-  activeKnowledgeTag.value = state.knowledgeTag;
-  activeKnowledgeFocus.value = state.knowledgeFocus;
+  activeKnowledgePageMode.value = "library";
+  activeKnowledgeFilter.value = "all";
+  activeKnowledgeCategory.value = "all";
+  activeKnowledgeTag.value = "";
+  activeKnowledgeFocus.value = "all";
   activeKnowledgeYear.value = state.knowledgeYear;
   activeKnowledgeVenue.value = state.knowledgeVenue;
-  activeKnowledgeReadingStatus.value = state.knowledgeReadingStatus;
-  activeKnowledgePriority.value = state.knowledgePriority;
+  activeKnowledgeReadingStatus.value = "all";
+  activeKnowledgePriority.value = "all";
   selectedKnowledgeRecordKey.value = state.selectedKnowledgeRecordKey;
   selectedKnowledgeResearchKeys.value = new Set(state.selectedKnowledgeResearchKeys);
 
   knowledgeSearchInput.value = state.knowledgeSearch;
   knowledgeSortSelect.value = state.knowledgeSort;
-  knowledgeGroupSelect.value = state.knowledgeGroup;
+  knowledgeGroupSelect.value = "none";
   knowledgeResearchScopeSelect.value = state.knowledgeResearchScope;
   knowledgeResearchQuestionInput.value = state.knowledgeResearchQuestion;
   knowledgeInsightQuestionInput.value = state.knowledgeInsightQuestion;

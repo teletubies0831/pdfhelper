@@ -15,7 +15,7 @@
 
 
 
-import { cardTypeButtons, editPaperCardButton, exportPaperCardButton, knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeClearResearchButton, knowledgeClearSelectionButton, knowledgeDeleteItemButton, knowledgeDetailCloseButton, knowledgeEditItemButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeInsightPresetButtons, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeModeButtons, knowledgeNewNoteButton, knowledgeOpenSourceButton, knowledgePriorityFilterSelect, knowledgeQuestionPresetButtons, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeRunResearchButton, knowledgeSaveResearchResultButton, knowledgeSearchInput, knowledgeSelectVisibleButton, knowledgeSortSelect, knowledgeVenueFilterSelect, knowledgeYearFilterSelect, paperCardBackButton, paperCardEntryButton, paperCardPageElement, paperCardScrollContainers, paperCardSectionButtons, readingJournalBackButton, readingJournalContentInput, readingJournalEditorCancelButton, readingJournalEditorCloseButton, readingJournalEditorElement, readingJournalForm, readingJournalNewButton, readingJournalQuoteInput, readingJournalSearchInput, readingJournalTagsInput, readingJournalTitleInput, regeneratePaperCardButton, returnToPdfButton, savePaperCardPageButton, summaryScopeButtons } from "../viewer-elements";
+import { cardTypeButtons, editPaperCardButton, exportPaperCardButton, knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeClearResearchButton, knowledgeClearSelectionButton, knowledgeDeleteItemButton, knowledgeDetailCloseButton, knowledgeEditItemButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeInsightPresetButtons, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeModeButtons, knowledgeNewNoteButton, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgeOpenSourceButton, knowledgePriorityFilterSelect, knowledgeQuestionPresetButtons, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeRunResearchButton, knowledgeSaveResearchResultButton, knowledgeSearchInput, knowledgeSelectVisibleButton, knowledgeSortSelect, knowledgeVenueFilterSelect, knowledgeYearFilterSelect, paperCardBackButton, paperCardEntryButton, paperCardPageElement, paperCardScrollContainers, paperCardSectionButtons, readingJournalBackButton, readingJournalContentInput, readingJournalEditorCancelButton, readingJournalEditorCloseButton, readingJournalEditorElement, readingJournalForm, readingJournalNewButton, readingJournalQuoteInput, readingJournalSearchInput, readingJournalTagsInput, readingJournalTitleInput, regeneratePaperCardButton, returnToPdfButton, savePaperCardPageButton, summaryScopeButtons } from "../viewer-elements";
 import { activeKnowledgeCategory, activeKnowledgeFocus, activeKnowledgeInsightPrompt, activeKnowledgePageMode, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, editingPaperOverviewId, knowledgeEditorTargetKey, paperCardPageDocumentKey, paperCardReturnTarget, persistCurrentAppViewState, selectedKnowledgeRecordKey, selectedKnowledgeResearchKeys } from "../../core/pdf-reader/public";
 
 import { setActiveSummaryScope } from "../../services/document-agent/viewer-document-agent";
@@ -25,10 +25,12 @@ import { closePaperCardPage, closeReadingJournalEditor, closeReadingJournalPage,
 import { setStatus } from "../../features/recent-files/public";
 
 
-import { clearKnowledgeResearchResult, closeKnowledgeBasePage, closeKnowledgeEditor, collectKnowledgeItems, deleteKnowledgeItem, deleteSelectedKnowledgeItem, getFilteredKnowledgeItems, getSelectedKnowledgeItem, importKnowledgeNotes, knowledgeEditorBodyMode, normalizeKnowledgeCategory, openKnowledgeBasePage, openKnowledgeEditor, openSelectedKnowledgeSource, renderKnowledgeBase, renderKnowledgeDetail, runKnowledgeResearch, saveKnowledgeEditor, saveKnowledgeResearchResult, scheduleKnowledgeEditorPreview, setKnowledgeEditorBodyMode, setKnowledgeFilter, setKnowledgePageMode, setKnowledgePageStatus, updateKnowledgeResearchScopeSummary } from "../../features/knowledge-base/public";
+import { clearKnowledgeResearchResult, closeKnowledgeBasePage, closeKnowledgeEditor, collectKnowledgeItems, deleteKnowledgeItem, deleteSelectedKnowledgeItem, getFilteredKnowledgeItems, getSelectedKnowledgeItem, importKnowledgeNotes, knowledgeEditorBodyMode, normalizeKnowledgeCategory, openKnowledgeBasePage, openKnowledgeEditor, openSelectedKnowledgeSource, renderKnowledgeBase, renderKnowledgeDetail, runKnowledgeResearch, saveKnowledgeEditor, saveKnowledgeResearchResult, scheduleKnowledgeEditorPreview, setKnowledgeEditorBodyMode, resetKnowledgeOriginFilter, setKnowledgeFilter, setKnowledgeOrigin, setKnowledgeOriginContent, setKnowledgePageMode, setKnowledgePageStatus, updateKnowledgeResearchScopeSummary } from "../../features/knowledge-base/public";
 import type { CardType, KnowledgeFilter, KnowledgeFocus, KnowledgePageMode, SummaryScope } from "../../core/pdf-reader/public";
+import type { KnowledgeOriginContentFilter, KnowledgeOriginFilter } from "../../features/knowledge-base/public";
 
 import { scheduleAppViewStateSave, source } from '../app-ui';
+import { pdfDocument } from "../viewer-state";
 
 export function registerKnowledgeEvents(): void {
   paperCardEntryButton?.addEventListener("click", openModeSecondaryPage);
@@ -142,7 +144,13 @@ export function registerKnowledgeEvents(): void {
       renderKnowledgeBase();
     });
   
-  knowledgeNewNoteButton.addEventListener("click", () => openKnowledgeEditor());
+  knowledgeNewNoteButton.addEventListener("click", () => {
+      if (!pdfDocument.value) {
+        setKnowledgePageStatus("请先打开 PDF，再使用当前阅读模式的阅读入口。", true);
+        return;
+      }
+      openModeSecondaryPage();
+    });
   
   knowledgeImportButton.addEventListener("click", () =>
       knowledgeImportInput.click(),
@@ -228,6 +236,7 @@ export function registerKnowledgeEvents(): void {
       activeKnowledgeCategory.value = "all";
       activeKnowledgeTag.value = "";
       activeKnowledgeFocus.value = "all";
+      resetKnowledgeOriginFilter();
       knowledgeSearchInput.value = "";
       if (knowledgeYearFilterSelect) knowledgeYearFilterSelect.value = "all";
       if (knowledgeVenueFilterSelect) knowledgeVenueFilterSelect.value = "all";
@@ -253,6 +262,26 @@ export function registerKnowledgeEvents(): void {
       );
     });
   
+  for (const button of knowledgeOriginButtons) {
+      button.addEventListener("click", () => {
+        const origin = button.dataset.knowledgeOrigin as
+          | Exclude<KnowledgeOriginFilter, "all">
+          | undefined;
+        if (origin) setKnowledgeOrigin(origin);
+      });
+    }
+
+  for (const button of knowledgeOriginFilterButtons) {
+      button.addEventListener("click", () => {
+        const [origin, content] = (button.dataset.knowledgeOriginFilter || "").split(":") as [
+          Exclude<KnowledgeOriginFilter, "all">,
+          Exclude<KnowledgeOriginContentFilter, "all">,
+        ];
+        if (!origin || !content) return;
+        setKnowledgeOriginContent(origin, content);
+      });
+    }
+
   for (const button of knowledgeFilterButtons) {
       button.addEventListener("click", () => {
         const filter = button.dataset.knowledgeFilter as

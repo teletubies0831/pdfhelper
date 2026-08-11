@@ -11,10 +11,11 @@ html.knowledge-editor-open body {
   position: fixed !important;
   z-index: 1000100 !important;
   inset: 0 !important;
-  display: block !important;
-  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 22px !important;
   overflow: hidden !important;
-  background: #f3f6fb !important;
+  background: rgb(15 23 42 / 32%) !important;
 }
 
 #knowledge-editor-dialog.knowledge-editor-backdrop[hidden] {
@@ -24,30 +25,30 @@ html.knowledge-editor-open body {
 #knowledge-editor-dialog .knowledge-editor-panel {
   display: grid !important;
   grid-template-rows: auto minmax(0, 1fr);
-  width: 100vw !important;
-  height: 100vh !important;
-  max-width: none !important;
-  max-height: none !important;
+  width: min(1320px, calc(100vw - 44px)) !important;
+  height: min(860px, calc(100vh - 44px)) !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
   margin: 0 !important;
   overflow: hidden !important;
-  border: 0 !important;
-  border-radius: 0 !important;
+  border: 1px solid #dce6f4 !important;
+  border-radius: 18px !important;
   background:
     linear-gradient(180deg, #f7faff 0%, #f2f6fc 100%) !important;
-  box-shadow: none !important;
+  box-shadow: 0 28px 80px rgb(15 23 42 / 28%) !important;
   color-scheme: light !important;
 }
 
 #knowledge-editor-dialog .knowledge-editor-header {
   display: flex !important;
-  min-height: 78px;
+  min-height: 72px;
   box-sizing: border-box;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   border-bottom: 1px solid #dce6f4 !important;
   background: rgb(255 255 255 / 96%) !important;
-  padding: 14px 26px !important;
+  padding: 12px 20px !important;
   box-shadow: 0 5px 18px rgb(48 91 154 / 5%);
 }
 
@@ -151,7 +152,7 @@ html.knowledge-editor-open body {
   min-height: 0;
   grid-template-columns: minmax(0, 1.72fr) minmax(300px, 0.68fr);
   gap: 18px;
-  padding: 18px 22px 22px;
+  padding: 16px 18px 18px;
   overflow: hidden;
 }
 
@@ -387,6 +388,18 @@ html.knowledge-editor-open body {
   margin-left: 0;
   border-radius: 9px;
   padding: 0;
+}
+
+@media (max-width: 980px) {
+  #knowledge-editor-dialog.knowledge-editor-backdrop {
+    padding: 12px !important;
+  }
+
+  #knowledge-editor-dialog .knowledge-editor-panel {
+    width: calc(100vw - 24px) !important;
+    height: calc(100vh - 24px) !important;
+    border-radius: 14px !important;
+  }
 }
 
 @media (max-width: 1280px) {

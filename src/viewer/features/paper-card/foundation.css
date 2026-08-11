@@ -11,7 +11,7 @@
 }
 
 .app-frame.paper-card-page-open .workspace {
-  display: none;
+  display: grid;
 }
 
 .paper-card-page-header {

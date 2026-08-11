@@ -6,7 +6,6 @@
 
 
 
-import { getReadingModeLabel } from "../../../../shared/reading-mode";
 
 
 
@@ -28,7 +27,7 @@ import { renderChatMarkdown, requestAiContent } from "../../shared-ui/markdown/m
 import type { KnowledgeItem, KnowledgeResearchScope, SavedKnowledgeNote } from "../../core/pdf-reader/public";
 import { collectKnowledgeItems, getKnowledgeRecordKey, normalizeKnowledgeCategory, readSavedKnowledgeNotes, writeSavedKnowledgeNotes } from './knowledge-repository';
 import { getFilteredKnowledgeItems, populateKnowledgeDashboardFilters, renderKnowledgeList, renderKnowledgeSidebar, setKnowledgePageMode, syncKnowledgeFocusCounts } from './library-view';
-import { getKnowledgeExcerpt, getKnowledgeKindLabel } from './knowledge-domain';
+import { activeKnowledgeOrigin, activeKnowledgeOriginContent, getKnowledgeExcerpt, getKnowledgeKindLabel, type KnowledgeOriginContentFilter, type KnowledgeOriginFilter } from './knowledge-domain';
 
 
 
@@ -308,7 +307,6 @@ export function saveKnowledgeResearchResult(): void {
 
 export function renderKnowledgeBase(): void {
   const items = collectKnowledgeItems();
-  const modeLabel = getReadingModeLabel(resolvedReadingMode.value);
   const validKeys = new Set(items.map((item) => item.recordKey));
   selectedKnowledgeResearchKeys.value = new Set(
     Array.from(selectedKnowledgeResearchKeys.value).filter((key) =>
@@ -324,19 +322,36 @@ export function renderKnowledgeBase(): void {
   knowledgeGroupSelect.value = "none";
   const filtered = getFilteredKnowledgeItems(items);
 
-  knowledgePageTitleElement.textContent = "全部内容";
+  setKnowledgePageMode("library");
+
+  const originLabels: Record<Exclude<KnowledgeOriginFilter, "all">, string> = {
+    novel: "来自小说",
+    paper: "来自论文",
+    general: "来自通用",
+  };
+  const contentLabels: Record<
+    Exclude<KnowledgeOriginContentFilter, "all">,
+    string
+  > = {
+    "reading-card": "阅读卡片",
+    note: "保存的笔记",
+  };
+  knowledgePageTitleElement.textContent =
+    activeKnowledgeOrigin.value === "all"
+      ? "全部内容"
+      : activeKnowledgeOriginContent.value === "all"
+        ? originLabels[activeKnowledgeOrigin.value]
+        : `${originLabels[activeKnowledgeOrigin.value]} · ${contentLabels[activeKnowledgeOriginContent.value]}`;
   if (knowledgePageSubtitleElement) {
     knowledgePageSubtitleElement.textContent =
-      "管理你的笔记、阅读卡片和论文卡片，助力高效科研。";
+      "统一管理来自小说、论文和通用阅读的笔记与卡片。";
   }
-  knowledgePageTitleElement.textContent = `${modeLabel}知识库`;
   knowledgeTotalCountElement.textContent = String(filtered.length);
   knowledgeDocumentCountElement.textContent = String(
     new Set(filtered.map((item) => item.documentName)).size,
   );
 
   renderKnowledgeList(filtered);
-  setKnowledgePageMode(activeKnowledgePageMode.value);
   updateKnowledgeResearchScopeSummary();
   persistCurrentAppViewState();
 }

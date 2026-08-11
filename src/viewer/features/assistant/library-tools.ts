@@ -73,14 +73,11 @@ export function updateModeNavigation(): void {
 
   const isPaper = resolvedReadingMode.value === "paper";
   if (paperCardEntryButton) {
-    paperCardEntryButton.textContent = isPaper ? "论文阅读卡片" : "阅读札记";
+    paperCardEntryButton.hidden = isPaper;
+    paperCardEntryButton.textContent = "阅读札记";
     (paperCardEntryButton as HTMLButtonElement).disabled = !hasDocument;
   }
-  knowledgeBaseEntryButton.textContent = isPaper
-    ? "论文知识库"
-    : resolvedReadingMode.value === "novel"
-      ? "小说知识库"
-      : "通用知识库";
+  knowledgeBaseEntryButton.textContent = "知识库";
   knowledgeBaseEntryButton.disabled = !hasDocument;
   if (hasDocument) {
     if (isPaper && !readingJournalPageElement.hidden) closeReadingJournalPage();

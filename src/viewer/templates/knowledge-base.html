@@ -10,22 +10,55 @@
               </div>
             </div>
 
-            <nav class="knowledge-type-nav" aria-label="内容类型">
-              <button class="active" data-knowledge-filter="all" type="button">
+            <nav class="knowledge-type-nav knowledge-source-tree" aria-label="知识库内容导航">
+              <button class="active knowledge-tree-root" data-knowledge-filter="all" type="button">
                 <span>▤ 全部内容</span><strong id="knowledge-count-all">0</strong>
               </button>
-              <button data-knowledge-filter="note" type="button">
-                <span>▧ 保存的笔记</span><strong id="knowledge-count-note">0</strong>
-              </button>
-              <button data-knowledge-filter="reading-card" type="button">
-                <span>◇ 阅读卡片</span><strong id="knowledge-count-reading-card">0</strong>
-              </button>
-              <button data-knowledge-filter="paper-card" type="button">
-                <span>▱ 论文卡片</span><strong id="knowledge-count-paper-card">0</strong>
-              </button>
+
+              <section class="knowledge-source-group" data-knowledge-source-group="novel">
+                <button class="knowledge-source-heading" data-knowledge-origin="novel" type="button">
+                  <span>来自小说</span><strong id="knowledge-count-origin-novel">0</strong>
+                </button>
+                <div class="knowledge-source-children">
+                  <button data-knowledge-origin-filter="novel:reading-card" type="button">
+                    <span>◇ 阅读卡片</span><strong id="knowledge-count-origin-novel-reading-card">0</strong>
+                  </button>
+                  <button data-knowledge-origin-filter="novel:note" type="button">
+                    <span>▧ 保存的笔记</span><strong id="knowledge-count-origin-novel-note">0</strong>
+                  </button>
+                </div>
+              </section>
+
+              <section class="knowledge-source-group" data-knowledge-source-group="paper">
+                <button class="knowledge-source-heading" data-knowledge-origin="paper" type="button">
+                  <span>来自论文</span><strong id="knowledge-count-origin-paper">0</strong>
+                </button>
+                <div class="knowledge-source-children">
+                  <button data-knowledge-origin-filter="paper:reading-card" type="button">
+                    <span>◇ 阅读卡片</span><strong id="knowledge-count-origin-paper-reading-card">0</strong>
+                  </button>
+                  <button data-knowledge-origin-filter="paper:note" type="button">
+                    <span>▧ 保存的笔记</span><strong id="knowledge-count-origin-paper-note">0</strong>
+                  </button>
+                </div>
+              </section>
+
+              <section class="knowledge-source-group" data-knowledge-source-group="general">
+                <button class="knowledge-source-heading" data-knowledge-origin="general" type="button">
+                  <span>来自通用</span><strong id="knowledge-count-origin-general">0</strong>
+                </button>
+                <div class="knowledge-source-children">
+                  <button data-knowledge-origin-filter="general:reading-card" type="button">
+                    <span>◇ 阅读卡片</span><strong id="knowledge-count-origin-general-reading-card">0</strong>
+                  </button>
+                  <button data-knowledge-origin-filter="general:note" type="button">
+                    <span>▧ 保存的笔记</span><strong id="knowledge-count-origin-general-note">0</strong>
+                  </button>
+                </div>
+              </section>
             </nav>
 
-            <section class="knowledge-sidebar-section">
+            <section class="knowledge-sidebar-section" hidden>
               <div class="knowledge-sidebar-section-heading">
                 <strong>分类</strong>
               </div>
@@ -51,20 +84,20 @@
           <main class="knowledge-main">
             <header class="knowledge-main-header">
               <div>
-                <h1 id="knowledge-page-title">研究知识库</h1>
-                <p id="knowledge-page-subtitle">管理你的文献笔记、论文卡片与综述准备，一站式助力高效科研。</p>
+                <h1 id="knowledge-page-title">全部内容</h1>
+                <p id="knowledge-page-subtitle">统一管理来自小说、论文和通用阅读的笔记与卡片。</p>
                 <p class="knowledge-page-meta" hidden>共 <strong id="knowledge-total-count">0</strong> 条内容，来自 <strong id="knowledge-document-count">0</strong> 篇文档</p>
               </div>
               <div class="knowledge-main-actions">
-                <button id="knowledge-refresh" type="button">↻ 刷新</button>
-                <button id="knowledge-import" type="button">⇧ 导入笔记</button>
+                <button id="knowledge-refresh" type="button" hidden>↻ 刷新</button>
+                <button id="knowledge-import" type="button" hidden>⇧ 导入笔记</button>
                 <input id="knowledge-import-input" type="file" accept="application/json,.json" hidden />
-                <button id="knowledge-batch-organize" type="button">▣ 批量整理</button>
-                <button id="knowledge-new-note" class="primary-button" type="button">＋ 新建笔记</button>
+                <button id="knowledge-batch-organize" type="button" hidden>▣ 批量整理</button>
+                <button id="knowledge-new-note" class="primary-button" type="button" title="打开当前阅读模式对应的阅读入口">＋ 当前PDF添加到库</button>
               </div>
             </header>
 
-            <div class="knowledge-workspace-tabs" role="tablist" aria-label="知识库工作模式">
+            <div class="knowledge-workspace-tabs" role="tablist" aria-label="知识库工作模式" hidden>
               <button class="active" data-knowledge-mode="library" type="button" role="tab" aria-selected="true">内容库</button>
               <button data-knowledge-mode="qa" type="button" role="tab" aria-selected="false">✦ 跨文献问答</button>
               <button data-knowledge-mode="insights" type="button" role="tab" aria-selected="false">◇ 研究洞察</button>

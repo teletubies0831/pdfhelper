@@ -18,15 +18,15 @@
 import { activeKnowledgeCategory, activeKnowledgeFilter, activeKnowledgeFocus, activeKnowledgePageMode, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, persistCurrentAppViewState, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
 
 import { openSavedPaperOverviewReview } from "../paper-card/public";
-import { knowledgeBasePageElement, knowledgeCategoryListElement, knowledgeCountAllElement, knowledgeCountNoteElement, knowledgeCountPaperCardElement, knowledgeCountReadingCardElement, knowledgeDetailBodyElement, knowledgeDetailContentElement, knowledgeDetailCreatedElement, knowledgeDetailDocumentElement, knowledgeDetailEmptyElement, knowledgeDetailPositionElement, knowledgeDetailTagsElement, knowledgeDetailTimeElement, knowledgeDetailTitleElement, knowledgeDetailTypeElement, knowledgeDetailUpdatedElement, knowledgeEditItemButton, knowledgeFocusButtons, knowledgeFocusCountCitableElement, knowledgeFocusCountDeepElement, knowledgeFocusCountFinishedElement, knowledgeFocusCountMethodsElement, knowledgeFocusCountRelatedElement, knowledgeFocusCountReplicateElement, knowledgeFocusCountTodoElement, knowledgeInsightControls, knowledgeLibraryView, knowledgeListElement, knowledgeModeButtons, knowledgeOpenSourceButton, knowledgePageTitleElement, knowledgePriorityFilterSelect, knowledgeQaControls, knowledgeReadingStatusFilterSelect, knowledgeRecentSummaryElement, knowledgeRelatedSummaryElement, knowledgeResearchDescription, knowledgeResearchHeading, knowledgeResearchQuestionInput, knowledgeResearchView, knowledgeRunResearchButton, knowledgeSearchInput, knowledgeSortSelect, knowledgeTagListElement, knowledgeVenueFilterSelect, knowledgeYearFilterSelect } from "../../app/viewer-elements";
+import { knowledgeBasePageElement, knowledgeCountAllElement, knowledgeCountOriginGeneralElement, knowledgeCountOriginGeneralNoteElement, knowledgeCountOriginGeneralReadingCardElement, knowledgeCountOriginNovelElement, knowledgeCountOriginNovelNoteElement, knowledgeCountOriginNovelReadingCardElement, knowledgeCountOriginPaperElement, knowledgeCountOriginPaperNoteElement, knowledgeCountOriginPaperReadingCardElement, knowledgeDetailBodyElement, knowledgeDetailContentElement, knowledgeDetailCreatedElement, knowledgeDetailDocumentElement, knowledgeDetailEmptyElement, knowledgeDetailPositionElement, knowledgeDetailTagsElement, knowledgeDetailTimeElement, knowledgeDetailTitleElement, knowledgeDetailTypeElement, knowledgeDetailUpdatedElement, knowledgeEditItemButton, knowledgeFocusButtons, knowledgeFocusCountCitableElement, knowledgeFocusCountDeepElement, knowledgeFocusCountFinishedElement, knowledgeFocusCountMethodsElement, knowledgeFocusCountRelatedElement, knowledgeFocusCountReplicateElement, knowledgeFocusCountTodoElement, knowledgeInsightControls, knowledgeLibraryView, knowledgeListElement, knowledgeModeButtons, knowledgeOpenSourceButton, knowledgePageTitleElement, knowledgePriorityFilterSelect, knowledgeQaControls, knowledgeReadingStatusFilterSelect, knowledgeRecentSummaryElement, knowledgeRelatedSummaryElement, knowledgeResearchDescription, knowledgeResearchHeading, knowledgeResearchQuestionInput, knowledgeResearchView, knowledgeRunResearchButton, knowledgeSearchInput, knowledgeSortSelect, knowledgeTagListElement, knowledgeVenueFilterSelect, knowledgeYearFilterSelect } from "../../app/viewer-elements";
 
 
 
 
 
 
-import type { KnowledgeFilter, KnowledgeFocus, KnowledgeItem, KnowledgeKind, KnowledgePageMode } from "../../core/pdf-reader/public";
-import { deriveKnowledgePriority, deriveKnowledgeReadingStatus, extractKnowledgeVenue, extractKnowledgeYear, formatKnowledgeDate, formatKnowledgeRelativeDate, getKnowledgeBaseDocumentName, getKnowledgeExcerptForDashboard, getKnowledgeKindIcon, getKnowledgeKindLabel, matchesKnowledgeFocus } from './knowledge-domain';
+import type { KnowledgeFocus, KnowledgeItem, KnowledgePageMode } from "../../core/pdf-reader/public";
+import { activeKnowledgeOrigin, activeKnowledgeOriginContent, deriveKnowledgePriority, deriveKnowledgeReadingStatus, extractKnowledgeVenue, extractKnowledgeYear, formatKnowledgeDate, formatKnowledgeRelativeDate, getKnowledgeBaseDocumentName, getKnowledgeExcerptForDashboard, getKnowledgeKindIcon, getKnowledgeKindLabel, getKnowledgeOriginContentType, matchesKnowledgeFocus, syncKnowledgeOriginButtons, type KnowledgeOriginContentFilter, type KnowledgeOriginFilter } from './knowledge-domain';
 import { renderKnowledgeBase, updateKnowledgeResearchScopeSummary } from './research-controller';
 import { deleteKnowledgeItem, openKnowledgeEditor } from './editor-controller';
 
@@ -139,12 +139,17 @@ export function populateKnowledgeDashboardFilters(items: KnowledgeItem[]): void 
 export function getFilteredKnowledgeItems(items: KnowledgeItem[]): KnowledgeItem[] {
   const query = knowledgeSearchInput.value.trim().toLocaleLowerCase("zh-CN");
   const filtered = items.filter((item) => {
-    if (activeKnowledgeFilter.value !== "all" && item.kind !== activeKnowledgeFilter.value)
+    if (
+      activeKnowledgeOrigin.value !== "all" &&
+      item.originMode !== activeKnowledgeOrigin.value
+    )
       return false;
     if (
-      activeKnowledgeCategory.value !== "all" &&
-      item.category !== activeKnowledgeCategory.value
+      activeKnowledgeOriginContent.value !== "all" &&
+      getKnowledgeOriginContentType(item) !== activeKnowledgeOriginContent.value
     )
+      return false;
+    if (activeKnowledgeFilter.value !== "all" && item.kind !== activeKnowledgeFilter.value)
       return false;
     if (activeKnowledgeTag.value && !item.tags.includes(activeKnowledgeTag.value))
       return false;
@@ -202,61 +207,43 @@ export function getFilteredKnowledgeItems(items: KnowledgeItem[]): KnowledgeItem
 
 
 export function renderKnowledgeSidebar(items: KnowledgeItem[]): void {
-  const countByKind = (kind: KnowledgeKind) =>
-    items.filter((item) => item.kind === kind).length;
+  const countOrigin = (
+    origin: Exclude<KnowledgeOriginFilter, "all">,
+    content: KnowledgeOriginContentFilter = "all",
+  ): number =>
+    items.filter(
+      (item) =>
+        item.originMode === origin &&
+        (content === "all" || getKnowledgeOriginContentType(item) === content),
+    ).length;
+
   knowledgeCountAllElement.textContent = String(items.length);
-  knowledgeCountNoteElement.textContent = String(countByKind("note"));
-  knowledgeCountReadingCardElement.textContent = String(
-    countByKind("reading-card"),
+
+  knowledgeCountOriginNovelElement.textContent = String(countOrigin("novel"));
+  knowledgeCountOriginNovelReadingCardElement.textContent = String(
+    countOrigin("novel", "reading-card"),
   );
-  knowledgeCountPaperCardElement.textContent = String(
-    countByKind("paper-card"),
+  knowledgeCountOriginNovelNoteElement.textContent = String(
+    countOrigin("novel", "note"),
   );
 
-  const categoryCounts = new Map<string, number>();
-  for (const item of items) {
-    categoryCounts.set(
-      item.category,
-      (categoryCounts.get(item.category) || 0) + 1,
-    );
-  }
-  const categoryButtons: HTMLButtonElement[] = [];
-  const allCategoryButton = document.createElement("button");
-  allCategoryButton.type = "button";
-  allCategoryButton.classList.toggle(
-    "active",
-    activeKnowledgeCategory.value === "all",
+  knowledgeCountOriginPaperElement.textContent = String(countOrigin("paper"));
+  knowledgeCountOriginPaperReadingCardElement.textContent = String(
+    countOrigin("paper", "reading-card"),
   );
-  allCategoryButton.innerHTML = "<span>▤ 全部分类</span>";
-  const allCount = document.createElement("strong");
-  allCount.textContent = String(items.length);
-  allCategoryButton.append(allCount);
-  allCategoryButton.addEventListener("click", () => {
-    activeKnowledgeCategory.value = "all";
-    activeKnowledgeTag.value = "";
-    renderKnowledgeBase();
-  });
-  categoryButtons.push(allCategoryButton);
+  knowledgeCountOriginPaperNoteElement.textContent = String(
+    countOrigin("paper", "note"),
+  );
 
-  for (const [category, count] of Array.from(categoryCounts.entries())
-    .sort((left, right) => right[1] - left[1])
-    .slice(0, 8)) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.classList.toggle("active", activeKnowledgeCategory.value === category);
-    const label = document.createElement("span");
-    label.textContent = `□ ${category}`;
-    const countElement = document.createElement("strong");
-    countElement.textContent = String(count);
-    button.append(label, countElement);
-    button.addEventListener("click", () => {
-      activeKnowledgeCategory.value = category;
-      activeKnowledgeTag.value = "";
-      renderKnowledgeBase();
-    });
-    categoryButtons.push(button);
-  }
-  knowledgeCategoryListElement.replaceChildren(...categoryButtons);
+  knowledgeCountOriginGeneralElement.textContent = String(countOrigin("general"));
+  knowledgeCountOriginGeneralReadingCardElement.textContent = String(
+    countOrigin("general", "reading-card"),
+  );
+  knowledgeCountOriginGeneralNoteElement.textContent = String(
+    countOrigin("general", "note"),
+  );
+
+  syncKnowledgeOriginButtons();
 
   const tagCounts = new Map<string, number>();
   for (const item of items) {
@@ -539,16 +526,6 @@ export function renderKnowledgeDetail(
 
 
 
-export function getKnowledgeFilterLabel(filter: KnowledgeFilter): string {
-  return {
-    all: "全部内容",
-    note: "保存的笔记",
-    "reading-card": "阅读卡片",
-    "paper-card": "论文卡片",
-  }[filter];
-}
-
-
 
 export function setKnowledgePageMode(mode: KnowledgePageMode): void {
   activeKnowledgePageMode.value = mode;
@@ -577,10 +554,6 @@ export function setKnowledgePageMode(mode: KnowledgePageMode): void {
     knowledgeResearchDescription.textContent =
       "寻找文献共识、冲突、研究空白与可验证的新假设，并明确区分证据和 AI 推测。";
     knowledgeRunResearchButton.textContent = "◇ 生成研究洞察";
-  } else {
-    knowledgePageTitleElement.textContent = getKnowledgeFilterLabel(
-      activeKnowledgeFilter.value,
-    );
   }
   updateKnowledgeResearchScopeSummary();
   persistCurrentAppViewState();

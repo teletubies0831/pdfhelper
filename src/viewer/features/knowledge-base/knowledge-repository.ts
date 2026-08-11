@@ -15,7 +15,7 @@
 
 
 
-import { KNOWLEDGE_ITEM_META_STORAGE_KEY, KNOWLEDGE_NOTES_STORAGE_KEY, READING_JOURNAL_STORAGE_KEY, resolvedReadingMode } from "../../core/pdf-reader/public";
+import { KNOWLEDGE_ITEM_META_STORAGE_KEY, KNOWLEDGE_NOTES_STORAGE_KEY, READING_JOURNAL_STORAGE_KEY } from "../../core/pdf-reader/public";
 import { readSavedSummaryNotes } from "../../services/document-agent/viewer-document-agent";
 import { formatGeneratedCardText, formatPaperOverviewMarkdown, getCardTypeLabel, readSavedPaperCards, readSavedPaperOverviews } from "../paper-card/public";
 
@@ -27,6 +27,7 @@ import { formatGeneratedCardText, formatPaperOverviewMarkdown, getCardTypeLabel,
 
 import type { KnowledgeItem, KnowledgeItemMetaStore, KnowledgeSource, SavedKnowledgeNote, SavedReadingJournalEntry } from "../../core/pdf-reader/public";
 import { knowledgeLibrary, type KnowledgeRecord } from '../../../modules/knowledge/public';
+import { isResolvedReadingMode, type ResolvedReadingMode } from '../../../modules/reading-mode/public';
 
 
 
@@ -164,7 +165,7 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
 
   for (const note of readSavedKnowledgeNotes()) {
     if (!note || typeof note.id !== "string") continue;
-    if ((note.readingMode ?? "paper") !== resolvedReadingMode.value) continue;
+    const originMode: ResolvedReadingMode = note.readingMode ?? "paper";
     const createdAt =
       typeof note.createdAt === "string"
         ? note.createdAt
@@ -178,6 +179,7 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
           id: note.id,
           source: "knowledge-note",
           kind: "note",
+          originMode,
           title:
             typeof note.title === "string" && note.title.trim()
               ? note.title.trim()
@@ -210,7 +212,7 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
   }
 
   for (const entry of readReadingJournalEntries()) {
-    if (!entry || entry.readingMode !== resolvedReadingMode.value) continue;
+    if (!entry) continue;
     items.push(
       applyKnowledgeMeta(
         {
@@ -218,6 +220,7 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
           id: entry.id,
           source: "reading-journal",
           kind: "note",
+          originMode: entry.readingMode,
           title: entry.title || "未命名阅读札记",
           content: [entry.quote ? `> ${entry.quote}` : "", entry.content]
             .filter(Boolean)
@@ -236,7 +239,6 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
   }
 
   for (const note of readSavedSummaryNotes()) {
-    if (resolvedReadingMode.value !== "paper") continue;
     if (!note || typeof note.id !== "string") continue;
     const points = Array.isArray(note.points)
       ? note.points.filter(
@@ -265,6 +267,7 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
           id: note.id,
           source: "summary-note",
           kind: "note",
+          originMode: "paper",
           title: `${rangeLabel}总结`,
           content: points.map((point) => `• ${point.trim()}`).join("\n"),
           documentName:
@@ -284,7 +287,6 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
   }
 
   for (const card of readSavedPaperCards()) {
-    if (resolvedReadingMode.value !== "paper") continue;
     if (!card || typeof card.id !== "string") continue;
     const createdAt =
       typeof card.createdAt === "string"
@@ -297,6 +299,7 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
           id: card.id,
           source: "reading-card",
           kind: "reading-card",
+          originMode: "paper",
           title:
             typeof card.title === "string" && card.title.trim()
               ? card.title.trim()
@@ -327,7 +330,6 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
   }
 
   for (const card of readSavedPaperOverviews()) {
-    if (resolvedReadingMode.value !== "paper") continue;
     if (!card || typeof card.id !== "string") continue;
     const createdAt =
       typeof card.createdAt === "string"
@@ -363,6 +365,7 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
           id: card.id,
           source: "paper-overview",
           kind: "paper-card",
+          originMode: "paper",
           title: card.title?.trim() || card.documentName || "未命名论文卡片",
           content: [formatPaperOverviewMarkdown(card), linkedCardContent]
             .filter(Boolean)
@@ -386,12 +389,22 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
 }
 
 export function collectKnowledgeItems(): KnowledgeItem[] {
-  const readingMode = resolvedReadingMode.value;
   const legacyItems = collectLegacyKnowledgeItems();
-  knowledgeLibrary.synchronize(
-    readingMode,
-    legacyItems as Array<Omit<KnowledgeRecord, 'readingMode'>>,
-  );
-  return knowledgeLibrary.list(readingMode).map(({ readingMode: _scope, ...item }) =>
-    item as KnowledgeItem);
+  const modes: ResolvedReadingMode[] = ["novel", "paper", "general"];
+
+  for (const mode of modes) {
+    const scopedRecords = legacyItems
+      .filter((item) => item.originMode === mode)
+      .map(({ originMode: _originMode, ...item }) => item);
+    knowledgeLibrary.synchronize(
+      mode,
+      scopedRecords as Array<Omit<KnowledgeRecord, "readingMode">>,
+    );
+  }
+
+  return knowledgeLibrary.list().flatMap((record) => {
+    if (!isResolvedReadingMode(record.readingMode)) return [];
+    const { readingMode, ...item } = record;
+    return [{ ...item, originMode: readingMode } as KnowledgeItem];
+  });
 }

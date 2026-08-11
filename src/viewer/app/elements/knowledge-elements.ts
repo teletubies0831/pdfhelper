@@ -20,20 +20,52 @@ export const knowledgeFilterButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-knowledge-filter]"),
 );
 
+export const knowledgeOriginButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-knowledge-origin]"),
+);
+
+export const knowledgeOriginFilterButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-knowledge-origin-filter]"),
+);
+
 export const knowledgeCountAllElement = requiredElement<HTMLElement>(
   "knowledge-count-all",
 );
 
-export const knowledgeCountNoteElement = requiredElement<HTMLElement>(
-  "knowledge-count-note",
+export const knowledgeCountOriginNovelElement = requiredElement<HTMLElement>(
+  "knowledge-count-origin-novel",
 );
 
-export const knowledgeCountReadingCardElement = requiredElement<HTMLElement>(
-  "knowledge-count-reading-card",
+export const knowledgeCountOriginNovelReadingCardElement = requiredElement<HTMLElement>(
+  "knowledge-count-origin-novel-reading-card",
 );
 
-export const knowledgeCountPaperCardElement = requiredElement<HTMLElement>(
-  "knowledge-count-paper-card",
+export const knowledgeCountOriginNovelNoteElement = requiredElement<HTMLElement>(
+  "knowledge-count-origin-novel-note",
+);
+
+export const knowledgeCountOriginPaperElement = requiredElement<HTMLElement>(
+  "knowledge-count-origin-paper",
+);
+
+export const knowledgeCountOriginPaperReadingCardElement = requiredElement<HTMLElement>(
+  "knowledge-count-origin-paper-reading-card",
+);
+
+export const knowledgeCountOriginPaperNoteElement = requiredElement<HTMLElement>(
+  "knowledge-count-origin-paper-note",
+);
+
+export const knowledgeCountOriginGeneralElement = requiredElement<HTMLElement>(
+  "knowledge-count-origin-general",
+);
+
+export const knowledgeCountOriginGeneralReadingCardElement = requiredElement<HTMLElement>(
+  "knowledge-count-origin-general-reading-card",
+);
+
+export const knowledgeCountOriginGeneralNoteElement = requiredElement<HTMLElement>(
+  "knowledge-count-origin-general-note",
 );
 
 export const knowledgeCategoryListElement = requiredElement<HTMLElement>(

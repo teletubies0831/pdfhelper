@@ -240,6 +240,7 @@ export interface KnowledgeItem {
   id: string;
   source: KnowledgeSource;
   kind: KnowledgeKind;
+  originMode: ResolvedReadingMode;
   title: string;
   content: string;
   documentName: string;
