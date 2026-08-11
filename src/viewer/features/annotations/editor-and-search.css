@@ -1,0 +1,203 @@
+/* Existing highlights must not block native text selection. Click/right-click
+   handling is done by coordinate hit-testing in main.ts, so the visual
+   highlight layer can stay transparent to the mouse. */
+.pdfViewer .annotationEditorLayer.disabled .highlightEditor,
+.pdfViewer .annotationEditorLayer.disabled .highlightEditor .internal,
+.pdfViewer .annotationEditorLayer .highlightEditor.disabled,
+.pdfViewer .annotationEditorLayer .highlightEditor.disabled .internal {
+  pointer-events: none !important;
+}
+
+/* Selection mode keeps the page itself transparent for text selection, while
+   existing free-text and ink annotations remain selectable and draggable. */
+.pdfViewer .annotationEditorLayer.disabled
+  :is(.freeTextEditor, .stampEditor, .signatureEditor) {
+  cursor: pointer;
+  pointer-events: auto !important;
+}
+
+.pdfViewer .annotationEditorLayer.disabled
+  :is(.freeTextEditor, .stampEditor, .signatureEditor).selectedEditor {
+  cursor: move;
+}
+
+/* PDF.js search must only paint the match background. If its transparent text
+   becomes visible, it sits above the canvas glyphs and looks like a font swap. */
+.pdfViewer .textLayer .highlight {
+  color: transparent !important;
+}
+
+/* The project uses its own context menu; hide PDF.js' floating toolbar to
+   avoid duplicate/mispositioned delete and color controls. */
+.pdfViewer .annotationEditorLayer .editToolbar {
+  display: none !important;
+}
+
+/* PDF.js temporarily hides the preserved annotation and editor layers while
+   switching between selection and editing modes. Keep their last painted
+   frame visible until annotationeditormodechanged confirms the replacement is
+   ready; otherwise saved highlights and note markers visibly blink. */
+.pdfViewer.pdf-helper-editor-mode-transition
+  :is(.annotationLayer, .annotationEditorLayer)[hidden] {
+  display: block !important;
+}
+
+.annotation-action-bar {
+  position: fixed;
+  z-index: 1000002;
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #cbd4e1;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 22%);
+  color: #526176;
+  font-size: 12px;
+  padding: 4px 5px 4px 10px;
+}
+
+.annotation-action-bar[hidden] {
+  display: none;
+}
+
+.annotation-action-bar button {
+  min-height: 27px;
+  border-color: transparent;
+  color: #b42318;
+  padding: 0 8px;
+}
+
+.annotation-action-bar .free-text-size-control {
+  height: 28px;
+  border: 0;
+  padding: 0;
+}
+
+.annotation-action-bar .free-text-size-control[hidden] {
+  display: none !important;
+}
+
+.annotation-action-bar .free-text-size-control button {
+  color: #243248;
+  min-height: 24px;
+  padding: 0 5px;
+}
+
+.find-bar {
+  position: fixed;
+  z-index: 1000003;
+  top: 8px;
+  right: 16px;
+  display: flex;
+  height: 40px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #d5dbe5;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgb(15 23 42 / 20%);
+  padding: 4px 6px;
+}
+
+.find-bar[hidden] {
+  display: none;
+}
+
+.find-bar input {
+  width: 190px;
+  height: 30px;
+  border: 0;
+  outline: 0;
+  padding: 0 7px;
+}
+
+.find-bar span {
+  min-width: 42px;
+  color: #68778c;
+  font-size: 12px;
+  text-align: center;
+}
+
+.find-bar button {
+  min-width: 30px;
+  min-height: 30px;
+  border: 0;
+  padding: 0;
+}
+
+.pdf-helper-note-indicator {
+  position: absolute;
+  z-index: 7;
+  top: 0;
+  left: 0;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #fff;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 38%);
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+  transform: translate(35%, -45%);
+}
+
+.pdfViewer.pdf-helper-notes-hidden .pdf-helper-note-indicator {
+  display: none;
+}
+
+/* Saved PDF comments are still stored in the file, but pdf.js also renders
+   its own default gray popup for embedded Popup annotations. The reader uses
+   the custom note popover instead, so hide the built-in popup UI here. */
+#viewer-container .annotationLayer .popupAnnotation,
+#viewer-container .annotationLayer .popup,
+#viewer-container .annotationLayer .popupTriggerArea,
+#viewer-container .annotationLayer .annotationCommentButton,
+#viewer-container .commentPopup {
+  display: none !important;
+}
+
+/* Re-opened PDF annotations are rendered once by the native annotation layer.
+   Keep their visual appearance, but don't let that layer intercept selection
+   and our custom hit-testing. */
+#viewer-container .annotationLayer .highlightAnnotation,
+#viewer-container .annotationLayer .popupAnnotation,
+#viewer-container .annotationLayer .popupTriggerArea {
+  pointer-events: none !important;
+}
+
+/* The native annotation layer is enabled for clickable PDF links. Helper
+   highlights/free-text/ink are rendered by the separate editor layer, so hide
+   their native duplicates while leaving linkAnnotation interactive. */
+#viewer-container .annotationLayer .highlightAnnotation,
+#viewer-container .annotationLayer .freeTextAnnotation,
+#viewer-container .annotationLayer .inkAnnotation {
+  visibility: hidden !important;
+}
+
+/* During the hand-off, either representation may be the first one ready.
+   Allow PDF.js' native annotation appearance to cover the old editor frame;
+   after the mode-change event the normal duplicate-suppression rule resumes. */
+.pdfViewer.pdf-helper-editor-mode-transition
+  .annotationLayer
+  :is(.highlightAnnotation, .freeTextAnnotation, .inkAnnotation) {
+  visibility: visible !important;
+}
+
+#viewer-container .annotationLayer .linkAnnotation {
+  pointer-events: auto !important;
+}
+
+.pdf-helper-note-indicator {
+  font-size: 0;
+}
+
+.pdf-helper-note-indicator::after {
+  content: "✎";
+  font-size: 13px;
+}

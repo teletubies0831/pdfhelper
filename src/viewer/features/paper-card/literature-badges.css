@@ -1,0 +1,54 @@
+/* Multi-source literature tool badges */
+.online-related-paper-top-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.online-related-paper-order {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d5b36b;
+  border-radius: 999px;
+  background: #fff8e8;
+  color: #9a6710;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.online-related-paper-region {
+  display: inline-flex;
+  min-height: 23px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.online-related-paper-region.region-domestic {
+  background: #fff2e8;
+  color: #a85a17;
+}
+
+.online-related-paper-region.region-international {
+  background: #eef3fa;
+  color: #526a8e;
+}
+
+.online-related-paper-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.online-related-paper-meta-row .online-related-paper-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+}

@@ -1,0 +1,137 @@
+.selection-context-menu {
+  position: fixed;
+  z-index: 1000000;
+  width: 178px;
+  border: 1px solid #cbd4e1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgb(15 23 42 / 24%);
+  padding: 10px;
+}
+
+.selection-context-menu[hidden] {
+  display: none;
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 1000004;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  background: rgb(15 23 42 / 28%);
+  padding-top: 88px;
+}
+
+.modal-backdrop[hidden] {
+  display: none !important;
+}
+
+.recent-files-panel {
+  display: flex;
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(620px, calc(100vh - 120px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d8e0eb;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 28%);
+}
+
+.recent-files-panel header,
+.recent-files-panel footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.recent-files-panel header {
+  border-bottom: 1px solid #edf1f7;
+}
+
+.recent-files-panel footer {
+  border-top: 1px solid #edf1f7;
+}
+
+.recent-files-panel header strong {
+  color: #172033;
+  font-size: 16px;
+}
+
+.recent-files-panel header button {
+  min-width: 32px;
+  padding: 0 8px;
+}
+
+.recent-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.recent-files-empty {
+  border: 1px dashed #d6deea;
+  border-radius: 10px;
+  color: #64748b;
+  line-height: 1.6;
+  padding: 18px;
+  text-align: center;
+}
+
+.recent-file-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #e3eaf5;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+}
+
+.recent-file-item:hover {
+  border-color: #8bb4ff;
+  background: #f8fbff;
+}
+
+.recent-file-open {
+  min-width: 0;
+  min-height: 0;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+
+.recent-file-open:hover {
+  color: #1458d4;
+}
+
+.recent-file-name {
+  display: block;
+  overflow: hidden;
+  color: #172033;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-file-meta {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.recent-file-remove {
+  min-width: 32px;
+  min-height: 30px;
+  color: #b42318;
+  padding: 0 8px;
+}

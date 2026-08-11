@@ -1,0 +1,58 @@
+.paper-card-form-section {
+  scroll-margin-top: 16px;
+}
+
+.paper-card-form-section h2 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.paper-card-page-body {
+  padding: 12px;
+}
+
+.paper-card-field-grid input,
+.paper-card-field-grid textarea,
+.paper-card-field-grid select {
+  font-size: 14px;
+}
+
+.paper-card-field-grid textarea {
+  line-height: 1.75;
+}
+
+@media (max-width: 1280px) {
+  .paper-card-layout {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 980px) {
+  .paper-card-field-grid.two-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+.paper-card-sidebar .paper-card-form-section {
+  width: 100%;
+}
+
+.paper-card-sidebar .paper-card-form-section + .paper-card-form-section {
+  margin-top: 0;
+}
+
+.paper-card-sidebar .paper-card-field-grid {
+  gap: 10px;
+}
+
+.paper-card-sidebar .paper-card-field-grid textarea {
+  min-height: 92px;
+}
+
+.paper-card-main .paper-card-form-section,
+.paper-card-sidebar .paper-card-form-section {
+  min-width: 0;
+}

@@ -1,0 +1,375 @@
+/* ==========================================================================
+   Paper overview CCF badge — remove reading-decision panel
+   ========================================================================== */
+
+.paper-card-decision-card[hidden] {
+  display: none !important;
+}
+
+.paper-card-overview-card {
+  position: relative;
+}
+
+/* 给右上角的小标签预留空间，标题很长时也不会盖住标签。 */
+.paper-card-overview-content {
+  min-width: 0;
+  padding-right: 104px;
+}
+
+.paper-card-overview-ccf-badge {
+  position: absolute;
+  z-index: 2;
+  top: 18px;
+  right: 18px;
+  min-width: 58px;
+  min-height: 28px;
+  box-sizing: border-box;
+  padding: 3px 12px;
+  font-size: 12px;
+  line-height: 1.2;
+  box-shadow: 0 3px 10px rgb(52 73 107 / 5%);
+}
+
+.paper-card-overview-ccf-badge.ccf-rank-a {
+  border-color: #efa8a8 !important;
+  background: #fff5f5 !important;
+  color: #bd4141 !important;
+}
+
+.paper-card-overview-ccf-badge.ccf-rank-b {
+  border-color: #e9c583 !important;
+  background: #fff8eb !important;
+  color: #9d6515 !important;
+}
+
+.paper-card-overview-ccf-badge.ccf-rank-c {
+  border-color: #afd1b7 !important;
+  background: #f0f9f2 !important;
+  color: #397a49 !important;
+}
+
+/* 阅读决策删除后，近期相关工作直接成为右栏第一块。 */
+.paper-card-sidebar > .paper-card-reading-list-card {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .paper-card-overview-content {
+    padding-right: 0;
+  }
+
+  .paper-card-overview-ccf-badge {
+    position: static;
+    align-self: flex-start;
+    margin: 0 0 10px auto;
+  }
+}
+
+/* ==========================================================================
+   CCF badge — always lock to the top-right corner
+   ========================================================================== */
+
+/* 覆盖此前小屏幕规则：无论浏览器缩放比例如何，都固定在卡片右上角。 */
+.paper-card-overview-card .paper-card-overview-ccf-badge {
+  position: absolute !important;
+  z-index: 5 !important;
+  top: 20px !important;
+  right: 20px !important;
+  bottom: auto !important;
+  left: auto !important;
+  margin: 0 !important;
+  align-self: auto !important;
+  transform: none !important;
+}
+
+/* 始终为右上角标签保留空间。 */
+.paper-card-overview-card .paper-card-overview-content {
+  padding-right: 112px !important;
+}
+
+@media (max-width: 760px) {
+  .paper-card-overview-card .paper-card-overview-ccf-badge {
+    position: absolute !important;
+    top: 16px !important;
+    right: 16px !important;
+    left: auto !important;
+    margin: 0 !important;
+  }
+
+  .paper-card-overview-card .paper-card-overview-content {
+    padding-right: 96px !important;
+  }
+}
+
+/* ==========================================================================
+   CCF rank inline with venue and year
+   ========================================================================== */
+
+/* 取消此前为右上角标签预留的空白。 */
+.paper-card-overview-card .paper-card-overview-content {
+  padding-right: 0 !important;
+}
+
+.paper-card-venue-value-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.paper-card-venue-value-row textarea {
+  flex: 1 1 auto;
+  width: auto !important;
+  min-width: 0;
+  margin: 0 !important;
+}
+
+#paper-ccf-rank.paper-card-inline-ccf-rank,
+#paper-ccf-rank.paper-card-ccf-rank {
+  position: static !important;
+  inset: auto !important;
+  display: inline-flex !important;
+  flex: 0 0 auto;
+  width: auto !important;
+  min-width: 52px;
+  min-height: 26px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  padding: 3px 10px !important;
+  border-radius: 999px;
+  transform: none !important;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.2;
+  text-decoration: none;
+  box-shadow: none;
+}
+
+#paper-ccf-rank.ccf-rank-a {
+  border-color: #efa8a8 !important;
+  background: #fff5f5 !important;
+  color: #bd4141 !important;
+}
+
+#paper-ccf-rank.ccf-rank-b {
+  border-color: #e9c583 !important;
+  background: #fff8eb !important;
+  color: #9d6515 !important;
+}
+
+#paper-ccf-rank.ccf-rank-c {
+  border-color: #afd1b7 !important;
+  background: #f0f9f2 !important;
+  color: #397a49 !important;
+}
+
+#paper-ccf-rank.ccf-rank-loading,
+#paper-ccf-rank.ccf-rank-unavailable,
+#paper-ccf-rank.ccf-rank-not-listed {
+  border-color: #d4deec !important;
+  background: #f7f9fc !important;
+  color: #718099 !important;
+}
+
+/* 阅读模式下看起来是一整行：
+   USENIX Security Symposium · 2024 · CCF A */
+.paper-card-form.reading-view .paper-card-venue-value-row {
+  justify-content: flex-start;
+}
+
+@media (max-width: 760px) {
+  .paper-card-venue-value-row {
+    flex-wrap: wrap;
+  }
+
+  #paper-ccf-rank.paper-card-inline-ccf-rank,
+  #paper-ccf-rank.paper-card-ccf-rank {
+    position: static !important;
+    margin: 0 !important;
+  }
+}
+
+/* ==========================================================================
+   CCF rank as plain inline text
+   ========================================================================== */
+
+/* CCF 等级与会议、年份在同一行，但不再使用胶囊标签。 */
+#paper-ccf-rank.paper-card-inline-ccf-rank,
+#paper-ccf-rank.paper-card-ccf-rank {
+  position: static !important;
+  inset: auto !important;
+  display: inline !important;
+  flex: 0 0 auto;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  color: #65758f !important;
+  font: inherit !important;
+  font-weight: 650 !important;
+  line-height: inherit !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+/* 在年份和 CCF 等级之间直接显示中点。 */
+#paper-ccf-rank.paper-card-inline-ccf-rank::before,
+#paper-ccf-rank.paper-card-ccf-rank::before {
+  content: "·";
+  display: inline;
+  margin: 0 8px;
+  color: #7d8ba1;
+  font-weight: 500;
+}
+
+/* 仅用文字颜色区分等级，不再显示任何图形。 */
+#paper-ccf-rank.ccf-rank-a {
+  color: #bd4141 !important;
+}
+
+#paper-ccf-rank.ccf-rank-b {
+  color: #a16a18 !important;
+}
+
+#paper-ccf-rank.ccf-rank-c {
+  color: #397a49 !important;
+}
+
+#paper-ccf-rank.ccf-rank-loading,
+#paper-ccf-rank.ccf-rank-unavailable,
+#paper-ccf-rank.ccf-rank-not-listed {
+  color: #718099 !important;
+}
+
+.paper-card-venue-value-row {
+  align-items: baseline !important;
+}
+
+.paper-card-venue-field > span {
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Paper-card completion status and current-document loading state
+   ========================================================================== */
+
+.paper-card-page-status {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.26s ease,
+    transform 0.26s ease;
+}
+
+.paper-card-page-status.fading {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.paper-card-page-status.persistent {
+  position: relative;
+  padding-left: 38px;
+}
+
+.paper-card-page-status.persistent::before {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 2px solid #9abcf1;
+  border-top-color: #2f73df;
+  border-radius: 50%;
+  content: "";
+  transform: translateY(-50%);
+  animation: paper-card-status-spin 0.8s linear infinite;
+}
+
+@keyframes paper-card-status-spin {
+  to {
+    transform: translateY(-50%) rotate(360deg);
+  }
+}
+
+/* 生成期间不再把通用占位内容当成当前论文结果展示。 */
+.paper-card-form.generating {
+  position: relative;
+  opacity: 1 !important;
+}
+
+.paper-card-form.generating .paper-card-layout {
+  opacity: 0.18;
+  filter: grayscale(0.15);
+  pointer-events: none;
+}
+
+.paper-card-form.generating::after {
+  position: absolute;
+  z-index: 12;
+  top: 50%;
+  left: 50%;
+  width: min(520px, calc(100% - 48px));
+  box-sizing: border-box;
+  border: 1px solid #c9dcfa;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 95%);
+  color: #355c94;
+  content:
+    "正在根据当前 PDF 生成论文阅读卡片\A"
+    attr(data-generating-document);
+  padding: 22px 26px;
+  box-shadow: 0 12px 34px rgb(46 84 140 / 12%);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.75;
+  text-align: center;
+  white-space: pre-wrap;
+  transform: translate(-50%, -50%);
+}
+
+/* 相关工作区域只展示当前论文的等待、检索或结果状态。 */
+.online-related-paper-status {
+  min-height: 74px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Paper-card generation — keep only the top status bar
+   ========================================================================== */
+
+/* 生成期间不再让正文区域整体变淡。 */
+.paper-card-form.generating .paper-card-layout {
+  opacity: 1 !important;
+  filter: none !important;
+  pointer-events: none;
+}
+
+/* 删除页面中央的“正在根据当前 PDF 生成论文阅读卡片”提示框。 */
+.paper-card-form.generating::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* 生成时仅保留顶部状态条。 */
+.paper-card-form.generating {
+  opacity: 1 !important;
+}
+
+/* 顶部状态条在生成完成前持续显示，完成后由 main.ts 平滑淡出。 */
+.paper-card-page-status.persistent {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}

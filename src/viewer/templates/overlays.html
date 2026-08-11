@@ -1,0 +1,245 @@
+<div id="selection-context-menu" class="selection-context-menu" hidden>
+      <button id="context-copy" class="context-menu-item" type="button">复制</button>
+      <button id="context-clean-copy" class="context-menu-item" type="button">整理后复制</button>
+      <div id="context-colors" class="quick-colors" aria-label="高亮颜色">
+        <button type="button" data-quick-highlight-color="#fff066" title="黄色"></button>
+        <button type="button" data-quick-highlight-color="#9be7a5" title="绿色"></button>
+        <button type="button" data-quick-highlight-color="#8ec5ff" title="蓝色"></button>
+        <button type="button" data-quick-highlight-color="#ff9fc9" title="粉色"></button>
+        <button type="button" data-quick-highlight-color="#ffc078" title="橙色"></button>
+      </div>
+      <div id="highlight-context-actions" class="highlight-context-actions" hidden>
+        <button id="context-note" class="context-menu-item" type="button">添加笔记</button>
+        <button id="context-delete-highlight" class="context-menu-item danger" type="button">删除高亮</button>
+      </div>
+    </div>
+
+    <div id="recent-files-dialog" class="modal-backdrop" hidden>
+      <section class="recent-files-panel" role="dialog" aria-modal="true" aria-labelledby="recent-files-title">
+        <header>
+          <strong id="recent-files-title">最近打开</strong>
+          <button id="close-recent-files" type="button" aria-label="关闭">×</button>
+        </header>
+        <div id="recent-files-list" class="recent-files-list"></div>
+        <footer>
+          <button id="clear-recent-files" type="button">清空记录</button>
+        </footer>
+      </section>
+    </div>
+
+    <div id="translation-history-dialog" class="modal-backdrop" hidden>
+      <section class="translation-history-panel" role="dialog" aria-modal="true" aria-labelledby="translation-history-dialog-title">
+        <header>
+          <div>
+            <strong id="translation-history-dialog-title">英语学习历史</strong>
+            <span id="translation-history-dialog-count">0 条记录</span>
+          </div>
+          <div class="translation-history-dialog-actions">
+            <button id="clear-translation-history" class="translation-history-clear" type="button" hidden>清空记录</button>
+            <button id="close-translation-history" type="button" aria-label="关闭">×</button>
+          </div>
+        </header>
+        <div class="translation-history-search">
+          <input id="translation-history-search" type="search" autocomplete="off" placeholder="搜索单词、原句或释义" aria-label="搜索英语学习历史" />
+        </div>
+        <div id="translation-history-dialog-list" class="translation-history-dialog-list"></div>
+      </section>
+    </div>
+
+
+    <div id="knowledge-editor-dialog" class="modal-backdrop knowledge-editor-backdrop" hidden>
+      <form
+        id="knowledge-editor-form"
+        class="knowledge-editor-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="knowledge-editor-heading"
+      >
+        <header class="knowledge-editor-header">
+          <div class="knowledge-editor-heading-group">
+            <div class="knowledge-editor-page-icon" aria-hidden="true">▧</div>
+            <div>
+              <strong id="knowledge-editor-heading">新建笔记</strong>
+              <p id="knowledge-editor-source">保存到本地知识库</p>
+            </div>
+          </div>
+
+          <div class="knowledge-editor-header-actions">
+            <button id="knowledge-editor-cancel" type="button">← 返回知识库</button>
+            <button
+              id="knowledge-editor-delete"
+              class="knowledge-editor-delete-button"
+              type="button"
+              hidden
+            >删除</button>
+            <button class="primary-button knowledge-editor-save-button" type="submit">▣ 保存修改</button>
+            <button id="knowledge-editor-close" class="knowledge-editor-close-button" type="button" aria-label="关闭">×</button>
+          </div>
+        </header>
+
+        <div class="knowledge-editor-workspace">
+          <main class="knowledge-editor-document">
+            <section class="knowledge-editor-title-card">
+              <label>
+                <span>笔记标题</span>
+                <input
+                  id="knowledge-editor-title"
+                  type="text"
+                  maxlength="160"
+                  placeholder="输入一个清晰、可检索的笔记标题"
+                />
+              </label>
+            </section>
+
+            <section class="knowledge-editor-body-card">
+              <div class="knowledge-editor-section-heading">
+                <div>
+                  <strong id="knowledge-editor-body-mode-label">排版正文</strong>
+                  <span>原文、翻译、重点词汇与 LaTeX 公式会自动整理</span>
+                </div>
+                <button
+                  id="knowledge-editor-mode-toggle"
+                  class="knowledge-editor-mode-toggle"
+                  type="button"
+                >编辑正文</button>
+              </div>
+
+              <div class="knowledge-editor-body-workspace knowledge-editor-single-workspace">
+                <label
+                  id="knowledge-editor-edit-pane"
+                  class="knowledge-editor-body-label knowledge-editor-edit-pane"
+                  hidden
+                >
+                  <span class="sr-only">编辑正文</span>
+                  <textarea
+                    id="knowledge-editor-body"
+                    rows="20"
+                    placeholder="建议结构：
+
+原文
+记录论文原文、页码和关键公式。
+
+翻译
+写下准确、通顺的中文翻译。
+
+重点词汇
+- oblivious：不经意的
+- programmable：可编程的
+
+我的判断
+说明这段内容为什么重要。
+
+公式可使用：
+$F(k,q_i)$
+或
+$$
+F(x)=\sum_{i=1}^{n} w_i x_i
+$$"
+                  ></textarea>
+                </label>
+
+                <section
+                  id="knowledge-editor-preview-pane"
+                  class="knowledge-editor-preview-pane knowledge-editor-single-preview"
+                  aria-label="笔记排版正文"
+                >
+                  <div
+                    id="knowledge-editor-preview"
+                    class="knowledge-editor-preview chat-markdown"
+                    aria-live="polite"
+                  ></div>
+                </section>
+              </div>
+            </section>
+          </main>
+
+          <aside class="knowledge-editor-sidebar">
+            <section class="knowledge-editor-side-card">
+              <header>
+                <strong>知识属性</strong>
+                <span>便于后续检索和跨文献整理</span>
+              </header>
+
+              <div class="knowledge-editor-fields">
+                <label>
+                  <span>分类</span>
+                  <input
+                    id="knowledge-editor-category"
+                    type="text"
+                    maxlength="60"
+                    placeholder="例如：安全多方计算 / 密码学协议"
+                  />
+                </label>
+
+                <label>
+                  <span>标签</span>
+                  <input
+                    id="knowledge-editor-tags"
+                    type="text"
+                    maxlength="240"
+                    placeholder="例如：OPRF, PSI, 复现"
+                  />
+                  <small>多个标签使用逗号分隔</small>
+                </label>
+              </div>
+            </section>
+
+            <section class="knowledge-editor-side-card knowledge-editor-source-card">
+              <header>
+                <strong>来源与使用方式</strong>
+                <span>保留可追溯性，避免笔记脱离论文语境</span>
+              </header>
+              <div class="knowledge-editor-guidance">
+                <p><strong>来源：</strong><span>当前来源显示在页面标题下方。</span></p>
+                <p><strong>引用：</strong><span>记录页码、图表或实验编号。</span></p>
+                <p><strong>判断：</strong><span>区分论文原文、你的推断和待验证事项。</span></p>
+              </div>
+            </section>
+
+            <section class="knowledge-editor-side-card knowledge-editor-tip-card">
+              <strong>研究生笔记建议</strong>
+              <ul>
+                <li>只保留能支持研究决策的信息。</li>
+                <li>把结论和证据放在一起。</li>
+                <li>明确下一次阅读或实验动作。</li>
+              </ul>
+            </section>
+          </aside>
+        </div>
+      </form>
+    </div>
+
+    <aside id="highlight-note-popover" class="highlight-note-popover" hidden>
+      <header>
+        <strong id="highlight-note-title">高亮笔记</strong>
+        <button id="close-highlight-note" type="button" aria-label="关闭">×</button>
+      </header>
+      <p id="highlight-note-quote"></p>
+      <textarea id="highlight-note-text" rows="5" placeholder="记录你的理解、疑问或联想…"></textarea>
+      <footer>
+        <button id="delete-highlight-note" type="button">删除笔记</button>
+        <button id="save-highlight-note" class="primary-button" type="button">保存笔记</button>
+      </footer>
+    </aside>
+
+    <div id="annotation-action-bar" class="annotation-action-bar" hidden>
+      <span id="annotation-type-label">批注</span>
+      <label id="free-text-size-control" class="free-text-size-control" title="文本字号" hidden>
+        <span>字号</span>
+        <button id="free-text-size-down" type="button" title="缩小文本">A-</button>
+        <input id="free-text-size" type="number" min="4" max="72" step="1" value="16" />
+        <button id="free-text-size-up" type="button" title="放大文本">A+</button>
+        <input id="free-text-color" class="free-text-color-input" type="color" value="#000000" title="文本颜色" />
+      </label>
+      <button id="delete-annotation" type="button" title="删除批注（Delete）">删除</button>
+    </div>
+
+    <form id="find-bar" class="find-bar" hidden>
+      <input id="find-input" type="search" placeholder="在PDF中查找" autocomplete="off" />
+      <span id="find-count" aria-live="polite">0/0</span>
+      <button id="find-previous" type="button" title="上一个">↑</button>
+      <button id="find-next" type="button" title="下一个">↓</button>
+      <button id="find-close" type="button" title="关闭">×</button>
+    </form>
+
+    <div id="settings-modal-backdrop" class="settings-modal-backdrop" hidden aria-hidden="true"></div>

@@ -1,0 +1,100 @@
+<header class="toolbar">
+  <button id="outline-toggle" class="toolbar-pill toolbar-nav-button toolbar-outline-button" type="button" title="显示或隐藏左侧目录">
+    <span class="toolbar-icon">☰</span>
+    目录
+  </button>
+
+  <div class="toolbar-menu" data-toolbar-menu>
+    <button
+      class="toolbar-pill toolbar-menu-trigger toolbar-nav-button toolbar-file-button"
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded="false"
+    >
+      <span aria-hidden="true">▣</span>
+      文件
+      <span class="toolbar-menu-caret" aria-hidden="true">⌄</span>
+    </button>
+    <div class="toolbar-menu-panel" role="menu" hidden>
+      <div class="toolbar-menu-section">
+        <div class="toolbar-menu-heading">文件管理</div>
+        <button id="recent-files-button" class="toolbar-menu-item" type="button" role="menuitem">
+          <span aria-hidden="true">◷</span>
+          最近打开
+        </button>
+        <label
+          id="open-file"
+          class="toolbar-menu-item"
+          for="file-input"
+          role="menuitem"
+          tabindex="0"
+        >
+          <svg class="toolbar-icon open-pdf-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6.5 3.5h7l4 4v13h-11z" />
+            <path d="M13.5 3.5v4h4" />
+            <path d="M8.8 14.8h6.4" />
+            <path d="M8.8 17.2h4.6" />
+            <path d="M8.8 10.6h2.1a1.5 1.5 0 0 1 0 3H8.8z" />
+          </svg>
+          打开 PDF
+        </label>
+        <button id="save-annotated-pdf" class="toolbar-menu-item primary-button" type="button" role="menuitem">
+          <span aria-hidden="true">↓</span>
+          保存批注 PDF
+        </button>
+      </div>
+    </div>
+  </div>
+  <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" />
+
+  <div class="reading-mode-control" aria-label="阅读模式">
+    <select id="reading-mode-select" title="选择当前 PDF 的阅读策略">
+      <option value="auto">AI 自动识别（通用阅读）</option>
+      <option value="general">通用阅读</option>
+      <option value="paper">论文精读</option>
+      <option value="novel">小说阅读</option>
+    </select>
+    <button id="detect-reading-mode" type="button" title="重新识别阅读模式" aria-label="重新识别阅读模式">↻</button>
+    <small id="reading-mode-status">AI自动 · 通用阅读</small>
+  </div>
+
+  <div class="toolbar-group annotation-tools expanded-toolbar-group" aria-label="批注工具">
+    <button class="toolbar-nav-button" type="button" data-editor-mode="select" title="选择文字；选择批注后可移动或编辑">
+      移动/选择
+    </button>
+    <button class="toolbar-nav-button" type="button" data-editor-mode="highlight" title="选中文字并高亮">
+      ✎ 高亮
+    </button>
+    <label class="highlight-color-control" title="高亮颜色">
+      <span>颜色</span>
+      <input id="highlight-color" type="color" value="#fff066" />
+    </label>
+    <button class="toolbar-nav-button" type="button" data-editor-mode="ink" title="自由绘制">画笔</button>
+    <button class="toolbar-nav-button" type="button" data-editor-mode="text" title="在页面上添加文本">批注</button>
+    <button id="undo-annotation" class="toolbar-nav-button" type="button" title="撤销批注">撤销</button>
+    <button id="redo-annotation" class="toolbar-nav-button" type="button" title="重做批注">重做</button>
+    <button id="smart-copy" class="toolbar-nav-button" type="button" title="整理复制选中文本">整理复制</button>
+    <button id="toggle-notes" class="toolbar-nav-button" type="button" title="隐藏/显示所有笔记标记">隐藏笔记</button>
+  </div>
+
+  <div class="toolbar-group ai-tools expanded-toolbar-group" aria-label="AI 工具">
+    <button id="ai-panel-toggle" class="toolbar-pill toolbar-nav-button ai-entry active" type="button">
+      PDF 阅读
+    </button>
+    <button id="paper-card-entry" class="toolbar-pill toolbar-nav-button" type="button">论文阅读卡片</button>
+    <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button">知识库</button>
+  </div>
+
+  <button id="assistant-panel-toggle" class="toolbar-pill toolbar-nav-button assistant-entry active" type="button" title="显示或隐藏右侧 AI 助手">
+    AI 助手
+  </button>
+  <button
+    id="ai-settings-button"
+    class="toolbar-icon-button toolbar-settings-button toolbar-nav-button"
+    type="button"
+    title="AI 设置"
+    aria-label="打开 AI 设置"
+  >
+    ⚙
+  </button>
+</header>

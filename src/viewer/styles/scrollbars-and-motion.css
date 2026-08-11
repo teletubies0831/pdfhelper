@@ -1,0 +1,236 @@
+/* ==========================================================================
+   Paper card true content-height fields
+   Textareas start compact and grow only as much as their content requires.
+   ========================================================================== */
+
+.paper-card-page .paper-card-field-grid textarea,
+.paper-card-page .paper-card-field-grid.compact-grid textarea {
+  box-sizing: border-box;
+  min-height: 44px;
+  height: 44px;
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  resize: none;
+  line-height: 1.65;
+}
+
+
+/* ==========================================================================
+   Knowledge-base paper review page
+   Saved paper cards open in the full paper-card editor instead of a tiny pane.
+   ========================================================================== */
+
+.paper-card-page.review-mode .paper-card-page-header h1 {
+  color: #244f96;
+}
+
+.paper-card-page.review-mode .paper-card-command-bar {
+  border-color: #cfe0ff;
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+}
+
+.paper-card-page.review-mode #paper-card-document-name::before {
+  content: "复习：";
+  color: #7b8ca5;
+  font-weight: 500;
+}
+
+.knowledge-item-card.kind-paper-card {
+  cursor: pointer;
+}
+
+.knowledge-item-card.kind-paper-card::after {
+  content: "双击或按 Enter 打开复习页";
+  margin-top: 8px;
+  color: #8d72bd;
+  font-size: 9px;
+}
+
+
+/* ==========================================================================
+   Knowledge base scrollbar theme
+   Soft blue scrollbars that match the existing PDF Helper visual language.
+   ========================================================================== */
+
+.knowledge-base-page {
+  --knowledge-scrollbar-track: #eef4ff;
+  --knowledge-scrollbar-track-border: #dde9fb;
+  --knowledge-scrollbar-thumb-start: #a9c7ff;
+  --knowledge-scrollbar-thumb-end: #7eaaf7;
+  --knowledge-scrollbar-thumb-hover: #5f8fe8;
+  --knowledge-scrollbar-thumb-active: #2f6fd4;
+}
+
+/* Firefox */
+.knowledge-base-page,
+.knowledge-base-page * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--knowledge-scrollbar-thumb-end) var(--knowledge-scrollbar-track);
+}
+
+/* Chromium / Edge */
+.knowledge-base-page::-webkit-scrollbar,
+.knowledge-base-page *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.knowledge-base-page::-webkit-scrollbar-track,
+.knowledge-base-page *::-webkit-scrollbar-track {
+  border: 1px solid var(--knowledge-scrollbar-track-border);
+  border-radius: 999px;
+  background: var(--knowledge-scrollbar-track);
+}
+
+.knowledge-base-page::-webkit-scrollbar-thumb,
+.knowledge-base-page *::-webkit-scrollbar-thumb {
+  min-height: 42px;
+  border: 2px solid var(--knowledge-scrollbar-track);
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      180deg,
+      var(--knowledge-scrollbar-thumb-start) 0%,
+      var(--knowledge-scrollbar-thumb-end) 100%
+    );
+  box-shadow:
+    inset 0 0 0 1px rgb(47 111 212 / 8%),
+    0 1px 2px rgb(47 111 212 / 10%);
+}
+
+.knowledge-base-page::-webkit-scrollbar-thumb:hover,
+.knowledge-base-page *::-webkit-scrollbar-thumb:hover {
+  background: var(--knowledge-scrollbar-thumb-hover);
+}
+
+.knowledge-base-page::-webkit-scrollbar-thumb:active,
+.knowledge-base-page *::-webkit-scrollbar-thumb:active {
+  background: var(--knowledge-scrollbar-thumb-active);
+}
+
+.knowledge-base-page::-webkit-scrollbar-corner,
+.knowledge-base-page *::-webkit-scrollbar-corner {
+  background: var(--knowledge-scrollbar-track);
+}
+
+/* Quiet application scrollbars: nearly invisible at rest, clearer on hover. */
+:is(
+  .left-panel,
+  #viewer-container,
+  .chat-messages,
+  .assistant-tools-runtime,
+  .selected-snippet,
+  .settings-panel,
+  .settings-popover,
+  .settings-memory-list,
+  .chat-message-content pre,
+  .chat-attachments
+) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+:is(
+  .left-panel,
+  #viewer-container,
+  .chat-messages,
+  .assistant-tools-runtime,
+  .selected-snippet,
+  .settings-panel,
+  .settings-popover,
+  .settings-memory-list,
+  .chat-message-content pre,
+  .chat-attachments
+)::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+:is(
+  .left-panel,
+  #viewer-container,
+  .chat-messages,
+  .assistant-tools-runtime,
+  .selected-snippet,
+  .settings-panel,
+  .settings-popover,
+  .settings-memory-list,
+  .chat-message-content pre,
+  .chat-attachments
+)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:is(
+  .left-panel,
+  #viewer-container,
+  .chat-messages,
+  .assistant-tools-runtime,
+  .selected-snippet,
+  .settings-panel,
+  .settings-popover,
+  .settings-memory-list,
+  .chat-message-content pre,
+  .chat-attachments
+)::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+:is(
+  .left-panel,
+  #viewer-container,
+  .chat-messages,
+  .assistant-tools-runtime,
+  .selected-snippet,
+  .settings-panel,
+  .settings-popover,
+  .settings-memory-list,
+  .chat-message-content pre,
+  .chat-attachments
+):hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.pdf-helper-math.display.needs-horizontal-scroll::-webkit-scrollbar {
+  height: 5px;
+}
+
+.pdf-helper-math.display.needs-horizontal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pdf-helper-math.display.needs-horizontal-scroll::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.pdf-helper-math.display.needs-horizontal-scroll:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Keep the three major columns visually consistent. */
+.knowledge-sidebar,
+.knowledge-main,
+.knowledge-detail-content,
+.knowledge-detail-body {
+  scrollbar-gutter: stable;
+}

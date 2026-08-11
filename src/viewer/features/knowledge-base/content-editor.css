@@ -1,0 +1,537 @@
+/* ==========================================================================
+   Knowledge card deletion, math preview and context-aware navigation
+   ========================================================================== */
+
+.knowledge-simple-card {
+  position: relative;
+}
+
+.knowledge-simple-card-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+  min-height: 58px;
+  margin-bottom: 12px;
+}
+
+.knowledge-simple-card-header .knowledge-card-title {
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+
+.knowledge-card-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  height: 32px;
+  box-sizing: border-box;
+  border: 1px solid #e5d8dc;
+  border-radius: 9px;
+  background: #fff;
+  color: #9b6873;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.knowledge-card-delete-button:hover,
+.knowledge-card-delete-button:focus-visible {
+  border-color: #e7aeb8;
+  background: #fff5f6;
+  color: #c3485a;
+  outline: none;
+}
+
+#knowledge-editor-dialog .knowledge-editor-delete-button {
+  border-color: #ead3d8 !important;
+  background: #fff !important;
+  color: #b25766 !important;
+}
+
+#knowledge-editor-dialog .knowledge-editor-delete-button:hover {
+  border-color: #e6a7b2 !important;
+  background: #fff3f5 !important;
+  color: #c93f55 !important;
+}
+
+/* 正文编辑与漂亮公式预览并排 */
+.knowledge-editor-body-workspace {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.04fr) minmax(340px, 0.96fr);
+  gap: 0;
+  overflow: hidden;
+}
+
+.knowledge-editor-body-label {
+  display: grid !important;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-right: 1px solid #e1e9f5;
+  padding: 12px 14px 14px !important;
+}
+
+.knowledge-editor-pane-label {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  color: #6e809b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#knowledge-editor-dialog #knowledge-editor-body {
+  min-width: 0;
+}
+
+.knowledge-editor-preview-pane {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: linear-gradient(180deg, #fbfdff 0%, #f7faff 100%);
+}
+
+.knowledge-editor-preview-pane > header {
+  display: flex !important;
+  min-height: 56px !important;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0 !important;
+  border-bottom: 1px solid #e5ecf6 !important;
+  background: transparent !important;
+  padding: 9px 16px !important;
+}
+
+.knowledge-editor-preview-pane > header strong {
+  display: block;
+  color: #263b58 !important;
+  font-size: 14px !important;
+}
+
+.knowledge-editor-preview-pane > header span:not(.knowledge-editor-preview-badge) {
+  display: block;
+  margin-top: 3px;
+  color: #8998ad;
+  font-size: 11px;
+}
+
+.knowledge-editor-preview-badge {
+  display: inline-flex;
+  height: 25px;
+  align-items: center;
+  border: 1px solid #cbdcf7;
+  border-radius: 999px;
+  background: #edf5ff;
+  color: #3970bc;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.knowledge-editor-preview {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 22px 28px;
+  color: #33465f;
+  font-size: 14px;
+  line-height: 1.8;
+  scrollbar-gutter: stable;
+}
+
+.knowledge-editor-preview h1,
+.knowledge-editor-preview h2,
+.knowledge-editor-preview h3,
+.knowledge-editor-preview h4 {
+  color: #1c3150;
+  line-height: 1.4;
+}
+
+.knowledge-editor-preview h1 {
+  font-size: 22px;
+}
+
+.knowledge-editor-preview h2 {
+  border-bottom: 1px solid #dce7f5;
+  padding-bottom: 7px;
+  font-size: 18px;
+}
+
+.knowledge-editor-preview h3 {
+  font-size: 16px;
+}
+
+.knowledge-editor-preview p {
+  margin: 0.7em 0;
+}
+
+.knowledge-editor-preview ul,
+.knowledge-editor-preview ol {
+  padding-left: 22px;
+}
+
+.knowledge-editor-preview code {
+  border-radius: 5px;
+  background: #edf3fb;
+  color: #315b91;
+  padding: 2px 5px;
+  font-family: "Cascadia Code", Consolas, monospace;
+}
+
+.knowledge-editor-preview pre {
+  overflow: auto;
+  border: 1px solid #dbe6f4;
+  border-radius: 10px;
+  background: #f3f7fc;
+  padding: 13px;
+}
+
+.knowledge-editor-preview .pdf-helper-math.inline {
+  color: #1f4f91;
+}
+
+.knowledge-editor-preview .pdf-helper-math.display {
+  display: block;
+  max-width: 100%;
+  margin: 18px 0;
+  overflow-x: auto;
+  border: 1px solid #d9e6f7;
+  border-radius: 13px;
+  background: #fff;
+  padding: 18px 14px;
+  color: #173d70;
+  text-align: center;
+  box-shadow: 0 6px 18px rgb(47 91 155 / 5%);
+}
+
+.knowledge-editor-preview .pdf-helper-math.display .katex {
+  font-size: 1.08em;
+}
+
+.knowledge-editor-preview-empty {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  justify-items: center;
+  color: #8394ab;
+  text-align: center;
+}
+
+.knowledge-editor-preview-empty > span {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  margin-bottom: 13px;
+  border: 1px solid #cfdef4;
+  border-radius: 17px;
+  background: #edf5ff;
+  color: #3971bd;
+  font-family: var(--font-ui);
+  font-size: 28px;
+}
+
+.knowledge-editor-preview-empty strong {
+  color: #49617f;
+  font-size: 14px;
+}
+
+.knowledge-editor-preview-empty p {
+  max-width: 300px;
+  margin: 6px 0 0;
+  color: #91a0b4;
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .knowledge-editor-body-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.8fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .knowledge-editor-body-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(420px, 1fr) minmax(360px, auto);
+    overflow: visible;
+  }
+
+  .knowledge-editor-body-label {
+    border-right: 0;
+    border-bottom: 1px solid #e1e9f5;
+  }
+
+  .knowledge-editor-preview-pane {
+    min-height: 360px;
+  }
+}
+
+/* ==========================================================================
+   Knowledge note body — one-panel reading/editing mode
+   ========================================================================== */
+
+.knowledge-editor-section-heading {
+  gap: 18px;
+}
+
+.knowledge-editor-mode-toggle {
+  flex: 0 0 auto;
+  min-width: 94px;
+  height: 36px;
+  border: 1px solid #c9daf3;
+  border-radius: 10px;
+  background: #f5f9ff;
+  color: #3569ae;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.knowledge-editor-mode-toggle:hover,
+.knowledge-editor-mode-toggle:focus-visible {
+  border-color: #8eb2e8;
+  background: #edf5ff;
+  color: #225ca9;
+  outline: none;
+}
+
+.knowledge-editor-body-workspace.knowledge-editor-single-workspace {
+  display: block !important;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
+}
+
+.knowledge-editor-edit-pane,
+.knowledge-editor-single-preview {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.knowledge-editor-edit-pane[hidden],
+.knowledge-editor-single-preview[hidden] {
+  display: none !important;
+}
+
+.knowledge-editor-body-label.knowledge-editor-edit-pane {
+  display: block !important;
+  border: 0 !important;
+  padding: 14px !important;
+}
+
+.knowledge-editor-body-label.knowledge-editor-edit-pane[hidden] {
+  display: none !important;
+}
+
+#knowledge-editor-dialog #knowledge-editor-body {
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+  border-radius: 12px;
+  padding: 22px 26px;
+  font-size: 15px;
+  line-height: 1.9;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+.knowledge-editor-preview-pane.knowledge-editor-single-preview {
+  display: block !important;
+  overflow: hidden;
+  border: 0 !important;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
+}
+
+.knowledge-editor-preview-pane.knowledge-editor-single-preview[hidden] {
+  display: none !important;
+}
+
+.knowledge-editor-single-preview .knowledge-editor-preview {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 26px 34px 38px;
+  color: #344760;
+  font-size: 15px;
+  line-height: 1.95;
+  scrollbar-gutter: stable;
+}
+
+.knowledge-editor-single-preview .knowledge-editor-preview > :first-child {
+  margin-top: 0;
+}
+
+.knowledge-editor-single-preview .knowledge-editor-preview > :last-child {
+  margin-bottom: 0;
+}
+
+.knowledge-editor-single-preview .knowledge-editor-preview p,
+.knowledge-editor-single-preview .knowledge-editor-preview li {
+  text-align: justify;
+  text-align-last: left;
+  text-justify: inter-ideograph;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-editor-single-preview .knowledge-editor-preview p {
+  margin: 0.72em 0;
+}
+
+.knowledge-editor-single-preview .knowledge-editor-preview h2 {
+  margin: 1.5em 0 0.72em;
+  border-bottom: 1px solid #dce7f5;
+  padding-bottom: 9px;
+  color: #1c3b66;
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.knowledge-editor-single-preview .knowledge-editor-preview h2:first-child {
+  margin-top: 0;
+}
+
+.knowledge-editor-single-preview .knowledge-editor-preview ul,
+.knowledge-editor-single-preview .knowledge-editor-preview ol {
+  margin: 0.65em 0;
+  padding-left: 24px;
+}
+
+.knowledge-editor-single-preview .knowledge-editor-preview li + li {
+  margin-top: 5px;
+}
+
+.knowledge-editor-single-preview
+  .knowledge-editor-preview
+  .pdf-helper-math.inline {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: baseline;
+  margin: 0 2px;
+  border-radius: 5px;
+  color: #174d8f;
+  vertical-align: baseline;
+}
+
+.knowledge-editor-single-preview
+  .knowledge-editor-preview
+  .pdf-helper-math.inline
+  .katex {
+  color: #174d8f;
+  font-size: 1.03em;
+}
+
+.knowledge-editor-single-preview
+  .knowledge-editor-preview
+  .pdf-helper-math.display {
+  display: block;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 20px 0;
+  overflow-x: auto;
+  border: 1px solid #d5e4f7;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  padding: 20px 18px;
+  color: #143f75;
+  text-align: center;
+  box-shadow: 0 6px 18px rgb(43 88 151 / 5%);
+}
+
+.knowledge-editor-single-preview
+  .knowledge-editor-preview
+  .pdf-helper-math.display
+  .katex {
+  color: #143f75;
+  font-size: 1.1em;
+}
+
+.knowledge-editor-single-preview
+  .knowledge-editor-preview
+  .pdf-helper-math.display
+  > .katex {
+  display: inline-block;
+  transform: scale(var(--pdf-math-scale, 1));
+  transform-origin: center center;
+}
+
+.knowledge-editor-single-preview
+  .knowledge-editor-preview
+  .pdf-helper-math.display.needs-horizontal-scroll {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  .knowledge-editor-single-preview .knowledge-editor-preview {
+    padding: 22px 20px 30px;
+  }
+
+  #knowledge-editor-dialog #knowledge-editor-body {
+    padding: 20px;
+  }
+}
+
+/* ==========================================================================
+   Formula completion and unified category separators
+   ========================================================================== */
+
+.knowledge-sidebar-list button span,
+.knowledge-card-subtitle,
+.knowledge-editor-fields input {
+  word-spacing: normal;
+}
+
+.knowledge-sidebar-list button span {
+  overflow-wrap: normal;
+  word-break: keep-all;
+  line-break: strict;
+}
+
+.knowledge-sidebar-list button span::first-letter {
+  letter-spacing: 0;
+}
+
+/* 统一后的“分类 A / 分类 B”尽量在斜杠两侧成组换行。 */
+#knowledge-category-list button span {
+  white-space: normal;
+  text-wrap: pretty;
+}
+
+.knowledge-editor-single-preview
+  .knowledge-editor-preview
+  .pdf-helper-math.inline {
+  white-space: nowrap;
+  line-height: 1.35;
+}
+
+.knowledge-editor-single-preview
+  .knowledge-editor-preview
+  .pdf-helper-math.inline
+  .katex {
+  vertical-align: -0.06em;
+}
+
+.knowledge-editor-single-preview
+  .knowledge-editor-preview
+  .pdf-helper-math.display {
+  scrollbar-width: thin;
+  scrollbar-color: #b8c9df transparent;
+}

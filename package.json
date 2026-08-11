@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "wxt -b edge",
     "dev:chrome": "wxt -b chrome",
+    "typecheck": "tsc --noEmit",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "check": "pnpm typecheck && pnpm check:architecture && pnpm build",
     "build": "wxt build -b edge",
     "build:chrome": "wxt build -b chrome",
     "zip": "wxt zip -b edge",

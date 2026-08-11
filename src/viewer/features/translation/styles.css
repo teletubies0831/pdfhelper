@@ -1,0 +1,258 @@
+/* ==========================================================================
+   Translation panel math formatting — shared with knowledge notes
+   ========================================================================== */
+
+.translation-math-preview:not([hidden]) {
+  position: relative;
+  margin-top: 9px;
+  border-color: #cfdff5;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+  color: #284566;
+  padding: 34px 13px 12px;
+  box-shadow: 0 5px 16px rgb(42 87 149 / 5%);
+}
+
+.translation-math-preview:not([hidden])::before {
+  position: absolute;
+  top: 9px;
+  left: 12px;
+  content: "公式排版";
+  color: #4776b4;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.translation-math-preview .pdf-helper-math.inline {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: baseline;
+  color: #164f91;
+  white-space: nowrap;
+}
+
+.translation-math-preview .pdf-helper-math.inline .katex {
+  color: #164f91;
+  font-size: 1.03em;
+}
+
+.translation-math-preview .pdf-helper-math.display {
+  display: block;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 12px 0;
+  overflow-x: auto;
+  border: 1px solid #d7e5f6;
+  border-radius: 11px;
+  background: #fff;
+  padding: 14px 12px;
+  color: #153f76;
+  text-align: center;
+}
+
+.translation-math-preview .pdf-helper-math.display .katex {
+  color: #153f76;
+}
+
+.english-learning-card .pdf-helper-math.inline,
+.translation-source-sentence-translation .pdf-helper-math.inline {
+  color: #174f90;
+  white-space: nowrap;
+}
+
+.english-learning-card .pdf-helper-math.display,
+.translation-source-sentence-translation .pdf-helper-math.display {
+  display: block;
+  max-width: 100%;
+  margin: 12px 0;
+  overflow-x: auto;
+  border: 1px solid #d9e6f7;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 13px;
+  color: #17467e;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Selected English — single rich-text box with inline KaTeX
+   ========================================================================== */
+
+.selected-snippet-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.selected-snippet-heading-row h3 {
+  margin: 0 !important;
+}
+
+.selected-snippet-mode-toggle {
+  flex: 0 0 auto;
+  height: 31px;
+  border: 1px solid #efb26c;
+  border-radius: 9px;
+  background: #fff8ee;
+  color: #a6540d;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.selected-snippet-mode-toggle:hover,
+.selected-snippet-mode-toggle:focus-visible {
+  border-color: #df8b35;
+  background: #fff3e3;
+  color: #8e4005;
+  outline: none;
+}
+
+.selected-snippet-shell {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 150px;
+  max-height: 470px;
+  overflow: hidden;
+  border: 1px solid #f3aa55;
+  border-radius: 13px;
+  background:
+    linear-gradient(180deg, #fffaf3 0%, #fff7ec 100%);
+  box-shadow: inset 0 1px 2px rgb(120 70 20 / 4%);
+}
+
+.selected-snippet-shell.editing {
+  border-color: #e58a31;
+  box-shadow: 0 0 0 3px rgb(229 138 49 / 11%);
+}
+
+.selected-snippet-shell .selected-snippet {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  max-height: 470px;
+  margin: 0;
+  overflow: auto;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 18px 20px;
+  color: #934308;
+  font-size: 15px;
+  font-weight: 550;
+  line-height: 1.78;
+  resize: none;
+}
+
+.selected-snippet-shell .selected-snippet[hidden] {
+  display: none !important;
+}
+
+.selected-snippet-rich-view {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 150px;
+  max-height: 470px;
+  overflow: auto;
+  padding: 18px 20px 22px;
+  color: #934308;
+  font-size: 15px;
+  font-weight: 540;
+  line-height: 1.82;
+  scrollbar-gutter: stable;
+  cursor: text;
+}
+
+.selected-snippet-rich-view[hidden] {
+  display: none !important;
+}
+
+.selected-snippet-rich-view p,
+.selected-snippet-rich-view li {
+  color: #934308;
+  text-align: justify;
+  text-align-last: left;
+  text-justify: inter-ideograph;
+  overflow-wrap: anywhere;
+}
+
+.selected-snippet-rich-view p {
+  margin: 0 0 0.78em;
+}
+
+.selected-snippet-rich-view p:last-child {
+  margin-bottom: 0;
+}
+
+.selected-snippet-rich-view ul,
+.selected-snippet-rich-view ol {
+  margin: 0.7em 0;
+  padding-left: 22px;
+}
+
+.selected-snippet-rich-view .pdf-helper-math.inline {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: baseline;
+  margin: 0 2px;
+  color: #174f91;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.selected-snippet-rich-view .pdf-helper-math.inline .katex {
+  color: #174f91;
+  font-size: 1.04em;
+}
+
+.selected-snippet-rich-view .pdf-helper-math.display {
+  display: block;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 16px 0;
+  overflow-x: auto;
+  border: 1px solid #e3c99f;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 72%);
+  padding: 15px 12px;
+  color: #174b87;
+  text-align: center;
+}
+
+.selected-snippet-rich-view .pdf-helper-math.display .katex {
+  color: #174b87;
+}
+
+/* The old extra formula card is no longer used for selected English. */
+#selected-snippet-math-preview::before {
+  content: none !important;
+}
+
+.selected-snippet-empty {
+  display: grid;
+  min-height: 112px;
+  place-items: center;
+  color: #b47b4e;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .selected-snippet-shell,
+  .selected-snippet-shell .selected-snippet,
+  .selected-snippet-rich-view {
+    max-height: 390px;
+  }
+
+  .selected-snippet-rich-view,
+  .selected-snippet-shell .selected-snippet {
+    padding: 16px;
+  }
+}

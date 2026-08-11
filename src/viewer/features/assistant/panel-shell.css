@@ -1,0 +1,71 @@
+.ai-result-box.error {
+  border-color: #e5484d;
+  background: #fff4f4;
+  color: #b42318;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.assistant-tools-runtime {
+  display: none;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.assistant-tools-runtime.active {
+  display: flex;
+}
+
+.assistant-tools-runtime > .ai-tabs {
+  display: none;
+}
+
+.assistant-tabs {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: #f5f7fb;
+  padding: 4px;
+}
+
+.assistant-tabs button {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 0 4px;
+}
+
+.assistant-tabs button.active {
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(15 23 42 / 10%);
+  color: var(--primary);
+}
+
+.assistant-panel {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.assistant-panel[hidden] {
+  display: none;
+}
+
+.chat-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}

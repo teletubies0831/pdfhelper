@@ -1,0 +1,32 @@
+.pdfViewer .textLayer ::selection {
+  background: transparent;
+}
+
+.pdfViewer .textLayer br::selection {
+  background: transparent;
+}
+
+.pdfViewer.pdf-helper-ink-mode .textLayer {
+  pointer-events: none !important;
+}
+
+.pdfViewer.pdf-helper-ink-mode .annotationEditorLayer {
+  pointer-events: auto !important;
+}
+
+.pdfViewer .page .pdf-helper-selection-overlay {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.pdfViewer .page .pdf-helper-selection-overlay > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+}

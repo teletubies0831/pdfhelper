@@ -1,0 +1,268 @@
+/* =========================================================
+   Edit mode interaction gate
+   Interactive blue hover/double-click editing appears only
+   after the user clicks the global "Edit card" button.
+   ========================================================= */
+
+/* Normal reading state: keep every quick-edit field visually neutral. */
+.paper-card-form.reading-view .paper-card-inline-editable,
+.paper-card-form.reading-view .paper-card-inline-editable[readonly],
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable[readonly] {
+  cursor: default !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable:hover,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-field:hover
+  .paper-card-inline-editable[readonly],
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field:hover
+  textarea[readonly],
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field:focus-within
+  textarea {
+  cursor: default !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable-card,
+.paper-card-form.reading-view .paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view .paper-card-inline-editable-card:focus-within,
+.paper-card-form.reading-view
+  .paper-card-highlight.paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view
+  .paper-card-highlight.paper-card-inline-editable-card:focus-within,
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view
+  .paper-card-insight.paper-card-inline-editable-card:focus-within,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within {
+  cursor: default !important;
+  border-color: #d9e3f0 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.paper-card-form.reading-view .paper-card-highlight label > span,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-card:hover
+  label
+  > span,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-card:focus-within
+  label
+  > span,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-field:hover
+  > span,
+.paper-card-form.reading-view
+  .paper-card-inline-editable-field:focus-within
+  > span,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover
+  > span,
+.paper-card-form.reading-view
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within
+  > span {
+  color: #3e4f69 !important;
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable-card::after,
+.paper-card-form.reading-view .paper-card-inline-editable-field::after,
+.paper-card-form.reading-view
+  .paper-card-overview-card
+  .paper-card-inline-editable-field::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Edit mode: show the blue affordance only here. */
+.paper-card-form.editing .paper-card-inline-editable-card,
+.paper-card-form.editing .paper-card-inline-editable-field {
+  cursor: text !important;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-fast) var(--motion-ease-out),
+    box-shadow var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-form.editing .paper-card-inline-editable-card:hover,
+.paper-card-form.editing .paper-card-inline-editable-card:focus-within,
+.paper-card-form.editing
+  .paper-card-highlight.paper-card-inline-editable-card:hover,
+.paper-card-form.editing
+  .paper-card-highlight.paper-card-inline-editable-card:focus-within,
+.paper-card-form.editing
+  .paper-card-insight.paper-card-inline-editable-card:hover,
+.paper-card-form.editing
+  .paper-card-insight.paper-card-inline-editable-card:focus-within,
+.paper-card-form.editing
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover,
+.paper-card-form.editing
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within {
+  border-color: #9cb9e7 !important;
+  background: #f8fbff !important;
+  box-shadow: 0 0 0 3px rgb(85 130 201 / 9%) !important;
+}
+
+.paper-card-form.editing
+  .paper-card-inline-editable-field:hover
+  .paper-card-inline-editable[readonly],
+.paper-card-form.editing
+  .paper-card-inline-editable-field:focus-within
+  .paper-card-inline-editable,
+.paper-card-form.editing .paper-card-inline-editable[readonly]:hover {
+  cursor: text !important;
+  border-color: #b7cae8 !important;
+  background: #fff !important;
+  color: #315e9f !important;
+  box-shadow: none !important;
+}
+
+.paper-card-form.editing
+  .paper-card-inline-editable-card:hover
+  label
+  > span,
+.paper-card-form.editing
+  .paper-card-inline-editable-card:focus-within
+  label
+  > span,
+.paper-card-form.editing
+  .paper-card-inline-editable-field:hover
+  > span,
+.paper-card-form.editing
+  .paper-card-inline-editable-field:focus-within
+  > span,
+.paper-card-form.editing
+  .paper-card-decision-reason.paper-card-inline-editable-card:hover
+  > span,
+.paper-card-form.editing
+  .paper-card-decision-reason.paper-card-inline-editable-card:focus-within
+  > span {
+  color: #2f6fd6 !important;
+}
+
+.paper-card-form.editing .paper-card-inline-editable.inline-editing {
+  cursor: text !important;
+  border-color: #7099d8 !important;
+  background: #fff !important;
+  color: #26354d !important;
+  box-shadow: 0 0 0 3px rgb(86 132 201 / 15%) !important;
+}
+
+.paper-card-form.editing .paper-card-inline-editable-card::after,
+.paper-card-form.editing .paper-card-inline-editable-field::after,
+.paper-card-form.editing
+  .paper-card-overview-card
+  .paper-card-inline-editable-field::after {
+  content: "双击编辑 · 点击其他位置自动保存" !important;
+  display: block !important;
+  max-height: 0;
+  overflow: hidden;
+  color: #7f91ac;
+  font-size: 10px;
+  line-height: 1.4;
+  opacity: 0;
+  padding-left: 8px;
+  transition:
+    max-height var(--motion-fast) var(--motion-ease-out),
+    opacity var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-form.editing .paper-card-inline-editable-card:hover::after,
+.paper-card-form.editing .paper-card-inline-editable-card:focus-within::after,
+.paper-card-form.editing .paper-card-inline-editable-field:hover::after,
+.paper-card-form.editing .paper-card-inline-editable-field:focus-within::after {
+  max-height: 18px;
+  opacity: 1;
+}
+
+/* =========================================================
+   Stable edit mode: no hover/double-click visual effects.
+   Clicking the global Edit card button directly unlocks fields.
+   ========================================================= */
+.paper-card-form .paper-card-inline-editable-card,
+.paper-card-form .paper-card-inline-editable-card:hover,
+.paper-card-form .paper-card-inline-editable-card:focus-within,
+.paper-card-form .paper-card-inline-editable-field,
+.paper-card-form .paper-card-inline-editable-field:hover,
+.paper-card-form .paper-card-inline-editable-field:focus-within,
+.paper-card-form .paper-card-highlight.paper-card-inline-editable-card,
+.paper-card-form .paper-card-highlight.paper-card-inline-editable-card:hover,
+.paper-card-form .paper-card-highlight.paper-card-inline-editable-card:focus-within,
+.paper-card-form .paper-card-insight.paper-card-inline-editable-card,
+.paper-card-form .paper-card-insight.paper-card-inline-editable-card:hover,
+.paper-card-form .paper-card-insight.paper-card-inline-editable-card:focus-within,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card:hover,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card:focus-within {
+  border-color: #d9e3f0 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+.paper-card-form .paper-card-inline-editable-field::after,
+.paper-card-form .paper-card-inline-editable-card::after,
+.paper-card-form.editing .paper-card-inline-editable-field::after,
+.paper-card-form.editing .paper-card-inline-editable-card::after,
+.paper-card-form .paper-card-overview-card .paper-card-inline-editable-field::after {
+  content: none !important;
+  display: none !important;
+  max-height: 0 !important;
+  opacity: 0 !important;
+}
+
+.paper-card-form .paper-card-inline-editable,
+.paper-card-form .paper-card-inline-editable:hover,
+.paper-card-form .paper-card-inline-editable:focus,
+.paper-card-form .paper-card-inline-editable.inline-editing,
+.paper-card-form.editing .paper-card-inline-editable,
+.paper-card-form.editing .paper-card-inline-editable:hover,
+.paper-card-form.editing .paper-card-inline-editable:focus {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transition: none !important;
+}
+
+.paper-card-form.reading-view .paper-card-inline-editable {
+  cursor: default !important;
+}
+
+.paper-card-form.editing .paper-card-inline-editable {
+  cursor: text !important;
+  user-select: text !important;
+  pointer-events: auto !important;
+}
+
+.paper-card-form .paper-card-inline-editable-field > span,
+.paper-card-form .paper-card-inline-editable-field:hover > span,
+.paper-card-form .paper-card-inline-editable-field:focus-within > span,
+.paper-card-form .paper-card-inline-editable-card label > span,
+.paper-card-form .paper-card-inline-editable-card:hover label > span,
+.paper-card-form .paper-card-inline-editable-card:focus-within label > span,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card > span,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card:hover > span,
+.paper-card-form .paper-card-decision-reason.paper-card-inline-editable-card:focus-within > span {
+  color: #3e4f69 !important;
+  transition: none !important;
+}

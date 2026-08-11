@@ -1,0 +1,560 @@
+/* ==========================================================================
+   Paper card research workspace
+   Compact, action-oriented view for graduate-student paper reading.
+   ========================================================================== */
+
+.app-frame.paper-card-page-open .reading-mode-control,
+.app-frame.paper-card-page-open .annotation-tools,
+.app-frame.paper-card-page-open .document-name {
+  display: none;
+}
+
+.app-frame.paper-card-page-open .ai-tools {
+  margin-left: auto;
+}
+
+.paper-card-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: #fff;
+  padding: 22px 34px 34px;
+}
+
+.paper-card-shell {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+}
+
+.paper-card-page-header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 18px;
+}
+
+.paper-card-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.paper-card-page-header h1 {
+  margin: 0;
+  color: #14213a;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.paper-card-page-header p {
+  margin: 5px 0 0;
+  color: #7b8aa2;
+  font-size: 13px;
+}
+
+.paper-card-command-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.paper-card-command-actions button {
+  min-height: 38px;
+  border-color: #dfe7f2;
+  border-radius: 9px;
+  padding: 0 13px;
+}
+
+.paper-card-page-status {
+  margin: 0 0 12px;
+  border: 1px solid #cfe0ff;
+  border-radius: 10px;
+  background: #f3f7ff;
+  color: #315b9f;
+  padding: 10px 14px;
+}
+
+.paper-card-page-status.error {
+  border-color: #f3c6c6;
+  background: #fff5f5;
+  color: #b42318;
+}
+
+.paper-card-form {
+  width: 100%;
+}
+
+.paper-card-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 22px;
+  align-items: start;
+}
+
+.paper-card-main,
+.paper-card-sidebar {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.paper-card-sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+.paper-card-overview-card,
+.paper-card-insight,
+.paper-card-side-card {
+  border: 1px solid #dfe7f1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.paper-card-overview-card {
+  display: flex;
+  min-height: 122px;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+}
+
+.paper-card-document-icon {
+  display: grid;
+  width: 58px;
+  height: 64px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  background: #f0f4fa;
+  color: #14213a;
+  font-size: 29px;
+}
+
+.paper-card-overview-content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.paper-card-overview-card label,
+.paper-card-insight label,
+.paper-card-side-card label {
+  display: block;
+  min-width: 0;
+}
+
+.paper-card-field-label {
+  display: none;
+}
+
+.paper-card-title-field input {
+  width: 100%;
+  color: #111f39;
+  font-size: 19px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.paper-card-authors-field {
+  margin-top: 5px;
+}
+
+.paper-card-authors-field input {
+  width: 100%;
+  color: #55657d;
+  font-size: 12px;
+}
+
+.paper-card-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 20px;
+  margin-top: 7px;
+}
+
+.paper-card-meta-row label,
+.paper-card-source-file {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: #67768d;
+  font-size: 12px;
+}
+
+.paper-card-meta-row label > span {
+  color: #43516a;
+  font-weight: 700;
+}
+
+.paper-card-meta-row input {
+  width: 170px;
+  color: #34445f;
+  font-size: 12px;
+}
+
+.paper-card-source-file {
+  min-width: 0;
+  max-width: 310px;
+}
+
+.paper-card-source-file strong {
+  overflow: hidden;
+  color: #55657d;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paper-card-insight {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 78px;
+  padding: 13px 18px 13px 14px;
+}
+
+.paper-card-highlight {
+  border-color: #bfd5ff;
+  background: linear-gradient(90deg, #f6f9ff 0%, #fff 100%);
+}
+
+.paper-card-insight-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: #286eea;
+  font-size: 24px;
+}
+
+.paper-card-insight label > span,
+.paper-card-decision-reason > span {
+  display: block;
+  margin-bottom: 4px;
+  color: #12213d;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.paper-card-highlight label > span {
+  color: #2164df;
+}
+
+.paper-card-insight textarea {
+  width: 100%;
+  color: #53627a;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.paper-card-side-card {
+  overflow: hidden;
+  padding: 16px 18px;
+}
+
+.paper-card-side-card h2 {
+  margin: 0 0 14px;
+  color: #17243e;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.paper-card-decision-banner {
+  display: flex;
+  min-height: 102px;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 1px solid #cbe8d8;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f0fbf5, #f7fcf9);
+  padding: 14px;
+}
+
+.paper-card-decision-check {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #22a864;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.paper-card-decision-banner label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.paper-card-decision-banner label > span {
+  color: #244337;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.paper-card-decision-banner select {
+  min-width: 132px;
+  color: #168955;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.paper-card-decision-reason {
+  margin-top: 12px;
+  border-bottom: 1px solid #edf1f6;
+  padding-bottom: 12px;
+}
+
+.paper-card-decision-reason textarea {
+  width: 100%;
+  color: #5f6f84;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.paper-card-metrics {
+  display: flex;
+  flex-direction: column;
+}
+
+.paper-card-metric-row {
+  display: flex !important;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.paper-card-metric-row:last-child {
+  border-bottom: 0;
+}
+
+.paper-card-metric-row > span:first-child {
+  color: #40516b;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.paper-card-metric-row select,
+.paper-card-metric-row input {
+  width: 110px;
+  text-align: right;
+  color: #1766e8;
+  font-weight: 750;
+}
+
+.paper-card-metric-row:nth-child(1) select {
+  color: #1d9b61;
+}
+
+.paper-card-metric-row:nth-child(2) select {
+  color: #f08a15;
+}
+
+.paper-card-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.paper-card-score input {
+  width: 62px;
+  color: #1766e8;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.paper-card-score em {
+  color: #516078;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.paper-card-action-row {
+  display: grid !important;
+  grid-template-columns: 25px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  border-bottom: 1px solid #edf1f6;
+  padding: 9px 0;
+}
+
+.paper-card-action-row:last-child {
+  border-bottom: 0;
+}
+
+.paper-card-action-icon {
+  color: #405674;
+  font-size: 17px;
+  line-height: 24px;
+  text-align: center;
+}
+
+.paper-card-action-copy {
+  min-width: 0;
+}
+
+.paper-card-action-copy strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #24334d;
+  font-size: 13px;
+}
+
+.paper-card-action-copy textarea {
+  width: 100%;
+  color: #53637b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.paper-card-reading-list-card textarea {
+  width: 100%;
+  min-height: 118px;
+  color: #3f5069;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.paper-card-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.paper-card-form input,
+.paper-card-form textarea,
+.paper-card-form select {
+  max-width: 100%;
+  border: 1px solid #d9e2ef;
+  border-radius: 8px;
+  outline: none;
+  background: #fff;
+  padding: 7px 9px;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease-out),
+    box-shadow var(--motion-fast) var(--motion-ease-out),
+    background-color var(--motion-fast) var(--motion-ease-out);
+}
+
+.paper-card-form textarea {
+  resize: none;
+}
+
+.paper-card-form input:focus,
+.paper-card-form textarea:focus,
+.paper-card-form select:focus {
+  border-color: #7faaff;
+  box-shadow: 0 0 0 3px rgb(31 103 232 / 10%);
+}
+
+.paper-card-form.reading-view input,
+.paper-card-form.reading-view textarea,
+.paper-card-form.reading-view select {
+  appearance: none;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  pointer-events: none;
+}
+
+.paper-card-form.reading-view textarea {
+  overflow: hidden;
+}
+
+.paper-card-form.editing .paper-card-overview-card,
+.paper-card-form.editing .paper-card-insight,
+.paper-card-form.editing .paper-card-side-card {
+  box-shadow: 0 0 0 2px rgb(31 103 232 / 4%);
+}
+
+.paper-card-form.generating {
+  opacity: 0.64;
+  pointer-events: none;
+}
+
+.paper-card-support-fields {
+  display: none !important;
+}
+
+@media (max-width: 1120px) {
+  .paper-card-page {
+    padding: 18px;
+  }
+
+  .paper-card-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .paper-card-command-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .paper-card-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .paper-card-sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .paper-card-reading-list-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .paper-card-page {
+    padding: 12px;
+  }
+
+  .paper-card-page-header h1 {
+    font-size: 22px;
+  }
+
+  .paper-card-command-actions button {
+    flex: 1 1 auto;
+  }
+
+  .paper-card-overview-card {
+    align-items: flex-start;
+  }
+
+  .paper-card-meta-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .paper-card-meta-row input {
+    width: 100%;
+  }
+
+  .paper-card-sidebar {
+    display: flex;
+  }
+}

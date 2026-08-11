@@ -1,0 +1,207 @@
+/* Paper-card section navigation */
+.paper-card-workspace {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 16px;
+  overflow: hidden;
+}
+
+.paper-card-workspace > .paper-card-form {
+  width: 100%;
+  min-width: 0;
+}
+
+.paper-card-section-nav {
+  display: flex;
+  min-height: 0;
+  align-self: start;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #e1e7ef;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 4%);
+}
+
+.paper-card-section-nav > strong {
+  padding: 6px 9px 9px;
+  color: #8994a6;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.paper-card-section-nav button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 10px;
+  color: #566277;
+  font-size: 13px;
+  text-align: left;
+  transition: background-color .16s ease, color .16s ease;
+}
+
+.paper-card-section-nav button:hover {
+  background: #f3f6fb;
+  color: #25324a;
+}
+
+.paper-card-section-nav button.active {
+  background: #eaf2ff;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.paper-card-nav-section {
+  scroll-margin-top: 12px;
+}
+
+@media (max-width: 1180px) {
+  .paper-card-workspace {
+    grid-template-columns: 142px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .paper-card-section-nav {
+    padding: 7px;
+  }
+
+  .paper-card-section-nav button {
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+}
+
+/* Preserve toolbar geometry outside the PDF viewer while making the
+   viewer-only controls clearly unavailable. */
+.app-frame.paper-card-page-open #outline-toggle,
+.app-frame.paper-card-page-open #assistant-panel-toggle,
+.app-frame.reading-journal-page-open #outline-toggle,
+.app-frame.reading-journal-page-open #assistant-panel-toggle,
+.app-frame.knowledge-base-page-open #outline-toggle,
+.app-frame.knowledge-base-page-open #assistant-panel-toggle {
+  border-color: #e2e8f0;
+  background: #f3f5f8;
+  color: #a3adbc;
+  box-shadow: none;
+  opacity: .72;
+  cursor: not-allowed;
+}
+
+#knowledge-editor-dialog .knowledge-editor-fields input {
+  width: 100%;
+  height: 44px;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+#knowledge-editor-dialog .knowledge-editor-fields small {
+  color: #91a0b5;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.knowledge-editor-source-card {
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+}
+
+.knowledge-editor-guidance {
+  display: grid;
+  gap: 12px;
+}
+
+.knowledge-editor-guidance p {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+  margin: 0;
+  color: #657791;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.knowledge-editor-guidance p strong {
+  color: #3d5575;
+}
+
+.knowledge-editor-tip-card {
+  border-color: #cfe0fb;
+  background: linear-gradient(180deg, #f3f8ff 0%, #edf5ff 100%);
+}
+
+.knowledge-editor-tip-card > strong {
+  color: #285d9e;
+  font-size: 14px;
+}
+
+.knowledge-editor-tip-card ul {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #587394;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+#knowledge-editor-dialog[data-kind="reading-card"] .knowledge-editor-page-icon {
+  background: linear-gradient(180deg, #edf7ff 0%, #e5f2ff 100%);
+  color: #2474b9;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  clip-path: inset(50%) !important;
+}
+
+@media (max-width: 980px) {
+  #knowledge-editor-dialog .knowledge-editor-header {
+    padding: 12px 16px !important;
+  }
+
+  #knowledge-editor-dialog .knowledge-editor-header p {
+    max-width: 42vw;
+  }
+
+  .knowledge-editor-workspace {
+    grid-template-columns: minmax(0, 1fr) 290px;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 760px) {
+  #knowledge-editor-dialog .knowledge-editor-header {
+    align-items: flex-start;
+  }
+
+  .knowledge-editor-header-actions {
+    gap: 6px;
+  }
+
+  #knowledge-editor-dialog #knowledge-editor-cancel {
+    display: none;
+  }
+
+  .knowledge-editor-workspace {
+    grid-template-columns: 1fr;
+    overflow: hidden auto;
+  }
+
+  .knowledge-editor-document {
+    min-height: 680px;
+  }
+
+  .knowledge-editor-sidebar {
+    overflow: visible;
+  }
+}

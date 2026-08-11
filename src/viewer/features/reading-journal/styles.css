@@ -1,0 +1,240 @@
+/* Lightweight, mode-scoped reading journal. */
+.reading-journal-page {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  background: #f4f7fb;
+  padding: 18px;
+}
+
+.reading-journal-page[hidden],
+.reading-journal-editor[hidden] {
+  display: none;
+}
+
+.app-frame.reading-journal-page-open .workspace {
+  display: none;
+}
+
+.reading-journal-shell {
+  width: min(1080px, 100%);
+  min-height: 100%;
+  margin: 0 auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgb(15 23 42 / 5%);
+  padding: 20px;
+}
+
+.reading-journal-header,
+.reading-journal-header > div,
+.reading-journal-search,
+.reading-journal-card header,
+.reading-journal-card footer,
+.reading-journal-card footer > div {
+  display: flex;
+  align-items: center;
+}
+
+.reading-journal-header {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reading-journal-header > div {
+  gap: 10px;
+}
+
+.reading-journal-header > div > span {
+  display: grid;
+  gap: 2px;
+}
+
+.reading-journal-header strong {
+  color: #172033;
+  font-size: 20px;
+}
+
+.reading-journal-header small,
+.reading-journal-card small,
+.reading-journal-count {
+  color: #7b879b;
+}
+
+.reading-journal-header button,
+.reading-journal-card button {
+  min-height: 32px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 11px;
+}
+
+.reading-journal-header .primary-button {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.reading-journal-search {
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.reading-journal-search input {
+  min-width: 0;
+  flex: 1;
+  height: 38px;
+  border: 1px solid #dce4ef;
+  border-radius: 9px;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.reading-journal-search span {
+  color: #7b879b;
+  font-size: 12px;
+}
+
+.reading-journal-list {
+  display: grid;
+  gap: 12px;
+}
+
+.reading-journal-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  padding: 15px 16px;
+}
+
+.reading-journal-card header {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reading-journal-card header strong {
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.reading-journal-card blockquote {
+  margin: 12px 0;
+  border-left: 3px solid #93c5fd;
+  background: #f8fafc;
+  padding: 9px 12px;
+  color: #526071;
+}
+
+.reading-journal-markdown {
+  color: #334155;
+  line-height: 1.7;
+}
+
+.reading-journal-card footer {
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #edf1f6;
+  padding-top: 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.reading-journal-card footer > div {
+  gap: 6px;
+}
+
+.reading-journal-card footer button {
+  min-height: 28px;
+  font-size: 12px;
+}
+
+.reading-journal-empty {
+  padding: 80px 20px;
+  text-align: center;
+  color: #7b879b;
+}
+
+.reading-journal-empty strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #334155;
+}
+
+.reading-journal-editor {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(15 23 42 / 32%);
+  padding: 22px;
+}
+
+.reading-journal-editor form {
+  display: grid;
+  width: min(680px, 100%);
+  max-height: min(820px, 92vh);
+  gap: 13px;
+  overflow: auto;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 24%);
+  padding: 20px;
+}
+
+.reading-journal-editor header,
+.reading-journal-editor footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reading-journal-editor header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.reading-journal-editor header small {
+  color: #7b879b;
+}
+
+.reading-journal-editor label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reading-journal-editor input,
+.reading-journal-editor textarea {
+  width: 100%;
+  border: 1px solid #dce4ef;
+  border-radius: 9px;
+  padding: 9px 11px;
+  color: #1e293b;
+  font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+  resize: vertical;
+}
+
+.reading-journal-editor footer {
+  justify-content: flex-end;
+}
+
+.reading-journal-editor button {
+  min-height: 34px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 14px;
+}
+
+.reading-journal-editor .primary-button {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
