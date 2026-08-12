@@ -33,7 +33,10 @@ export function collectPaperCardFormData(): PaperCardFormData {
   return {
     title: paperTitleInput.value.trim(),
     authors: paperAuthorsInput.value.trim(),
-    venueYear: normalizePaperVenueYearDisplay(paperVenueYearInput.value),
+    venueYear: normalizePaperVenueYearDisplay(
+      paperVenueYearInput.value,
+      paperTitleInput.value,
+    ),
     researchArea: paperResearchAreaInput.value.trim(),
     keywords: paperKeywordsInput.value.trim(),
     oneSentenceSummary: paperOneSentenceSummaryInput.value.trim(),
@@ -71,17 +74,39 @@ export function collectPaperCardFormData(): PaperCardFormData {
   };
 }
 
-export function normalizePaperVenueYearDisplay(value: string): string {
-  let normalized = value.trim();
-  if (!normalized) return "";
-
-  normalized = normalized
-    .replace(/\s*[，,]\s*(?=(?:19|20)\d{2}\b)/g, " · ")
-    .replace(/\s*[·•]\s*/g, " · ")
-    .replace(/\s+((?:19|20)\d{2})\s*$/g, " · $1")
-    .replace(/(?:\s*·\s*){2,}/g, " · ")
+export function normalizePaperVenueYearDisplay(
+  value: string,
+  fallbackTitle = "",
+): string {
+  const normalized = value
+    .trim()
     .replace(/\s+/g, " ")
+    .replace(/[，]/g, ",");
+
+  const yearMatch = normalized.match(/\b(?:19|20)\d{2}\b/);
+  const year = yearMatch?.[0] ?? "";
+
+  let venue = yearMatch
+    ? normalized.slice(0, yearMatch.index).trim()
+    : normalized;
+
+  venue = venue
+    .replace(/\s*[·•,;；]\s*$/g, "")
+    .replace(
+      /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?$/i,
+      "",
+    )
+    .replace(/\s*[·•,;；]\s*$/g, "")
+    .replace(
+      /\b(?:Vol(?:ume)?|Iss(?:ue)?|No)\.?\s*\d+.*$/i,
+      "",
+    )
     .trim();
 
-  return normalized;
+  if (!venue || /原文未明确|未明确|unknown|n\/a/i.test(venue)) {
+    venue = fallbackTitle.trim();
+  }
+
+  if (!venue) return year;
+  return year ? `${venue} · ${year}` : venue;
 }

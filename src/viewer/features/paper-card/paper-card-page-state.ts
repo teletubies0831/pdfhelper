@@ -1,7 +1,7 @@
 
 import { browser } from "wxt/browser";
 import { editingPaperOverviewId, paperCardPageAbortController, paperCardPageDocumentKey, paperCardPageRequestId, paperCardPageSourceCache, paperCardReturnTarget, paperCardReviewDocumentName } from "../../core/pdf-reader/public";
-import { paperCardBackButton, paperCardFormElement, paperCardPageElement, paperCardPageSubtitleElement, paperCardPageTitleElement, regeneratePaperCardButton, returnToPdfButton, savePaperCardPageButton } from "../../app/viewer-elements";
+import { exportPaperCardButton, paperCardBackButton, paperCardFormElement, paperCardPageElement, paperCardPageSubtitleElement, paperCardPageTitleElement, regeneratePaperCardButton, returnToPdfButton, savePaperCardPageButton } from "../../app/viewer-elements";
 import { sourceName } from "../../app/viewer-state";
 
 import { getDisplayFileName } from "../../core/pdf-reader/public";
@@ -21,22 +21,21 @@ export function setPaperCardPageMode(mode: "generate" | "review"): void {
   paperCardPageSubtitleElement.textContent = "";
   paperCardPageSubtitleElement.hidden = true;
   regeneratePaperCardButton.hidden = isReview;
+  exportPaperCardButton.hidden = isReview;
   savePaperCardPageButton.textContent = isReview
     ? "▣ 保存修改"
     : "▣ 加入知识库";
-  const returnToKnowledge =
-    isReview && paperCardReturnTarget.value === "knowledge";
-  const returnLabel = returnToKnowledge ? "← 返回知识库" : "← 返回 PDF";
-  returnToPdfButton.textContent = returnToKnowledge ? "关闭" : returnLabel;
+
+  const returnLabel = isReview ? "查看原文" : "← 返回 PDF";
+  returnToPdfButton.textContent = returnLabel;
   returnToPdfButton.setAttribute(
     "aria-label",
-    returnToKnowledge ? "关闭论文卡片" : "返回 PDF",
+    isReview ? "查看来源 PDF" : "返回 PDF",
   );
-  paperCardBackButton.textContent = returnLabel;
-  paperCardBackButton.setAttribute(
-    "aria-label",
-    returnToKnowledge ? "返回知识库" : "返回 PDF",
-  );
+  returnToPdfButton.title = isReview ? "打开这张卡片所属的 PDF" : "返回 PDF";
+
+  paperCardBackButton.textContent = "← 返回 PDF";
+  paperCardBackButton.setAttribute("aria-label", "返回 PDF");
   setPaperCardEditMode(false);
 }
 

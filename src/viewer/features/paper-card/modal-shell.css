@@ -1,0 +1,161 @@
+/* ==========================================================================
+   Paper card — centered modal shell
+   UI-only override: keep existing paper-card content, colors and behaviors.
+   ========================================================================== */
+
+.paper-card-page:not([hidden]) {
+  position: fixed !important;
+  z-index: 1000100 !important;
+  inset: 0 !important;
+  display: grid !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  place-items: center !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  background: rgb(15 23 42 / 30%) !important;
+  padding: 26px !important;
+}
+
+/* Keep the underlying PDF workspace visible through the dimmed backdrop. */
+.app-frame.paper-card-page-open .workspace {
+  display: grid !important;
+}
+
+.paper-card-page .paper-card-shell {
+  display: grid !important;
+  width: min(1510px, calc(100vw - 52px)) !important;
+  height: min(890px, calc(100vh - 52px)) !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid #dce5f1 !important;
+  border-radius: 22px !important;
+  background: #f5f8fc !important;
+  box-shadow:
+    0 32px 90px rgb(15 23 42 / 30%),
+    0 8px 28px rgb(37 67 117 / 12%) !important;
+}
+
+.paper-card-page .paper-card-page-header {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  border-bottom: 1px solid #dfe7f2 !important;
+  background: rgb(255 255 255 / 98%) !important;
+  padding: 16px 20px !important;
+}
+
+.paper-card-page .paper-card-page-header h1 {
+  font-size: 24px !important;
+}
+
+.paper-card-page .paper-card-page-status {
+  box-sizing: border-box !important;
+  margin: 12px 18px 0 !important;
+}
+
+.paper-card-page .paper-card-workspace {
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 16px 18px 18px !important;
+}
+
+.paper-card-page .paper-card-section-nav {
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+
+.paper-card-page .paper-card-form {
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin-top: 0 !important;
+  overflow: hidden !important;
+}
+
+.paper-card-page .paper-card-layout {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.paper-card-page .paper-card-main,
+.paper-card-page .paper-card-sidebar {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable;
+  padding-bottom: 28px !important;
+}
+
+/* Slightly stronger scrollbars inside the modal. */
+.paper-card-page .paper-card-main::-webkit-scrollbar,
+.paper-card-page .paper-card-sidebar::-webkit-scrollbar,
+.paper-card-page .paper-card-section-nav::-webkit-scrollbar {
+  width: 9px;
+}
+
+.paper-card-page .paper-card-main::-webkit-scrollbar-track,
+.paper-card-page .paper-card-sidebar::-webkit-scrollbar-track,
+.paper-card-page .paper-card-section-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.paper-card-page .paper-card-main::-webkit-scrollbar-thumb,
+.paper-card-page .paper-card-sidebar::-webkit-scrollbar-thumb,
+.paper-card-page .paper-card-section-nav::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #9eacc0;
+  background-clip: padding-box;
+}
+
+.paper-card-page .paper-card-main::-webkit-scrollbar-thumb:hover,
+.paper-card-page .paper-card-sidebar::-webkit-scrollbar-thumb:hover,
+.paper-card-page .paper-card-section-nav::-webkit-scrollbar-thumb:hover {
+  background: #7e8fa8;
+  background-clip: padding-box;
+}
+
+@supports (height: 100dvh) {
+  .paper-card-page .paper-card-shell {
+    height: min(890px, calc(100dvh - 52px)) !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .paper-card-page:not([hidden]) {
+    padding: 14px !important;
+  }
+
+  .paper-card-page .paper-card-shell {
+    width: calc(100vw - 28px) !important;
+    height: calc(100vh - 28px) !important;
+    border-radius: 17px !important;
+  }
+
+  @supports (height: 100dvh) {
+    .paper-card-page .paper-card-shell {
+      height: calc(100dvh - 28px) !important;
+    }
+  }
+
+  .paper-card-page .paper-card-page-header {
+    padding: 13px 15px !important;
+  }
+
+  .paper-card-page .paper-card-workspace {
+    padding: 12px !important;
+  }
+}

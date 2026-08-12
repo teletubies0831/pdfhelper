@@ -1,0 +1,68 @@
+/* Saved paper-card review actions:
+   查看原文 | 编辑卡片 | 保存修改 | × */
+
+.paper-card-page.review-mode .paper-card-command-actions {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.paper-card-page.review-mode #return-to-pdf,
+.paper-card-page.review-mode #edit-paper-card,
+.paper-card-page.review-mode #save-paper-card-page {
+  min-height: 42px;
+  border-radius: 11px;
+  padding-inline: 18px;
+  white-space: nowrap;
+}
+
+.paper-card-page.review-mode #return-to-pdf {
+  color: #465c7c;
+}
+
+.paper-card-page.review-mode #edit-paper-card {
+  color: #465c7c;
+}
+
+.paper-card-page.review-mode #save-paper-card-page {
+  box-shadow: none;
+}
+
+.paper-card-close-button {
+  display: inline-grid;
+  width: 42px;
+  min-width: 42px !important;
+  height: 42px;
+  min-height: 42px !important;
+  place-items: center;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: #60738f !important;
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1;
+  padding: 0 !important;
+}
+
+.paper-card-close-button:hover {
+  background: #f1f5fa !important;
+  color: #243a5a !important;
+}
+
+.paper-card-close-button:focus-visible {
+  outline: 2px solid #91b8ff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .paper-card-page.review-mode .paper-card-command-actions {
+    gap: 6px;
+  }
+
+  .paper-card-page.review-mode #return-to-pdf,
+  .paper-card-page.review-mode #edit-paper-card,
+  .paper-card-page.review-mode #save-paper-card-page {
+    padding-inline: 11px;
+  }
+}

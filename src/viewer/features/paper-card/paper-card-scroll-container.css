@@ -1,0 +1,129 @@
+/* Paper card: one complete vertical scroll area.
+   Header stays fixed; every card below it remains reachable by scrolling. */
+
+.paper-card-page:not([hidden]) {
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.paper-card-shell {
+  box-sizing: border-box !important;
+  display: grid !important;
+  width: min(1380px, calc(100vw - 44px)) !important;
+  height: calc(100vh - 44px) !important;
+  max-height: calc(100vh - 44px) !important;
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
+  overflow: hidden !important;
+}
+
+@supports (height: 100dvh) {
+  .paper-card-shell {
+    height: calc(100dvh - 44px) !important;
+    max-height: calc(100dvh - 44px) !important;
+  }
+}
+
+.paper-card-page-status[hidden] {
+  display: none !important;
+}
+
+/* This is the only vertical scroll owner. */
+.paper-card-workspace {
+  display: block !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: scroll !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  scroll-padding-bottom: 48px;
+  padding-bottom: 48px !important;
+}
+
+.paper-card-form {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.paper-card-layout {
+  display: grid !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  grid-template-columns: minmax(0, 1fr) 410px !important;
+  align-items: start !important;
+  overflow: visible !important;
+}
+
+/* Columns expand naturally; the workspace scrolls the complete result. */
+.paper-card-main,
+.paper-card-sidebar {
+  box-sizing: border-box !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  padding-right: 0 !important;
+  padding-bottom: 24px !important;
+}
+
+.paper-card-sidebar {
+  position: static !important;
+  top: auto !important;
+  align-self: start !important;
+}
+
+.paper-card-workspace::-webkit-scrollbar {
+  width: 11px;
+}
+
+.paper-card-workspace::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #edf2f8;
+}
+
+.paper-card-workspace::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 2px solid #edf2f8;
+  border-radius: 999px;
+  background: #98a9bf;
+  background-clip: padding-box;
+}
+
+.paper-card-workspace::-webkit-scrollbar-thumb:hover {
+  background: #7488a2;
+  background-clip: padding-box;
+}
+
+.paper-card-workspace::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@media (max-width: 1120px) {
+  .paper-card-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .paper-card-shell {
+    width: calc(100vw - 20px) !important;
+    height: calc(100vh - 20px) !important;
+    max-height: calc(100vh - 20px) !important;
+  }
+
+  @supports (height: 100dvh) {
+    .paper-card-shell {
+      height: calc(100dvh - 20px) !important;
+      max-height: calc(100dvh - 20px) !important;
+    }
+  }
+}

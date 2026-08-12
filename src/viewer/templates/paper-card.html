@@ -10,17 +10,28 @@
             </div>
 
             <div class="paper-card-command-actions" aria-label="论文卡片操作">
-              <button id="paper-card-open-source" type="button">查看原文</button>
+              <button id="return-to-pdf" type="button">← 返回 PDF</button>
               <button id="edit-paper-card" type="button">✎ 编辑卡片</button>
               <button id="regenerate-paper-card" type="button">↻ 重新生成</button>
+              <button id="export-paper-card" type="button">↓ 导出</button>
               <button id="save-paper-card-page" class="primary-button" type="button">▣ 加入知识库</button>
-              <button id="return-to-pdf" class="paper-card-close-button" type="button" aria-label="关闭论文卡片">×</button>
+              <button id="paper-card-close" class="paper-card-close-button" type="button" aria-label="关闭论文阅读卡片" title="关闭">×</button>
             </div>
           </div>
 
           <div id="paper-card-page-status" class="paper-card-page-status" hidden aria-live="polite"></div>
 
           <div class="paper-card-workspace">
+            <nav class="paper-card-section-nav" aria-label="论文卡片栏目">
+              <strong>卡片栏目</strong>
+              <button class="active" type="button" data-paper-card-section="paper-card-section-overview">论文概览</button>
+              <button type="button" data-paper-card-section="paper-card-section-summary">核心摘要</button>
+              <button type="button" data-paper-card-section="paper-card-section-problem">问题与创新</button>
+              <button type="button" data-paper-card-section="paper-card-section-results">实验结果</button>
+              <button type="button" data-paper-card-section="paper-card-section-decision">阅读决策</button>
+              <button type="button" data-paper-card-section="paper-card-section-related">延伸阅读</button>
+            </nav>
+
           <form id="paper-card-form" class="paper-card-form reading-view">
             <div class="paper-card-layout">
               <main class="paper-card-main">

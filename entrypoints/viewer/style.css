@@ -12,3 +12,5 @@
 @import url("../../src/viewer/features/knowledge-base/content-editor.css");
 @import url("../../src/viewer/features/translation/styles.css");
 @import url("../../src/viewer/features/paper-card/status-and-ccf.css");
+@import url("../../src/viewer/features/paper-card/modal-shell.css");
+@import url("../../src/viewer/features/paper-card/review-actions.css");

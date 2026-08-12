@@ -27,10 +27,6 @@ export const editPaperCardButton =
 
 export const returnToPdfButton = requiredElement<HTMLButtonElement>("return-to-pdf");
 
-export const paperCardOpenSourceButton = requiredElement<HTMLButtonElement>(
-  "paper-card-open-source",
-);
-
 export const regeneratePaperCardButton = requiredElement<HTMLButtonElement>(
   "regenerate-paper-card",
 );
@@ -38,6 +34,13 @@ export const regeneratePaperCardButton = requiredElement<HTMLButtonElement>(
 export const savePaperCardPageButton = requiredElement<HTMLButtonElement>(
   "save-paper-card-page",
 );
+
+export const exportPaperCardButton =
+  requiredElement<HTMLButtonElement>("export-paper-card");
+
+
+export const paperCardCloseButton =
+  requiredElement<HTMLButtonElement>("paper-card-close");
 
 export const paperCardDocumentNameElement = requiredElement<HTMLTextAreaElement>(
   "paper-card-document-name",

@@ -1,0 +1,52 @@
+/* Knowledge source tree: one fixed numeric column on the right. */
+
+.knowledge-source-tree .knowledge-tree-root,
+.knowledge-source-tree .knowledge-source-heading,
+.knowledge-source-tree .knowledge-source-children button {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 32px !important;
+  column-gap: 8px;
+  align-items: center;
+}
+
+.knowledge-source-tree .knowledge-tree-root > span,
+.knowledge-source-tree .knowledge-source-heading > span,
+.knowledge-source-tree .knowledge-source-children button > span {
+  min-width: 0;
+}
+
+.knowledge-source-tree .knowledge-tree-root > strong,
+.knowledge-source-tree .knowledge-source-heading > strong,
+.knowledge-source-tree .knowledge-source-children button > strong {
+  display: block;
+  width: 32px;
+  justify-self: end;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.knowledge-recent-card[role="button"] {
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.knowledge-recent-card[role="button"]:hover,
+.knowledge-recent-card[role="button"]:focus-visible {
+  border-color: #bdd2f6;
+  background: #f8fbff;
+  box-shadow: 0 5px 16px rgb(41 89 160 / 8%);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.knowledge-simple-card.knowledge-recent-target {
+  border-color: #85b1ff !important;
+  box-shadow:
+    0 0 0 3px rgb(55 123 246 / 12%),
+    0 10px 28px rgb(36 81 147 / 10%) !important;
+}

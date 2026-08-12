@@ -14,6 +14,7 @@ import { collectKnowledgeItems, getKnowledgeRecordKey, normalizeKnowledgeCategor
 import { getKnowledgeExcerpt, setKnowledgePageStatus } from './knowledge-domain';
 import { writeJsonValue } from '../../../platform/storage/browser-json-repository';
 import { closeKnowledgeEditor } from "./knowledge-editor-dialog";
+import { ensureSourcePdfOpen } from "../../shared-ui/navigation/source-pdf-navigation";
 
 export function saveKnowledgeEditor(): void {
   const title = knowledgeEditorTitleInput.value.trim();
@@ -145,41 +146,63 @@ export function deleteSelectedKnowledgeItem(): void {
   deleteKnowledgeItem(item);
 }
 
-export function openSelectedKnowledgeSource(): void {
-  const item = getSelectedKnowledgeItem();
-  if (item?.source === "reading-journal") {
-    const entry = readReadingJournalEntries().find((candidate) => candidate.id === item.id);
-    if (entry) {
-      closeKnowledgeEditor();
-      closeKnowledgeBasePage();
-      void openReadingJournalSource(entry);
-    }
+export async function openSelectedKnowledgeSource(): Promise<void> {
+  const item =
+    getSelectedKnowledgeItem()
+    ?? (knowledgeEditorTargetKey.value
+      ? collectKnowledgeItems().find(
+          (candidate) => candidate.recordKey === knowledgeEditorTargetKey.value,
+        )
+      : undefined);
+
+  if (!item) return;
+
+  if (item.source === "reading-journal") {
+    const entry = readReadingJournalEntries().find(
+      (candidate) => candidate.id === item.id,
+    );
+    if (!entry) return;
+
+    closeKnowledgeEditor();
+    closeKnowledgeBasePage();
+    await openReadingJournalSource(entry);
     return;
   }
-  if (!item) return;
-  const targetPageNumber = item.pageNumber ?? (item.source === "paper-overview" ? 1 : undefined);
+
+  const targetPageNumber =
+    item.pageNumber ?? (item.source === "paper-overview" ? 1 : undefined);
+
   if (!targetPageNumber) {
     setKnowledgePageStatus("这条内容没有记录原文位置。", true);
     return;
   }
-  const currentDocumentName = sourceName.value ? getDisplayFileName(sourceName.value) : "";
-  if (!pdfDocument.value || currentDocumentName !== item.documentName) {
-    setKnowledgePageStatus(`请先打开来源文件“${item.documentName}”。`, true);
+
+  const sourceOpened = await ensureSourcePdfOpen(item.documentName);
+  if (!sourceOpened || !pdfDocument.value) {
+    setKnowledgePageStatus(
+      `无法自动打开来源文件“${item.documentName}”。请先通过“文件”打开一次该 PDF，使它出现在最近文件记录中。`,
+      true,
+    );
     return;
   }
+
   const pageNumber = Math.min(
     pdfDocument.value.numPages,
     Math.max(1, targetPageNumber),
   );
+
   closeKnowledgeEditor();
   closeKnowledgeBasePage();
-  // The PDF viewer has just become visible. Wait until layout is measurable;
-  // PDF.js rejects scrolling while its page container has no offset parent.
+
+  const jumpToSourcePage = () => {
+    if (!pdfDocument.value) return;
+    pdfViewer.currentPageNumber = pageNumber;
+    pdfViewer.scrollPageIntoView({ pageNumber });
+    setStatus(`已打开“${item.documentName}”，并定位到第 ${pageNumber} 页。`);
+  };
+
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      pdfViewer.currentPageNumber = pageNumber;
-      pdfViewer.scrollPageIntoView({ pageNumber });
-      setStatus(`已定位到“${item.title}”的来源：第 ${pageNumber} 页。`);
-    });
+    requestAnimationFrame(jumpToSourcePage);
   });
+  window.setTimeout(jumpToSourcePage, 260);
 }

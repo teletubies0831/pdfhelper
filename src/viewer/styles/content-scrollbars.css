@@ -1,0 +1,84 @@
+/* Visible content scrollbars for long research pages. */
+
+.knowledge-sidebar,
+.knowledge-main,
+.knowledge-editor-sidebar,
+.knowledge-editor-single-preview .knowledge-editor-preview,
+.paper-card-main,
+.paper-card-sidebar {
+  overflow-y: scroll !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto !important;
+  scrollbar-color: #98a9bf #edf2f8 !important;
+}
+
+#knowledge-editor-body {
+  overflow-y: scroll !important;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto !important;
+  scrollbar-color: #98a9bf #edf2f8 !important;
+}
+
+.knowledge-sidebar::-webkit-scrollbar,
+.knowledge-main::-webkit-scrollbar,
+.knowledge-editor-sidebar::-webkit-scrollbar,
+.knowledge-editor-single-preview .knowledge-editor-preview::-webkit-scrollbar,
+#knowledge-editor-body::-webkit-scrollbar,
+.paper-card-main::-webkit-scrollbar,
+.paper-card-sidebar::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+.knowledge-sidebar::-webkit-scrollbar-track,
+.knowledge-main::-webkit-scrollbar-track,
+.knowledge-editor-sidebar::-webkit-scrollbar-track,
+.knowledge-editor-single-preview .knowledge-editor-preview::-webkit-scrollbar-track,
+#knowledge-editor-body::-webkit-scrollbar-track,
+.paper-card-main::-webkit-scrollbar-track,
+.paper-card-sidebar::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #edf2f8;
+}
+
+.knowledge-sidebar::-webkit-scrollbar-thumb,
+.knowledge-main::-webkit-scrollbar-thumb,
+.knowledge-editor-sidebar::-webkit-scrollbar-thumb,
+.knowledge-editor-single-preview .knowledge-editor-preview::-webkit-scrollbar-thumb,
+#knowledge-editor-body::-webkit-scrollbar-thumb,
+.paper-card-main::-webkit-scrollbar-thumb,
+.paper-card-sidebar::-webkit-scrollbar-thumb {
+  min-height: 44px;
+  border: 2px solid #edf2f8;
+  border-radius: 999px;
+  background: #98a9bf;
+  background-clip: padding-box;
+}
+
+.knowledge-sidebar::-webkit-scrollbar-thumb:hover,
+.knowledge-main::-webkit-scrollbar-thumb:hover,
+.knowledge-editor-sidebar::-webkit-scrollbar-thumb:hover,
+.knowledge-editor-single-preview .knowledge-editor-preview::-webkit-scrollbar-thumb:hover,
+#knowledge-editor-body::-webkit-scrollbar-thumb:hover,
+.paper-card-main::-webkit-scrollbar-thumb:hover,
+.paper-card-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #7488a2;
+  background-clip: padding-box;
+}
+
+.knowledge-base-shell,
+.knowledge-editor-workspace,
+.paper-card-workspace,
+.paper-card-form,
+.paper-card-layout {
+  min-height: 0 !important;
+}
+
+.knowledge-sidebar,
+.knowledge-main,
+.knowledge-editor-sidebar,
+.paper-card-main,
+.paper-card-sidebar {
+  min-height: 0 !important;
+}

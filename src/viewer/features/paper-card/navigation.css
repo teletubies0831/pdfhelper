@@ -1,8 +1,10 @@
 /* Paper-card section navigation */
 .paper-card-workspace {
-  display: block;
+  display: grid;
   min-height: 0;
   flex: 1 1 auto;
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 16px;
   overflow: hidden;
 }
 
@@ -11,13 +13,67 @@
   min-width: 0;
 }
 
+.paper-card-section-nav {
+  display: flex;
+  min-height: 0;
+  align-self: start;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #e1e7ef;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 4%);
+}
+
+.paper-card-section-nav > strong {
+  padding: 6px 9px 9px;
+  color: #8994a6;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.paper-card-section-nav button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 10px;
+  color: #566277;
+  font-size: 13px;
+  text-align: left;
+  transition: background-color .16s ease, color .16s ease;
+}
+
+.paper-card-section-nav button:hover {
+  background: #f3f6fb;
+  color: #25324a;
+}
+
+.paper-card-section-nav button.active {
+  background: #eaf2ff;
+  color: #2563eb;
+  font-weight: 700;
+}
+
 .paper-card-nav-section {
   scroll-margin-top: 12px;
 }
 
 @media (max-width: 1180px) {
   .paper-card-workspace {
-    display: block;
+    grid-template-columns: 142px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .paper-card-section-nav {
+    padding: 7px;
+  }
+
+  .paper-card-section-nav button {
+    padding-inline: 8px;
+    font-size: 12px;
   }
 }
 
@@ -25,6 +81,8 @@
    viewer-only controls clearly unavailable. */
 .app-frame.paper-card-page-open #outline-toggle,
 .app-frame.paper-card-page-open #assistant-panel-toggle,
+.app-frame.reading-journal-page-open #outline-toggle,
+.app-frame.reading-journal-page-open #assistant-panel-toggle,
 .app-frame.knowledge-base-page-open #outline-toggle,
 .app-frame.knowledge-base-page-open #assistant-panel-toggle {
   border-color: #e2e8f0;
