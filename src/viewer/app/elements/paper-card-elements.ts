@@ -6,45 +6,10 @@ export const paperCardSectionButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-paper-card-section]"),
 );
 
+
 export const paperCardScrollContainers = Array.from(
   document.querySelectorAll<HTMLElement>(".paper-card-main, .paper-card-sidebar"),
 );
-
-export const readingJournalPageElement = requiredElement<HTMLElement>("reading-journal-page");
-
-export const readingJournalBackButton = requiredElement<HTMLButtonElement>("reading-journal-back");
-
-export const readingJournalNewButton = requiredElement<HTMLButtonElement>("reading-journal-new");
-
-export const readingJournalDocumentElement = requiredElement<HTMLElement>("reading-journal-document");
-
-export const readingJournalSearchInput = requiredElement<HTMLInputElement>("reading-journal-search");
-
-export const readingJournalCountElement = requiredElement<HTMLElement>("reading-journal-count");
-
-export const readingJournalListElement = requiredElement<HTMLElement>("reading-journal-list");
-
-export const readingJournalEmptyElement = requiredElement<HTMLElement>("reading-journal-empty");
-
-export const readingJournalEditorElement = requiredElement<HTMLElement>("reading-journal-editor");
-
-export const readingJournalForm = requiredElement<HTMLFormElement>("reading-journal-form");
-
-export const readingJournalEditorTitleElement = requiredElement<HTMLElement>("reading-journal-editor-title");
-
-export const readingJournalEditorSourceElement = requiredElement<HTMLElement>("reading-journal-editor-source");
-
-export const readingJournalEditorCloseButton = requiredElement<HTMLButtonElement>("reading-journal-editor-close");
-
-export const readingJournalEditorCancelButton = requiredElement<HTMLButtonElement>("reading-journal-editor-cancel");
-
-export const readingJournalTitleInput = requiredElement<HTMLInputElement>("reading-journal-title");
-
-export const readingJournalQuoteInput = requiredElement<HTMLTextAreaElement>("reading-journal-quote");
-
-export const readingJournalContentInput = requiredElement<HTMLTextAreaElement>("reading-journal-content");
-
-export const readingJournalTagsInput = requiredElement<HTMLInputElement>("reading-journal-tags");
 
 export const paperCardPageTitleElement = requiredElement<HTMLElement>(
   "paper-card-page-title",
@@ -62,6 +27,10 @@ export const editPaperCardButton =
 
 export const returnToPdfButton = requiredElement<HTMLButtonElement>("return-to-pdf");
 
+export const paperCardOpenSourceButton = requiredElement<HTMLButtonElement>(
+  "paper-card-open-source",
+);
+
 export const regeneratePaperCardButton = requiredElement<HTMLButtonElement>(
   "regenerate-paper-card",
 );
@@ -69,9 +38,6 @@ export const regeneratePaperCardButton = requiredElement<HTMLButtonElement>(
 export const savePaperCardPageButton = requiredElement<HTMLButtonElement>(
   "save-paper-card-page",
 );
-
-export const exportPaperCardButton =
-  requiredElement<HTMLButtonElement>("export-paper-card");
 
 export const paperCardDocumentNameElement = requiredElement<HTMLTextAreaElement>(
   "paper-card-document-name",

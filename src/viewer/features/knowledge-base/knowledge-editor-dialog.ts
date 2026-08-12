@@ -1,7 +1,6 @@
 import { knowledgeEditorTargetKey } from "../../core/pdf-reader/public";
 
-import { openReadingJournalEditor, openReadingJournalPage } from "../paper-card/public";
-import { knowledgeEditorBodyInput, knowledgeEditorBodyModeLabel, knowledgeEditorCategoryInput, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorEditPane, knowledgeEditorForm, knowledgeEditorHeading, knowledgeEditorModeToggleButton, knowledgeEditorPreviewElement, knowledgeEditorPreviewPane, knowledgeEditorSource, knowledgeEditorTagsInput, knowledgeEditorTitleInput } from "../../app/viewer-elements";
+import { knowledgeEditorBodyInput, knowledgeEditorBodyModeLabel, knowledgeEditorCategoryInput, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorEditPane, knowledgeEditorForm, knowledgeEditorHeading, knowledgeEditorModeToggleButton, knowledgeEditorPreviewElement, knowledgeEditorPreviewPane, knowledgeEditorSource, knowledgeEditorSourceDocument, knowledgeEditorSourcePosition, knowledgeEditorSourceQuote, knowledgeEditorTagsInput, knowledgeEditorTitleInput } from "../../app/viewer-elements";
 import { renderChatMarkdown } from "../../shared-ui/markdown/markdown-renderer";
 import { pdfViewer, sourceName } from "../../app/viewer-state";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
@@ -10,7 +9,7 @@ import { getDisplayFileName } from "../../core/pdf-reader/public";
 import type { KnowledgeItem } from "../../core/pdf-reader/public";
 import { knowledgeEditorBodyMode, knowledgeEditorPreviewTimer } from './research-controller';
 import type { KnowledgeEditorBodyMode } from './research-controller';
-import { normalizeKnowledgeCategory, readReadingJournalEntries } from './knowledge-repository';
+import { normalizeKnowledgeCategory } from './knowledge-repository';
 
 
 import { prepareKnowledgeEditorMarkdown } from "./knowledge-markdown-normalizer";
@@ -51,11 +50,12 @@ export function setKnowledgeEditorBodyMode(
 ): void {
   knowledgeEditorBodyMode.value = mode;
   const editing = mode === "edit";
+  knowledgeEditorDialog.dataset.editing = String(editing);
 
   knowledgeEditorEditPane.hidden = !editing;
   knowledgeEditorPreviewPane.hidden = editing;
   knowledgeEditorModeToggleButton.textContent = editing
-    ? "查看排版"
+    ? "预览排版"
     : "编辑正文";
   knowledgeEditorModeToggleButton.setAttribute(
     "aria-pressed",
@@ -81,28 +81,35 @@ export function setKnowledgeEditorBodyMode(
   renderKnowledgeEditorPreview();
 }
 
+function getKnowledgeSourceQuote(item: KnowledgeItem | undefined): string {
+  if (!item) return "未记录原句";
+  const blockquote = item.content.match(/^>\s*(.+)$/m)?.[1]?.trim();
+  if (blockquote) return blockquote;
+  const originalSection = item.content.match(
+    /(?:^|\n)(?:#{1,6}\s*)?原文\s*\n+([^\n#][\s\S]*?)(?=\n\s*(?:#{1,6}\s*)?(?:翻译|单词学习|句子学习|重点词汇|我的判断)\b|$)/,
+  )?.[1]?.trim();
+  return originalSection?.replace(/\s+/g, " ").slice(0, 260) || "未记录原句";
+}
+
 export function openKnowledgeEditor(item?: KnowledgeItem): void {
-  if (item?.source === "reading-journal") {
-    const entry = readReadingJournalEntries().find((candidate) => candidate.id === item.id);
-    if (entry) {
-      openReadingJournalPage();
-      openReadingJournalEditor(entry);
-    }
-    return;
-  }
   knowledgeEditorTargetKey.value = item?.recordKey || null;
   knowledgeEditorDialog.dataset.kind = item?.kind || "note";
   document.documentElement.classList.add("knowledge-editor-open");
   knowledgeEditorHeading.textContent = item
-    ? item.kind === "note"
-      ? "编辑笔记"
-      : "编辑阅读卡片"
+    ? item.kind === "paper-card"
+      ? "查看论文卡片"
+      : item.kind === "reading-card"
+        ? "查看阅读卡片"
+        : "查看笔记"
     : "新建笔记";
   knowledgeEditorSource.textContent = item
     ? `${item.documentName} · ${item.positionLabel}`
     : sourceName.value
       ? `${getDisplayFileName(sourceName.value)} · 第 ${Math.max(1, pdfViewer.currentPageNumber || 1)} 页`
       : "保存到本地知识库";
+  knowledgeEditorSourceDocument.textContent = item?.documentName || "当前 PDF";
+  knowledgeEditorSourcePosition.textContent = item?.positionLabel || "将在保存时记录当前页";
+  knowledgeEditorSourceQuote.textContent = getKnowledgeSourceQuote(item);
   knowledgeEditorTitleInput.value = item?.title || "";
   knowledgeEditorCategoryInput.value = normalizeKnowledgeCategory(
     item?.category || "AI 笔记",
@@ -121,6 +128,7 @@ export function closeKnowledgeEditor(): void {
   window.clearTimeout(knowledgeEditorPreviewTimer.value);
   knowledgeEditorDialog.hidden = true;
   knowledgeEditorDialog.removeAttribute("data-kind");
+  knowledgeEditorDialog.removeAttribute("data-editing");
   document.documentElement.classList.remove("knowledge-editor-open");
   knowledgeEditorDeleteButton.hidden = true;
   knowledgeEditorPreviewElement.replaceChildren();

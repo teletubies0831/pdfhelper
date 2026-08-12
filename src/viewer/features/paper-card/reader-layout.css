@@ -42,7 +42,7 @@
   overflow: hidden;
   border: 1px solid #dfe7f1;
   border-radius: 18px;
-  background: #f2f4f7;
+  background: linear-gradient(180deg, #f7faff 0%, #f2f6fc 100%);
   box-shadow: 0 28px 80px rgb(15 23 42 / 28%);
 }
 
@@ -51,7 +51,7 @@
   margin: 0;
   border-bottom: 1px solid #e1e8f2;
   background: rgb(255 255 255 / 97%);
-  padding: 14px 18px;
+  padding: 12px 20px;
 }
 
 .paper-card-page-status {
@@ -62,7 +62,7 @@
 .paper-card-workspace {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 14px 16px 16px;
+  padding: 16px 18px 18px;
 }
 
 .paper-card-form {

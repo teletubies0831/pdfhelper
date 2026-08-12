@@ -149,11 +149,17 @@ export function openSelectedKnowledgeSource(): void {
   const item = getSelectedKnowledgeItem();
   if (item?.source === "reading-journal") {
     const entry = readReadingJournalEntries().find((candidate) => candidate.id === item.id);
-    if (entry) void openReadingJournalSource(entry);
+    if (entry) {
+      closeKnowledgeEditor();
+      closeKnowledgeBasePage();
+      void openReadingJournalSource(entry);
+    }
     return;
   }
-  if (!item?.pageNumber) {
-    setKnowledgePageStatus("这条内容没有可定位的页码。", true);
+  if (!item) return;
+  const targetPageNumber = item.pageNumber ?? (item.source === "paper-overview" ? 1 : undefined);
+  if (!targetPageNumber) {
+    setKnowledgePageStatus("这条内容没有记录原文位置。", true);
     return;
   }
   const currentDocumentName = sourceName.value ? getDisplayFileName(sourceName.value) : "";
@@ -163,12 +169,17 @@ export function openSelectedKnowledgeSource(): void {
   }
   const pageNumber = Math.min(
     pdfDocument.value.numPages,
-    Math.max(1, item.pageNumber),
+    Math.max(1, targetPageNumber),
   );
+  closeKnowledgeEditor();
   closeKnowledgeBasePage();
-  pdfViewer.currentPageNumber = pageNumber;
+  // The PDF viewer has just become visible. Wait until layout is measurable;
+  // PDF.js rejects scrolling while its page container has no offset parent.
   requestAnimationFrame(() => {
-    pdfViewer.scrollPageIntoView({ pageNumber });
-    setStatus(`已定位到“${item.title}”的来源：第 ${pageNumber} 页。`);
+    requestAnimationFrame(() => {
+      pdfViewer.currentPageNumber = pageNumber;
+      pdfViewer.scrollPageIntoView({ pageNumber });
+      setStatus(`已定位到“${item.title}”的来源：第 ${pageNumber} 页。`);
+    });
   });
 }

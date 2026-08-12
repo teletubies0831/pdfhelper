@@ -110,6 +110,12 @@ input:disabled {
   white-space: nowrap;
 }
 
+/* Toolbar button layout uses an explicit display value above, so preserve the
+   native hidden contract for entries removed by the active feature set. */
+.toolbar [hidden] {
+  display: none !important;
+}
+
 
 /* Grouped toolbar dropdowns: keep related actions together and remove the
    horizontal scrollbar from the main toolbar. */

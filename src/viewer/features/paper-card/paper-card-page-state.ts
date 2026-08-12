@@ -27,10 +27,10 @@ export function setPaperCardPageMode(mode: "generate" | "review"): void {
   const returnToKnowledge =
     isReview && paperCardReturnTarget.value === "knowledge";
   const returnLabel = returnToKnowledge ? "← 返回知识库" : "← 返回 PDF";
-  returnToPdfButton.textContent = returnLabel;
+  returnToPdfButton.textContent = returnToKnowledge ? "关闭" : returnLabel;
   returnToPdfButton.setAttribute(
     "aria-label",
-    returnToKnowledge ? "返回知识库" : "返回 PDF",
+    returnToKnowledge ? "关闭论文卡片" : "返回 PDF",
   );
   paperCardBackButton.textContent = returnLabel;
   paperCardBackButton.setAttribute(

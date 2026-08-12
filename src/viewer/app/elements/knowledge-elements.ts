@@ -370,12 +370,28 @@ export const knowledgeEditorSource = requiredElement<HTMLElement>(
   "knowledge-editor-source",
 );
 
+export const knowledgeEditorSourceDocument = requiredElement<HTMLElement>(
+  "knowledge-editor-source-document",
+);
+
+export const knowledgeEditorSourcePosition = requiredElement<HTMLElement>(
+  "knowledge-editor-source-position",
+);
+
+export const knowledgeEditorSourceQuote = requiredElement<HTMLElement>(
+  "knowledge-editor-source-quote",
+);
+
 export const knowledgeEditorCloseButton = requiredElement<HTMLButtonElement>(
   "knowledge-editor-close",
 );
 
 export const knowledgeEditorCancelButton = requiredElement<HTMLButtonElement>(
   "knowledge-editor-cancel",
+);
+
+export const knowledgeEditorOpenSourceButton = requiredElement<HTMLButtonElement>(
+  "knowledge-editor-open-source",
 );
 
 export const knowledgeEditorDeleteButton = requiredElement<HTMLButtonElement>(

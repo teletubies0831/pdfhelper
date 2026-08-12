@@ -17,11 +17,11 @@ import { executeMemoryTool } from "../../../../entrypoints/viewer/memory-store";
 
 import { pendingChatImages, readingModePreference, resolvedReadingMode, visionAiConfig } from "../../core/pdf-reader/public";
 
-import { aiPanelToggleButton, assistantPanelToggleButton, chatImageInput, knowledgeBaseEntryButton, knowledgeBasePageElement, outlineToggleButton, paperCardEntryButton, paperCardPageElement, readingJournalPageElement, readingModeSelect } from "../../app/viewer-elements";
+import { aiPanelToggleButton, assistantPanelToggleButton, chatImageInput, knowledgeBaseEntryButton, knowledgeBasePageElement, outlineToggleButton, paperCardPageElement, readingModeSelect } from "../../app/viewer-elements";
 import { isRecord } from "../annotations/public";
 import { readRecentFiles } from "../recent-files/public";
 import { pdfDocument, sourceName } from "../../app/viewer-state";
-import { closePaperCardPage, closeReadingJournalPage, readSavedPaperCards, readSavedPaperOverviews, renderReadingJournal, saveReadingJournalEntry } from "../paper-card/public";
+import { closePaperCardPage, readSavedPaperCards, readSavedPaperOverviews, saveReadingJournalEntry } from "../paper-card/public";
 import { readReadingJournalEntries, renderKnowledgeBase } from "../knowledge-base/public";
 
 
@@ -37,10 +37,6 @@ export function setCurrentApplicationView(
 ): void {
   const isViewer = view === "viewer";
   aiPanelToggleButton?.classList.toggle("active", view === "viewer");
-  paperCardEntryButton?.classList.toggle(
-    "active",
-    view === "paper-card" || view === "journal",
-  );
   knowledgeBaseEntryButton.classList.toggle("active", view === "knowledge");
   if (outlineToggleButton instanceof HTMLButtonElement) {
     outlineToggleButton.disabled = !isViewer;
@@ -71,18 +67,10 @@ export function updateModeNavigation(): void {
     readingModeSelect.value = readingModePreference.value;
   }
 
-  const isPaper = resolvedReadingMode.value === "paper";
-  if (paperCardEntryButton) {
-    paperCardEntryButton.hidden = isPaper;
-    paperCardEntryButton.textContent = "阅读札记";
-    (paperCardEntryButton as HTMLButtonElement).disabled = !hasDocument;
-  }
   knowledgeBaseEntryButton.textContent = "知识库";
   knowledgeBaseEntryButton.disabled = !hasDocument;
   if (hasDocument) {
-    if (isPaper && !readingJournalPageElement.hidden) closeReadingJournalPage();
-    if (!isPaper && !paperCardPageElement.hidden) closePaperCardPage();
-    if (!readingJournalPageElement.hidden) renderReadingJournal();
+    if (!paperCardPageElement.hidden) closePaperCardPage();
     if (!knowledgeBasePageElement.hidden) renderKnowledgeBase();
   }
 }

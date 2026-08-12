@@ -327,7 +327,8 @@
 }
 
 .knowledge-editor-body-label.knowledge-editor-edit-pane {
-  display: block !important;
+  display: flex !important;
+  flex-direction: column;
   border: 0 !important;
   padding: 14px !important;
 }

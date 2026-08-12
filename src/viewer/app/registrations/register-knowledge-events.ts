@@ -15,11 +15,11 @@
 
 
 
-import { cardTypeButtons, editPaperCardButton, exportPaperCardButton, knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeClearResearchButton, knowledgeClearSelectionButton, knowledgeDeleteItemButton, knowledgeDetailCloseButton, knowledgeEditItemButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeInsightPresetButtons, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeModeButtons, knowledgeNewNoteButton, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgeOpenSourceButton, knowledgePriorityFilterSelect, knowledgeQuestionPresetButtons, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeRunResearchButton, knowledgeSaveResearchResultButton, knowledgeSearchInput, knowledgeSelectVisibleButton, knowledgeSortSelect, knowledgeVenueFilterSelect, knowledgeYearFilterSelect, paperCardBackButton, paperCardEntryButton, paperCardPageElement, paperCardScrollContainers, paperCardSectionButtons, readingJournalBackButton, readingJournalContentInput, readingJournalEditorCancelButton, readingJournalEditorCloseButton, readingJournalEditorElement, readingJournalForm, readingJournalNewButton, readingJournalQuoteInput, readingJournalSearchInput, readingJournalTagsInput, readingJournalTitleInput, regeneratePaperCardButton, returnToPdfButton, savePaperCardPageButton, summaryScopeButtons } from "../viewer-elements";
+import { cardTypeButtons, editPaperCardButton, knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeClearResearchButton, knowledgeClearSelectionButton, knowledgeDeleteItemButton, knowledgeDetailCloseButton, knowledgeEditItemButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeEditorOpenSourceButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeInsightPresetButtons, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeModeButtons, knowledgeNewNoteButton, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgeOpenSourceButton, knowledgePriorityFilterSelect, knowledgeQuestionPresetButtons, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeRunResearchButton, knowledgeSaveResearchResultButton, knowledgeSearchInput, knowledgeSelectVisibleButton, knowledgeSortSelect, knowledgeVenueFilterSelect, knowledgeYearFilterSelect, paperCardBackButton, paperCardOpenSourceButton, paperCardPageElement, paperCardScrollContainers, paperCardSectionButtons, regeneratePaperCardButton, returnToPdfButton, savePaperCardPageButton, summaryScopeButtons } from "../viewer-elements";
 import { activeKnowledgeCategory, activeKnowledgeFocus, activeKnowledgeInsightPrompt, activeKnowledgePageMode, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, editingPaperOverviewId, knowledgeEditorTargetKey, paperCardPageDocumentKey, paperCardReturnTarget, persistCurrentAppViewState, selectedKnowledgeRecordKey, selectedKnowledgeResearchKeys } from "../../core/pdf-reader/public";
 
 import { setActiveSummaryScope } from "../../services/document-agent/viewer-document-agent";
-import { closePaperCardPage, closeReadingJournalEditor, closeReadingJournalPage, exportPaperOverviewCard, generatePaperOverviewCard, openModeSecondaryPage, openReadingJournalEditor, openSavedPaperOverviewReview, paperCardEditMode, renderReadingJournal, savePaperOverviewCard, saveReadingJournalEntry, setActiveCardType, setActivePaperCardSection, setPaperCardEditMode, setPaperCardPageStatus, syncPaperCardSectionFromScroll } from "../../features/paper-card/public";
+import { closePaperCardPage, generatePaperOverviewCard, openPaperCardSource, openSavedPaperOverviewReview, paperCardEditMode, savePaperOverviewCard, setActiveCardType, setActivePaperCardSection, setPaperCardEditMode, setPaperCardPageStatus, syncPaperCardSectionFromScroll } from "../../features/paper-card/public";
 
 
 import { setStatus } from "../../features/recent-files/public";
@@ -33,39 +33,7 @@ import { scheduleAppViewStateSave, source } from '../app-ui';
 import { pdfDocument } from "../viewer-state";
 
 export function registerKnowledgeEvents(): void {
-  paperCardEntryButton?.addEventListener("click", openModeSecondaryPage);
-  
   knowledgeBaseEntryButton.addEventListener("click", openKnowledgeBasePage);
-  
-  readingJournalBackButton.addEventListener("click", closeReadingJournalPage);
-  
-  readingJournalNewButton.addEventListener("click", () => openReadingJournalEditor());
-  
-  readingJournalSearchInput.addEventListener("input", renderReadingJournal);
-  
-  readingJournalEditorCloseButton.addEventListener("click", closeReadingJournalEditor);
-  
-  readingJournalEditorCancelButton.addEventListener("click", closeReadingJournalEditor);
-  
-  readingJournalEditorElement.addEventListener("pointerdown", (event) => {
-      if (event.target === readingJournalEditorElement) closeReadingJournalEditor();
-    });
-  
-  readingJournalForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      if (!readingJournalContentInput.value.trim() && !readingJournalQuoteInput.value.trim()) {
-        setStatus("请填写札记内容或原文摘录。", true);
-        return;
-      }
-      saveReadingJournalEntry({
-        title: readingJournalTitleInput.value,
-        quote: readingJournalQuoteInput.value,
-        content: readingJournalContentInput.value,
-        tags: readingJournalTagsInput.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
-        origin: "user",
-      });
-      closeReadingJournalEditor();
-    });
   
   knowledgeBaseBackButton.addEventListener("click", closeKnowledgeBasePage);
   
@@ -146,10 +114,10 @@ export function registerKnowledgeEvents(): void {
   
   knowledgeNewNoteButton.addEventListener("click", () => {
       if (!pdfDocument.value) {
-        setKnowledgePageStatus("请先打开 PDF，再使用当前阅读模式的阅读入口。", true);
+        setKnowledgePageStatus("请先打开 PDF，再添加知识笔记。", true);
         return;
       }
-      openModeSecondaryPage();
+      openKnowledgeEditor();
     });
   
   knowledgeImportButton.addEventListener("click", () =>
@@ -318,7 +286,20 @@ export function registerKnowledgeEvents(): void {
   
   knowledgeEditorCloseButton.addEventListener("click", closeKnowledgeEditor);
   
-  knowledgeEditorCancelButton.addEventListener("click", closeKnowledgeEditor);
+  knowledgeEditorCancelButton.addEventListener("click", () => {
+      const item = knowledgeEditorTargetKey.value
+        ? collectKnowledgeItems().find(
+            (candidate) => candidate.recordKey === knowledgeEditorTargetKey.value,
+          )
+        : undefined;
+      if (item) openKnowledgeEditor(item);
+      else closeKnowledgeEditor();
+    });
+
+  knowledgeEditorOpenSourceButton.addEventListener(
+      "click",
+      openSelectedKnowledgeSource,
+    );
   
   knowledgeEditorBodyInput.addEventListener(
       "input",
@@ -367,6 +348,17 @@ export function registerKnowledgeEvents(): void {
   returnToPdfButton.addEventListener("click", () =>
       closePaperCardPage(paperCardReturnTarget.value),
     );
+
+  paperCardOpenSourceButton.addEventListener("click", openPaperCardSource);
+
+  paperCardPageElement.addEventListener("pointerdown", (event) => {
+      if (
+        event.target === paperCardPageElement &&
+        paperCardReturnTarget.value === "knowledge"
+      ) {
+        closePaperCardPage("knowledge");
+      }
+    });
   
   editPaperCardButton.addEventListener("click", () => {
       const enteringEditMode = !paperCardEditMode.value;
@@ -385,8 +377,6 @@ export function registerKnowledgeEvents(): void {
     });
   
   savePaperCardPageButton.addEventListener("click", savePaperOverviewCard);
-  
-  exportPaperCardButton.addEventListener("click", exportPaperOverviewCard);
   
   for (const button of summaryScopeButtons) {
       button.addEventListener("click", () => {

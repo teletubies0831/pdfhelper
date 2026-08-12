@@ -65,14 +65,7 @@
           </div>
 
           <div class="knowledge-editor-header-actions">
-            <button id="knowledge-editor-cancel" type="button">← 返回知识库</button>
-            <button
-              id="knowledge-editor-delete"
-              class="knowledge-editor-delete-button"
-              type="button"
-              hidden
-            >删除</button>
-            <button class="primary-button knowledge-editor-save-button" type="submit">▣ 保存修改</button>
+            <button id="knowledge-editor-open-source" type="button">查看原文</button>
             <button id="knowledge-editor-close" class="knowledge-editor-close-button" type="button" aria-label="关闭">×</button>
           </div>
         </header>
@@ -105,11 +98,12 @@
               </div>
 
               <div class="knowledge-editor-body-workspace knowledge-editor-single-workspace">
-                <label
+                <div
                   id="knowledge-editor-edit-pane"
                   class="knowledge-editor-body-label knowledge-editor-edit-pane"
                   hidden
                 >
+                  <label class="knowledge-editor-textarea-label">
                   <span class="sr-only">编辑正文</span>
                   <textarea
                     id="knowledge-editor-body"
@@ -136,7 +130,13 @@ $$
 F(x)=\sum_{i=1}^{n} w_i x_i
 $$"
                   ></textarea>
-                </label>
+                  </label>
+                  <footer class="knowledge-editor-edit-actions">
+                    <button id="knowledge-editor-cancel" type="button">取消编辑</button>
+                    <button id="knowledge-editor-delete" class="knowledge-editor-delete-button" type="button" hidden>删除</button>
+                    <button class="primary-button knowledge-editor-save-button" type="submit">保存修改</button>
+                  </footer>
+                </div>
 
                 <section
                   id="knowledge-editor-preview-pane"
@@ -186,13 +186,13 @@ $$"
 
             <section class="knowledge-editor-side-card knowledge-editor-source-card">
               <header>
-                <strong>来源与使用方式</strong>
-                <span>保留可追溯性，避免笔记脱离论文语境</span>
+                <strong>原文位置</strong>
+                <span>用于返回 PDF 中对应的上下文</span>
               </header>
               <div class="knowledge-editor-guidance">
-                <p><strong>来源：</strong><span>当前来源显示在页面标题下方。</span></p>
-                <p><strong>引用：</strong><span>记录页码、图表或实验编号。</span></p>
-                <p><strong>判断：</strong><span>区分论文原文、你的推断和待验证事项。</span></p>
+                <p><strong>文件：</strong><span id="knowledge-editor-source-document">未关联文档</span></p>
+                <p><strong>位置：</strong><span id="knowledge-editor-source-position">未记录位置</span></p>
+                <p><strong>原句：</strong><span id="knowledge-editor-source-quote">未记录原句</span></p>
               </div>
             </section>
 

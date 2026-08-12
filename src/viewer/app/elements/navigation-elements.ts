@@ -26,5 +26,3 @@ export const readingModeStatus = requiredElement<HTMLElement>("reading-mode-stat
 
 export const aiSettingsButton =
   requiredElement<HTMLButtonElement>("ai-settings-button");
-
-export const paperCardEntryButton = document.getElementById("paper-card-entry");

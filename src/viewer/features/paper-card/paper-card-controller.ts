@@ -15,9 +15,9 @@
 
 
 
-import { SAVED_PAPER_OVERVIEWS_STORAGE_KEY, editingPaperOverviewId, paperCardPageAbortController, paperCardPageDocumentKey, paperCardPageSourceCache, paperCardReturnTarget, paperCardReviewDocumentName, persistCurrentAppViewState, resolvedReadingMode, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
-import { aiPanelToggleButton, appFrame, knowledgeBaseEntryButton, knowledgeBasePageElement, paperCardDocumentNameElement, paperCardEntryButton, paperCardFormElement, paperCardPageElement, paperCardSectionButtons, paperKeywordsInput, paperPersonalNotesInput, paperResearchAreaInput, paperTitleInput, readingJournalPageElement } from "../../app/viewer-elements";
-import { currentRecentEntryId, pdfDocument, sourceName } from "../../app/viewer-state";
+import { SAVED_PAPER_OVERVIEWS_STORAGE_KEY, editingPaperOverviewId, paperCardPageAbortController, paperCardPageDocumentKey, paperCardPageSourceCache, paperCardReturnTarget, paperCardReviewDocumentName, persistCurrentAppViewState, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
+import { aiPanelToggleButton, appFrame, knowledgeBaseEntryButton, knowledgeBasePageElement, paperCardDocumentNameElement, paperCardFormElement, paperCardPageElement, paperCardSectionButtons, paperKeywordsInput, paperPersonalNotesInput, paperResearchAreaInput, paperTitleInput } from "../../app/viewer-elements";
+import { currentRecentEntryId, pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
 
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 
@@ -25,33 +25,22 @@ import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { getDocumentChatId, setCurrentApplicationView } from "../assistant/public";
 import { getKnowledgeRecordKey, openKnowledgeEditor, refreshKnowledgeBaseIfOpen, renderKnowledgeBase, setKnowledgePageStatus } from "../knowledge-base/public";
 import type { KnowledgeItem, PaperCardFormData, SavedPaperOverview } from "../../core/pdf-reader/public";
-import { openReadingJournalPage } from './reading-journal';
 import { cancelActivePaperOverviewRequest, clearPaperCardReviewState, collectPaperCardFormData, renderPaperCardForm, schedulePaperCardTextareaRefresh, setPaperCardEditMode, setPaperCardPageMode, setPaperCardPageStatus, updatePaperCardDocumentName } from './paper-card-form';
 import { generatePaperOverviewCard } from './paper-card-generator';
 import { getCurrentPaperSourceLocator } from './reading-card';
 import { readJsonValue, writeJsonValue } from '../../../platform/storage/browser-json-repository';
+import { setStatus } from "../recent-files/public";
 
-
-
-
-export function openModeSecondaryPage(): void {
-  if (!pdfDocument.value) return;
-  if (resolvedReadingMode.value === "paper") openPaperCardPage();
-  else openReadingJournalPage();
-}
 
 
 
 export function openPaperCardPage(): void {
-  readingJournalPageElement.hidden = true;
-  appFrame?.classList.remove("reading-journal-page-open");
   clearPaperCardReviewState();
-  knowledgeBasePageElement.hidden = true;
-  appFrame?.classList.remove("knowledge-base-page-open");
+  knowledgeBasePageElement.hidden = false;
+  appFrame?.classList.add("knowledge-base-page-open");
   knowledgeBaseEntryButton.classList.remove("active");
   paperCardPageElement.hidden = false;
-  appFrame?.classList.add("paper-card-page-open");
-  paperCardEntryButton?.classList.add("active");
+  appFrame?.classList.add("paper-card-page-open", "paper-card-review-overlay-open");
   aiPanelToggleButton?.classList.remove("active");
   setCurrentApplicationView("paper-card");
   updatePaperCardDocumentName();
@@ -128,7 +117,6 @@ export function openSavedPaperOverviewReview(item: KnowledgeItem): void {
   knowledgeBaseEntryButton.classList.add("active");
   paperCardPageElement.hidden = false;
   appFrame?.classList.add("paper-card-page-open");
-  paperCardEntryButton?.classList.add("active");
   aiPanelToggleButton?.classList.remove("active");
   setCurrentApplicationView("paper-card");
 
@@ -160,8 +148,7 @@ export function closePaperCardPage(destination: "pdf" | "knowledge" = "pdf"): vo
   paperCardPageAbortController.value?.abort();
   cancelActivePaperOverviewRequest();
   paperCardPageElement.hidden = true;
-  appFrame?.classList.remove("paper-card-page-open");
-  paperCardEntryButton?.classList.remove("active");
+  appFrame?.classList.remove("paper-card-page-open", "paper-card-review-overlay-open");
 
   const returnToKnowledge = destination === "knowledge";
   clearPaperCardReviewState();
@@ -182,6 +169,25 @@ export function closePaperCardPage(destination: "pdf" | "knowledge" = "pdf"): vo
   aiPanelToggleButton?.classList.add("active");
   setCurrentApplicationView("viewer");
   persistCurrentAppViewState();
+}
+
+export function openPaperCardSource(): void {
+  const expectedDocumentName = paperCardReviewDocumentName.value.trim();
+  const currentDocumentName = sourceName.value
+    ? getDisplayFileName(sourceName.value)
+    : "";
+  if (!pdfDocument.value || (expectedDocumentName && currentDocumentName !== expectedDocumentName)) {
+    setStatus(`请先打开来源文件“${expectedDocumentName || "对应论文"}”。`, true);
+    return;
+  }
+  closePaperCardPage("pdf");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      pdfViewer.currentPageNumber = 1;
+      pdfViewer.scrollPageIntoView({ pageNumber: 1 });
+      setStatus("已返回论文原文第 1 页。");
+    });
+  });
 }
 
 

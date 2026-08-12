@@ -268,6 +268,32 @@ html.knowledge-editor-open body {
   padding: 14px;
 }
 
+.knowledge-editor-textarea-label {
+  display: block;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.knowledge-editor-edit-actions {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #e2eaf5;
+  padding: 12px 14px 0;
+}
+
+.knowledge-editor-edit-actions button {
+  min-height: 38px;
+}
+
+#knowledge-editor-dialog:not([data-editing="true"]) .knowledge-editor-title-card input,
+#knowledge-editor-dialog:not([data-editing="true"]) .knowledge-editor-fields input {
+  border-color: transparent !important;
+  background: #f7faff !important;
+  pointer-events: none;
+}
+
 #knowledge-editor-dialog #knowledge-editor-body {
   display: block;
   width: 100%;

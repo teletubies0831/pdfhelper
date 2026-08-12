@@ -21,6 +21,25 @@
   padding: 22px 34px 34px;
 }
 
+.app-frame.paper-card-review-overlay-open .paper-card-page {
+  position: fixed;
+  z-index: 1000000;
+  inset: 28px;
+  flex: none;
+  border: 1px solid #dce6f4;
+  border-radius: 18px;
+  background: #f7faff;
+  box-shadow: 0 28px 80px rgb(15 23 42 / 30%);
+}
+
+.app-frame.paper-card-review-overlay-open::after {
+  position: fixed;
+  z-index: 999999;
+  inset: 0;
+  background: rgb(15 23 42 / 32%);
+  content: "";
+}
+
 .paper-card-shell {
   width: min(1500px, 100%);
   margin: 0 auto;
@@ -68,6 +87,31 @@
   border-color: #dfe7f2;
   border-radius: 9px;
   padding: 0 13px;
+}
+
+.paper-card-command-actions .paper-card-close-button {
+  width: 42px;
+  min-width: 42px;
+  border-color: transparent;
+  background: transparent;
+  color: #62738e;
+  padding: 0;
+  font-size: 24px;
+  font-weight: 400;
+}
+
+.paper-card-command-actions .paper-card-close-button:hover {
+  border-color: transparent;
+  background: #edf3fb;
+  color: #264e87;
+}
+
+.app-frame.paper-card-review-overlay-open .paper-card-shell,
+.app-frame.paper-card-review-overlay-open .paper-card-overview-card,
+.app-frame.paper-card-review-overlay-open .paper-card-insight,
+.app-frame.paper-card-review-overlay-open .paper-card-side-card {
+  border-color: #dce6f4;
+  box-shadow: 0 8px 24px rgb(42 84 145 / 5%);
 }
 
 .paper-card-page-status {

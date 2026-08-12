@@ -15,11 +15,11 @@ import { memoryTools } from "../../../../entrypoints/viewer/memory-store";
 
 
 
-import { aiPanelToggleButton, aiProviderSelect, aiSettingsButton, aiTabButtons, appFrame, assistantPanelToggleButton, assistantSettingsPanel, assistantViewButtons, chatCompressionKeepRecentMessagesInput, chatCompressionMaxRecentMessagesInput, chatForm, chatImageButton, chatImageInput, chatInput, chatMessagesElement, clearChatButton, closeDeepSeekSettingsButton, deepSeekBaseUrlInput, deepSeekSettingsStatus, deepSeekThinkingSelect, detectReadingModeButton, focusModeButton, knowledgeBasePageElement, longTermMemoryList, outlineToggleButton, paperCardPageElement, readingJournalPageElement, readingModeSelect, refreshLongTermMemoriesButton, saveDeepSeekSettingsButton, settingsModalBackdrop, testDeepSeekButton, testVisionAiButton, visionAiModeSelect } from "../viewer-elements";
+import { aiPanelToggleButton, aiProviderSelect, aiSettingsButton, aiTabButtons, appFrame, assistantPanelToggleButton, assistantSettingsPanel, assistantViewButtons, chatCompressionKeepRecentMessagesInput, chatCompressionMaxRecentMessagesInput, chatForm, chatImageButton, chatImageInput, chatInput, chatMessagesElement, clearChatButton, closeDeepSeekSettingsButton, deepSeekBaseUrlInput, deepSeekSettingsStatus, deepSeekThinkingSelect, detectReadingModeButton, focusModeButton, knowledgeBasePageElement, longTermMemoryList, outlineToggleButton, paperCardPageElement, readingModeSelect, refreshLongTermMemoriesButton, saveDeepSeekSettingsButton, settingsModalBackdrop, testDeepSeekButton, testVisionAiButton, visionAiModeSelect } from "../viewer-elements";
 import { aiConfig, aiConfigLoaded, chatHistory, chatImagePreviewOverlay, chatRequestPending, readingModePreference, setAssistantView, setDeepSeekSettingsOpen, setFocusMode, setLeftPanelCollapsed, showSettingsSavedFeedback } from "../../core/pdf-reader/public";
 import { jumpToPdfCitations } from "../../features/translation/public";
 
-import { bindPaperCardTextareaAutoResize, closePaperCardPage, closeReadingJournalPage } from "../../features/paper-card/public";
+import { bindPaperCardTextareaAutoResize, closePaperCardPage } from "../../features/paper-card/public";
 import { pdfDocument } from "../viewer-state";
 import { addChatImageFiles, closeChatImagePreview, detectReadingMode, getDocumentChatId, openChatImagePreview, queueChatConversationPersistence, refreshLongTermMemoryList, resetChatConversation, saveDeepSeekConfig, sendChatMessage, setCurrentApplicationView, setReadingModePreference, testDeepSeekConnection, testVisionAiConnection, updateVisionAiFieldsVisibility } from "../../features/assistant/public";
 
@@ -70,10 +70,6 @@ export function registerAssistantEvents(): void {
     });
   
   aiPanelToggleButton?.addEventListener("click", () => {
-      if (!readingJournalPageElement.hidden) {
-        closeReadingJournalPage();
-        return;
-      }
       if (!paperCardPageElement.hidden) {
         closePaperCardPage();
         return;
@@ -86,7 +82,6 @@ export function registerAssistantEvents(): void {
     });
   
   assistantPanelToggleButton.addEventListener("click", () => {
-      if (!readingJournalPageElement.hidden) closeReadingJournalPage();
       if (!paperCardPageElement.hidden) closePaperCardPage();
       if (!knowledgeBasePageElement.hidden) closeKnowledgeBasePage();
       const willOpen =

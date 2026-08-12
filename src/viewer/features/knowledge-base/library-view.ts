@@ -17,7 +17,6 @@
 
 import { activeKnowledgeCategory, activeKnowledgeFilter, activeKnowledgeFocus, activeKnowledgePageMode, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, persistCurrentAppViewState, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
 
-import { openSavedPaperOverviewReview } from "../paper-card/public";
 import { knowledgeBasePageElement, knowledgeCountAllElement, knowledgeCountOriginGeneralElement, knowledgeCountOriginGeneralNoteElement, knowledgeCountOriginGeneralReadingCardElement, knowledgeCountOriginNovelElement, knowledgeCountOriginNovelNoteElement, knowledgeCountOriginNovelReadingCardElement, knowledgeCountOriginPaperElement, knowledgeCountOriginPaperNoteElement, knowledgeCountOriginPaperReadingCardElement, knowledgeDetailBodyElement, knowledgeDetailContentElement, knowledgeDetailCreatedElement, knowledgeDetailDocumentElement, knowledgeDetailEmptyElement, knowledgeDetailPositionElement, knowledgeDetailTagsElement, knowledgeDetailTimeElement, knowledgeDetailTitleElement, knowledgeDetailTypeElement, knowledgeDetailUpdatedElement, knowledgeEditItemButton, knowledgeFocusButtons, knowledgeFocusCountCitableElement, knowledgeFocusCountDeepElement, knowledgeFocusCountFinishedElement, knowledgeFocusCountMethodsElement, knowledgeFocusCountRelatedElement, knowledgeFocusCountReplicateElement, knowledgeFocusCountTodoElement, knowledgeInsightControls, knowledgeLibraryView, knowledgeListElement, knowledgeModeButtons, knowledgeOpenSourceButton, knowledgePageTitleElement, knowledgePriorityFilterSelect, knowledgeQaControls, knowledgeReadingStatusFilterSelect, knowledgeRecentSummaryElement, knowledgeRelatedSummaryElement, knowledgeResearchDescription, knowledgeResearchHeading, knowledgeResearchQuestionInput, knowledgeResearchView, knowledgeRunResearchButton, knowledgeSearchInput, knowledgeSortSelect, knowledgeTagListElement, knowledgeVenueFilterSelect, knowledgeYearFilterSelect } from "../../app/viewer-elements";
 
 
@@ -29,6 +28,7 @@ import type { KnowledgeFocus, KnowledgeItem, KnowledgePageMode } from "../../cor
 import { activeKnowledgeOrigin, activeKnowledgeOriginContent, deriveKnowledgePriority, deriveKnowledgeReadingStatus, extractKnowledgeVenue, extractKnowledgeYear, formatKnowledgeDate, formatKnowledgeRelativeDate, getKnowledgeBaseDocumentName, getKnowledgeExcerptForDashboard, getKnowledgeKindIcon, getKnowledgeKindLabel, getKnowledgeOriginContentType, matchesKnowledgeFocus, syncKnowledgeOriginButtons, type KnowledgeOriginContentFilter, type KnowledgeOriginFilter } from './knowledge-domain';
 import { renderKnowledgeBase, updateKnowledgeResearchScopeSummary } from './research-controller';
 import { deleteKnowledgeItem, openKnowledgeEditor } from './editor-controller';
+import { openSavedPaperOverviewReview } from "../paper-card/public";
 
 
 
@@ -280,14 +280,10 @@ export function renderKnowledgeSidebar(items: KnowledgeItem[]): void {
 
 export function openKnowledgeItemFromLibrary(item: KnowledgeItem): void {
   selectedKnowledgeRecordKey.value = item.recordKey;
-
-  // 整篇论文生成的论文卡片进入完整论文阅读卡片页。
   if (item.source === "paper-overview") {
     openSavedPaperOverviewReview(item);
     return;
   }
-
-  // 普通笔记、AI 总结和阅读卡片进入内容编辑页。
   openKnowledgeEditor(item);
 }
 
@@ -301,9 +297,7 @@ export function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
   card.setAttribute("role", "button");
   card.setAttribute(
     "aria-label",
-    item.source === "paper-overview"
-      ? `打开论文卡片：${item.title}`
-      : `打开知识内容：${item.title}`,
+    `查看知识内容：${item.title}`,
   );
 
   const cardHeader = document.createElement("div");
@@ -500,12 +494,8 @@ export function renderKnowledgeDetail(
   });
   knowledgeDetailTagsElement.replaceChildren(...tags);
   renderKnowledgeBody(item.content);
-  knowledgeEditItemButton.textContent =
-    item.source === "paper-overview" ? "打开复习页" : "编辑内容";
-  knowledgeEditItemButton.title =
-    item.source === "paper-overview"
-      ? "打开完整论文卡片页面进行复习和修改"
-      : "编辑当前知识内容";
+  knowledgeEditItemButton.textContent = "查看 / 编辑";
+  knowledgeEditItemButton.title = "在弹窗中查看排版内容或编辑 Markdown 原文";
 
   const related = items.filter(
     (candidate) =>
@@ -521,7 +511,7 @@ export function renderKnowledgeDetail(
   knowledgeRelatedSummaryElement.textContent = related.length
     ? `同一文档中还有 ${relatedNotes} 条笔记、${relatedCards} 张卡片。`
     : "当前文档暂无其他关联内容。";
-  knowledgeOpenSourceButton.disabled = !item.pageNumber;
+  knowledgeOpenSourceButton.disabled = false;
 }
 
 

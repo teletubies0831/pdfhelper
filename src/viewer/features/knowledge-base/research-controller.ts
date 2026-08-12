@@ -17,7 +17,7 @@
 import { activeKnowledgeInsightPrompt, activeKnowledgePageMode, aiConfigLoaded, knowledgeResearchPending, lastKnowledgeResearchAnswer, lastKnowledgeResearchItems, lastKnowledgeResearchQuestion, paperCardPageAbortController, persistCurrentAppViewState, resolvedReadingMode, selectedKnowledgeRecordKey, selectedKnowledgeResearchKeys } from "../../core/pdf-reader/public";
 
 
-import { aiPanelToggleButton, appFrame, knowledgeBaseEntryButton, knowledgeBasePageElement, knowledgeDocumentCountElement, knowledgeGroupSelect, knowledgeInsightQuestionInput, knowledgePageSubtitleElement, knowledgePageTitleElement, knowledgeResearchQuestionInput, knowledgeResearchResult, knowledgeResearchResultBody, knowledgeResearchResultKind, knowledgeResearchResultTitle, knowledgeResearchScopeSelect, knowledgeResearchScopeSummary, knowledgeResearchSourceList, knowledgeResearchStatus, knowledgeRunResearchButton, knowledgeTotalCountElement, paperCardEntryButton, paperCardPageElement, readingJournalPageElement } from "../../app/viewer-elements";
+import { aiPanelToggleButton, appFrame, knowledgeBaseEntryButton, knowledgeBasePageElement, knowledgeDocumentCountElement, knowledgeGroupSelect, knowledgeInsightQuestionInput, knowledgePageSubtitleElement, knowledgePageTitleElement, knowledgeResearchQuestionInput, knowledgeResearchResult, knowledgeResearchResultBody, knowledgeResearchResultKind, knowledgeResearchResultTitle, knowledgeResearchScopeSelect, knowledgeResearchScopeSummary, knowledgeResearchSourceList, knowledgeResearchStatus, knowledgeRunResearchButton, knowledgeTotalCountElement, paperCardPageElement } from "../../app/viewer-elements";
 import { loadDeepSeekConfig, setCurrentApplicationView } from "../assistant/public";
 import { renderChatMarkdown, requestAiContent } from "../../shared-ui/markdown/markdown-renderer";
 
@@ -365,12 +365,9 @@ export function refreshKnowledgeBaseIfOpen(): void {
 
 
 export function openKnowledgeBasePage(): void {
-  readingJournalPageElement.hidden = true;
-  appFrame?.classList.remove("reading-journal-page-open");
   paperCardPageAbortController.value?.abort();
   paperCardPageElement.hidden = true;
   appFrame?.classList.remove("paper-card-page-open");
-  paperCardEntryButton?.classList.remove("active");
   knowledgeBasePageElement.hidden = false;
   appFrame?.classList.add("knowledge-base-page-open");
   knowledgeBaseEntryButton.classList.add("active");
