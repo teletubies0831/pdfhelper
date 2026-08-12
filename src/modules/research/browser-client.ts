@@ -1,6 +1,6 @@
 import { browser } from "wxt/browser";
 
-import type { RelatedPaper, RelatedResearchRequest, RelatedResearchResponse } from "./contracts";
+import type { RelatedResearchRequest, RelatedResearchResponse } from "./contracts";
 
 export type { RelatedPaper } from "./contracts";
 

@@ -29,6 +29,7 @@ import { activeKnowledgeOrigin, activeKnowledgeOriginContent, deriveKnowledgePri
 import { renderKnowledgeBase, updateKnowledgeResearchScopeSummary } from './research-controller';
 import { deleteKnowledgeItem, openKnowledgeEditor } from './editor-controller';
 import { openSavedPaperOverviewReview } from "../paper-card/public";
+import { getPaperLibraryCardMetadata } from "./paper-library-card-metadata";
 
 
 
@@ -320,15 +321,24 @@ export function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
   });
   cardHeader.append(title, deleteButton);
 
+  const paperMetadata = getPaperLibraryCardMetadata(item);
+  if (paperMetadata) {
+    card.classList.add("paper-library-card");
+  }
+
   const subtitle = document.createElement("div");
   subtitle.className = "knowledge-card-subtitle";
-  const venue = extractKnowledgeVenue(item);
-  const year = extractKnowledgeYear(item);
-  const subtitleParts: string[] = [];
-  if (venue && venue !== "未标注") subtitleParts.push(venue);
-  if (year && year !== "未标注") subtitleParts.push(year);
-  subtitle.textContent =
-    subtitleParts.join(" · ") || getKnowledgeKindLabel(item.kind);
+  if (paperMetadata) {
+    subtitle.textContent = paperMetadata.venueYear;
+  } else {
+    const venue = extractKnowledgeVenue(item);
+    const year = extractKnowledgeYear(item);
+    const subtitleParts: string[] = [];
+    if (venue && venue !== "未标注") subtitleParts.push(venue);
+    if (year && year !== "未标注") subtitleParts.push(year);
+    subtitle.textContent =
+      subtitleParts.join(" · ") || getKnowledgeKindLabel(item.kind);
+  }
 
   const fileLine = document.createElement("div");
   fileLine.className = "knowledge-card-file";
@@ -342,17 +352,11 @@ export function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
 
   const excerpt = document.createElement("p");
   excerpt.className = "knowledge-card-excerpt";
-  excerpt.textContent = getKnowledgeExcerptForDashboard(item);
+  excerpt.textContent = paperMetadata
+    ? paperMetadata.authors || "作者信息未记录"
+    : getKnowledgeExcerptForDashboard(item);
 
-  const tags = document.createElement("div");
-  tags.className = "knowledge-card-tags";
-  for (const tag of item.tags.slice(0, 4)) {
-    const tagElement = document.createElement("span");
-    tagElement.textContent = tag;
-    tags.append(tagElement);
-  }
-
-  card.append(cardHeader, subtitle, fileLine, excerpt, tags);
+  card.append(cardHeader, subtitle, fileLine, excerpt);
 
   const openItem = (): void => openKnowledgeItemFromLibrary(item);
   card.addEventListener("click", openItem);

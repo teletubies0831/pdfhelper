@@ -1,6 +1,6 @@
 import { AnnotationEditorType, type PDFDocumentProxy } from "pdfjs-dist";
 
-import { pdfDocument, sourceName } from "../../app/viewer-state";
+import { pdfDocument } from "../../app/viewer-state";
 
 
 

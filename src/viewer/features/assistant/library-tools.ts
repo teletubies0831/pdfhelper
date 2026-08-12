@@ -20,7 +20,7 @@ import { pendingChatImages, readingModePreference, resolvedReadingMode, visionAi
 import { aiPanelToggleButton, assistantPanelToggleButton, chatImageInput, knowledgeBaseEntryButton, knowledgeBasePageElement, outlineToggleButton, paperCardPageElement, readingModeSelect } from "../../app/viewer-elements";
 import { isRecord } from "../annotations/public";
 import { readRecentFiles } from "../recent-files/public";
-import { pdfDocument, sourceName } from "../../app/viewer-state";
+import { pdfDocument } from "../../app/viewer-state";
 import { closePaperCardPage, readSavedPaperCards, readSavedPaperOverviews, saveReadingJournalEntry } from "../paper-card/public";
 import { readReadingJournalEntries, renderKnowledgeBase } from "../knowledge-base/public";
 

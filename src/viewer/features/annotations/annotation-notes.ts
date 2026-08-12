@@ -20,7 +20,6 @@ import { activeEditorMode, annotationEditor, contextHighlightEditor, contextSele
 import { setStatus } from "../recent-files/public";
 import { forgetHelperNote, getAnnotationGeometrySignature, getEditorSerializedValue, getEditorStorageKeys, getRememberedHelperNote, isFreeTextEditor, isHighlightEditor, isInkEditor, isRecord, isStoredHighlightValue, markUnsavedChanges, normalizeStorageKey, rememberHelperNote } from "./annotation-persistence";
 import { getViewerSelectionRawText } from "../../core/pdf-reader/public";
-import { clearCustomSelection } from '../text-selection/public';
 import { findAnnotationEditor, findHighlightNoteAnchor, setHighlightColor, syncFreeTextControls } from './annotation-editor';
 
 
@@ -28,7 +27,6 @@ import { findAnnotationEditor, findHighlightNoteAnchor, setHighlightColor, syncF
 
 export function clearDomSelection() {
   window.getSelection()?.removeAllRanges();
-  clearCustomSelection();
 }
 
 

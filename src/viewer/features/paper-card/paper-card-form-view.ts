@@ -85,6 +85,7 @@ export function bindPaperCardTextareaAutoResize(): void {
   paperVenueYearInput.addEventListener("blur", () => {
     paperVenueYearInput.value = normalizePaperVenueYearDisplay(
       paperVenueYearInput.value,
+      paperTitleInput.value,
     );
     autoResizePaperCardTextarea(paperVenueYearInput);
   });
@@ -97,7 +98,10 @@ export function renderPaperCardForm(
 ): void {
   paperTitleInput.value = data.title;
   paperAuthorsInput.value = data.authors;
-  paperVenueYearInput.value = normalizePaperVenueYearDisplay(data.venueYear);
+  paperVenueYearInput.value = normalizePaperVenueYearDisplay(
+    data.venueYear,
+    data.title,
+  );
   paperResearchAreaInput.value = data.researchArea;
   paperKeywordsInput.value = data.keywords;
   paperOneSentenceSummaryInput.value = data.oneSentenceSummary;

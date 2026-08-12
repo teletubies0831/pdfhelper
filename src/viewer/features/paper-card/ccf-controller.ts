@@ -1,6 +1,6 @@
 import { browser } from "wxt/browser";
 
-import type { CcfLookupRequest, CcfLookupResponse, CcfRank, CcfRankResult } from "../../../../shared/research";
+import type { CcfLookupRequest, CcfLookupResponse, CcfRankResult } from "../../../../shared/research";
 
 export type { CcfRank, CcfRankResult } from "../../../../shared/research";
 

@@ -14,3 +14,5 @@
 @import url("../../src/viewer/features/paper-card/status-and-ccf.css");
 @import url("../../src/viewer/styles/reader-visual-refresh.css");
 @import url("../../src/viewer/styles/translation-visual-refresh.css");
+@import url("../../src/viewer/features/paper-card/modal-shell.css");
+@import url("../../src/viewer/features/paper-card/review-actions.css");

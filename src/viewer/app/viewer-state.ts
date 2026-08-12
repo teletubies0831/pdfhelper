@@ -102,10 +102,6 @@ export let areNoteIndicatorsHidden = { value: false };
 
 export let sourcePdfBytes: { value: Uint8Array | null } = { value: null };
 
-export let selectionRenderFrame = { value: 0 };
-
-export let selectionRenderSettleFrame = { value: 0 };
-
 export let contextSelectionRanges: { value: Range[] } = { value: [] };
 
 export let contextSelectionText = { value: "" };
