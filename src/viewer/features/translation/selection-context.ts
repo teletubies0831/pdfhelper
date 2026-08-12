@@ -49,6 +49,10 @@ export function setMoreExamplesButtonVisible(visible: boolean): void {
   generateMoreExamplesButton.hidden = !visible;
   generateMoreExamplesButton.disabled = false;
   generateMoreExamplesButton.textContent = "生成更多例句";
+  const mirroredButton = document.querySelector<HTMLButtonElement>(
+    "[data-translation-action='examples']",
+  );
+  if (mirroredButton) mirroredButton.hidden = !visible;
 }
 
 

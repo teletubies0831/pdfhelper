@@ -6,6 +6,9 @@ export const undoAnnotationButton =
 export const redoAnnotationButton =
   requiredElement<HTMLButtonElement>("redo-annotation");
 
+export const eraseSelectedAnnotationButton =
+  requiredElement<HTMLButtonElement>("erase-selected-annotation");
+
 export const smartCopyButton = requiredElement<HTMLButtonElement>("smart-copy");
 
 export const saveAnnotatedPdfButton =

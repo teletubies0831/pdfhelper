@@ -15,7 +15,7 @@ import { memoryTools } from "../../../../entrypoints/viewer/memory-store";
 
 
 
-import { aiPanelToggleButton, aiProviderSelect, aiSettingsButton, aiTabButtons, appFrame, assistantPanelToggleButton, assistantSettingsPanel, assistantViewButtons, chatCompressionKeepRecentMessagesInput, chatCompressionMaxRecentMessagesInput, chatForm, chatImageButton, chatImageInput, chatInput, chatMessagesElement, clearChatButton, closeDeepSeekSettingsButton, deepSeekBaseUrlInput, deepSeekSettingsStatus, deepSeekThinkingSelect, detectReadingModeButton, focusModeButton, knowledgeBasePageElement, longTermMemoryList, outlineToggleButton, paperCardPageElement, readingModeSelect, refreshLongTermMemoriesButton, saveDeepSeekSettingsButton, settingsModalBackdrop, testDeepSeekButton, testVisionAiButton, visionAiModeSelect } from "../viewer-elements";
+import { aiPanelToggleButton, aiProviderSelect, aiSettingsButton, aiTabButtons, appFrame, assistantPanelToggleButton, assistantSettingsPanel, assistantViewButtons, chatCompressionKeepRecentMessagesInput, chatCompressionMaxRecentMessagesInput, chatForm, chatImageButton, chatImageInput, chatInput, chatMessagesElement, clearChatButton, closeDeepSeekSettingsButton, deepSeekBaseUrlInput, deepSeekSettingsStatus, deepSeekThinkingSelect, detectReadingModeButton, focusModeButton, knowledgeBasePageElement, longTermMemoryList, outlineToggleButton, paperCardPageElement, readingModeMenuButtons, readingModeSelect, refreshLongTermMemoriesButton, saveDeepSeekSettingsButton, settingsModalBackdrop, testDeepSeekButton, testVisionAiButton, visionAiModeSelect } from "../viewer-elements";
 import { aiConfig, aiConfigLoaded, chatHistory, chatImagePreviewOverlay, chatRequestPending, readingModePreference, setAssistantView, setDeepSeekSettingsOpen, setFocusMode, setLeftPanelCollapsed, showSettingsSavedFeedback } from "../../core/pdf-reader/public";
 import { jumpToPdfCitations } from "../../features/translation/public";
 
@@ -111,6 +111,15 @@ export function registerAssistantEvents(): void {
       if (isReadingModePreference(preference))
         void setReadingModePreference(preference);
     });
+
+  for (const modeButton of readingModeMenuButtons) {
+    modeButton.addEventListener("click", () => {
+      const preference = modeButton.dataset.readingModeValue;
+      if (!isReadingModePreference(preference)) return;
+      readingModeSelect.value = preference;
+      readingModeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
   
   detectReadingModeButton.addEventListener("click", () => {
       readingModePreference.value = "auto";

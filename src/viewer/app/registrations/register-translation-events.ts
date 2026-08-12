@@ -31,6 +31,22 @@ import { saveTranslationAndExplanationAsNote } from "../../features/knowledge-ba
 
 
 export function registerTranslationEvents(): void {
+  document
+    .querySelector<HTMLButtonElement>("#translation-inline-history")
+    ?.addEventListener("click", () => openTranslationHistoryButton.click());
+  for (const actionButton of document.querySelectorAll<HTMLButtonElement>(
+    "[data-translation-action]",
+  )) {
+    const targetId = {
+      save: "save-translation-note",
+      examples: "generate-more-examples",
+      copy: "copy-translation",
+    }[actionButton.dataset.translationAction || ""];
+    if (!targetId) continue;
+    actionButton.addEventListener("click", () => {
+      document.querySelector<HTMLButtonElement>(`#${targetId}`)?.click();
+    });
+  }
   saveTranslationNoteButton.addEventListener(
       "click",
       saveTranslationAndExplanationAsNote,
@@ -88,19 +104,32 @@ export function registerTranslationEvents(): void {
       translationAbortController.value?.abort();
       moreExamplesAbortController.value?.abort();
       cancelPendingAutomaticTranslation();
-      selectedTextForAi.value = text;
+      const existingWordResult = currentEnglishLearningResult.value?.kind === "word"
+        ? currentEnglishLearningResult.value
+        : null;
+      const queryText = existingWordResult
+        ? existingWordResult.selectedWord || existingWordResult.word
+        : text;
+      selectedTextForAi.value = queryText;
       selectedTextPageNumber.value = Math.max(
         1,
         selectedTextPageNumber.value || pdfViewer.currentPageNumber || 1,
       );
-      currentEnglishLearningSourceSentence.value = getSelectedEnglishWord(text)
-        ? normalizeLearningInlineText(translationSourceSentenceInput.value || text)
-        : text;
-      setTranslationSelectionEditor(text, currentEnglishLearningSourceSentence.value);
+      currentEnglishLearningSourceSentence.value = existingWordResult
+        ? text
+        : getSelectedEnglishWord(text)
+          ? normalizeLearningInlineText(translationSourceSentenceInput.value || text)
+          : text;
+      setTranslationSelectionEditor(
+        queryText,
+        currentEnglishLearningSourceSentence.value,
+        "",
+        queryText,
+      );
       setSelectedSnippetDisplayMode("preview");
       lastTranslatedText.value = "";
       currentEnglishLearningResult.value = null;
-      void translateSelectedText(text);
+      void translateSelectedText(queryText);
     });
   
   openTranslationHistoryButton.addEventListener("click", async () => {

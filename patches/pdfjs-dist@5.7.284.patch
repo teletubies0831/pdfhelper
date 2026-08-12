@@ -1,0 +1,70 @@
+diff --git a/build/pdf.mjs b/build/pdf.mjs
+index 3b08593dd20d37f9679d0ba0f7999ad96d393682..db2c18fa197544ad7b954863d97be065802e3497 100644
+--- a/build/pdf.mjs
++++ b/build/pdf.mjs
+@@ -14701,6 +14701,13 @@ class TextLayer {
+     const ascent = metrics.fontBoundingBoxAscent;
+     const descent = Math.abs(metrics.fontBoundingBoxDescent);
+     ctx.canvas.width = ctx.canvas.height = 0;
++    // Resizing a canvas resets its drawing state, including `ctx.font`.
++    // Invalidate the matching cache entry so the next text-width measurement
++    // restores the requested font instead of measuring with the 10px default.
++    this.#canvasCtxFonts.set(ctx, {
++      size: 0,
++      family: ""
++    });
+     let ratio = 0.8;
+     if (ascent) {
+       ratio = ascent / (ascent + descent);
+diff --git a/build/pdf.worker.mjs b/build/pdf.worker.mjs
+index 7d85fb9b157e751bdf05d7a6d3a12d29f161bded..e5c83e6ab60f2838a1be74350d6e2f4e07e38887 100644
+--- a/build/pdf.worker.mjs
++++ b/build/pdf.worker.mjs
+@@ -35289,7 +35289,11 @@ class PartialEvaluator {
+       if (!seenStyles.has(loadedName)) {
+         seenStyles.add(loadedName);
+         textContent.styles[loadedName] = {
+-          fontFamily: font.fallbackName,
++          // Canvas rendering has already registered the PDF font under this
++          // generated family name. Reuse it in the text layer so per-character
++          // advances match the visible glyphs; retain the generic family for
++          // documents whose embedded font cannot be loaded by the browser.
++          fontFamily: `"${loadedName}", ${font.fallbackName}`,
+           ascent: font.ascent,
+           descent: font.descent,
+           vertical: font.vertical
+diff --git a/legacy/build/pdf.mjs b/legacy/build/pdf.mjs
+index 5559b93393787671a0e2bfacc190fd94b7084fb6..cc3ab3ac27ecc2a9eb6b0670fc69c0b43c56312c 100644
+--- a/legacy/build/pdf.mjs
++++ b/legacy/build/pdf.mjs
+@@ -21413,6 +21413,13 @@ class TextLayer {
+     const ascent = metrics.fontBoundingBoxAscent;
+     const descent = Math.abs(metrics.fontBoundingBoxDescent);
+     ctx.canvas.width = ctx.canvas.height = 0;
++    // Resizing a canvas resets its drawing state, including `ctx.font`.
++    // Invalidate the matching cache entry so the next text-width measurement
++    // restores the requested font instead of measuring with the 10px default.
++    this.#canvasCtxFonts.set(ctx, {
++      size: 0,
++      family: ""
++    });
+     let ratio = 0.8;
+     if (ascent) {
+       ratio = ascent / (ascent + descent);
+diff --git a/legacy/build/pdf.worker.mjs b/legacy/build/pdf.worker.mjs
+index 40551cb445b5b7428cd2caf64e5d9d0c1ff4432c..d5074f44d2f31e9f88073129f99e18a6d40a340b 100644
+--- a/legacy/build/pdf.worker.mjs
++++ b/legacy/build/pdf.worker.mjs
+@@ -41652,7 +41652,11 @@ class PartialEvaluator {
+       if (!seenStyles.has(loadedName)) {
+         seenStyles.add(loadedName);
+         textContent.styles[loadedName] = {
+-          fontFamily: font.fallbackName,
++          // Canvas rendering has already registered the PDF font under this
++          // generated family name. Reuse it in the text layer so per-character
++          // advances match the visible glyphs; retain the generic family for
++          // documents whose embedded font cannot be loaded by the browser.
++          fontFamily: `"${loadedName}", ${font.fallbackName}`,
+           ascent: font.ascent,
+           descent: font.descent,
+           vertical: font.vertical

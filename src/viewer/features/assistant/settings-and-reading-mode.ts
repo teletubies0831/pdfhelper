@@ -15,9 +15,9 @@ import { CONVERSATION_MEMORY_CONFIG_STORAGE_KEY, normalizeConversationMemoryConf
 
 
 
-import { aiConfig, aiConfigLoaded, conversationMemoryConfig, readingModeDetectionPending, readingModeDocumentKey, readingModeError, readingModePreference, readingModeRationale, resolvedReadingMode, setDeepSeekSettingsOpen, updateControls, visionAiConfig } from "../../core/pdf-reader/public";
+import { aiConfig, aiConfigLoaded, conversationMemoryConfig, navigateToPdfPageWhenVisible, readingModeDetectionPending, readingModeDocumentKey, readingModeError, readingModePreference, readingModeRationale, resolvedReadingMode, setDeepSeekSettingsOpen, updateControls, visionAiConfig } from "../../core/pdf-reader/public";
 
-import { aiProviderSelect, citationReturnButton, citationReturnPosition, deepSeekApiKeyInput, deepSeekBaseUrlInput, deepSeekMaxOutputTokensInput, deepSeekModelSelect, deepSeekSettingsStatus, deepSeekThinkingSelect, detectReadingModeButton, readingModeSelect, readingModeStatus, testDeepSeekButton, testVisionAiButton, translationModelSelect, viewerContainer, visionAiFields, visionAiModeSelect, visionApiKeyInput, visionBaseUrlInput, visionModelInput, visionSettingsStatus } from "../../app/viewer-elements";
+import { aiProviderSelect, citationReturnButton, citationReturnPosition, deepSeekApiKeyInput, deepSeekBaseUrlInput, deepSeekMaxOutputTokensInput, deepSeekModelSelect, deepSeekSettingsStatus, deepSeekThinkingSelect, detectReadingModeButton, readingModeMenuButtons, readingModeSelect, readingModeStatus, readingModeTriggerLabel, testDeepSeekButton, testVisionAiButton, translationModelSelect, viewerContainer, visionAiFields, visionAiModeSelect, visionApiKeyInput, visionBaseUrlInput, visionModelInput, visionSettingsStatus } from "../../app/viewer-elements";
 import { getPdfFingerprint } from "../annotations/public";
 import { getCurrentReadingPosition, scheduleReadingPositionSave } from "../recent-files/public";
 import { internalNavigationHistory, isOpeningDocument, isRestoringReadingPosition, isReturningFromInternalNavigation, linkService, pdfDocument, pdfViewer, sourceName, suppressInternalNavigationCapture } from "../../app/viewer-state";
@@ -168,9 +168,12 @@ export function returnToPreviousInternalNavigationPosition() {
     Math.max(1, Math.round(entry.pageNumber)),
   );
   if (Number.isFinite(entry.scale) && entry.scale > 0) {
-    pdfViewer.currentScale = Math.max(0.1, Math.min(10, entry.scale));
+    const scale = Math.max(0.1, Math.min(10, entry.scale));
+    requestAnimationFrame(() => {
+      if (viewerContainer.offsetParent) pdfViewer.currentScale = scale;
+    });
   }
-  pdfViewer.currentPageNumber = pageNumber;
+  navigateToPdfPageWhenVisible(pageNumber);
 
   const exactTop = Math.max(0, entry.scrollTop);
   const exactLeft = Math.max(0, entry.scrollLeft);
@@ -410,6 +413,15 @@ export function updateReadingModeUi(): void {
       : `AI 自动识别（${getReadingModeLabel(resolvedReadingMode.value)}）`;
   }
   readingModeSelect.value = readingModePreference.value;
+  readingModeTriggerLabel.textContent = readingModePreference.value === "auto"
+    ? getReadingModeLabel(resolvedReadingMode.value)
+    : getReadingModeLabel(readingModePreference.value);
+  for (const modeButton of readingModeMenuButtons) {
+    const isActive = modeButton.dataset.readingModeValue
+      === readingModePreference.value;
+    modeButton.classList.toggle("active", isActive);
+    modeButton.setAttribute("aria-checked", String(isActive));
+  }
   detectReadingModeButton.disabled =
     !pdfDocument.value || readingModeDetectionPending.value;
   detectReadingModeButton.textContent = readingModeDetectionPending.value

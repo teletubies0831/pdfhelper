@@ -2,6 +2,9 @@
         <aside class="left-panel" aria-label="左侧目录">
           <div class="side-tabs single-tab">
             <button class="active" type="button">目录</button>
+            <button id="outline-search-button" class="outline-search-button" type="button" title="在 PDF 中查找" aria-label="在 PDF 中查找">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
+            </button>
           </div>
 
           <nav class="outline-list" aria-label="PDF 目录">
@@ -17,19 +20,37 @@
 
           <div class="quick-location">
             <strong>快速定位</strong>
-            <button type="button">◎ 当前位置：第 3 页</button>
-            <button type="button">◷ 上次阅读：第 5 页</button>
+            <button id="quick-current-location" type="button" disabled>
+              <svg class="quick-location-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-location" /></svg>
+              <span id="quick-current-location-label">当前位置：未打开 PDF</span>
+            </button>
+            <button id="quick-last-location" type="button" disabled>
+              <svg class="quick-location-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-history" /></svg>
+              <span id="quick-last-location-label">上次阅读：暂无记录</span>
+            </button>
           </div>
         </aside>
 
         <main class="reading-panel">
           <section class="reader-card">
             <div class="reader-header">
-              <strong>PDF 正文阅读区</strong>
+              <span class="reader-document-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5M8.5 14h7M8.5 17h5" /></svg>
+              </span>
               <div id="status-bar" class="status-bar">
                 <span id="status-text">请选择PDF文件。</span>
                 <span id="text-status">文字层尚未加载</span>
               </div>
+              <div class="reader-header-controls" aria-label="PDF 页面与缩放控制">
+                <span id="reader-page-summary" class="reader-page-summary">第 0 页 / 共 0 页</span>
+                <button id="reader-search-button" class="reader-icon-button" type="button" title="在 PDF 中查找" aria-label="在 PDF 中查找">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
+                </button>
+                <div class="toolbar-group zoom-controls">
+                  <button id="zoom-out" type="button" title="缩小">−</button>
+                  <span id="zoom-value">100%</span>
+                  <button id="zoom-in" type="button" title="放大">＋</button>
+                </div>
               <button
                 id="focus-mode-toggle"
                 class="reader-focus-button"
@@ -40,6 +61,7 @@
                 <span aria-hidden="true">⛶</span>
                 <span id="focus-mode-label">专注模式</span>
               </button>
+              </div>
             </div>
 
             <button
@@ -60,12 +82,6 @@
             </div>
 
             <footer class="reader-footer">
-              <div class="toolbar-group zoom-controls">
-                <span id="zoom-value">100%</span>
-                <button id="zoom-out" type="button" title="缩小">−</button>
-                <button id="zoom-in" type="button" title="放大">＋</button>
-              </div>
-
               <div class="toolbar-group page-controls">
                 <button id="previous-page" type="button" title="上一页">‹ 上一页</button>
                 <input id="page-number" type="number" min="1" value="0" aria-label="当前页" />
@@ -302,7 +318,7 @@
 
             <div class="ai-tab-panel" data-ai-panel="translate">
               <div class="translation-scroll-content">
-                <section class="ai-section">
+                <section class="ai-section translation-selection-section">
                   <div class="selected-snippet-heading-row">
                     <h3>1. 选中英文</h3>
                     <button
@@ -331,17 +347,29 @@
                     ></div>
                   </div>
                   <label id="translation-source-sentence-field" class="translation-source-sentence-field" hidden>
-                    <span>文中原句（可修改）</span>
+                    <span class="translation-source-label">文中原句（可修改）</span>
                     <textarea id="translation-source-sentence" rows="1" spellcheck="false" placeholder="当前单词所在的原句"></textarea>
                     <div id="translation-source-sentence-math-preview" class="translation-math-preview" hidden></div>
-                    <span>原句翻译</span>
+                    <span>文件解释（AI 概述）</span>
                     <div id="translation-source-sentence-translation" class="translation-source-sentence-translation">查询后显示原句的完整翻译</div>
                   </label>
                   <p id="translation-learning-hint" class="translation-learning-hint" hidden></p>
                 </section>
 
-                <section class="ai-section">
-                  <h3 id="translation-learning-title">2. 学习结果</h3>
+                <div id="translation-primary-actions" class="translation-primary-actions">
+                  <button class="translation-primary-save" type="button" data-translation-action="save"><svg class="translation-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-save-kb" /></svg>保存到知识库</button>
+                  <button class="translation-primary-examples" type="button" data-translation-action="examples"><svg class="translation-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>生成更多例句</button>
+                  <button class="translation-primary-copy" type="button" data-translation-action="copy"><svg class="translation-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-copy" /></svg>复制学习结果</button>
+                </div>
+
+                <section id="translation-result-section" class="ai-section">
+                  <div class="translation-result-heading">
+                    <h3 id="translation-learning-title">2. 学习结果</h3>
+                    <button id="translation-inline-history" class="translation-inline-history" type="button" title="查看英语学习历史">
+                      <svg class="translation-history-trigger-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-history" /></svg>
+                      历史记录 <strong id="translation-inline-history-count">0</strong>
+                    </button>
+                  </div>
                   <div id="translation-result" class="ai-result-box" aria-live="polite">
                     选中英文后将自动生成学习卡片。
                   </div>
@@ -351,13 +379,13 @@
               <div class="translation-bottom-dock">
                 <div class="translation-dock-tools">
                   <button id="open-translation-history" class="translation-history-trigger" type="button" title="查看英语学习历史">
-                    <span class="translation-history-trigger-icon" aria-hidden="true">◷</span>
+                    <svg class="translation-history-trigger-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-history" /></svg>
                     <span>历史记录</span>
                     <strong id="translation-history-count">0</strong>
                   </button>
                   <button id="apply-translation-edit" class="translation-requery-button" type="button" disabled>按修改重新查询</button>
                 </div>
-                <div class="ai-actions">
+                <div class="ai-actions translation-native-actions">
                   <button id="save-translation-note" type="button">保存为笔记</button>
                   <button id="generate-more-examples" type="button" hidden>生成更多例句</button>
                   <button id="copy-translation" class="primary-button" type="button">复制学习结果</button>

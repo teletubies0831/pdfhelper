@@ -1,6 +1,6 @@
 <header class="toolbar">
   <button id="outline-toggle" class="toolbar-pill toolbar-nav-button toolbar-outline-button" type="button" title="显示或隐藏左侧目录">
-    <span class="toolbar-icon">☰</span>
+    <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-menu" /></svg>
     目录
   </button>
 
@@ -11,9 +11,9 @@
       aria-haspopup="menu"
       aria-expanded="false"
     >
-      <span aria-hidden="true">▣</span>
+      <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-file" /></svg>
       文件
-      <span class="toolbar-menu-caret" aria-hidden="true">⌄</span>
+      <svg class="toolbar-menu-caret" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-chevron-down" /></svg>
     </button>
     <div class="toolbar-menu-panel" role="menu" hidden>
       <div class="toolbar-menu-section">
@@ -47,8 +47,40 @@
   </div>
   <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" />
 
-  <div class="reading-mode-control" aria-label="阅读模式">
-    <select id="reading-mode-select" title="选择当前 PDF 的阅读策略">
+  <div class="toolbar-menu reading-mode-menu" data-toolbar-menu>
+    <button
+      class="toolbar-pill toolbar-menu-trigger toolbar-nav-button reading-mode-trigger"
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded="false"
+      title="选择当前 PDF 的阅读策略"
+    >
+      <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-mode" /></svg>
+      <span id="reading-mode-trigger-label">通用阅读</span>
+      <svg class="toolbar-menu-caret" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-chevron-down" /></svg>
+    </button>
+    <div class="toolbar-menu-panel reading-mode-menu-panel" role="menu" hidden>
+      <div class="toolbar-menu-section">
+        <div class="toolbar-menu-heading">阅读模式</div>
+        <button class="toolbar-menu-item reading-mode-menu-item" type="button" role="menuitemradio" aria-checked="false" data-reading-mode-value="auto">
+          <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
+          <span><strong>AI 自动识别</strong><small>根据当前文档自动选择模式</small></span>
+        </button>
+        <button class="toolbar-menu-item reading-mode-menu-item" type="button" role="menuitemradio" aria-checked="false" data-reading-mode-value="general">
+          <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-mode" /></svg>
+          <span><strong>通用阅读</strong><small>适合一般资料和技术文档</small></span>
+        </button>
+        <button class="toolbar-menu-item reading-mode-menu-item" type="button" role="menuitemradio" aria-checked="false" data-reading-mode-value="paper">
+          <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pdf" /></svg>
+          <span><strong>论文精读</strong><small>突出论文结构与研究信息</small></span>
+        </button>
+        <button class="toolbar-menu-item reading-mode-menu-item" type="button" role="menuitemradio" aria-checked="false" data-reading-mode-value="novel">
+          <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>
+          <span><strong>小说阅读</strong><small>侧重原句翻译和语言学习</small></span>
+        </button>
+      </div>
+    </div>
+    <select id="reading-mode-select" class="reading-mode-native-select" title="选择当前 PDF 的阅读策略" aria-hidden="true" tabindex="-1">
       <option value="auto">AI 自动识别（通用阅读）</option>
       <option value="general">通用阅读</option>
       <option value="paper">论文精读</option>
@@ -60,31 +92,37 @@
 
   <div class="toolbar-group annotation-tools expanded-toolbar-group" aria-label="批注工具">
     <button class="toolbar-nav-button" type="button" data-editor-mode="select" title="选择文字；选择批注后可移动或编辑">
+      <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pointer" /></svg>
       移动/选择
     </button>
     <button class="toolbar-nav-button" type="button" data-editor-mode="highlight" title="选中文字并高亮">
-      ✎ 高亮
+      <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-highlight" /></svg>
+      高亮
     </button>
     <label class="highlight-color-control" title="高亮颜色">
+      <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-color" /></svg>
       <span>颜色</span>
       <input id="highlight-color" type="color" value="#fff066" />
     </label>
-    <button class="toolbar-nav-button" type="button" data-editor-mode="ink" title="自由绘制">画笔</button>
-    <button class="toolbar-nav-button" type="button" data-editor-mode="text" title="在页面上添加文本">批注</button>
-    <button id="undo-annotation" class="toolbar-nav-button" type="button" title="撤销批注">撤销</button>
-    <button id="redo-annotation" class="toolbar-nav-button" type="button" title="重做批注">重做</button>
-    <button id="smart-copy" class="toolbar-nav-button" type="button" title="整理复制选中文本">整理复制</button>
-    <button id="toggle-notes" class="toolbar-nav-button" type="button" title="隐藏/显示所有笔记标记">隐藏笔记</button>
+    <button class="toolbar-nav-button" type="button" data-editor-mode="ink" title="自由绘制"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pen" /></svg>画笔</button>
+    <button class="toolbar-nav-button" type="button" data-editor-mode="text" title="在页面上添加文本"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-note" /></svg>批注</button>
+    <button id="erase-selected-annotation" class="toolbar-nav-button" type="button" title="删除当前选中的批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eraser" /></svg>擦除</button>
+    <button id="undo-annotation" class="toolbar-nav-button" type="button" title="撤销批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-undo" /></svg>撤销</button>
+    <button id="redo-annotation" class="toolbar-nav-button" type="button" title="重做批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-redo" /></svg>重做</button>
+    <button id="smart-copy" class="toolbar-nav-button" type="button" title="整理复制选中文本"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-copy" /></svg>整理复制</button>
+    <button id="toggle-notes" class="toolbar-nav-button" type="button" title="隐藏/显示所有笔记标记"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eye-off" /></svg><span data-toggle-notes-label>隐藏笔记</span></button>
   </div>
 
   <div class="toolbar-group ai-tools expanded-toolbar-group" aria-label="AI 工具">
     <button id="ai-panel-toggle" class="toolbar-pill toolbar-nav-button ai-entry active" type="button">
+      <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pdf" /></svg>
       PDF 阅读
     </button>
-    <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button">知识库</button>
+    <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>知识卡</button>
   </div>
 
   <button id="assistant-panel-toggle" class="toolbar-pill toolbar-nav-button assistant-entry active" type="button" title="显示或隐藏右侧 AI 助手">
+    <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
     AI 助手
   </button>
   <button
@@ -94,6 +132,6 @@
     title="AI 设置"
     aria-label="打开 AI 设置"
   >
-    ⚙
+    <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-settings" /></svg>
   </button>
 </header>

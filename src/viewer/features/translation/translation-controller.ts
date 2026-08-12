@@ -30,7 +30,7 @@ import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { getEnglishWordSelection, getSelectedEnglishWord, getSelectionSentenceContext, getSelectionSurroundingText, getTranslationScopeFromSelection, normalizeLearningInlineText, setMoreExamplesButtonVisible, setTranslationLearningTitle, setTranslationState } from './selection-context';
 import { parseSentenceLearningResult, parseVocabularyLearningResult, readVocabularyExamples, renderSentenceLearningResult, renderVocabularyLearningResult, setTranslationSelectionEditor } from './learning-view';
 import { updateSummaryMetadata } from './citation-and-summary';
-import { ensureTranslationHistoryLoaded, storeTranslationHistoryResult } from './translation-history';
+import { findTranslationHistoryResult, storeTranslationHistoryResult } from './translation-history';
 
 
 
@@ -93,6 +93,8 @@ export function updateAiSelectedSnippet(): void {
   setTranslationSelectionEditor(
     text,
     automaticWordSelection ? sourceSentence : text,
+    "",
+    rawSelectedText,
   );
   translationAbortController.value?.abort();
   moreExamplesAbortController.value?.abort();
@@ -137,13 +139,32 @@ export function scheduleAiSelectedSnippetUpdate(): void {
 export async function translateSelectedText(text: string): Promise<void> {
   if (!text || text !== selectedTextForAi.value) return;
 
-  void ensureTranslationHistoryLoaded();
-
   const selectedWord = getSelectedEnglishWord(text);
   const isWord = Boolean(selectedWord);
   const sourceSentence = normalizeLearningInlineText(
     currentEnglishLearningSourceSentence.value || text,
   );
+
+  const cachedEntry = await findTranslationHistoryResult(
+    selectedWord || sourceSentence,
+    sourceSentence,
+    isWord ? "word" : "sentence",
+  );
+  if (text !== selectedTextForAi.value) return;
+  if (cachedEntry) {
+    lastTranslatedText.value = text;
+    currentEnglishLearningSourceText.value = text;
+    currentEnglishLearningResult.value = cachedEntry.result;
+    if (cachedEntry.result.kind === "word") {
+      renderVocabularyLearningResult(cachedEntry.result);
+    } else {
+      renderSentenceLearningResult(cachedEntry.result);
+    }
+    translationLearningHintElement.textContent = "已从当前 PDF 的历史记录中恢复结果，未调用大模型。";
+    void storeTranslationHistoryResult(text, cachedEntry.result);
+    return;
+  }
+
   translationAbortController.value?.abort();
   const controller = new AbortController();
   translationAbortController.value = controller;

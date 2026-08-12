@@ -17,7 +17,7 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 import { mergeSelectionRects } from "../../shared-ui/geometry/merge-selection-rects";
 import { citationReturnButton, citationReturnPosition, outlineList, summaryPositionElement, summaryRangeElement, summaryResultElement, summarySourceElement, viewerElement } from "../../app/viewer-elements";
-import { activeSummaryScope, lastSummaryPoints, normalizeCopiedText } from "../../core/pdf-reader/public";
+import { activeSummaryScope, lastSummaryPoints, navigateToPdfPageWhenVisible, normalizeCopiedText } from "../../core/pdf-reader/public";
 import { createPdfCitationPattern } from "../../shared-ui/markdown/markdown-renderer";
 
 import { pdfDocument, pdfViewer } from "../../app/viewer-state";
@@ -527,8 +527,7 @@ export async function jumpToPdfCitations(
   citationReturnButton.setAttribute("aria-hidden", "true");
   citationReturnButton.tabIndex = -1;
   citationReturnPosition.textContent = "";
-  pdfViewer.currentPageNumber = pageNumber;
-  pdfViewer.scrollPageIntoView({ pageNumber });
+  navigateToPdfPageWhenVisible(pageNumber);
   const textLayer = await waitForCitationTextLayer(pageNumber);
   if (!textLayer) {
     console.warn("[PDF Helper 引用定位] 文字层未加载，无法核对原文", {

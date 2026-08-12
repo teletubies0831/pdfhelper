@@ -86,6 +86,8 @@ export let currentRecentEntryId: { value: string | null } = { value: null };
 
 export let pendingReadingPosition: { value: ReadingPosition | null } = { value: null };
 
+export let lastReadingPosition: { value: ReadingPosition | null } = { value: null };
+
 export let readingPositionSaveHandle: { value: number | null } = { value: null };
 
 export let isRestoringReadingPosition = { value: false };

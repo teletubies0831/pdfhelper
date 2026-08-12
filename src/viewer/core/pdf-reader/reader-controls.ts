@@ -15,8 +15,8 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 
 
-import { canRedoAnnotation, canUndoAnnotation, pdfDocument, pdfViewer } from "../../app/viewer-state";
-import { appFrame, cardTypeButtons, copyCardButton, copySummaryButton, editorModeButtons, findInput, findNextButton, findPreviousButton, focusModeButton, focusModeLabel, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, nextButton, outlineList, outlineToggleButton, pageCountElement, pageNumberInput, previousButton, redoAnnotationButton, saveAnnotatedPdfButton, saveCardButton, saveSummaryNoteButton, smartCopyButton, summaryScopeButtons, toggleNotesButton, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton, zoomValueElement } from "../../app/viewer-elements";
+import { canRedoAnnotation, canUndoAnnotation, lastReadingPosition, pdfDocument, pdfViewer } from "../../app/viewer-state";
+import { appFrame, cardTypeButtons, copyCardButton, copySummaryButton, editorModeButtons, findInput, findNextButton, findPreviousButton, focusModeButton, focusModeLabel, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, nextButton, outlineList, outlineToggleButton, pageCountElement, pageNumberInput, previousButton, quickCurrentLocationButton, quickCurrentLocationLabel, quickLastLocationButton, quickLastLocationLabel, redoAnnotationButton, saveAnnotatedPdfButton, saveCardButton, saveSummaryNoteButton, smartCopyButton, summaryScopeButtons, toggleNotesButton, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton, zoomValueElement } from "../../app/viewer-elements";
 import { navigateToDestinationWithoutReturnHistory } from "../../features/assistant/public";
 import { getSelectionSurroundingText, updateSummaryMetadata, type SelectionSurroundingText } from "../../features/translation/public";
 
@@ -38,6 +38,21 @@ export function updateControls() {
   pageNumberInput.max = String(Math.max(1, pages));
   pageCountElement.textContent = String(pages);
   zoomValueElement.textContent = `${Math.round(scale * 100)}%`;
+  const readerPageSummary = document.querySelector<HTMLElement>(
+    "#reader-page-summary",
+  );
+  if (readerPageSummary) {
+    readerPageSummary.textContent = `第 ${page} 页 / 共 ${pages} 页`;
+  }
+  quickCurrentLocationLabel.textContent = hasDocument
+    ? `当前位置：第 ${page} 页`
+    : "当前位置：未打开 PDF";
+  quickCurrentLocationButton.disabled = !hasDocument;
+  const previousPage = lastReadingPosition.value?.pageNumber;
+  quickLastLocationLabel.textContent = previousPage
+    ? `上次阅读：第 ${previousPage} 页`
+    : "上次阅读：暂无记录";
+  quickLastLocationButton.disabled = !hasDocument || !previousPage;
 
   for (const control of [
     previousButton,
@@ -73,6 +88,25 @@ export function updateControls() {
   updateOutlineActivePage();
 }
 
+export function navigateToPdfPageWhenVisible(pageNumber: number): void {
+  if (!pdfDocument.value) return;
+  const targetPage = Math.min(
+    pdfDocument.value.numPages,
+    Math.max(1, Math.round(pageNumber)),
+  );
+  let remainingFrames = 8;
+  const navigate = () => {
+    if (!pdfDocument.value) return;
+    if (viewerElement.offsetParent && viewerElement.firstElementChild) {
+      pdfViewer.currentPageNumber = targetPage;
+      return;
+    }
+    remainingFrames -= 1;
+    if (remainingFrames > 0) requestAnimationFrame(navigate);
+  };
+  requestAnimationFrame(navigate);
+}
+
 
 
 export function setLeftPanelCollapsed(collapsed: boolean) {
@@ -99,14 +133,43 @@ export function setFocusMode(enabled: boolean): void {
 
 export function updateOutlineActivePage() {
   if (!outlineList) return;
-  const currentPage = String(pdfViewer.currentPageNumber || "");
-  for (const button of Array.from(
-    outlineList.querySelectorAll<HTMLButtonElement>("button"),
-  )) {
-    button.classList.toggle(
-      "active",
-      button.dataset.outlinePage === currentPage,
-    );
+  const currentPage = Math.max(1, Math.round(pdfViewer.currentPageNumber || 1));
+  const outlineButtons = Array.from(
+    outlineList.querySelectorAll<HTMLButtonElement>("button[data-outline-page]"),
+  );
+  let activeButton: HTMLButtonElement | null = null;
+  let activePage = Number.NEGATIVE_INFINITY;
+
+  for (const button of outlineButtons) {
+    const outlinePage = Number(button.dataset.outlinePage);
+    if (!Number.isInteger(outlinePage) || outlinePage > currentPage) continue;
+    if (outlinePage >= activePage) {
+      activeButton = button;
+      activePage = outlinePage;
+    }
+  }
+
+  if (!activeButton && outlineButtons.length > 0) {
+    activeButton = outlineButtons[0] ?? null;
+  }
+
+  const previousActiveButton = outlineList.querySelector<HTMLButtonElement>(
+    "button.active",
+  );
+  for (const button of outlineButtons) {
+    button.classList.toggle("active", button === activeButton);
+    if (button === activeButton) button.setAttribute("aria-current", "location");
+    else button.removeAttribute("aria-current");
+  }
+
+  if (activeButton && activeButton !== previousActiveButton) {
+    const listBounds = outlineList.getBoundingClientRect();
+    const buttonBounds = activeButton.getBoundingClientRect();
+    if (buttonBounds.top < listBounds.top) {
+      outlineList.scrollTop -= listBounds.top - buttonBounds.top + 6;
+    } else if (buttonBounds.bottom > listBounds.bottom) {
+      outlineList.scrollTop += buttonBounds.bottom - listBounds.bottom + 6;
+    }
   }
 }
 
@@ -242,7 +305,7 @@ export async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
       depth: 0,
       pageNumber,
       onClick: () => {
-        pdfViewer.currentPageNumber = pageNumber;
+        navigateToPdfPageWhenVisible(pageNumber);
       },
     });
   }

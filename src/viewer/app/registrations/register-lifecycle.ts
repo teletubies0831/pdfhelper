@@ -20,12 +20,12 @@ import { activeSummaryScope, cardAbortController, clearOutlineList, moreExamples
 import { autoResizeTranslationTextarea, cancelPendingAutomaticTranslation, scheduleAiSelectedSnippetUpdate } from "../../features/translation/public";
 import { cancelPendingSummaryGeneration } from "../../services/document-agent/viewer-document-agent";
 import { cancelPendingCardGeneration, installPaperCardInlineEditing } from "../../features/paper-card/public";
-import { areNoteIndicatorsHidden, hasUnsavedChanges, selectionRenderFrame, selectionRenderSettleFrame } from "../viewer-state";
+import { areNoteIndicatorsHidden, hasUnsavedChanges } from "../viewer-state";
 import { loadDeepSeekConfig, returnToPreviousInternalNavigationPosition, setCurrentApplicationView, updateReadingModeUi } from "../../features/assistant/public";
 import { updateNoteIndicatorsVisibility } from "../../features/annotations/public";
-import { cancelReadingPositionSave, persistCurrentReadingPosition, scheduleReadingPositionSave } from "../../features/recent-files/public";
+import { cancelReadingPositionSave, persistCurrentReadingPosition, restoreMostRecentPdf, scheduleReadingPositionSave } from "../../features/recent-files/public";
 import { openRemotePdf, saveAnnotatedPdf } from "../../core/pdf-reader/public";
-import { clearCustomSelection, hideAnnotationActionBar, hideHighlightNote, hideSelectionContextMenu, scheduleCustomSelectionRender } from "../../features/annotations/public";
+import { hideAnnotationActionBar, hideHighlightNote, hideSelectionContextMenu } from "../../features/annotations/public";
 
 
 
@@ -35,7 +35,6 @@ export function registerLifecycle(): void {
   let viewerSelectionPointerActive = false;
 
   document.addEventListener("selectionchange", () => {
-      scheduleCustomSelectionRender();
       // Building the AI sentence context walks the full PDF.js text layer.
       // Keep that work out of the pointer-drag hot path and run it once after
       // the browser has finalized the selection on pointerup.
@@ -44,11 +43,6 @@ export function registerLifecycle(): void {
   
   viewerElement.addEventListener("pointerdown", (event) => {
       if (event.button === 0) viewerSelectionPointerActive = true;
-      // Do not leave the previous selection canvas visible while a new native
-      // selection is being established.
-      cancelAnimationFrame(selectionRenderFrame.value);
-      cancelAnimationFrame(selectionRenderSettleFrame.value);
-      clearCustomSelection();
       // 开始新一轮拖选时，停止旧选区尚未发出的 AI 请求。
       cancelPendingAutomaticTranslation();
       translationAbortController.value?.abort();
@@ -61,15 +55,9 @@ export function registerLifecycle(): void {
       cardAbortController.value?.abort();
     });
   
-  viewerElement.addEventListener("pointerup", () => {
-      // The final browser selection geometry is available only after pointerup.
-      scheduleCustomSelectionRender();
-    });
-
   const finishViewerPointerSelection = () => {
       if (!viewerSelectionPointerActive) return;
       viewerSelectionPointerActive = false;
-      scheduleCustomSelectionRender();
       scheduleAiSelectedSnippetUpdate();
     };
 
@@ -86,10 +74,6 @@ export function registerLifecycle(): void {
       returnToPreviousInternalNavigationPosition,
     );
   
-  viewerContainer.addEventListener("scroll", scheduleCustomSelectionRender, {
-      passive: true,
-    });
-  
   viewerContainer.addEventListener(
       "scroll",
       () => {
@@ -100,8 +84,6 @@ export function registerLifecycle(): void {
       },
       { passive: true },
     );
-  
-  window.addEventListener("resize", scheduleCustomSelectionRender);
   
   window.addEventListener("resize", () => {
       autoResizeTranslationTextarea(selectedSnippetElement);
@@ -156,6 +138,8 @@ export function registerLifecycle(): void {
   
   if (source?.startsWith("http://") || source?.startsWith("https://")) {
       void openRemotePdf(source);
+    } else {
+      void restoreMostRecentPdf();
     }
   
   installOnlineRelatedPapers();

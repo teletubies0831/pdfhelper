@@ -16,8 +16,8 @@
 
 
 import { recentFilesDialog, recentFilesList, statusText, viewerContainer } from "../../app/viewer-elements";
-import { currentRecentEntryId, isOpeningDocument, isRestoringReadingPosition, pdfDocument, pdfViewer, pendingReadingPosition, readingPositionSaveHandle } from "../../app/viewer-state";
-import { updateControls } from "../../core/pdf-reader/public";
+import { currentRecentEntryId, isOpeningDocument, isRestoringReadingPosition, lastReadingPosition, pdfDocument, pdfViewer, pendingReadingPosition, readingPositionSaveHandle } from "../../app/viewer-state";
+import { navigateToPdfPageWhenVisible, updateControls } from "../../core/pdf-reader/public";
 import { getDisplayFileName, openPdf, openRemotePdf } from "../../core/pdf-reader/public";
 
 import type { FileHandleLike } from "../../app/viewer-types";
@@ -231,6 +231,13 @@ export function restoreReadingPositionAfterPagesInit() {
     return;
   }
 
+  restoreReadingPosition(position);
+}
+
+
+
+export function restoreReadingPosition(position: ReadingPosition) {
+  if (!pdfDocument.value) return;
   isRestoringReadingPosition.value = true;
   const pageNumber = Math.min(
     pdfDocument.value.numPages,
@@ -244,7 +251,7 @@ export function restoreReadingPositionAfterPagesInit() {
     pdfViewer.currentScaleValue = "page-width";
   }
 
-  pdfViewer.currentPageNumber = pageNumber;
+  navigateToPdfPageWhenVisible(pageNumber);
 
   const applyPosition = () => {
     viewerContainer.scrollTop = Math.max(
@@ -267,6 +274,14 @@ export function restoreReadingPositionAfterPagesInit() {
       isRestoringReadingPosition.value = false;
     }, 250);
   });
+}
+
+
+
+export function returnToLastReadingPosition() {
+  const position = lastReadingPosition.value;
+  if (!position) return;
+  restoreReadingPosition(position);
 }
 
 
@@ -311,6 +326,38 @@ export async function openRecentFile(entry: RecentPdfEntry) {
     throw new Error("最近记录无效。");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
+  }
+}
+
+
+
+export async function restoreMostRecentPdf(): Promise<boolean> {
+  if (pdfDocument.value || isOpeningDocument.value) return false;
+
+  try {
+    const [entry] = await readRecentFiles();
+    if (!entry) return false;
+
+    if (entry.kind === "remote" && entry.url) {
+      await openRemotePdf(entry.url);
+      return pdfDocument.value !== null;
+    }
+
+    if (entry.kind !== "local" || !entry.fileHandle) return false;
+    const descriptor = { mode: "read" as const };
+    const permission = await entry.fileHandle.queryPermission?.(descriptor);
+    if (permission && permission !== "granted") {
+      setStatus("点击“文件 → 最近打开”即可继续上次阅读。", false);
+      return false;
+    }
+
+    const file = await entry.fileHandle.getFile();
+    await openPdf(await file.arrayBuffer(), file.name, entry.fileHandle, false);
+    return pdfDocument.value !== null;
+  } catch (error) {
+    console.warn("PDF Helper failed to restore the most recent PDF.", error);
+    setStatus("未能自动打开上次阅读的 PDF，可从“文件 → 最近打开”重试。", true);
+    return false;
   }
 }
 

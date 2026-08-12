@@ -19,7 +19,7 @@ import { SAVED_PAPER_OVERVIEWS_STORAGE_KEY, editingPaperOverviewId, paperCardPag
 import { aiPanelToggleButton, appFrame, knowledgeBaseEntryButton, knowledgeBasePageElement, paperCardDocumentNameElement, paperCardFormElement, paperCardPageElement, paperCardSectionButtons, paperKeywordsInput, paperPersonalNotesInput, paperResearchAreaInput, paperTitleInput } from "../../app/viewer-elements";
 import { currentRecentEntryId, pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
 
-import { getDisplayFileName } from "../../core/pdf-reader/public";
+import { getDisplayFileName, navigateToPdfPageWhenVisible } from "../../core/pdf-reader/public";
 
 
 import { getDocumentChatId, setCurrentApplicationView } from "../assistant/public";
@@ -183,8 +183,7 @@ export function openPaperCardSource(): void {
   closePaperCardPage("pdf");
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      pdfViewer.currentPageNumber = 1;
-      pdfViewer.scrollPageIntoView({ pageNumber: 1 });
+      navigateToPdfPageWhenVisible(1);
       setStatus("已返回论文原文第 1 页。");
     });
   });

@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// Keep the helper panel on the same patched worker as the main viewer.
+import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
 import { ACTION_LABELS, SELECTION_STORAGE_KEY, isSelectionAction, type SelectionAction, type SelectionRequest } from '../../shared/selection';
 import { extractPdfSource } from '../../shared/pdf-source';

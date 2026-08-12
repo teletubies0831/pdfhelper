@@ -19,7 +19,15 @@ export function updateNoteIndicatorsVisibility() {
     "pdf-helper-notes-hidden",
     areNoteIndicatorsHidden.value,
   );
-  toggleNotesButton.textContent = areNoteIndicatorsHidden.value
+  let label = toggleNotesButton.querySelector<HTMLElement>(
+    "[data-toggle-notes-label]",
+  );
+  if (!label) {
+    label = document.createElement("span");
+    label.dataset.toggleNotesLabel = "";
+    toggleNotesButton.append(label);
+  }
+  label.textContent = areNoteIndicatorsHidden.value
     ? "显示笔记"
     : "隐藏笔记";
   if (areNoteIndicatorsHidden.value) hideHighlightNote();

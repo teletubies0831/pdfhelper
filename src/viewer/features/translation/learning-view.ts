@@ -46,9 +46,69 @@ export type SelectedSnippetDisplayMode = "preview" | "edit";
 
 export let selectedSnippetDisplayMode: { value: SelectedSnippetDisplayMode } = { value: "preview" };
 
+let selectedSnippetHighlightText = "";
 
 
-export function renderSelectedSnippetRichView(value: string): void {
+
+function createSelectionHighlightPattern(value: string): RegExp | null {
+  const normalizedValue = normalizeLearningInlineText(value);
+  if (!normalizedValue) return null;
+  const escapedValue = normalizedValue
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\s+/g, "\\s+");
+  if (!escapedValue) return null;
+  const isSingleWord = getSelectedEnglishWord(normalizedValue) === normalizedValue;
+  const pattern = isSingleWord
+    ? `(?<![\\p{L}\\p{M}’'-])${escapedValue}(?![\\p{L}\\p{M}’'-])`
+    : escapedValue;
+  return new RegExp(pattern, "giu");
+}
+
+
+
+function highlightSelectedSnippetText(
+  container: HTMLElement,
+  highlightedText: string,
+): void {
+  const pattern = createSelectionHighlightPattern(highlightedText);
+  if (!pattern) return;
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) {
+    const textNode = walker.currentNode as Text;
+    if (textNode.parentElement?.closest(".pdf-helper-math")) continue;
+    textNodes.push(textNode);
+  }
+
+  for (const textNode of textNodes) {
+    const text = textNode.data;
+    pattern.lastIndex = 0;
+    if (!pattern.test(text)) continue;
+    pattern.lastIndex = 0;
+
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    for (const match of text.matchAll(pattern)) {
+      const start = match.index ?? 0;
+      if (start > cursor) fragment.append(text.slice(cursor, start));
+      const highlight = document.createElement("mark");
+      highlight.className = "selected-snippet-highlight";
+      highlight.textContent = match[0];
+      fragment.append(highlight);
+      cursor = start + match[0].length;
+    }
+    if (cursor < text.length) fragment.append(text.slice(cursor));
+    textNode.replaceWith(fragment);
+  }
+}
+
+
+
+export function renderSelectedSnippetRichView(
+  value: string,
+  highlightedText = selectedSnippetHighlightText,
+): void {
   const text = value.trim();
   selectedSnippetMathPreview.replaceChildren();
 
@@ -61,12 +121,19 @@ export function renderSelectedSnippetRichView(value: string): void {
     return;
   }
 
-  renderChatMarkdown(
-    selectedSnippetMathPreview,
-    prepareKnowledgeEditorMarkdown(text),
-    false,
-    true,
-  );
+  if (containsLatexMath(text)) {
+    renderChatMarkdown(
+      selectedSnippetMathPreview,
+      prepareKnowledgeEditorMarkdown(text),
+      false,
+      true,
+    );
+  } else {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = text;
+    selectedSnippetMathPreview.replaceChildren(paragraph);
+  }
+  highlightSelectedSnippetText(selectedSnippetMathPreview, highlightedText);
 }
 
 
@@ -77,13 +144,18 @@ export function setSelectedSnippetDisplayMode(
 ): void {
   selectedSnippetDisplayMode.value = mode;
   const editing = mode === "edit";
+  const wordMode = Boolean(
+    translationResultElement.closest(".word-learning-mode"),
+  );
 
   selectedSnippetShell.classList.toggle("editing", editing);
   selectedSnippetElement.hidden = !editing;
   selectedSnippetMathPreview.hidden = editing;
   selectedSnippetModeToggleButton.textContent = editing
     ? "查看排版"
-    : "编辑英文";
+    : wordMode
+      ? "编辑原文"
+      : "编辑英文";
   selectedSnippetModeToggleButton.setAttribute(
     "aria-pressed",
     String(editing),
@@ -138,24 +210,54 @@ export function renderLearningRichText(
   return element;
 }
 
+function getTranslationPrimaryActions(): HTMLElement | null {
+  return document.querySelector<HTMLElement>("#translation-primary-actions");
+}
+
+function placeTranslationActionsBeforeResult(): void {
+  const actions = getTranslationPrimaryActions();
+  const resultSection = document.querySelector<HTMLElement>(
+    "#translation-result-section",
+  );
+  if (actions && resultSection) resultSection.before(actions);
+}
+
 
 
 export function setTranslationSelectionEditor(
   text: string,
   sourceSentence = "",
   sourceSentenceTranslation = "",
+  highlightedText?: string,
 ): void {
   const normalizedText = normalizeCopiedText(text);
   const normalizedSourceSentence = normalizeLearningInlineText(
     sourceSentence || normalizedText,
   );
+  const isWord = Boolean(getSelectedEnglishWord(normalizedText));
+  const requestedHighlight = normalizeLearningInlineText(
+    highlightedText ?? selectedSnippetHighlightText ?? normalizedText,
+  );
+  selectedSnippetHighlightText = isWord
+    ? normalizedText
+    : requestedHighlight || normalizedText;
+  if (!normalizedText) selectedSnippetHighlightText = "";
+  translationResultElement.closest("[data-ai-panel='translate']")
+    ?.classList.toggle("word-learning-mode", isWord);
   selectedSnippetElement.value = normalizedText;
   selectedSnippetElement.removeAttribute("title");
   autoResizeTranslationTextarea(selectedSnippetElement);
-  renderSelectedSnippetRichView(normalizedText);
+  renderSelectedSnippetRichView(normalizedText, selectedSnippetHighlightText);
   setSelectedSnippetDisplayMode("preview");
-  const isWord = Boolean(getSelectedEnglishWord(normalizedText));
   translationSourceSentenceField.hidden = !isWord;
+  if (isWord && normalizedSourceSentence) {
+    selectedSnippetElement.value = normalizedSourceSentence;
+    renderSelectedSnippetRichView(
+      normalizedSourceSentence,
+      selectedSnippetHighlightText,
+    );
+    autoResizeTranslationTextarea(selectedSnippetElement);
+  }
   translationSourceSentenceInput.value = isWord
     ? normalizedSourceSentence
     : "";
@@ -178,7 +280,11 @@ export function markTranslationEditorChanged(): void {
   const text = normalizeCopiedText(selectedSnippetElement.value);
   autoResizeTranslationTextarea(selectedSnippetElement);
   renderSelectedSnippetRichView(text);
-  const isWord = Boolean(getSelectedEnglishWord(text));
+  const isWord = Boolean(
+    translationResultElement.closest(".word-learning-mode"),
+  );
+  translationResultElement.closest("[data-ai-panel='translate']")
+    ?.classList.toggle("word-learning-mode", isWord);
   translationSourceSentenceField.hidden = !isWord;
   applyTranslationEditButton.disabled = !text;
 }
@@ -331,10 +437,20 @@ export function parseSentenceLearningResult(
 
 
 export function renderVocabularyLearningResult(result: VocabularyLearningResult): void {
+  translationResultElement.closest("[data-ai-panel='translate']")
+    ?.classList.add("word-learning-mode");
+  const selectionTitle = document.querySelector<HTMLElement>(
+    ".translation-selection-section h3",
+  );
+  if (selectionTitle) selectionTitle.textContent = "1. 选中段落";
+  placeTranslationActionsBeforeResult();
   setTranslationLearningTitle("单词学习");
   translationLearningHintElement.textContent =
     "原句与完整翻译显示在上方；下方例句只用于扩展不同用法。";
   translationSourceSentenceField.hidden = false;
+  selectedSnippetElement.value = result.sentence;
+  renderSelectedSnippetRichView(result.sentence, selectedSnippetHighlightText);
+  autoResizeTranslationTextarea(selectedSnippetElement);
   translationSourceSentenceInput.value = result.sentence;
   autoResizeTranslationTextarea(translationSourceSentenceInput);
   renderTranslationMathPreview(
@@ -391,50 +507,8 @@ export function renderVocabularyLearningResult(result: VocabularyLearningResult)
   }
   card.append(meaning);
 
-  const senses = createLearningElement("section", "english-learning-block");
-  senses.append(createLearningElement("h4", "english-learning-label", "全部义项与英英释义"));
-  const allSenses = result.senses.length
-    ? result.senses
-    : result.partsOfSpeech.map((part) => ({ ...part, definitionEn: "" }));
-  if (!allSenses.length) {
-    senses.append(createLearningElement("p", "english-learning-empty", "未返回可用义项。"));
-  } else {
-    const list = createLearningElement("div", "english-sense-list");
-    allSenses.forEach((sense) => {
-      const item = createLearningElement("article", "english-sense-card");
-      const title = createLearningElement("div", "english-sense-title");
-      title.append(
-        createLearningElement("span", "english-pos-tag", sense.label),
-        createLearningElement("strong", "english-sense-meaning", sense.meaning),
-      );
-      item.append(title);
-      if (sense.definitionEn) {
-        item.append(createLearningElement("p", "english-sense-definition", sense.definitionEn));
-      }
-      list.append(item);
-    });
-    senses.append(list);
-  }
-  card.append(senses);
-
-  if (result.forms.length) {
-    const forms = createLearningElement("section", "english-learning-block");
-    forms.append(createLearningElement("h4", "english-learning-label", "词形变化"));
-    const list = createLearningElement("div", "english-form-list");
-    result.forms.forEach((form) => {
-      const item = createLearningElement("span", "english-form-chip");
-      item.append(
-        createLearningElement("strong", "english-form-label", form.label),
-        document.createTextNode(` ${form.value}`),
-      );
-      list.append(item);
-    });
-    forms.append(list);
-    card.append(forms);
-  }
-
   const examples = createLearningElement("section", "english-learning-block");
-  examples.append(createLearningElement("h4", "english-learning-label", "例句"));
+  examples.append(createLearningElement("h4", "english-learning-label", "3. 例句"));
   result.examples.forEach((example, index) => {
     const item = createLearningElement("article", "english-example-card");
     const label = "例句 " + String(index + 1) + " · " + example.usage;
@@ -453,9 +527,7 @@ export function renderVocabularyLearningResult(result: VocabularyLearningResult)
     );
     examples.append(item);
   });
-  card.append(examples);
-
-  translationResultElement.replaceChildren(card);
+  translationResultElement.replaceChildren(card, examples);
   translationResultElement.classList.remove("error");
   setMoreExamplesButtonVisible(true);
 }
@@ -463,6 +535,12 @@ export function renderVocabularyLearningResult(result: VocabularyLearningResult)
 
 
 export function renderSentenceLearningResult(result: SentenceLearningResult): void {
+  translationResultElement.closest("[data-ai-panel='translate']")
+    ?.classList.remove("word-learning-mode");
+  const selectionTitle = document.querySelector<HTMLElement>(
+    ".translation-selection-section h3",
+  );
+  if (selectionTitle) selectionTitle.textContent = "1. 选中英文";
   setTranslationLearningTitle("原句翻译");
   translationLearningHintElement.textContent =
     "已给出当前选中原句的完整译文，并仅挑选值得学习的术语、学术表达或较难词汇。";
@@ -489,6 +567,8 @@ export function renderSentenceLearningResult(result: SentenceLearningResult): vo
     ),
   );
   card.append(translation);
+  const primaryActions = getTranslationPrimaryActions();
+  if (primaryActions) card.append(primaryActions);
 
   const keywords = createLearningElement("section", "english-learning-block");
   keywords.append(

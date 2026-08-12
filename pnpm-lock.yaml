@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  pdfjs-dist@5.7.284: edcfb856896d0977c4ff909202993ab8dcad0d54609ab7a6c374ddd3b6f0e04a
+
 importers:
 
   .:
@@ -27,8 +30,8 @@ importers:
         specifier: ^1.17.1
         version: 1.17.1
       pdfjs-dist:
-        specifier: ^5.4.624
-        version: 5.7.284
+        specifier: 5.7.284
+        version: 5.7.284(patch_hash=edcfb856896d0977c4ff909202993ab8dcad0d54609ab7a6c374ddd3b6f0e04a)
       zod:
         specifier: ^4.0.0
         version: 4.4.3
@@ -3144,7 +3147,7 @@ snapshots:
       pako: 1.0.11
       tslib: 1.14.1
 
-  pdfjs-dist@5.7.284:
+  pdfjs-dist@5.7.284(patch_hash=edcfb856896d0977c4ff909202993ab8dcad0d54609ab7a6c374ddd3b6f0e04a):
     optionalDependencies:
       '@napi-rs/canvas': 0.1.100
 

@@ -18,6 +18,14 @@ export const readingModeSelect = requiredElement<HTMLSelectElement>(
   "reading-mode-select",
 );
 
+export const readingModeTriggerLabel = requiredElement<HTMLElement>(
+  "reading-mode-trigger-label",
+);
+
+export const readingModeMenuButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-reading-mode-value]"),
+);
+
 export const detectReadingModeButton = requiredElement<HTMLButtonElement>(
   "detect-reading-mode",
 );

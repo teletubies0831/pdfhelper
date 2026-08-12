@@ -18,7 +18,7 @@
 import { resolvedReadingMode } from "../../core/pdf-reader/public";
 import { currentRecentEntryId, pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
 import { getCurrentChapterContext } from "../translation/public";
-import { getDisplayFileName } from "../../core/pdf-reader/public";
+import { getDisplayFileName, navigateToPdfPageWhenVisible } from "../../core/pdf-reader/public";
 import { openRecentFile, readRecentFiles, setStatus } from "../recent-files/public";
 import { getDocumentChatId } from "../assistant/public";
 import { getKnowledgeExcerpt, normalizeKnowledgeTags, readReadingJournalEntries, refreshKnowledgeBaseIfOpen, writeReadingJournalEntries } from "../knowledge-base/public";
@@ -95,8 +95,7 @@ export async function openReadingJournalSource(entry: SavedReadingJournalEntry):
   const pageNumber = Math.min(pdfDocument.value.numPages, Math.max(1, entry.pageNumber));
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      pdfViewer.currentPageNumber = pageNumber;
-      pdfViewer.scrollPageIntoView({ pageNumber });
+      navigateToPdfPageWhenVisible(pageNumber);
       setStatus(`已定位到“${entry.title}”的原文：第 ${pageNumber} 页。`);
     });
   });

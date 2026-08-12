@@ -39,3 +39,15 @@ export const copyCardButton = requiredElement<HTMLButtonElement>("copy-card");
 export const saveCardButton = requiredElement<HTMLButtonElement>("save-card");
 
 export const outlineList = document.querySelector<HTMLElement>(".outline-list");
+
+export const quickCurrentLocationButton =
+  requiredElement<HTMLButtonElement>("quick-current-location");
+
+export const quickCurrentLocationLabel =
+  requiredElement<HTMLElement>("quick-current-location-label");
+
+export const quickLastLocationButton =
+  requiredElement<HTMLButtonElement>("quick-last-location");
+
+export const quickLastLocationLabel =
+  requiredElement<HTMLElement>("quick-last-location-label");

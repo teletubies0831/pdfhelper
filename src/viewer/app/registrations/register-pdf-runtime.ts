@@ -1,5 +1,7 @@
 import { AnnotationEditorType, GlobalWorkerOptions, type AnnotationEditorUIManager } from "pdfjs-dist";
-import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+// Use the readable worker build so the repository's PDF.js text-metric patch
+// is applied before WXT performs the production minification step.
+import workerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 
 
 

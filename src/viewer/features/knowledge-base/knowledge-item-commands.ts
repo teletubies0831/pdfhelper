@@ -4,7 +4,7 @@ import { openReadingJournalSource, readSavedPaperCards, readSavedPaperOverviews 
 import { knowledgeEditorBodyInput, knowledgeEditorCategoryInput, knowledgeEditorTagsInput, knowledgeEditorTitleInput } from "../../app/viewer-elements";
 
 import { pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
-import { getDisplayFileName } from "../../core/pdf-reader/public";
+import { getDisplayFileName, navigateToPdfPageWhenVisible } from "../../core/pdf-reader/public";
 import { getCurrentChapterContext } from "../translation/public";
 import { setStatus } from "../recent-files/public";
 import type { KnowledgeItem } from "../../core/pdf-reader/public";
@@ -177,8 +177,7 @@ export function openSelectedKnowledgeSource(): void {
   // PDF.js rejects scrolling while its page container has no offset parent.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      pdfViewer.currentPageNumber = pageNumber;
-      pdfViewer.scrollPageIntoView({ pageNumber });
+      navigateToPdfPageWhenVisible(pageNumber);
       setStatus(`已定位到“${item.title}”的来源：第 ${pageNumber} 页。`);
     });
   });

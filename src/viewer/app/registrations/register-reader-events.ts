@@ -15,15 +15,15 @@ import { AnnotationEditorType } from "pdfjs-dist";
 
 
 
-import { annotationActionBar, clearRecentFilesButton, closeHighlightNoteButton, closeRecentFilesButton, contextCleanCopyButton, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteAnnotationButton, deleteHighlightNoteButton, editorModeButtons, fileInput, findBar, findCloseButton, findInput, findNextButton, findPreviousButton, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, highlightColorInput, highlightNotePopover, highlightNoteText, nextButton, openFileButton, pageNumberInput, previousButton, quickHighlightButtons, recentFilesButton, recentFilesDialog, redoAnnotationButton, saveHighlightNoteButton, selectionContextMenu, smartCopyButton, translationHistoryDialog, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton } from "../viewer-elements";
-import { getViewerSelectionRawText, getViewerSelectionText, normalizeCopiedText, updateControls } from "../../core/pdf-reader/public";
+import { annotationActionBar, clearRecentFilesButton, closeHighlightNoteButton, closeRecentFilesButton, contextCleanCopyButton, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteAnnotationButton, deleteHighlightNoteButton, editorModeButtons, eraseSelectedAnnotationButton, fileInput, findBar, findCloseButton, findInput, findNextButton, findPreviousButton, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, highlightColorInput, highlightNotePopover, highlightNoteText, nextButton, openFileButton, pageNumberInput, previousButton, quickCurrentLocationButton, quickHighlightButtons, quickLastLocationButton, recentFilesButton, recentFilesDialog, redoAnnotationButton, saveHighlightNoteButton, selectionContextMenu, smartCopyButton, translationHistoryDialog, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton } from "../viewer-elements";
+import { getViewerSelectionRawText, getViewerSelectionText, navigateToPdfPageWhenVisible, normalizeCopiedText, updateControls } from "../../core/pdf-reader/public";
 
 
 
 import { annotationEditor, contextHighlightEditor, contextSelectionText, lastPointerDown, pdfDocument, pdfViewer, selectedAnnotationEditor } from "../viewer-state";
 
 import { confirmDiscardUnsavedChanges, isHighlightEditor } from "../../features/annotations/public";
-import { hideRecentFilesDialog, renderRecentFiles, setStatus, showRecentFilesDialog, writeRecentFiles } from "../../features/recent-files/public";
+import { hideRecentFilesDialog, renderRecentFiles, returnToLastReadingPosition, setStatus, showRecentFilesDialog, writeRecentFiles } from "../../features/recent-files/public";
 import { closeFindBar, openFindBar, openPdf, runSearch, saveAnnotatedPdf } from "../../core/pdf-reader/public";
 import { clearDomSelection, clearSelectedAnnotationState, createQuickHighlight, deleteSelectedAnnotation, deleteSelectedHighlight, findAnnotationEditor, findAnnotationEditorAtPoint, getFreeTextSize, getHighlightNote, hideAnnotationActionBar, hideHighlightNote, hideSelectionContextMenu, highlightCurrentSelectionFromToolbar, isEditableOrControl, isInkMode, isPointInsideSavedSelection, isPointInsideTextGlyph, isTextSelectionMode, saveContextSelection, saveHighlightNote, selectAnnotation, selectHighlight, setEditorMode, setFreeTextColor, setFreeTextSize, setHighlightColor, showAnnotationActionBar, showHighlightNote, showSelectionContextMenuAt, toggleHighlightNote } from "../../features/annotations/public";
 
@@ -32,6 +32,11 @@ import type { FilePickerWindow } from "../viewer-types";
 
 
 export function registerReaderEvents(): void {
+  for (const searchButton of document.querySelectorAll<HTMLButtonElement>(
+    "#outline-search-button, #reader-search-button",
+  )) {
+    searchButton.addEventListener("click", openFindBar);
+  }
   const pointerHighlightCache = new WeakMap<PointerEvent, any | null>();
   const getPointerHighlight = (event: PointerEvent): any | null => {
     if (pointerHighlightCache.has(event)) {
@@ -123,11 +128,19 @@ export function registerReaderEvents(): void {
         page >= 1 &&
         page <= pdfDocument.value.numPages
       ) {
-        pdfViewer.currentPageNumber = page;
+        navigateToPdfPageWhenVisible(page);
       } else {
         updateControls();
       }
-    });
+  });
+
+  quickCurrentLocationButton.addEventListener("click", () => {
+    navigateToPdfPageWhenVisible(pdfViewer.currentPageNumber);
+  });
+
+  quickLastLocationButton.addEventListener("click", () => {
+    returnToLastReadingPosition();
+  });
   
   zoomOutButton.addEventListener("click", () => {
       pdfViewer.currentScale = Math.max(0.25, pdfViewer.currentScale / 1.1);
@@ -166,6 +179,8 @@ export function registerReaderEvents(): void {
         if (mode === "text") setEditorMode(AnnotationEditorType.FREETEXT);
       });
     }
+
+  eraseSelectedAnnotationButton.addEventListener("click", deleteSelectedAnnotation);
   
   highlightColorInput.addEventListener("input", () => {
       setHighlightColor(highlightColorInput.value);

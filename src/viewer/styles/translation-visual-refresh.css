@@ -1,0 +1,455 @@
+/* Translation panel composition aligned with the redesigned reader shell. */
+
+.right-panel {
+  padding: 10px 10px 8px;
+}
+
+.assistant-tabs {
+  min-height: 44px;
+  margin-bottom: 10px;
+  border-radius: 9px;
+  background: #f5f7fb;
+  padding: 4px;
+}
+
+.assistant-tabs button {
+  min-height: 36px;
+  border-radius: 7px;
+  color: #455672;
+  font-size: 12px;
+}
+
+.assistant-tabs button.active {
+  box-shadow: 0 2px 8px rgb(25 45 74 / 8%);
+  color: var(--reader-blue);
+}
+
+.translation-scroll-content {
+  padding: 0 3px 6px;
+}
+
+.ai-section {
+  margin-bottom: 16px;
+}
+
+.ai-section h3 {
+  color: var(--reader-text);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.selected-snippet-heading-row {
+  min-height: 32px;
+  margin-bottom: 6px;
+}
+
+.selected-snippet-mode-toggle {
+  height: 30px;
+  border-radius: 8px;
+  background: #fffaf3;
+}
+
+.selected-snippet-shell {
+  min-height: 106px;
+  max-height: 210px;
+  border-color: #f2b06b;
+  border-radius: 9px;
+  background: #fffdf8;
+}
+
+.selected-snippet-rich-view,
+.selected-snippet-shell .selected-snippet {
+  min-height: 106px;
+  max-height: 210px;
+  padding: 13px 14px;
+  color: #111827 !important;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.selected-snippet-rich-view p,
+.selected-snippet-rich-view li,
+.selected-snippet-rich-view span:not(.pdf-helper-math *) {
+  color: #111827 !important;
+}
+
+.selected-snippet-highlight {
+  border-radius: 2px;
+  background: #fff09a !important;
+  box-decoration-break: clone;
+  color: #b76700 !important;
+  font-weight: 750;
+  text-decoration-line: underline;
+  text-decoration-color: #e09128;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  -webkit-box-decoration-break: clone;
+}
+
+.translation-source-sentence-field {
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.translation-source-sentence-field textarea {
+  min-height: 78px;
+  max-height: 118px;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.word-learning-mode .translation-source-label,
+.word-learning-mode #translation-source-sentence,
+.word-learning-mode #translation-source-sentence-math-preview {
+  display: none !important;
+}
+
+.translation-source-sentence-translation {
+  border-left-width: 2px;
+  border-radius: 9px;
+  background: #f5f8fd;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 8px 10px;
+}
+
+.translation-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: -2px 0 14px;
+}
+
+.translation-primary-actions button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-color: #dfe7f2;
+  border-radius: 8px;
+  background: #fff;
+  color: #33445f;
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 0 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.translation-action-icon,
+.translation-history-trigger-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.translation-primary-actions .translation-primary-examples {
+  display: none;
+}
+
+.word-learning-mode .translation-primary-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.word-learning-mode .translation-primary-actions .translation-primary-examples:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.word-learning-mode .translation-source-sentence-field {
+  display: grid;
+}
+
+#translation-result-section {
+  margin-bottom: 0;
+}
+
+#translation-learning-title {
+  margin-bottom: 7px;
+}
+
+.translation-result-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.translation-result-heading #translation-learning-title {
+  margin: 0;
+}
+
+.translation-inline-history {
+  display: none;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: #53647d;
+  font-size: 11px;
+  padding: 0 3px;
+}
+
+.word-learning-mode .translation-inline-history {
+  display: inline-flex;
+}
+
+.translation-inline-history strong {
+  display: inline-grid;
+  min-width: 19px;
+  height: 19px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: #1763d6;
+  font-size: 10px;
+}
+
+.ai-result-box {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.7;
+  padding: 0;
+}
+
+.english-learning-card {
+  display: grid;
+  gap: 10px;
+}
+
+.english-learning-card.word-card {
+  border: 1px solid #e4eaf3;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.english-learning-card.word-card + .english-learning-block {
+  margin-top: 12px;
+}
+
+.english-learning-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  border-bottom: 1px solid #edf1f7;
+  padding-bottom: 8px;
+}
+
+.english-learning-word {
+  color: #1455b8;
+  font-size: 21px;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.english-learning-pronunciation {
+  color: #65728a;
+  font-size: 11px;
+}
+
+.english-learning-meta,
+.english-form-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.english-learning-chip,
+.english-form-chip {
+  border: 1px solid #d9e5f7;
+  border-radius: 999px;
+  background: #f4f8ff;
+  color: #50617a;
+  font-size: 10px;
+  line-height: 1.45;
+  padding: 2px 7px;
+}
+
+.english-form-label {
+  color: #2563d9;
+  font-weight: 700;
+}
+
+.english-learning-label {
+  margin: 0 0 5px;
+  color: #33435e;
+  font-size: 12px;
+}
+
+.english-learning-block {
+  margin: 0;
+}
+
+.english-learning-context-meaning {
+  color: #1f2d46;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.english-pos-list {
+  margin-top: 6px;
+}
+
+.english-pos-row {
+  gap: 7px;
+  font-size: 11px;
+}
+
+.english-pos-tag {
+  border: 0;
+  border-radius: 4px;
+  background: #e9f2ff;
+  color: #1764d9;
+  font-size: 10px;
+  padding: 1px 5px;
+}
+
+.english-sense-list {
+  display: grid;
+  gap: 5px;
+}
+
+.english-sense-card {
+  border-left: 2px solid #8ab4ff;
+  border-radius: 0 6px 6px 0;
+  background: #f7f9fc;
+  padding: 6px 8px;
+}
+
+.english-sense-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.english-sense-meaning,
+.english-sense-definition {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.english-sense-definition {
+  margin: 5px 0 0;
+  color: #65728a;
+}
+
+.english-example-card {
+  border-color: #e3e9f2;
+  border-radius: 8px;
+  background: #fff;
+  padding: 9px 10px;
+}
+
+.english-example-en,
+.english-example-zh {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.sentence-card .english-learning-block:first-child {
+  margin-bottom: 4px;
+  border: 1px solid #e4eaf3;
+  border-radius: 9px;
+  background: #f7f9fc;
+  padding: 11px 12px;
+}
+
+.sentence-card .english-learning-block:first-child .english-learning-label {
+  display: none;
+}
+
+.english-sentence-translation {
+  color: #22314a;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.65;
+}
+
+.english-keyword-list {
+  display: grid;
+  gap: 7px;
+}
+
+.english-keyword-card {
+  border: 1px solid #e4eaf3;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 9px 11px;
+}
+
+.english-keyword-title {
+  gap: 7px;
+}
+
+.english-keyword-word {
+  color: #1457bc;
+  font-size: 14px;
+}
+
+.english-keyword-meaning {
+  margin-top: 4px;
+  color: #53637b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.translation-native-actions {
+  display: none !important;
+}
+
+.translation-bottom-dock {
+  display: block;
+  margin-top: 0;
+  border-top-color: #e9eef5;
+  box-shadow: none;
+  padding: 8px 2px 2px;
+}
+
+.word-learning-mode .translation-bottom-dock {
+  display: none;
+}
+
+.word-learning-mode:has(.selected-snippet-shell.editing) .translation-bottom-dock {
+  display: block;
+}
+
+.translation-dock-tools {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.translation-bottom-dock #open-translation-history {
+  display: inline-flex;
+}
+
+.word-learning-mode .translation-bottom-dock #open-translation-history {
+  display: none;
+}
+
+.translation-bottom-dock button {
+  min-height: 38px;
+  border-radius: 8px;
+}
+
+.translation-learning-hint {
+  display: none !important;
+}

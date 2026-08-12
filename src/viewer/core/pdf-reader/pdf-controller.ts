@@ -15,7 +15,7 @@ import { executeMemoryTool } from "../../../../entrypoints/viewer/memory-store";
 
 
 
-import { activeEditorMode, annotationEditor, annotationEditorWarmUpInFlight, canRedoAnnotation, canUndoAnnotation, currentFileHandle, currentRecentEntryId, eventBus, findController, isOpeningDocument, isRestoringReadingPosition, isSavingAnnotatedPdf, linkService, nativeAnnotationNotes, pdfDocument, pdfViewer, pendingReadingPosition, restoredAnnotationWarmUpPending, restoredHelperNotesBySignature, restoredHelperNotesByStorageKey, sourceName, sourcePdfBytes } from '../../app/viewer-state';
+import { activeEditorMode, annotationEditor, annotationEditorWarmUpInFlight, canRedoAnnotation, canUndoAnnotation, currentFileHandle, currentRecentEntryId, eventBus, findController, isOpeningDocument, isRestoringReadingPosition, isSavingAnnotatedPdf, lastReadingPosition, linkService, nativeAnnotationNotes, pdfDocument, pdfViewer, pendingReadingPosition, restoredAnnotationWarmUpPending, restoredHelperNotesBySignature, restoredHelperNotesByStorageKey, sourceName, sourcePdfBytes } from '../../app/viewer-state';
 import { confirmDiscardUnsavedChanges, embedHelperAnnotationsIntoPdf, getPdfFingerprint, markSavedChanges, restoreHelperAnnotations, writeEmbeddedPdfBytes } from '../../features/annotations/public';
 import { cancelReadingPositionSave, rememberRecentPdf, setStatus } from '../../features/recent-files/public';
 import { cancelPendingAutomaticTranslation, ensureTranslationHistoryLoaded, renderTranslationHistory, setMoreExamplesButtonVisible, setTranslationLearningTitle, setTranslationSelectionEditor, setTranslationState } from '../../features/translation/public';
@@ -51,6 +51,7 @@ export async function openPdf(
   cancelReadingPositionSave();
   currentRecentEntryId.value = null;
   pendingReadingPosition.value = null;
+  lastReadingPosition.value = null;
   isRestoringReadingPosition.value = false;
   clearInternalNavigationHistory();
 
@@ -66,7 +67,15 @@ export async function openPdf(
     const rawPdfBytes =
       data instanceof Uint8Array ? new Uint8Array(data) : new Uint8Array(data);
     sourcePdfBytes.value = rawPdfBytes;
-    const loadingTask = getDocument({ data: new Uint8Array(rawPdfBytes) });
+    const loadingTask = getDocument({
+      data: new Uint8Array(rawPdfBytes),
+      standardFontDataUrl: new URL(
+        "pdfjs-standard-fonts/",
+        window.location.href,
+      ).href,
+      useSystemFonts: true,
+      useWorkerFetch: false,
+    });
     const documentProxy = await loadingTask.promise;
     pdfDocument.value = documentProxy;
     sourceName.value = name;
@@ -94,6 +103,7 @@ export async function openPdf(
     );
     currentRecentEntryId.value = recentEntry?.id ?? null;
     pendingReadingPosition.value = recentEntry?.readingPosition ?? null;
+    lastReadingPosition.value = recentEntry?.readingPosition ?? null;
     await executeMemoryTool({
       name: "library.recordOpen",
       arguments: {
@@ -156,6 +166,7 @@ export async function openPdf(
     currentFileHandle.value = null;
     currentRecentEntryId.value = null;
     pendingReadingPosition.value = null;
+    lastReadingPosition.value = null;
     isRestoringReadingPosition.value = false;
     sourcePdfBytes.value = null;
     restoredAnnotationWarmUpPending.value = false;

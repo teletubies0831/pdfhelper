@@ -449,9 +449,6 @@ export let currentEnglishLearningSourceSentence = { value: "" };
 export const TRANSLATION_HISTORY_STORAGE_KEY = "pdf-helper-translation-history-v1";
 
 
-export const MAX_TRANSLATION_HISTORY_PER_DOCUMENT = 200;
-
-
 
 export interface TranslationHistoryEntry {
   id: string;

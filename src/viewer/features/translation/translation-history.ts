@@ -17,7 +17,7 @@ import { browser } from "wxt/browser";
 
 
 import { clearTranslationHistoryButton, openTranslationHistoryButton, translationHistoryCountElement, translationHistoryDialog, translationHistoryDialogCount, translationHistoryDialogList, translationHistorySearchInput } from "../../app/viewer-elements";
-import { MAX_TRANSLATION_HISTORY_PER_DOCUMENT, TRANSLATION_HISTORY_STORAGE_KEY, currentEnglishLearningResult, currentEnglishLearningSourceText, lastTranslatedText, selectedTextForAi, selectedTextPageNumber, translationHistoryDocumentKey, translationHistoryEntries } from "../../core/pdf-reader/public";
+import { TRANSLATION_HISTORY_STORAGE_KEY, currentEnglishLearningResult, currentEnglishLearningSourceText, lastTranslatedText, selectedTextForAi, selectedTextPageNumber, translationHistoryDocumentKey, translationHistoryEntries } from "../../core/pdf-reader/public";
 
 
 import { pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
@@ -29,6 +29,10 @@ import { setStatus } from "../recent-files/public";
 import type { EnglishLearningResult, TranslationHistoryEntry, TranslationHistoryStore } from "../../core/pdf-reader/public";
 import { renderSentenceLearningResult, renderVocabularyLearningResult, setTranslationSelectionEditor } from './learning-view';
 import { createLearningElement } from './selection-context';
+
+
+
+const translationHistoryIndex = new Map<string, TranslationHistoryEntry>();
 
 
 
@@ -118,8 +122,7 @@ export function readTranslationHistoryEntries(value: unknown): TranslationHistor
       };
     })
     .filter((entry): entry is TranslationHistoryEntry => Boolean(entry))
-    .sort((left, right) => right.updatedAt - left.updatedAt)
-    .slice(0, MAX_TRANSLATION_HISTORY_PER_DOCUMENT);
+    .sort((left, right) => right.updatedAt - left.updatedAt);
 }
 
 
@@ -146,6 +149,7 @@ export function restoreTranslationHistoryEntry(entry: TranslationHistoryEntry): 
     restoredText,
     entry.result.kind === "word" ? entry.result.sentence : "",
     entry.result.kind === "word" ? entry.result.sentenceTranslation : "",
+    restoredText,
   );
   if (entry.result.kind === "word") {
     renderVocabularyLearningResult(entry.result);
@@ -236,6 +240,10 @@ export function renderTranslationHistoryDialog(): void {
 
 export function renderTranslationHistory(): void {
   translationHistoryCountElement.textContent = String(translationHistoryEntries.value.length);
+  const inlineCount = document.querySelector<HTMLElement>(
+    "#translation-inline-history-count",
+  );
+  if (inlineCount) inlineCount.textContent = String(translationHistoryEntries.value.length);
   clearTranslationHistoryButton.hidden = translationHistoryEntries.value.length === 0;
   openTranslationHistoryButton.classList.toggle(
     "has-records",
@@ -263,6 +271,7 @@ export async function deleteTranslationHistoryEntry(id: string): Promise<void> {
   translationHistoryEntries.value = translationHistoryEntries.value.filter(
     (entry) => entry.id !== id,
   );
+  rebuildTranslationHistoryIndex();
   await persistTranslationHistoryEntries();
   renderTranslationHistory();
   if (!translationHistoryDialog.hidden) renderTranslationHistoryDialog();
@@ -277,7 +286,79 @@ export async function ensureTranslationHistoryLoaded(): Promise<void> {
   const store = stored[TRANSLATION_HISTORY_STORAGE_KEY] as TranslationHistoryStore | undefined;
   translationHistoryDocumentKey.value = documentKey;
   translationHistoryEntries.value = readTranslationHistoryEntries(store?.[documentKey]);
+  rebuildTranslationHistoryIndex();
   renderTranslationHistory();
+}
+
+
+
+function normalizeTranslationCacheText(value: string): string {
+  return value
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleLowerCase("en-US");
+}
+
+
+
+function getTranslationHistoryCacheKey(
+  selectedText: string,
+  sourceSentence: string,
+  kind: EnglishLearningResult["kind"],
+): string {
+  const normalizedSelection = normalizeTranslationCacheText(selectedText);
+  const normalizedSentence = normalizeTranslationCacheText(sourceSentence);
+  return kind === "word"
+    ? `word:${normalizedSelection}:${normalizedSentence}`
+    : `sentence:${normalizedSentence}`;
+}
+
+
+
+function getTranslationHistoryEntryCacheKey(
+  entry: TranslationHistoryEntry,
+): string {
+  if (entry.result.kind === "word") {
+    return getTranslationHistoryCacheKey(
+      entry.result.selectedWord || entry.result.word || entry.sourceText,
+      entry.result.sentence || "",
+      "word",
+    );
+  }
+  return getTranslationHistoryCacheKey(
+    entry.sourceText,
+    entry.result.sourceText || entry.sourceText,
+    "sentence",
+  );
+}
+
+
+
+function rebuildTranslationHistoryIndex(): void {
+  translationHistoryIndex.clear();
+  // Entries are newest-first. Keep the newest result if old storage contains
+  // duplicate semantic keys created by an earlier ID format.
+  for (const entry of translationHistoryEntries.value) {
+    const cacheKey = getTranslationHistoryEntryCacheKey(entry);
+    if (!translationHistoryIndex.has(cacheKey)) {
+      translationHistoryIndex.set(cacheKey, entry);
+    }
+  }
+}
+
+
+
+export async function findTranslationHistoryResult(
+  selectedText: string,
+  sourceSentence: string,
+  kind: EnglishLearningResult["kind"],
+): Promise<TranslationHistoryEntry | undefined> {
+  await ensureTranslationHistoryLoaded();
+  return translationHistoryIndex.get(
+    getTranslationHistoryCacheKey(selectedText, sourceSentence, kind),
+  );
 }
 
 
@@ -289,9 +370,16 @@ export async function storeTranslationHistoryResult(
   await ensureTranslationHistoryLoaded();
   const normalizedSource = sourceText.replace(/\s+/g, " ").trim();
   if (!normalizedSource) return;
-  const id = `${result.kind}:${normalizedSource.toLocaleLowerCase()}`;
+  const sourceSentence = result.kind === "word"
+    ? result.sentence || ""
+    : result.sourceText || normalizedSource;
+  const cacheKey = getTranslationHistoryCacheKey(
+    normalizedSource,
+    sourceSentence,
+    result.kind,
+  );
   const entry: TranslationHistoryEntry = {
-    id,
+    id: cacheKey,
     sourceText: normalizedSource,
     pageNumber: Math.max(1, selectedTextPageNumber.value || pdfViewer.currentPageNumber || 1),
     result,
@@ -299,8 +387,11 @@ export async function storeTranslationHistoryResult(
   };
   translationHistoryEntries.value = [
     entry,
-    ...translationHistoryEntries.value.filter((item) => item.id !== id),
-  ].slice(0, MAX_TRANSLATION_HISTORY_PER_DOCUMENT);
+    ...translationHistoryEntries.value.filter(
+      (item) => getTranslationHistoryEntryCacheKey(item) !== cacheKey,
+    ),
+  ];
+  rebuildTranslationHistoryIndex();
   await persistTranslationHistoryEntries();
   renderTranslationHistory();
 }
@@ -310,6 +401,7 @@ export async function storeTranslationHistoryResult(
 export async function clearCurrentTranslationHistory(): Promise<void> {
   await ensureTranslationHistoryLoaded();
   translationHistoryEntries.value = [];
+  translationHistoryIndex.clear();
   await persistTranslationHistoryEntries();
   renderTranslationHistory();
   setStatus("已清空当前 PDF 的英语学习历史。");
