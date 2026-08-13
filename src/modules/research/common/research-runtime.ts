@@ -13,8 +13,6 @@ export const FETCH_TIMEOUT_MS = 18_000;
 
 export const MAX_VISIBLE_PAPERS = 8;
 
-export const RELATED_CACHE_TTL = 4 * 60 * 60 * 1000;
-
 export const RELATED_CACHE_PREFIX = "pdf-helper:research-graph:v4-official-alias:";
 
 

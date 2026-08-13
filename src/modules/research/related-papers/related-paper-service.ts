@@ -4,7 +4,7 @@ import { END, START, StateGraph, StateSchema } from "@langchain/langgraph";
 import { browser } from "wxt/browser";
 import { z } from "zod";
 import type { CcfRankResult, RelatedPaper, RelatedResearchRequest, RelatedResearchResponse } from "../../../../shared/research";
-import { MAX_VISIBLE_PAPERS, RELATED_CACHE_PREFIX, RELATED_CACHE_TTL, normalizeText, titleKey, tokenize } from '../common/research-runtime';
+import { MAX_VISIBLE_PAPERS, RELATED_CACHE_PREFIX, normalizeText, titleKey, tokenize } from '../common/research-runtime';
 import type { RawLiteratureCandidate } from '../common/research-runtime';
 import { CCF_INDEX_URL, ccfOfficialDirectoryTool, loadCcfDirectory, readStorage } from '../ccf/ccf-service';
 import { crossrefSearchTool, dblpSearchTool, openAlexSearchTool, semanticScholarExactTool, semanticScholarRecommendationsTool, semanticScholarSearchTool } from '../providers/literature-providers';
@@ -294,7 +294,12 @@ export function hashText(value: string): string {
 
 
 export function relatedCacheKey(request: RelatedResearchRequest): string {
-  return `${RELATED_CACHE_PREFIX}${hashText(titleKey(request.title))}`;
+  const queryIdentity = [
+    titleKey(request.title),
+    normalizeText(request.keywords ?? ""),
+    normalizeText(request.researchArea ?? ""),
+  ].join("\u0000");
+  return `${RELATED_CACHE_PREFIX}${hashText(queryIdentity)}`;
 }
 
 
@@ -304,7 +309,7 @@ export async function runRelatedResearchGraph(
   const cacheKey = relatedCacheKey(request);
   if (!request.force) {
     const cached = await readStorage<{ savedAt: number; response: RelatedResearchResponse }>(cacheKey);
-    if (cached && Date.now() - cached.savedAt < RELATED_CACHE_TTL && cached.response.ok && cached.response.papers.length > 0) {
+    if (cached?.response.ok) {
       return cached.response;
     }
   }
@@ -329,9 +334,9 @@ export async function runRelatedResearchGraph(
         ccfDirectorySource: state.ccfDirectorySource,
       },
     };
-    if (response.papers.length > 0) {
-      await browser.storage.local.set({ [cacheKey]: { savedAt: Date.now(), response } });
-    }
+    await browser.storage.local.set({
+      [cacheKey]: { savedAt: Date.now(), response },
+    });
     return response;
   }
   catch (error) {

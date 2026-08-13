@@ -176,7 +176,7 @@ function renderPapers(
       diagnostics?.currentPaperMatched
         ? "已使用当前论文的 Semantic Scholar 推荐图"
         : "未匹配到当前论文ID，已使用多查询检索",
-      `更新于 ${new Date().toLocaleString()}`,
+      "结果已保存；点击“刷新”才会重新查询",
     ].join("；"),
   );
   result.append(list, footer);
@@ -262,7 +262,7 @@ export function installOnlineRelatedPapers(): void {
 
     document.addEventListener("pdf-helper:paper-card-ready", () => {
       lastKey = "";
-      schedule(true);
+      schedule(false);
     });
 
     page.addEventListener("click", (event) => {
@@ -277,14 +277,8 @@ export function installOnlineRelatedPapers(): void {
     });
     document.getElementById("regenerate-paper-card")?.addEventListener("click", () => {
       lastKey = "";
-      window.setTimeout(() => schedule(true), 1500);
+      window.setTimeout(() => schedule(false), 1500);
     });
-    for (const id of ["paper-title", "paper-keywords", "paper-research-area"]) {
-      document.getElementById(id)?.addEventListener("change", () => {
-        lastKey = "";
-        schedule(true);
-      });
-    }
     const observer = new MutationObserver(() => {
       if (!page.hidden) schedule(false);
     });

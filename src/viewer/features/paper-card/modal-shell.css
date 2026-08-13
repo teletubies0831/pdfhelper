@@ -22,6 +22,12 @@
   display: grid !important;
 }
 
+/* A saved card opened from the knowledge library must keep that library as
+   the modal backdrop. The PDF becomes visible only after "查看原文". */
+.app-frame.paper-card-page-open.knowledge-base-page-open .workspace {
+  display: none !important;
+}
+
 .paper-card-page .paper-card-shell {
   display: grid !important;
   width: min(1510px, calc(100vw - 52px)) !important;

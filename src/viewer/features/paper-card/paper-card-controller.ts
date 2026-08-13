@@ -34,10 +34,12 @@ import { readJsonValue, writeJsonValue } from '../../../platform/storage/browser
 
 
 export function openPaperCardPage(): void {
+  const openedFromKnowledgeBase = !knowledgeBasePageElement.hidden;
   clearPaperCardReviewState();
-  knowledgeBasePageElement.hidden = true;
-  appFrame?.classList.remove("knowledge-base-page-open");
-  knowledgeBaseEntryButton.classList.remove("active");
+  paperCardReturnTarget.value = openedFromKnowledgeBase ? "knowledge" : "pdf";
+  knowledgeBasePageElement.hidden = !openedFromKnowledgeBase;
+  appFrame?.classList.toggle("knowledge-base-page-open", openedFromKnowledgeBase);
+  knowledgeBaseEntryButton.classList.toggle("active", openedFromKnowledgeBase);
   paperCardPageElement.hidden = false;
   appFrame?.classList.add("paper-card-page-open");
   aiPanelToggleButton?.classList.remove("active");
@@ -111,8 +113,8 @@ export function openSavedPaperOverviewReview(item: KnowledgeItem): void {
   paperCardPageDocumentKey.value = `saved:${card.id}`;
   paperCardPageSourceCache.value = null;
 
-  knowledgeBasePageElement.hidden = true;
-  appFrame?.classList.remove("knowledge-base-page-open");
+  knowledgeBasePageElement.hidden = false;
+  appFrame?.classList.add("knowledge-base-page-open");
   knowledgeBaseEntryButton.classList.add("active");
   paperCardPageElement.hidden = false;
   appFrame?.classList.add("paper-card-page-open");

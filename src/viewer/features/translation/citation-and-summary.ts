@@ -27,6 +27,7 @@ import { pdfDocument, pdfViewer } from "../../app/viewer-state";
 
 
 import type { SummaryContext, SummaryScope } from "../../core/pdf-reader/public";
+import { preserveReadingPositionForSourceNavigation } from "../recent-files/public";
 
 
 
@@ -527,6 +528,7 @@ export async function jumpToPdfCitations(
   citationReturnButton.setAttribute("aria-hidden", "true");
   citationReturnButton.tabIndex = -1;
   citationReturnPosition.textContent = "";
+  await preserveReadingPositionForSourceNavigation();
   navigateToPdfPageWhenVisible(pageNumber);
   const textLayer = await waitForCitationTextLayer(pageNumber);
   if (!textLayer) {

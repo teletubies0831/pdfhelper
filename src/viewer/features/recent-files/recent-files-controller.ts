@@ -25,6 +25,34 @@ import { confirmDiscardUnsavedChanges } from '../annotations/public';
 import { RECENT_FILES_LIMIT, type ReadingPosition, type RecentPdfEntry } from './contracts';
 import { readRecentFiles, writeRecentFiles } from './recent-files-repository';
 
+let temporarySourceNavigationEntryId: string | null = null;
+
+function isTemporarySourceNavigationActive(): boolean {
+  return Boolean(
+    currentRecentEntryId.value
+    && temporarySourceNavigationEntryId === currentRecentEntryId.value,
+  );
+}
+
+async function writeCurrentEntryReadingPosition(
+  recentEntryId: string,
+  readingPosition: ReadingPosition,
+): Promise<void> {
+  const entries = await readRecentFiles();
+  const entry = entries.find((item) => item.id === recentEntryId);
+  if (!entry) return;
+
+  const updatedEntry: RecentPdfEntry = {
+    ...entry,
+    lastOpenedAt: Date.now(),
+    readingPosition,
+  };
+  await writeRecentFiles([
+    updatedEntry,
+    ...entries.filter((item) => item.id !== recentEntryId),
+  ]);
+}
+
 
 
 
@@ -81,6 +109,9 @@ export async function rememberRecentPdf(
   fileHandle: FileHandleLike | null,
   url?: string,
 ): Promise<RecentPdfEntry | null> {
+  // Opening a document starts a new reading session. Any previous temporary
+  // source-navigation guard must not leak into the newly opened session.
+  temporarySourceNavigationEntryId = null;
   try {
     const entries = await readRecentFiles();
     let entry: RecentPdfEntry | null = null;
@@ -178,27 +209,17 @@ export async function persistCurrentReadingPosition() {
     !pdfDocument.value ||
     !currentRecentEntryId.value ||
     isOpeningDocument.value ||
-    isRestoringReadingPosition.value
+    isRestoringReadingPosition.value ||
+    isTemporarySourceNavigationActive()
   )
     return;
 
   const readingPosition = getCurrentReadingPosition();
-  if (!readingPosition) return;
+  const recentEntryId = currentRecentEntryId.value;
+  if (!readingPosition || !recentEntryId) return;
 
   try {
-    const entries = await readRecentFiles();
-    const entry = entries.find((item) => item.id === currentRecentEntryId.value);
-    if (!entry) return;
-
-    const updatedEntry: RecentPdfEntry = {
-      ...entry,
-      lastOpenedAt: Date.now(),
-      readingPosition,
-    };
-    await writeRecentFiles([
-      updatedEntry,
-      ...entries.filter((item) => item.id !== currentRecentEntryId.value),
-    ]);
+    await writeCurrentEntryReadingPosition(recentEntryId, readingPosition);
   } catch (error) {
     console.warn("PDF Helper failed to persist reading position.", error);
   }
@@ -211,13 +232,45 @@ export function scheduleReadingPositionSave() {
     !pdfDocument.value ||
     !currentRecentEntryId.value ||
     isOpeningDocument.value ||
-    isRestoringReadingPosition.value
+    isRestoringReadingPosition.value ||
+    isTemporarySourceNavigationActive()
   )
     return;
   cancelReadingPositionSave();
   readingPositionSaveHandle.value = window.setTimeout(() => {
     void persistCurrentReadingPosition();
   }, 600);
+}
+
+/**
+ * Freezes the user's real reading position before a temporary "view source"
+ * jump. Programmatic page/scroll events remain excluded from persistence until
+ * the user returns through the quick "last reading" action.
+ */
+export async function preserveReadingPositionForSourceNavigation(): Promise<void> {
+  const recentEntryId = currentRecentEntryId.value;
+  if (!pdfDocument.value || !recentEntryId) return;
+  if (temporarySourceNavigationEntryId === recentEntryId) return;
+
+  cancelReadingPositionSave();
+  const readingPosition =
+    isOpeningDocument.value || isRestoringReadingPosition.value
+      ? lastReadingPosition.value ?? getCurrentReadingPosition()
+      : getCurrentReadingPosition();
+  if (!readingPosition) return;
+
+  lastReadingPosition.value = readingPosition;
+  temporarySourceNavigationEntryId = recentEntryId;
+  updateControls();
+
+  try {
+    await writeCurrentEntryReadingPosition(recentEntryId, readingPosition);
+  } catch (error) {
+    console.warn(
+      "PDF Helper failed to preserve the reading position before source navigation.",
+      error,
+    );
+  }
 }
 
 
@@ -281,6 +334,9 @@ export function restoreReadingPosition(position: ReadingPosition) {
 export function returnToLastReadingPosition() {
   const position = lastReadingPosition.value;
   if (!position) return;
+  if (temporarySourceNavigationEntryId === currentRecentEntryId.value) {
+    temporarySourceNavigationEntryId = null;
+  }
   restoreReadingPosition(position);
 }
 

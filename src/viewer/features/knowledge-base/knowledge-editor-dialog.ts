@@ -10,6 +10,7 @@ import type { KnowledgeItem } from "../../core/pdf-reader/public";
 import { knowledgeEditorBodyMode, knowledgeEditorPreviewTimer } from './research-controller';
 import type { KnowledgeEditorBodyMode } from './research-controller';
 import { normalizeKnowledgeCategory } from './knowledge-repository';
+import { getKnowledgeSourceQuote } from "./knowledge-domain";
 
 
 import { prepareKnowledgeEditorMarkdown } from "./knowledge-markdown-normalizer";
@@ -81,16 +82,6 @@ export function setKnowledgeEditorBodyMode(
   renderKnowledgeEditorPreview();
 }
 
-function getKnowledgeSourceQuote(item: KnowledgeItem | undefined): string {
-  if (!item) return "未记录原句";
-  const blockquote = item.content.match(/^>\s*(.+)$/m)?.[1]?.trim();
-  if (blockquote) return blockquote;
-  const originalSection = item.content.match(
-    /(?:^|\n)(?:#{1,6}\s*)?原文\s*\n+([^\n#][\s\S]*?)(?=\n\s*(?:#{1,6}\s*)?(?:翻译|单词学习|句子学习|重点词汇|我的判断)\b|$)/,
-  )?.[1]?.trim();
-  return originalSection?.replace(/\s+/g, " ").slice(0, 260) || "未记录原句";
-}
-
 export function openKnowledgeEditor(item?: KnowledgeItem): void {
   knowledgeEditorTargetKey.value = item?.recordKey || null;
   knowledgeEditorDialog.dataset.kind = item?.kind || "note";
@@ -109,7 +100,8 @@ export function openKnowledgeEditor(item?: KnowledgeItem): void {
       : "保存到本地知识库";
   knowledgeEditorSourceDocument.textContent = item?.documentName || "当前 PDF";
   knowledgeEditorSourcePosition.textContent = item?.positionLabel || "将在保存时记录当前页";
-  knowledgeEditorSourceQuote.textContent = getKnowledgeSourceQuote(item);
+  knowledgeEditorSourceQuote.textContent =
+    getKnowledgeSourceQuote(item) || "未记录原句";
   knowledgeEditorTitleInput.value = item?.title || "";
   knowledgeEditorCategoryInput.value = normalizeKnowledgeCategory(
     item?.category || "AI 笔记",

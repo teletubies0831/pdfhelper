@@ -68,11 +68,11 @@ export function updateModeNavigation(): void {
   }
 
   knowledgeBaseEntryButton.textContent = "知识库";
-  knowledgeBaseEntryButton.disabled = !hasDocument;
-  if (hasDocument) {
-    if (!paperCardPageElement.hidden) closePaperCardPage();
-    if (!knowledgeBasePageElement.hidden) renderKnowledgeBase();
-  }
+  // The knowledge library is backed by saved records and remains available
+  // even when the reader has no active PDF document.
+  knowledgeBaseEntryButton.disabled = false;
+  if (hasDocument && !paperCardPageElement.hidden) closePaperCardPage();
+  if (!knowledgeBasePageElement.hidden) renderKnowledgeBase();
 }
 
 

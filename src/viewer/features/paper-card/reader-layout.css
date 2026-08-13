@@ -2,21 +2,6 @@
    Paper card layout: independent left/right scrolling and gray palette
    ========================================================================== */
 
-/* Reuse the complete PDF-reader toolbar on the paper-card page. */
-.app-frame.paper-card-page-open .reading-mode-control,
-.app-frame.paper-card-page-open .annotation-tools,
-.app-frame.paper-card-page-open .document-name {
-  display: inline-flex;
-}
-
-.app-frame.paper-card-page-open .document-name {
-  display: block;
-}
-
-.app-frame.paper-card-page-open .ai-tools {
-  margin-left: 0;
-}
-
 /* The paper-card page itself never scrolls. Each column owns its scrollbar. */
 .paper-card-page {
   flex: 1 1 auto;

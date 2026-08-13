@@ -5,13 +5,16 @@ import { knowledgeEditorBodyInput, knowledgeEditorCategoryInput, knowledgeEditor
 
 import { pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
 import { getDisplayFileName, navigateToPdfPageWhenVisible } from "../../core/pdf-reader/public";
-import { getCurrentChapterContext } from "../translation/public";
-import { setStatus } from "../recent-files/public";
+import { getCurrentChapterContext, jumpToPdfCitations } from "../translation/public";
+import {
+  preserveReadingPositionForSourceNavigation,
+  setStatus,
+} from "../recent-files/public";
 import type { KnowledgeItem } from "../../core/pdf-reader/public";
 import { addKnowledgeNote, closeKnowledgeBasePage, getSelectedKnowledgeItem, renderKnowledgeBase } from './research-controller';
 
 import { collectKnowledgeItems, getKnowledgeRecordKey, normalizeKnowledgeCategory, normalizeKnowledgeTags, readKnowledgeItemMetaStore, readReadingJournalEntries, readSavedKnowledgeNotes, writeKnowledgeItemMetaStore, writeReadingJournalEntries, writeSavedKnowledgeNotes } from './knowledge-repository';
-import { getKnowledgeExcerpt, setKnowledgePageStatus } from './knowledge-domain';
+import { getKnowledgeExcerpt, getKnowledgeSourceQuote, setKnowledgePageStatus } from './knowledge-domain';
 import { writeJsonValue } from '../../../platform/storage/browser-json-repository';
 import { closeKnowledgeEditor } from "./knowledge-editor-dialog";
 import { ensureSourcePdfOpen } from "../../shared-ui/navigation/source-pdf-navigation";
@@ -193,6 +196,12 @@ export async function openSelectedKnowledgeSource(): Promise<void> {
 
   closeKnowledgeEditor();
   closeKnowledgeBasePage();
-  navigateToPdfPageWhenVisible(pageNumber);
+  const sourceQuote = getKnowledgeSourceQuote(item);
+  if (sourceQuote) {
+    await jumpToPdfCitations(pageNumber, [sourceQuote]);
+  } else {
+    await preserveReadingPositionForSourceNavigation();
+    navigateToPdfPageWhenVisible(pageNumber);
+  }
   setStatus(`已打开“${item.documentName}”，并定位到第 ${pageNumber} 页。`);
 }

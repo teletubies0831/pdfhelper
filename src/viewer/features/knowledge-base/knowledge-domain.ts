@@ -94,6 +94,18 @@ export function getKnowledgeExcerpt(content: string): string {
     .slice(0, 150);
 }
 
+export function getKnowledgeSourceQuote(
+  item: KnowledgeItem | undefined,
+): string {
+  if (!item) return "";
+  const blockquote = item.content.match(/^>\s*(.+)$/m)?.[1]?.trim();
+  if (blockquote) return blockquote;
+  const originalSection = item.content.match(
+    /(?:^|\n)(?:#{1,6}\s*)?原文\s*\n+([^\n#][\s\S]*?)(?=\n\s*(?:#{1,6}\s*)?(?:翻译|单词学习|句子学习|重点词汇|我的判断)\b|$)/,
+  )?.[1]?.trim();
+  return originalSection?.replace(/\s+/g, " ").slice(0, 500) || "";
+}
+
 
 
 export function setKnowledgePageStatus(message = "", isError = false): void {

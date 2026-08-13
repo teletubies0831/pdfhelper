@@ -4,7 +4,10 @@ import {
   openRemotePdf,
   paperCardReviewDocumentName,
 } from "../../core/pdf-reader/public";
-import { setStatus } from "../recent-files/public";
+import {
+  preserveReadingPositionForSourceNavigation,
+  setStatus,
+} from "../recent-files/public";
 import {
   ensureSourcePdfOpen,
   isSourcePdfCurrentlyOpen,
@@ -15,10 +18,11 @@ import {
 } from "./paper-card-controller";
 import { setPaperCardPageStatus } from "./paper-card-status";
 
-function finishOpeningSourcePdf(
+async function finishOpeningSourcePdf(
   documentName: string,
   statusMessage: string,
-): void {
+): Promise<void> {
+  await preserveReadingPositionForSourceNavigation();
   closePaperCardPage("pdf");
   navigateToPdfPageWhenVisible(1);
   setStatus(`${statusMessage}“${documentName}”，并定位到第 1 页。`);
@@ -41,7 +45,7 @@ export async function openSavedPaperCardSourcePdf(): Promise<void> {
   }
 
   if (isSourcePdfCurrentlyOpen(documentName, savedCard?.recentEntryId)) {
-    finishOpeningSourcePdf(documentName, "已返回来源论文");
+    await finishOpeningSourcePdf(documentName, "已返回来源论文");
     return;
   }
 
@@ -51,7 +55,7 @@ export async function openSavedPaperCardSourcePdf(): Promise<void> {
       savedCard?.recentEntryId,
     );
     if (sourceOpened) {
-      finishOpeningSourcePdf(documentName, "已打开来源论文");
+      await finishOpeningSourcePdf(documentName, "已打开来源论文");
       return;
     }
   } catch (error) {
@@ -66,7 +70,7 @@ export async function openSavedPaperCardSourcePdf(): Promise<void> {
   if (/^https?:\/\//i.test(sourceLocator)) {
     try {
       await openRemotePdf(sourceLocator);
-      finishOpeningSourcePdf(documentName, "已打开来源论文");
+      await finishOpeningSourcePdf(documentName, "已打开来源论文");
       return;
     } catch (error) {
       setPaperCardPageStatus(
