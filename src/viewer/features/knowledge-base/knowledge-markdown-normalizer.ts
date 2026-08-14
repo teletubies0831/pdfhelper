@@ -174,6 +174,29 @@ export function looksLikeKnowledgeEditorMath(value: string): boolean {
   return hasMathSymbol || hasIndexedVariable || hasFunction;
 }
 
+export function looksLikeKnowledgeEditorArithmetic(value: string): boolean {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (!compact) return false;
+
+  const hasOperator = /[+\-*/^]/.test(compact);
+  const hasVariableOrNumber = /[A-Za-z]|\d/.test(compact);
+  const hasParenthesizedGroup = /\([^()]{1,40}[+\-][^()]{1,40}\)\s*\/\s*[A-Za-z0-9]+/.test(
+    compact,
+  );
+  const hasRatio = /(?:\b[A-Za-z]\b|\b\d+\b)\s*\/\s*(?:\b[A-Za-z]\b|\b\d+\b)/.test(
+    compact,
+  );
+  const hasGroupedSum = /\b[A-Za-z]\s*[+\-]\s*\d+\b|\b\d+\s*[+\-]\s*[A-Za-z]\b/.test(
+    compact,
+  );
+
+  return Boolean(
+    hasVariableOrNumber
+      && hasOperator
+      && (hasParenthesizedGroup || hasRatio || hasGroupedSum)
+  );
+}
+
 export function normalizeKnowledgeEditorBareMath(content: string): string {
   const preserved: string[] = [];
   const preserve = (value: string): string => {
@@ -281,6 +304,15 @@ export function normalizeKnowledgeEditorBareMath(content: string): string {
     /\b([qQxXyYmMkKuUvV])\s*_?\s*([0-9]+|[iIjJkKnNmMuUvVbB])\b/g,
     (match) =>
       preserveInline(normalizeKnowledgeEditorMathExpression(match)),
+  );
+
+  // 11. 简单算术表达式，例如 (n+1)/2、n/2、m+n。
+  normalized = normalized.replace(
+    /(?<![$\\])((?:\([A-Za-z0-9+\-*/\s]{3,60}\)\s*\/\s*[A-Za-z0-9]+)|(?:\b[A-Za-z]\b|\b\d+\b)\s*\/\s*(?:\b[A-Za-z]\b|\b\d+\b)|(?:\b[A-Za-z]\b|\b\d+\b)\s*[+\-]\s*(?:\b[A-Za-z]\b|\b\d+\b))(?![$\\])/g,
+    (match) =>
+      looksLikeKnowledgeEditorArithmetic(match)
+        ? preserveInline(normalizeKnowledgeEditorMathExpression(match))
+        : match,
   );
 
   return normalized.replace(

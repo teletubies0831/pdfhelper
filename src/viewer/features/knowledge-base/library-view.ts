@@ -319,11 +319,11 @@ export function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
     event.stopPropagation();
     deleteKnowledgeItem(item);
   });
-  cardHeader.append(title, deleteButton);
-
   const paperMetadata = getPaperLibraryCardMetadata(item);
   if (paperMetadata) {
     card.classList.add("paper-library-card");
+  } else {
+    card.classList.add("knowledge-note-card");
   }
 
   const subtitle = document.createElement("div");
@@ -331,13 +331,8 @@ export function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
   if (paperMetadata) {
     subtitle.textContent = paperMetadata.venueYear;
   } else {
-    const venue = extractKnowledgeVenue(item);
-    const year = extractKnowledgeYear(item);
-    const subtitleParts: string[] = [];
-    if (venue && venue !== "未标注") subtitleParts.push(venue);
-    if (year && year !== "未标注") subtitleParts.push(year);
-    subtitle.textContent =
-      subtitleParts.join(" · ") || getKnowledgeKindLabel(item.kind);
+    const category = item.category.trim();
+    subtitle.textContent = category || getKnowledgeKindLabel(item.kind);
   }
 
   const fileLine = document.createElement("div");
@@ -352,11 +347,30 @@ export function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
 
   const excerpt = document.createElement("p");
   excerpt.className = "knowledge-card-excerpt";
-  excerpt.textContent = paperMetadata
-    ? paperMetadata.authors || "作者信息未记录"
-    : getKnowledgeExcerptForDashboard(item);
 
-  card.append(cardHeader, subtitle, fileLine, excerpt);
+  if (paperMetadata) {
+    excerpt.textContent = paperMetadata.authors || "作者信息未记录";
+    cardHeader.append(title, deleteButton);
+    card.append(cardHeader, subtitle, fileLine, excerpt);
+  } else {
+    const rawExcerpt = getKnowledgeExcerptForDashboard(item);
+    excerpt.textContent = rawExcerpt.replace(/^原文\s*/u, "").trim();
+    excerpt.classList.add("knowledge-note-excerpt-text");
+
+    const metaRow = document.createElement("div");
+    metaRow.className = "knowledge-note-meta-row";
+    metaRow.append(subtitle, deleteButton);
+
+    const excerptPanel = document.createElement("div");
+    excerptPanel.className = "knowledge-note-excerpt-panel";
+
+    const excerptLabel = document.createElement("div");
+    excerptLabel.className = "knowledge-note-excerpt-label";
+    excerptLabel.textContent = "原文摘录";
+
+    excerptPanel.append(excerptLabel, excerpt);
+    card.append(metaRow, excerptPanel, fileLine);
+  }
 
   const openItem = (): void => openKnowledgeItemFromLibrary(item);
   card.addEventListener("click", openItem);
