@@ -228,9 +228,16 @@ export function updateHighlightNoteIndicator(editor: any) {
     indicator = document.createElement("span");
     indicator.className = "pdf-helper-note-indicator";
     indicator.textContent = "●";
-    indicator.setAttribute("aria-label", "此高亮有笔记");
     container.append(indicator);
   }
+
+  const isOpen =
+    openHighlightNoteEditor.value === editor && !highlightNotePopover.hidden;
+  indicator.classList.toggle("is-open", isOpen);
+  indicator.setAttribute(
+    "aria-label",
+    isOpen ? "关闭高亮笔记" : "打开高亮笔记",
+  );
 
   const anchor = findHighlightNoteAnchor(container);
   if (anchor) {
@@ -376,6 +383,12 @@ export function positionFloatingElement(element: HTMLElement, anchor: DOMRect) {
 
 export function showHighlightNote(editor: any, focusEditor = false) {
   if (!editor?.div) return;
+  if (
+    openHighlightNoteEditor.value &&
+    openHighlightNoteEditor.value !== editor
+  ) {
+    hideHighlightNote();
+  }
   selectHighlight(editor);
   const note = getHighlightNote(editor);
   openHighlightNoteEditor.value = editor;
@@ -387,14 +400,17 @@ export function showHighlightNote(editor: any, focusEditor = false) {
     highlightNotePopover,
     editor.div.getBoundingClientRect(),
   );
+  updateHighlightNoteIndicator(editor);
   if (focusEditor) highlightNoteText.focus();
 }
 
 
 
 export function hideHighlightNote() {
+  const editor = openHighlightNoteEditor.value;
   highlightNotePopover.hidden = true;
   openHighlightNoteEditor.value = null;
+  if (editor) updateHighlightNoteIndicator(editor);
 }
 
 
@@ -511,17 +527,21 @@ export function showSelectionContextMenuAt(
   editor: any | null,
 ) {
   contextHighlightEditor.value = editor;
-  const isHighlightMenu = Boolean(editor);
-  contextCopyButton.hidden = isHighlightMenu;
-  contextCleanCopyButton.hidden = isHighlightMenu;
-  contextColors.hidden = isHighlightMenu;
+  contextCopyButton.hidden = false;
+  contextCleanCopyButton.hidden = false;
+  contextColors.hidden = false;
   highlightContextActions.hidden = false;
-  contextDeleteHighlightButton.hidden = !isHighlightMenu;
+  contextDeleteHighlightButton.hidden = true;
   contextNoteButton.textContent =
     editor && getHighlightNote(editor) ? "编辑笔记" : "添加笔记";
 
   if (editor) {
     contextSelectionText.value = getHighlightText(editor);
+  } else {
+    annotationEditor.value?.unselectAll();
+    selectedAnnotationEditor.value = null;
+    selectedHighlightEditor.value = null;
+    hideAnnotationActionBar();
   }
 
   selectionContextMenu.hidden = false;

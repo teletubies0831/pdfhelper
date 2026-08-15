@@ -281,7 +281,7 @@ export async function executeNativeToolCalls(
       if (toolName === "journal.add") {
         const args = (call.arguments ?? {}) as Record<string, unknown>;
         const entry = saveReadingJournalEntry({
-          title: typeof args.title === "string" ? args.title : "阅读札记",
+          title: typeof args.title === "string" ? args.title : "知识库笔记",
           quote: typeof args.quote === "string" ? args.quote : "",
           content: typeof args.content === "string" ? args.content : "",
           tags: Array.isArray(args.tags)

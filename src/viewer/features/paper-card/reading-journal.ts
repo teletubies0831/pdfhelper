@@ -65,7 +65,7 @@ export function saveReadingJournalEntry(input: {
     recentEntryId: context.recentEntryId,
     pageNumber,
     positionLabel: pageNumber === context.pageNumber ? context.positionLabel : `第 ${pageNumber} 页`,
-    title: input.title.trim() || getKnowledgeExcerpt(input.quote || input.content).slice(0, 42) || "阅读札记",
+    title: input.title.trim() || getKnowledgeExcerpt(input.quote || input.content).slice(0, 42) || "知识库笔记",
     quote: input.quote?.trim() ?? "",
     content: input.content.trim(),
     tags: normalizeKnowledgeTags(input.tags ?? []),

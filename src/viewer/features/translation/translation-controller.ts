@@ -246,6 +246,10 @@ export async function translateSelectedText(text: string): Promise<void> {
         reasoning: "disabled",
         maxOutputTokens: Math.min(4096, aiConfig.value.maxOutputTokens),
       },
+      {
+        signal: controller.signal,
+        timeoutMs: 75_000,
+      },
     );
 
     // Only show the result for the current selection so a slow request cannot
@@ -329,6 +333,10 @@ export async function generateMoreVocabularyExamples(): Promise<void> {
         model: aiConfig.value.translationModel || aiConfig.value.model,
         reasoning: "disabled",
         maxOutputTokens: Math.min(4096, aiConfig.value.maxOutputTokens),
+      },
+      {
+        signal: controller.signal,
+        timeoutMs: 75_000,
       },
     );
     if (controller.signal.aborted || currentEnglishLearningResult.value !== result) return;

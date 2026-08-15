@@ -10,13 +10,15 @@
 
 /* Selection mode keeps the page itself transparent for text selection, while
    existing free-text and ink annotations remain selectable and draggable. */
-.pdfViewer .annotationEditorLayer.disabled
+.pdfViewer
+  .annotationEditorLayer.disabled
   :is(.freeTextEditor, .stampEditor, .signatureEditor) {
   cursor: pointer;
   pointer-events: auto !important;
 }
 
-.pdfViewer .annotationEditorLayer.disabled
+.pdfViewer
+  .annotationEditorLayer.disabled
   :is(.freeTextEditor, .stampEditor, .signatureEditor).selectedEditor {
   cursor: move;
 }
@@ -132,19 +134,19 @@
   z-index: 7;
   top: 0;
   left: 0;
-  display: grid;
   width: 22px;
   height: 22px;
-  place-items: center;
-  border: 2px solid #fff;
+  border: 0;
   border-radius: 50%;
-  background: #f59e0b;
-  color: #fff;
-  box-shadow: 0 2px 8px rgb(15 23 42 / 38%);
-  font-size: 12px;
-  line-height: 1;
+  background: url("/resources/note-marker.png") center / 132% 132% no-repeat;
+  box-shadow: 0 2px 8px rgba(52, 51, 39, 0.3);
+  font-size: 0;
   pointer-events: none;
-  transform: translate(35%, -45%);
+  transform: translate(-40%, -50%);
+}
+
+.pdf-helper-note-indicator.is-open {
+  display: none;
 }
 
 .pdfViewer.pdf-helper-notes-hidden .pdf-helper-note-indicator {
@@ -191,13 +193,4 @@
 
 #viewer-container .annotationLayer .linkAnnotation {
   pointer-events: auto !important;
-}
-
-.pdf-helper-note-indicator {
-  font-size: 0;
-}
-
-.pdf-helper-note-indicator::after {
-  content: "✎";
-  font-size: 13px;
 }

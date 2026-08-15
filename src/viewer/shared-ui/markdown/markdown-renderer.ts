@@ -20,11 +20,60 @@ import { chatMessagesElement, deepSeekSettingsStatus } from '../../app/viewer-el
 import { normalizeCitationMatchText } from '../../features/translation/public';
 
 
+const DEFAULT_AI_CONTENT_TIMEOUT_MS = 120_000;
+
+export interface AiContentRequestOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+function requestAiRuntimeResponse(
+  message: Record<string, unknown>,
+  options: AiContentRequestOptions,
+): Promise<AiRuntimeResponse> {
+  const timeoutMs = Math.max(
+    1_000,
+    options.timeoutMs ?? DEFAULT_AI_CONTENT_TIMEOUT_MS,
+  );
+
+  return new Promise<AiRuntimeResponse>((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      options.signal?.removeEventListener("abort", handleAbort);
+      callback();
+    };
+    const handleAbort = (): void => {
+      finish(() => reject(new DOMException("AI 请求已取消。", "AbortError")));
+    };
+    const timeoutId = window.setTimeout(() => {
+      finish(() => reject(new Error(
+        `AI 请求超过 ${Math.round(timeoutMs / 1_000)} 秒仍未返回，请检查网络或模型配置后重试。`,
+      )));
+    }, timeoutMs);
+
+    if (options.signal?.aborted) {
+      handleAbort();
+      return;
+    }
+    options.signal?.addEventListener("abort", handleAbort, { once: true });
+
+    void browser.runtime.sendMessage(message).then(
+      (response) => finish(() => resolve(response as AiRuntimeResponse)),
+      (error) => finish(() => reject(error)),
+    );
+  });
+}
+
+
 
 export async function requestAiContent(
   messages: AiConversationMessage[],
   context: AiStreamStartMessage["context"] = {},
   configOverride?: Pick<AiConfig, "model" | "reasoning" | "maxOutputTokens">,
+  requestOptions: AiContentRequestOptions = {},
 ): Promise<string> {
   if (!aiConfig.value.apiKey) {
     setDeepSeekSettingsOpen(true);
@@ -33,7 +82,7 @@ export async function requestAiContent(
     throw new Error("请先在右上角“设置”中配置 API Key。");
   }
 
-  const response = (await browser.runtime.sendMessage({
+  const response = await requestAiRuntimeResponse({
     type: "pdf-helper:ai-chat",
     messages,
     configOverride,
@@ -41,7 +90,7 @@ export async function requestAiContent(
       ...context,
       readingMode: context.readingMode ?? resolvedReadingMode.value,
     },
-  })) as AiRuntimeResponse;
+  }, requestOptions);
 
   if (!response?.ok || !response.content?.trim()) {
     throw new Error(response?.error || "AI 模型没有返回有效内容。");

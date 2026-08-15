@@ -2,7 +2,14 @@
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 6px;
-  margin-bottom: 8px;
+  margin-top: 6px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+}
+
+.selection-context-menu [hidden],
+.selection-context-menu #context-delete-highlight {
+  display: none !important;
 }
 
 .context-menu-item {

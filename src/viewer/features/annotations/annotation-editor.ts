@@ -592,12 +592,13 @@ export function isPointInsideSavedSelection(
   clientX: number,
   clientY: number,
 ): boolean {
+  const selectionHitPadding = 6;
   for (const range of contextSelectionRanges.value) {
     for (const rect of range.getClientRects()) {
       if (
         rect.width > 0 &&
         rect.height > 0 &&
-        isPointInRect(clientX, clientY, rect, 2)
+        isPointInRect(clientX, clientY, rect, selectionHitPadding)
       ) {
         return true;
       }

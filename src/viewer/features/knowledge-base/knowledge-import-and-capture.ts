@@ -109,7 +109,7 @@ export function saveTranslationAndExplanationAsNote(): void {
       origin: "translation",
       pageNumber,
     });
-    setStatus(`已保存“${entry.title}”到阅读札记。`);
+    setStatus(`已保存“${entry.title}”到知识库。`);
     return;
   }
   const note = addKnowledgeNote({
@@ -155,7 +155,7 @@ export function attachChatSaveAction(
       });
       button.disabled = true;
       button.textContent = "已保存";
-      setStatus(`已保存“${entry.title}”到阅读札记。`);
+      setStatus(`已保存“${entry.title}”到知识库。`);
       return;
     }
     const note = addKnowledgeNote({

@@ -221,14 +221,14 @@ export function collectLegacyKnowledgeItems(): KnowledgeItem[] {
           source: "reading-journal",
           kind: "note",
           originMode: entry.readingMode,
-          title: entry.title || "未命名阅读札记",
+          title: entry.title || "未命名笔记",
           content: [entry.quote ? `> ${entry.quote}` : "", entry.content]
             .filter(Boolean)
             .join("\n\n"),
           documentName: entry.documentName,
           pageNumber: entry.pageNumber,
           positionLabel: entry.positionLabel,
-          category: "阅读札记",
+          category: "知识笔记",
           tags: entry.tags,
           createdAt: entry.createdAt,
           updatedAt: entry.updatedAt,

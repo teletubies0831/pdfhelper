@@ -92,9 +92,9 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
     parametersSummary: 'id', parameters: objectSchema({ id: { type: 'string' } }, ['id']),
   },
   {
-    name: 'journal.add', apiName: 'journal_add', label: '添加阅读札记',
-    description: '把当前对话中用户明确要求保存的单词、句子、摘录、解释或想法保存为当前阅读模式的 Markdown 阅读札记。',
-    trigger: '用户明确说“添加札记”“记到阅读札记”“把这个保存下来”时调用。',
+    name: 'journal.add', apiName: 'journal_add', label: '添加到知识库',
+    description: '把当前对话中用户明确要求保存的单词、句子、摘录、解释或想法保存为知识库中的 Markdown 笔记。',
+    trigger: '用户明确说“添加到知识库”“保存为笔记”“把这个保存下来”时调用。',
     parametersSummary: 'title, content, quote?, tags?, pageNumber?',
     parameters: objectSchema({
       title: { type: 'string' },
@@ -105,8 +105,8 @@ export const AGENT_TOOL_DEFINITIONS: AgentToolDefinition[] = [
     }, ['title', 'content']),
   },
   {
-    name: 'journal.search', apiName: 'journal_search', label: '搜索阅读札记',
-    description: '只搜索当前阅读模式下保存的阅读札记，不读取其他模式的数据。',
+    name: 'journal.search', apiName: 'journal_search', label: '搜索知识库笔记',
+    description: '搜索当前阅读模式下保存到知识库的笔记，不读取其他模式的数据。',
     trigger: '用户询问以前记录过的单词、句子、摘录或阅读想法时调用。',
     parametersSummary: 'query, limit?',
     parameters: objectSchema({

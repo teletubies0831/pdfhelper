@@ -38,6 +38,7 @@ export function registerReaderEvents(): void {
     searchButton.addEventListener("click", openFindBar);
   }
   const pointerHighlightCache = new WeakMap<PointerEvent, any | null>();
+  let contextSelectionCapturedOnPointerDown = false;
   const getPointerHighlight = (event: PointerEvent): any | null => {
     if (pointerHighlightCache.has(event)) {
       return pointerHighlightCache.get(event) ?? null;
@@ -261,6 +262,20 @@ export function registerReaderEvents(): void {
   viewerElement.addEventListener(
       "pointerdown",
       (event) => {
+        contextSelectionCapturedOnPointerDown = false;
+        if (
+          event.button === 2 &&
+          pdfDocument.value &&
+          isTextSelectionMode() &&
+          !isEditableOrControl(event.target)
+        ) {
+          saveContextSelection();
+          contextSelectionCapturedOnPointerDown = Boolean(
+            contextSelectionText.value,
+          );
+          return;
+        }
+
         if (
           event.button !== 0 ||
           !pdfDocument.value ||
@@ -290,8 +305,9 @@ export function registerReaderEvents(): void {
   
   viewerElement.addEventListener("contextmenu", (event) => {
       if (isInkMode()) return;
-    
-      saveContextSelection();
+
+      if (!contextSelectionCapturedOnPointerDown) saveContextSelection();
+      contextSelectionCapturedOnPointerDown = false;
       if (
         contextSelectionText.value &&
         annotationEditor.value &&

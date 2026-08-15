@@ -2,25 +2,51 @@ import type { AiConfig, AiNativeToolCall, AiStreamCompletionInfo } from '../cont
 import { AiProviderRequestError, getProviderErrorMessage } from './provider-error';
 import type { AiProviderAdapter, ProviderChatResult, ProviderMessage, ProviderStreamDelta } from './provider';
 
+const PROVIDER_REQUEST_TIMEOUT_MS = 120_000;
+
 async function fetchProviderJson(
   path: string,
   config: AiConfig,
   init?: RequestInit,
 ): Promise<unknown> {
   if (!config.apiKey) throw new Error('请先在 PDF Helper 的设置中配置 API Key。');
-  const response = await fetch(`${config.baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(getProviderErrorMessage(payload, `AI 请求失败：HTTP ${response.status}`));
+  const requestController = new AbortController();
+  let timedOut = false;
+  const handleCallerAbort = (): void => requestController.abort(init?.signal?.reason);
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    requestController.abort();
+  }, PROVIDER_REQUEST_TIMEOUT_MS);
+  if (init?.signal?.aborted) {
+    handleCallerAbort();
+  } else {
+    init?.signal?.addEventListener('abort', handleCallerAbort, { once: true });
   }
-  return payload;
+
+  try {
+    const response = await fetch(`${config.baseUrl}${path}`, {
+      ...init,
+      signal: requestController.signal,
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json',
+        ...init?.headers,
+      },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(getProviderErrorMessage(payload, `AI 请求失败：HTTP ${response.status}`));
+    }
+    return payload;
+  } catch (error) {
+    if (timedOut) {
+      throw new Error('AI 供应商超过 120 秒仍未响应，请检查网络、接口地址或模型状态后重试。');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    init?.signal?.removeEventListener('abort', handleCallerAbort);
+  }
 }
 
 const getProviderError = getProviderErrorMessage;
