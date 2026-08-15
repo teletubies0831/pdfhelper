@@ -18,7 +18,7 @@
 import { activeKnowledgeFilter, activeKnowledgePageMode } from "../../core/pdf-reader/public";
 
 
-import { knowledgeDashboardMetricsElement, knowledgeFilterButtons, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgePageStatusElement, knowledgeStudentWorkbenchElement, knowledgeWeeklyTasksElement } from "../../app/viewer-elements";
+import { knowledgeDashboardMetricsElement, knowledgeFilterButtons, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgePageStatusElement, knowledgePageTitleElement, knowledgeStudentWorkbenchElement, knowledgeWeeklyTasksElement } from "../../app/viewer-elements";
 
 
 
@@ -337,8 +337,25 @@ export function getKnowledgeRelevancePercent(item: KnowledgeItem): number {
 
 
 export function getKnowledgeExcerptForDashboard(item: KnowledgeItem): string {
-  const excerpt = getKnowledgeExcerpt(item.content).replace(/\s+/g, " ").trim();
-  return excerpt || "暂无摘要内容";
+  const excerpt = item.content
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^[•*-]\s*/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!excerpt) return "暂无摘要内容";
+  if (excerpt.length <= 1200) return excerpt;
+
+  const candidate = excerpt.slice(0, 1200);
+  const lastWhitespace = Math.max(
+    candidate.lastIndexOf(" "),
+    candidate.lastIndexOf("\t"),
+  );
+
+  // 英文优先在完整单词边界截断；中文等无空格文本保持字符截断。
+  return lastWhitespace >= 900
+    ? candidate.slice(0, lastWhitespace).trimEnd()
+    : candidate.trimEnd();
 }
 
 
