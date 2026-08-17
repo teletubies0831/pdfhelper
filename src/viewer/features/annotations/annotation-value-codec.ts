@@ -9,7 +9,7 @@ import { pdfDocument } from "../../app/viewer-state";
 export type EmbeddedHelperAnnotations = {
   format: "pdf-helper.annotations";
   version: 1;
-  app: "PDF Helper";
+  app: "PDFPal" | "PDF Helper";
   sourceName: string;
   fingerprint: string;
   savedAt: string;
@@ -26,7 +26,7 @@ export type EmbeddedHelperNote = {
 export const PDF_HELPER_ATTACHMENT_NAME = "pdfhelper.json";
 
 export const PDF_HELPER_ATTACHMENT_DESCRIPTION =
-  "PDF Helper internal annotation data. Open with PDF Helper to restore enhanced reading notes.";
+  "PDFPal internal annotation data. Open with PDFPal to restore enhanced reading notes.";
 
 export const DEFAULT_HIGHLIGHT_RGB = [255, 240, 102] as const;
 

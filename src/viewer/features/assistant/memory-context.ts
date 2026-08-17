@@ -37,14 +37,14 @@ export async function loadLongTermMemoryContext(
           `- [${memory.category}/${memory.key}] ${memory.content}`,
       )
       .join("\n");
-    console.info("[PDF Helper 长期记忆] 本轮检索", {
+    console.info("[PDFPal 长期记忆] 本轮检索", {
       documentId: documentId || undefined,
       count: relevant.length,
       memories: relevant,
     });
     return { text, memories: relevant };
   } catch (error) {
-    console.warn("[PDF Helper 长期记忆] 检索失败，本轮不注入长期记忆", error);
+    console.warn("[PDFPal 长期记忆] 检索失败，本轮不注入长期记忆", error);
     return { text: "", memories: [] };
   }
 }
@@ -67,7 +67,7 @@ export async function extractAndStoreLongTermMemories(
   const durableMemorySignal =
     /记住|以后|今后|长期|一直|默认|偏好|我(?:更)?喜欢|我希望|我习惯|我的研究方向|我(?:主要|目前|现在)研究|我的项目|项目目标|回答时|不要再|改为/i;
   if (!durableMemorySignal.test(userMessage) && !confirmedMemoryProposal) {
-    console.debug("[PDF Helper 长期记忆] 本轮没有持续性表达，跳过异步提取", {
+    console.debug("[PDFPal 长期记忆] 本轮没有持续性表达，跳过异步提取", {
       requestId,
     });
     return;
@@ -83,7 +83,7 @@ export async function extractAndStoreLongTermMemories(
   try {
     const documentId = documentProxy ? getDocumentChatId(documentProxy) : undefined;
     const existing = await memoryTools.list({ limit: 100 });
-    console.info("[PDF Helper 长期记忆] 异步提取开始", {
+    console.info("[PDFPal 长期记忆] 异步提取开始", {
       requestId,
       documentId,
       userMessage,
@@ -132,7 +132,7 @@ export async function extractAndStoreLongTermMemories(
         candidate.confidence >= 0.9 &&
         !fixedProgramRulePattern.test(`${candidate.key} ${candidate.content}`),
     );
-    console.info("[PDF Helper 工具调用] memory.upsert", {
+    console.info("[PDFPal 工具调用] memory.upsert", {
       requestId,
       confirmedMemoryProposal: confirmedMemoryProposal || undefined,
       candidates,
@@ -163,7 +163,7 @@ export async function extractAndStoreLongTermMemories(
       await Promise.all(
         legacyLikesMemories.map((memory) => memoryTools.forget(memory.id)),
       );
-      console.info("[PDF Helper 长期记忆] 已移除旧的单值喜好记录", {
+      console.info("[PDFPal 长期记忆] 已移除旧的单值喜好记录", {
         removed: legacyLikesMemories,
       });
     }
@@ -175,8 +175,8 @@ export async function extractAndStoreLongTermMemories(
       stored,
     };
     if (stored.length > 0) {
-      console.info("[PDF Helper 工具结果] memory.upsert", stored);
-      console.info("[PDF Helper 长期记忆] 写入成功", logPayload);
+      console.info("[PDFPal 工具结果] memory.upsert", stored);
+      console.info("[PDFPal 长期记忆] 写入成功", logPayload);
       if (assistantElement) {
         updateChatActivity(
           assistantElement,
@@ -187,7 +187,7 @@ export async function extractAndStoreLongTermMemories(
         );
       }
     } else {
-      console.info("[PDF Helper 长期记忆] 本轮没有可写入条目", logPayload);
+      console.info("[PDFPal 长期记忆] 本轮没有可写入条目", logPayload);
       if (assistantElement) {
         updateChatActivity(
           assistantElement,
@@ -199,7 +199,7 @@ export async function extractAndStoreLongTermMemories(
     }
     if (!assistantSettingsPanel.hidden) void refreshLongTermMemoryList();
   } catch (error) {
-    console.warn("[PDF Helper 长期记忆] 异步提取失败，不影响当前回答", error);
+    console.warn("[PDFPal 长期记忆] 异步提取失败，不影响当前回答", error);
     if (assistantElement) {
       updateChatActivity(
         assistantElement,

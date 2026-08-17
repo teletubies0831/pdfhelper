@@ -15,6 +15,29 @@
   display: none;
 }
 
+.app-frame.workspace-view-transitioning > .workspace,
+.app-frame.workspace-view-transitioning > .knowledge-base-page {
+  position: absolute;
+  z-index: 5;
+  top: var(--workspace-transition-top, 58px);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.app-frame.workspace-view-transitioning > .workspace {
+  display: grid;
+}
+
+.app-frame.workspace-view-transitioning > .knowledge-base-page {
+  display: block;
+}
+
 .knowledge-base-shell {
   display: grid;
   width: 100%;

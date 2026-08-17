@@ -166,6 +166,6 @@ export function formatAgentToolCatalogForPrompt(): string {
       `  参数：${tool.parametersSummary}`,
       `  调用时机：${tool.trigger}`,
     ].join('\n')),
-    '这些工具由 PDF Helper 在最终回答前执行。用户询问工具能力时必须依据本目录回答，不要声称工具列表为空。',
+    '这些工具由 PDFPal 在最终回答前执行。用户询问工具能力时必须依据本目录回答，不要声称工具列表为空。',
   ].join('\n');
 }

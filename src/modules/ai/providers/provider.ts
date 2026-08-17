@@ -3,10 +3,12 @@ import type { AiConfig, AiNativeToolCall, AiStreamCompletionInfo } from '../cont
 export type ProviderMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  reasoning_content?: string;
   tool_call_id?: string;
   tool_calls?: Array<{
     id: string;
     type: 'function';
+    index?: number;
     function: { name: string; arguments: string };
   }>;
 };

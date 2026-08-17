@@ -25,9 +25,9 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
   },
   {
     id: 'openai-compatible',
-    label: 'OpenAI 兼容接口（即将支持）',
+    label: 'OpenAI 兼容接口',
     defaultBaseUrl: '',
-    available: false,
+    available: true,
   },
   {
     id: 'anthropic',
@@ -112,6 +112,7 @@ export interface AiChatRequest {
   type: 'pdf-helper:ai-chat';
   messages: AiConversationMessage[];
   context?: AiDocumentContext;
+  routeId?: 'chat' | 'translation';
   /**
    * Per-request settings for specialised flows such as translation.  The API
    * key and provider always remain the user's saved configuration.
@@ -119,8 +120,21 @@ export interface AiChatRequest {
   configOverride?: Pick<AiConfig, 'model' | 'reasoning' | 'maxOutputTokens'>;
 }
 
+/**
+ * A model only passes the vision capability check when it reads this marker
+ * from the generated test image. Keep the answer out of the prompt so a
+ * text-only endpoint cannot pass merely by following the written instruction.
+ */
+export const AI_VISION_TEST_MARKER = 'PDF7392';
+export const AI_VISION_TEST_PROMPT = '请读取图片中央的验证码，只返回验证码本身，不要解释。';
+
 export interface AiTestRequest {
   type: 'pdf-helper:ai-test';
+  mode?: 'discover' | 'validate';
+  config?: Pick<AiConfig, 'providerId' | 'apiKey' | 'baseUrl' | 'model'> & {
+    capabilities?: Array<'text' | 'vision'>;
+  };
+  imageDataUrl?: string;
 }
 
 export interface AiDetectReadingModeRequest {
@@ -191,6 +205,10 @@ export interface AiNativeToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  /** Exact provider text, retained so a tool-call assistant message can be replayed losslessly. */
+  rawArguments?: string;
+  /** Stream index used to assemble parallel tool calls. */
+  index?: number;
 }
 
 export interface AiVisionRequest {
@@ -236,6 +254,7 @@ export interface AiStreamDebugInfo {
     content: string;
     toolCalls?: AiNativeToolCall[];
     toolCallId?: string;
+    reasoningContent?: string;
   }>;
   availableTools: Array<{
     name: string;

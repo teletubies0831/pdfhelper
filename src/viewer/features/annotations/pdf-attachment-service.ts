@@ -66,7 +66,7 @@ export function downloadEmbeddedPdfBytes(blob: Blob) {
       .pop()
       ?.replace(/\.pdf$/i, "") || "document";
   link.href = blobUrl;
-  link.download = `${safeDecodeURIComponent(baseName)}-pdfhelper.pdf`;
+  link.download = `${safeDecodeURIComponent(baseName)}-pdfpal.pdf`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
 }

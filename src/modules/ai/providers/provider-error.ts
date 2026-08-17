@@ -14,8 +14,16 @@ export function getSafeProviderErrorDetails(error: unknown): AiStreamErrorInfo {
 
 export function getProviderErrorMessage(payload: unknown, fallback: string): string {
   if (!payload || typeof payload !== 'object') return fallback;
-  const error = (payload as { error?: unknown }).error;
-  if (!error || typeof error !== 'object') return fallback;
-  const message = (error as { message?: unknown }).message;
-  return typeof message === 'string' && message.trim() ? message.trim() : fallback;
+  const record = payload as { error?: unknown; code?: unknown; message?: unknown };
+  const nestedError = record.error;
+  if (typeof nestedError === 'string' && nestedError.trim()) return nestedError.trim();
+  if (nestedError && typeof nestedError === 'object') {
+    const nestedMessage = (nestedError as { message?: unknown }).message;
+    if (typeof nestedMessage === 'string' && nestedMessage.trim()) return nestedMessage.trim();
+  }
+  if (typeof record.message === 'string' && record.message.trim()) {
+    const code = typeof record.code === 'string' && record.code.trim() ? record.code.trim() : '';
+    return code ? `${code}: ${record.message.trim()}` : record.message.trim();
+  }
+  return fallback;
 }

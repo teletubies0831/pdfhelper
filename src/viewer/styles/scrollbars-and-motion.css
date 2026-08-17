@@ -50,7 +50,7 @@
 
 /* ==========================================================================
    Knowledge base scrollbar theme
-   Soft blue scrollbars that match the existing PDF Helper visual language.
+   Soft blue scrollbars that match the existing PDFPal visual language.
    ========================================================================== */
 
 .knowledge-base-page {
@@ -123,6 +123,7 @@
   .selected-snippet,
   .settings-panel,
   .settings-popover,
+  .settings-pages,
   .settings-memory-list,
   .chat-message-content pre,
   .chat-attachments
@@ -139,6 +140,7 @@
   .selected-snippet,
   .settings-panel,
   .settings-popover,
+  .settings-pages,
   .settings-memory-list,
   .chat-message-content pre,
   .chat-attachments
@@ -155,6 +157,7 @@
   .selected-snippet,
   .settings-panel,
   .settings-popover,
+  .settings-pages,
   .settings-memory-list,
   .chat-message-content pre,
   .chat-attachments
@@ -170,6 +173,7 @@
   .selected-snippet,
   .settings-panel,
   .settings-popover,
+  .settings-pages,
   .settings-memory-list,
   .chat-message-content pre,
   .chat-attachments
@@ -188,6 +192,7 @@
   .selected-snippet,
   .settings-panel,
   .settings-popover,
+  .settings-pages,
   .settings-memory-list,
   .chat-message-content pre,
   .chat-attachments

@@ -1,29 +1,10 @@
 import { AnnotationEditorType } from "pdfjs-dist";
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { annotationActionBar, annotationTypeLabel, contextCleanCopyButton, contextColors, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteHighlightNoteButton, editorModeButtons, freeTextSizeControl, highlightColorInput, highlightContextActions, highlightNotePopover, highlightNoteQuote, highlightNoteText, highlightNoteTitle, selectionContextMenu, textStatus, viewerElement } from "../../app/viewer-elements";
 import { activeEditorMode, annotationEditor, contextHighlightEditor, contextSelectionRanges, contextSelectionText, nativeAnnotationNotes, openHighlightNoteEditor, pdfDocument, pdfViewer, restoredHelperNotesBySignature, selectedAnnotationEditor, selectedHighlightEditor } from "../../app/viewer-state";
 import { setStatus } from "../recent-files/public";
 import { forgetHelperNote, getAnnotationGeometrySignature, getEditorSerializedValue, getEditorStorageKeys, getRememberedHelperNote, isFreeTextEditor, isHighlightEditor, isInkEditor, isRecord, isStoredHighlightValue, markUnsavedChanges, normalizeStorageKey, rememberHelperNote } from "./annotation-persistence";
 import { getViewerSelectionRawText } from "../../core/pdf-reader/public";
 import { findAnnotationEditor, findHighlightNoteAnchor, setHighlightColor, syncFreeTextControls } from './annotation-editor';
-
-
-
 
 export function clearDomSelection() {
   window.getSelection()?.removeAllRanges();
@@ -216,27 +197,51 @@ export function updateHighlightNoteIndicator(editor: any) {
   const container = editor?.div as HTMLDivElement | null;
   if (!container) return;
 
+  const note = getHighlightNote(editor);
+
   let indicator = container.querySelector<HTMLElement>(
     ".pdf-helper-note-indicator",
   );
-  if (!getHighlightNote(editor)) {
+  if (!note) {
     indicator?.remove();
     return;
   }
 
   if (!indicator) {
-    indicator = document.createElement("span");
+    indicator = document.createElement("button");
+    indicator.setAttribute("type", "button");
     indicator.className = "pdf-helper-note-indicator";
-    indicator.textContent = "●";
+    const icon = document.createElement("img");
+    icon.className = "pdf-helper-note-icon";
+    icon.src = "/resources/note-marker.svg?v=yellow-1";
+    icon.alt = "";
+    icon.draggable = false;
+    const preview = document.createElement("span");
+    preview.className = "pdf-helper-note-preview";
+    preview.setAttribute("role", "tooltip");
+    indicator.append(icon);
+    indicator.append(preview);
+    indicator.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+    indicator.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleHighlightNote(editor);
+    });
     container.append(indicator);
   }
+
+  const preview = indicator.querySelector<HTMLElement>(
+    ".pdf-helper-note-preview",
+  );
+  if (preview) preview.textContent = note;
 
   const isOpen =
     openHighlightNoteEditor.value === editor && !highlightNotePopover.hidden;
   indicator.classList.toggle("is-open", isOpen);
   indicator.setAttribute(
     "aria-label",
-    isOpen ? "关闭高亮笔记" : "打开高亮笔记",
+    isOpen ? "关闭笔记编辑" : `编辑笔记：${note}`,
   );
 
   const anchor = findHighlightNoteAnchor(container);
@@ -359,7 +364,7 @@ export function selectAnnotation(editor: any, showActions = true) {
 
 
 export function selectHighlight(editor: any) {
-  selectAnnotation(editor);
+  selectAnnotation(editor, false);
 }
 
 
@@ -389,13 +394,13 @@ export function showHighlightNote(editor: any, focusEditor = false) {
   ) {
     hideHighlightNote();
   }
-  selectHighlight(editor);
+  selectAnnotation(editor, false);
   const note = getHighlightNote(editor);
   openHighlightNoteEditor.value = editor;
   highlightNoteTitle.textContent = note ? "高亮笔记" : "添加笔记";
   highlightNoteQuote.textContent = getHighlightText(editor);
   highlightNoteText.value = note;
-  deleteHighlightNoteButton.hidden = !note;
+  deleteHighlightNoteButton.hidden = true;
   positionFloatingElement(
     highlightNotePopover,
     editor.div.getBoundingClientRect(),
@@ -531,7 +536,7 @@ export function showSelectionContextMenuAt(
   contextCleanCopyButton.hidden = false;
   contextColors.hidden = false;
   highlightContextActions.hidden = false;
-  contextDeleteHighlightButton.hidden = true;
+  contextDeleteHighlightButton.hidden = !editor;
   contextNoteButton.textContent =
     editor && getHighlightNote(editor) ? "编辑笔记" : "添加笔记";
 

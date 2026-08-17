@@ -58,6 +58,26 @@ export const deepSeekMaxOutputTokensInput = requiredElement<HTMLInputElement>(
 export const deepSeekThinkingSelect =
   requiredElement<HTMLSelectElement>("deepseek-thinking");
 
+export const chatReasoningControl = requiredElement<HTMLElement>(
+  "chat-reasoning-control",
+);
+
+export const chatReasoningTrigger = requiredElement<HTMLButtonElement>(
+  "chat-reasoning-trigger",
+);
+
+export const chatReasoningValue = requiredElement<HTMLElement>(
+  "chat-reasoning-value",
+);
+
+export const chatReasoningMenu = requiredElement<HTMLElement>(
+  "chat-reasoning-menu",
+);
+
+export const chatReasoningOptionButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-chat-reasoning-value]"),
+);
+
 export const deepSeekBaseUrlInput =
   requiredElement<HTMLInputElement>("deepseek-base-url");
 
@@ -71,21 +91,113 @@ export const saveDeepSeekSettingsButton = requiredElement<HTMLButtonElement>(
 
 export const testDeepSeekButton = requiredElement<HTMLButtonElement>("test-deepseek");
 
-export const visionAiModeSelect = requiredElement<HTMLSelectElement>("vision-ai-mode");
-
-export const visionAiFields = requiredElement<HTMLElement>("vision-ai-fields");
-
-export const visionApiKeyInput = requiredElement<HTMLInputElement>("vision-api-key");
-
-export const visionModelInput = requiredElement<HTMLInputElement>("vision-model");
-
-export const visionBaseUrlInput = requiredElement<HTMLInputElement>("vision-base-url");
-
 export const visionSettingsStatus = requiredElement<HTMLElement>(
   "vision-settings-status",
 );
 
 export const testVisionAiButton = requiredElement<HTMLButtonElement>("test-vision-ai");
+
+export const settingsPrimaryTabButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]"),
+);
+
+export const settingsPrimaryPanels = Array.from(
+  document.querySelectorAll<HTMLElement>("[data-settings-panel]"),
+);
+
+export const settingsPages = requiredElement<HTMLElement>("settings-pages");
+
+export const settingsAgentToolCount = requiredElement<HTMLElement>(
+  "settings-agent-tool-count",
+);
+
+export const settingsAgentToolCatalog = requiredElement<HTMLElement>(
+  "settings-agent-tool-catalog",
+);
+
+export const settingsModelNavigation = requiredElement<HTMLElement>(
+  "settings-model-navigation",
+);
+
+export const settingsModelOverview = requiredElement<HTMLElement>(
+  "settings-model-overview",
+);
+
+export const settingsConnectionEditor = requiredElement<HTMLElement>(
+  "settings-connection-editor",
+);
+
+export const settingsConnectionBackButton = requiredElement<HTMLButtonElement>(
+  "settings-connection-back",
+);
+
+export const settingsConnectionTitle = requiredElement<HTMLElement>(
+  "settings-connection-title",
+);
+
+export const settingsConnectionFields = requiredElement<HTMLElement>(
+  "settings-connection-fields",
+);
+
+export const settingsConnectionGrid = requiredElement<HTMLElement>(
+  "settings-connection-grid",
+);
+
+export const settingsConnectionNameInput = requiredElement<HTMLInputElement>(
+  "settings-connection-name",
+);
+
+export const settingsConnectionCapabilitySelect = requiredElement<HTMLSelectElement>(
+  "settings-connection-capability",
+);
+
+export const settingsConnectionModelsInput = requiredElement<HTMLTextAreaElement>(
+  "settings-connection-models",
+);
+
+export const settingsConnectionModelCount = requiredElement<HTMLElement>(
+  "settings-connection-model-count",
+);
+
+export const settingsConnectionModelResults = requiredElement<HTMLElement>(
+  "settings-connection-model-results",
+);
+
+export const settingsConnectionManualModelInput = requiredElement<HTMLInputElement>(
+  "settings-connection-manual-model",
+);
+
+export const settingsConnectionAddManualModelButton = requiredElement<HTMLButtonElement>(
+  "settings-connection-add-manual-model",
+);
+
+export const settingsConnectionDeleteButton = requiredElement<HTMLButtonElement>(
+  "settings-connection-delete",
+);
+
+export const visionRouteSummary = requiredElement<HTMLSelectElement>(
+  "vision-route-summary",
+);
+
+export const settingsFooterNote = requiredElement<HTMLElement>(
+  "settings-footer-note",
+);
+
+export const addAiProviderButton = requiredElement<HTMLButtonElement>(
+  "add-ai-provider",
+);
+
+export const secretToggleButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-toggle-secret]"),
+);
+
+export const addLongTermMemoryButton = requiredElement<HTMLButtonElement>(
+  "add-long-term-memory",
+);
+
+export const longTermMemorySearchInput = requiredElement<HTMLInputElement>(
+  "long-term-memory-search",
+);
 
 export const chatCompressionTriggerCharactersInput = requiredElement<HTMLInputElement>(
   "chat-compression-trigger-characters",

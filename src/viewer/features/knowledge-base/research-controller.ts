@@ -17,7 +17,7 @@
 import { activeKnowledgeInsightPrompt, activeKnowledgePageMode, aiConfigLoaded, knowledgeResearchPending, lastKnowledgeResearchAnswer, lastKnowledgeResearchItems, lastKnowledgeResearchQuestion, paperCardPageAbortController, persistCurrentAppViewState, resolvedReadingMode, selectedKnowledgeRecordKey, selectedKnowledgeResearchKeys } from "../../core/pdf-reader/public";
 
 
-import { aiPanelToggleButton, appFrame, knowledgeBaseEntryButton, knowledgeBasePageElement, knowledgeDocumentCountElement, knowledgeGroupSelect, knowledgeInsightQuestionInput, knowledgePageSubtitleElement, knowledgePageTitleElement, knowledgeResearchQuestionInput, knowledgeResearchResult, knowledgeResearchResultBody, knowledgeResearchResultKind, knowledgeResearchResultTitle, knowledgeResearchScopeSelect, knowledgeResearchScopeSummary, knowledgeResearchSourceList, knowledgeResearchStatus, knowledgeRunResearchButton, knowledgeTotalCountElement, paperCardPageElement } from "../../app/viewer-elements";
+import { aiPanelToggleButton, appFrame, knowledgeBaseEntryButton, knowledgeBasePageElement, knowledgeDocumentCountElement, knowledgeGroupSelect, knowledgeInsightQuestionInput, knowledgePageSubtitleElement, knowledgePageTitleElement, knowledgeResearchQuestionInput, knowledgeResearchResult, knowledgeResearchResultBody, knowledgeResearchResultKind, knowledgeResearchResultTitle, knowledgeResearchScopeSelect, knowledgeResearchScopeSummary, knowledgeResearchSourceList, knowledgeResearchStatus, knowledgeRunResearchButton, knowledgeTotalCountElement, paperCardPageElement, readerWorkspaceElement } from "../../app/viewer-elements";
 import { loadDeepSeekConfig, setCurrentApplicationView } from "../assistant/public";
 import { renderChatMarkdown, requestAiContent } from "../../shared-ui/markdown/markdown-renderer";
 
@@ -362,29 +362,128 @@ export function refreshKnowledgeBaseIfOpen(): void {
   if (!knowledgeBasePageElement.hidden) renderKnowledgeBase();
 }
 
+type WorkspaceView = "viewer" | "knowledge";
+
+let activeWorkspaceView: WorkspaceView = knowledgeBasePageElement.hidden
+  ? "viewer"
+  : "knowledge";
+let workspaceTransitionToken = 0;
+let workspaceAnimations: Animation[] = [];
+
+function cancelWorkspaceTransition(): void {
+  workspaceTransitionToken += 1;
+  for (const animation of workspaceAnimations) animation.cancel();
+  workspaceAnimations = [];
+  appFrame?.classList.remove("workspace-view-transitioning");
+  appFrame?.style.removeProperty("--workspace-transition-top");
+}
+
+function setWorkspaceViewImmediately(view: WorkspaceView): void {
+  cancelWorkspaceTransition();
+  activeWorkspaceView = view;
+  const knowledgeVisible = view === "knowledge";
+  knowledgeBasePageElement.hidden = !knowledgeVisible;
+  knowledgeBasePageElement.inert = !knowledgeVisible;
+  readerWorkspaceElement.inert = knowledgeVisible;
+  knowledgeBasePageElement.toggleAttribute("aria-hidden", !knowledgeVisible);
+  readerWorkspaceElement.toggleAttribute("aria-hidden", knowledgeVisible);
+  appFrame?.classList.toggle("knowledge-base-page-open", knowledgeVisible);
+}
+
+async function transitionWorkspaceView(view: WorkspaceView): Promise<void> {
+  if (!workspaceAnimations.length) {
+    activeWorkspaceView = knowledgeBasePageElement.hidden ? "viewer" : "knowledge";
+  }
+  if (!appFrame || view === activeWorkspaceView) {
+    setWorkspaceViewImmediately(view);
+    return;
+  }
+
+  const outgoingView = activeWorkspaceView;
+  setWorkspaceViewImmediately(outgoingView);
+  const transitionToken = ++workspaceTransitionToken;
+  activeWorkspaceView = view;
+  const forward = view === "knowledge";
+  const outgoing = forward ? readerWorkspaceElement : knowledgeBasePageElement;
+  const incoming = forward ? knowledgeBasePageElement : readerWorkspaceElement;
+  const contentTop = outgoing.getBoundingClientRect().top;
+
+  appFrame.style.setProperty("--workspace-transition-top", `${contentTop}px`);
+  appFrame.classList.add("workspace-view-transitioning");
+  appFrame.classList.toggle("knowledge-base-page-open", view === "knowledge");
+  knowledgeBasePageElement.hidden = false;
+  outgoing.inert = true;
+  incoming.inert = false;
+  outgoing.setAttribute("aria-hidden", "true");
+  incoming.removeAttribute("aria-hidden");
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    setWorkspaceViewImmediately(view);
+    return;
+  }
+
+  const timing: KeyframeAnimationOptions = {
+    duration: 360,
+    easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    fill: "both",
+  };
+  const outgoingAnimation = outgoing.animate([
+    { transform: "translate3d(0, 0, 0)", opacity: 1 },
+    {
+      transform: forward
+        ? "translate3d(-100%, 0, 0)"
+        : "translate3d(100%, 0, 0)",
+      opacity: 0.94,
+    },
+  ], timing);
+  const incomingAnimation = incoming.animate([
+    {
+      transform: forward
+        ? "translate3d(100%, 0, 0)"
+        : "translate3d(-100%, 0, 0)",
+      opacity: 0.94,
+    },
+    { transform: "translate3d(0, 0, 0)", opacity: 1 },
+  ], timing);
+  workspaceAnimations = [outgoingAnimation, incomingAnimation];
+
+  await Promise.allSettled(workspaceAnimations.map((animation) => animation.finished));
+  if (transitionToken !== workspaceTransitionToken) return;
+  const completedAnimations = workspaceAnimations;
+  workspaceAnimations = [];
+  for (const animation of completedAnimations) animation.cancel();
+  const knowledgeVisible = view === "knowledge";
+  knowledgeBasePageElement.hidden = !knowledgeVisible;
+  knowledgeBasePageElement.inert = !knowledgeVisible;
+  readerWorkspaceElement.inert = knowledgeVisible;
+  knowledgeBasePageElement.toggleAttribute("aria-hidden", !knowledgeVisible);
+  readerWorkspaceElement.toggleAttribute("aria-hidden", knowledgeVisible);
+  appFrame.classList.toggle("knowledge-base-page-open", knowledgeVisible);
+  appFrame.classList.remove("workspace-view-transitioning");
+  appFrame.style.removeProperty("--workspace-transition-top");
+}
+
 
 
 export function openKnowledgeBasePage(): void {
   paperCardPageAbortController.value?.abort();
   paperCardPageElement.hidden = true;
   appFrame?.classList.remove("paper-card-page-open");
-  knowledgeBasePageElement.hidden = false;
-  appFrame?.classList.add("knowledge-base-page-open");
   knowledgeBaseEntryButton.classList.add("active");
   aiPanelToggleButton?.classList.remove("active");
   setCurrentApplicationView("knowledge");
   knowledgeBasePageElement.scrollTop = 0;
   renderKnowledgeBase();
+  void transitionWorkspaceView("knowledge");
 }
 
 
 
 export function closeKnowledgeBasePage(): void {
-  knowledgeBasePageElement.hidden = true;
-  appFrame?.classList.remove("knowledge-base-page-open");
   knowledgeBaseEntryButton.classList.remove("active");
   aiPanelToggleButton?.classList.add("active");
   setCurrentApplicationView("viewer");
+  void transitionWorkspaceView("viewer");
   persistCurrentAppViewState();
 }
 

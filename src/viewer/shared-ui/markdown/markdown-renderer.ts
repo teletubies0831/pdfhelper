@@ -25,6 +25,7 @@ const DEFAULT_AI_CONTENT_TIMEOUT_MS = 120_000;
 export interface AiContentRequestOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  routeId?: 'chat' | 'translation';
 }
 
 function requestAiRuntimeResponse(
@@ -86,6 +87,7 @@ export async function requestAiContent(
     type: "pdf-helper:ai-chat",
     messages,
     configOverride,
+    routeId: requestOptions.routeId,
     context: {
       ...context,
       readingMode: context.readingMode ?? resolvedReadingMode.value,

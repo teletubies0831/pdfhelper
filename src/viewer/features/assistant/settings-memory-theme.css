@@ -1,0 +1,226 @@
+.settings-page[data-settings-panel="memory"] {
+  margin-top: -2px;
+}
+
+.settings-memory-write-policy span {
+  border-radius: 9px;
+  background: #f4f7fb;
+  color: #344054;
+  font-size: 13px;
+  font-style: normal;
+  padding: 6px 11px;
+}
+
+.settings-compression-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #dfe7f1;
+  border-radius: 13px;
+  background: #fbfcfe;
+  min-height: 174px;
+  padding: 16px 15px 10px;
+}
+
+.settings-compression-card > div:first-child strong,
+.settings-compression-card > div:first-child small {
+  display: block;
+}
+
+.settings-compression-card > div:first-child strong {
+  color: #26354b;
+  font-size: 16px;
+}
+
+.settings-compression-card > div:first-child small {
+  margin-top: 3px;
+  color: #718096;
+  font-size: 14px;
+}
+
+.settings-compact-grid {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+  border-top: 1px solid #e7edf5;
+  padding-top: 13px;
+}
+
+.settings-compact-grid .settings-field {
+  min-width: 0;
+  margin-bottom: 7px;
+}
+
+.settings-memory-hint {
+  display: block;
+  margin: 9px 0 0;
+  color: #7a879b;
+  font-size: 13px;
+}
+
+.settings-memory-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-memory-toolbar > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.settings-memory-toolbar > div:first-child span {
+  color: #718096;
+  font-size: 13px;
+}
+
+.settings-memory-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-memory-actions button {
+  height: 40px;
+  padding: 0 13px;
+}
+
+.settings-section-copy {
+  margin: 5px 0 11px;
+  color: #718096;
+  font-size: 13px;
+}
+
+.settings-memory-search {
+  position: relative;
+  display: block;
+  margin-bottom: 11px;
+}
+
+.settings-memory-search > span {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  color: #718096;
+  transform: translateY(-50%);
+}
+
+.settings-memory-search input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #d8e0eb;
+  border-radius: 11px;
+  background: #fff;
+  color: #344054;
+  font-size: 14px;
+  padding: 0 13px 0 38px;
+}
+
+.settings-memory-list {
+  min-height: 64px;
+  max-height: 190px;
+  overflow: auto;
+  border: 1px solid #dfe7f1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.settings-memory-empty {
+  padding: 21px 12px;
+  color: #8a96a8;
+  font-size: 14px;
+  text-align: center;
+}
+
+.settings-memory-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+}
+
+.settings-memory-item + .settings-memory-item {
+  border-top: 1px solid #e7edf5;
+}
+
+.settings-memory-item[hidden] {
+  display: none;
+}
+
+.settings-memory-category {
+  border-radius: 9px;
+  background: #eaf2ff;
+  color: #2468df;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.settings-memory-content {
+  min-width: 0;
+  color: #344054;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.settings-memory-content small {
+  display: block;
+  margin-top: 2px;
+  color: #98a2b3;
+  font-size: 12px;
+}
+
+.settings-memory-delete {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.settings-memory-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-memory-edit {
+  border: 0;
+  background: transparent;
+  color: #1f67e8;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px;
+}
+
+.settings-memory-write-policy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 11px;
+  border: 1px solid #dfe7f1;
+  border-radius: 11px;
+  padding: 10px 13px;
+}
+
+.settings-memory-write-policy strong {
+  color: #26354b;
+  font-size: 15px;
+}
+
+.settings-memory-search input:focus {
+  border-color: #7aa9ff;
+  box-shadow: 0 0 0 3px rgb(31 103 232 / 10%);
+}
+
+@media (max-width: 720px) {
+  .settings-compact-grid {
+    grid-template-columns: 1fr;
+  }
+}

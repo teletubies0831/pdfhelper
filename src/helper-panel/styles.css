@@ -34,6 +34,17 @@ button {
   justify-content: space-between;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-logo {
+  width: 42px;
+  height: 42px;
+}
+
 .eyebrow,
 .section-label {
   margin: 0 0 5px;

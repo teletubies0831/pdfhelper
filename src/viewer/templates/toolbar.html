@@ -104,6 +104,11 @@
       <span>颜色</span>
       <input id="highlight-color" type="color" value="#fff066" />
     </label>
+    <div id="highlight-color-history" class="highlight-color-history" role="group" aria-label="最近使用的高亮颜色">
+      <button class="highlight-color-history-button" type="button" data-highlight-color-history-index="0" aria-label="最近颜色 1"></button>
+      <button class="highlight-color-history-button" type="button" data-highlight-color-history-index="1" aria-label="最近颜色 2"></button>
+      <button class="highlight-color-history-button" type="button" data-highlight-color-history-index="2" aria-label="最近颜色 3"></button>
+    </div>
     <button class="toolbar-nav-button" type="button" data-editor-mode="ink" title="自由绘制"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pen" /></svg>画笔</button>
     <button class="toolbar-nav-button" type="button" data-editor-mode="text" title="在页面上添加文本"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-note" /></svg>批注</button>
     <button id="erase-selected-annotation" class="toolbar-nav-button" type="button" title="删除当前选中的批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eraser" /></svg>擦除</button>

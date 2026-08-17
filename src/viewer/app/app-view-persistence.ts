@@ -16,8 +16,8 @@ import { DEFAULT_CONVERSATION_MEMORY_CONFIG, type ConversationMemoryConfig } fro
 
 
 
-import { aiSettingsButton, appFrame, assistantChatPanel, assistantSettingsPanel, assistantToolsRuntime, assistantViewButtons, chatInput, deepSeekApiKeyInput, knowledgeBasePageElement, knowledgeGroupSelect, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeSearchInput, knowledgeSortSelect, paperCardPageElement, settingsModalBackdrop } from "./viewer-elements";
-import { refreshLongTermMemoryList } from "../features/assistant/public";
+import { aiSettingsButton, appFrame, assistantChatPanel, assistantSettingsPanel, assistantToolsRuntime, assistantViewButtons, chatInput, knowledgeBasePageElement, knowledgeGroupSelect, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeSearchInput, knowledgeSortSelect, paperCardPageElement, settingsModalBackdrop } from "./viewer-elements";
+import { refreshLongTermMemoryList, resetSettingsPresentation } from "../features/assistant/public";
 import { cancelPendingAutomaticTranslation } from "../features/translation/public";
 import { collectKnowledgeItems, openKnowledgeBasePage, setKnowledgePageMode } from "../features/knowledge-base/public";
 import { cancelPendingCardGeneration, openSavedPaperOverviewReview } from "../features/paper-card/public";
@@ -136,7 +136,8 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
 export function getCurrentPersistedAppView(): PersistedAppView {
   if (!paperCardPageElement.hidden && editingPaperOverviewId.value)
     return "paper-review";
-  if (!knowledgeBasePageElement.hidden) return "knowledge";
+  if (appFrame?.classList.contains("knowledge-base-page-open"))
+    return "knowledge";
   return "viewer";
 }
 
@@ -345,28 +346,13 @@ export function setAssistantView(view: AssistantView): void {
 
 
 
-export let settingsSavedFeedbackTimer: number | undefined;
-
-
 export let settingsCloseAnimationTimer: number | undefined;
 
 
 
 export function showSettingsSavedFeedback(): void {
-  if (settingsSavedFeedbackTimer !== undefined) {
-    window.clearTimeout(settingsSavedFeedbackTimer);
-  }
-
-  aiSettingsButton.classList.add("saved");
-  aiSettingsButton.textContent = "✓ 已保存";
-  aiSettingsButton.setAttribute("aria-label", "AI 设置已保存");
-
-  settingsSavedFeedbackTimer = window.setTimeout(() => {
-    aiSettingsButton.classList.remove("saved");
-    aiSettingsButton.textContent = "⚙ 设置";
-    aiSettingsButton.setAttribute("aria-label", "打开 AI 设置");
-    settingsSavedFeedbackTimer = undefined;
-  }, 1400);
+  aiSettingsButton.classList.remove("saved");
+  aiSettingsButton.setAttribute("aria-label", "打开 AI 设置");
 }
 
 
@@ -389,6 +375,7 @@ export function setDeepSeekSettingsOpen(open: boolean): void {
     document.body.classList.add("settings-modal-open");
     aiSettingsButton.classList.add("active");
     aiSettingsButton.setAttribute("aria-expanded", "true");
+    resetSettingsPresentation();
 
     // Commit the resting state before entering so both opacity and transform
     // interpolate. This is one small layout read, not a per-frame layout cost.
@@ -399,7 +386,6 @@ export function setDeepSeekSettingsOpen(open: boolean): void {
     settingsModalBackdrop.classList.add("is-open");
 
     void refreshLongTermMemoryList();
-    window.setTimeout(() => deepSeekApiKeyInput.focus(), 0);
   } else {
     assistantSettingsPanel.classList.remove("is-open");
     settingsModalBackdrop.classList.remove("is-open");

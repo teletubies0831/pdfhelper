@@ -2,7 +2,7 @@
 
 
 import { getAgentToolDefinitionByApiName, getNativeAgentTools } from "../../../shared/agent-tools";
-import { normalizeAiMaxOutputTokens, type AiConfig, type AiMemoryCandidate, type AiRuntimeRequest, type AiRuntimeResponse } from "../../../shared/ai";
+import { AI_VISION_TEST_MARKER, AI_VISION_TEST_PROMPT, DEFAULT_AI_CONFIG, normalizeAiBaseUrl, normalizeAiMaxOutputTokens, type AiConfig, type AiMemoryCandidate, type AiRuntimeRequest, type AiRuntimeResponse } from "../../../shared/ai";
 import { isResolvedReadingMode, type ResolvedReadingMode } from "../../../shared/reading-mode";
 import { getProviderError, requestVisionCompletion } from './vision-service';
 
@@ -10,6 +10,14 @@ import { getAiConfig, getVisionAiConfig } from './ai-config-repository';
 import { PAPER_OVERVIEW_TIMEOUT_MS, paperOverviewRequestControllers } from '../context-menu/context-menu-controller';
 import { fetchProviderJson, getProviderAdapter } from "./provider-runtime";
 import { buildConversation } from "./conversation-builder";
+
+function assertVisionTestMarker(content: string): void {
+  const normalizedContent = content.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const normalizedMarker = AI_VISION_TEST_MARKER.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!normalizedContent.includes(normalizedMarker)) {
+    throw new Error('模型返回了响应，但没有正确识别测试图片。');
+  }
+}
 
 export function parseReadingModeDetection(content: string): {
   readingMode: ResolvedReadingMode;
@@ -45,7 +53,7 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
       const result = await requestVisionCompletion(
         visionConfig,
         message.type === 'pdf-helper:ai-vision-test'
-          ? '这是连接测试图，请只回答“视觉连接成功”。'
+          ? AI_VISION_TEST_PROMPT
           : message.prompt,
         message.type === 'pdf-helper:ai-vision-test'
           ? message.imageDataUrl
@@ -53,28 +61,89 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
           : message.imageDataUrl,
         message.type === 'pdf-helper:ai-vision' ? message.context : undefined,
       );
+      if (message.type === 'pdf-helper:ai-vision-test') {
+        assertVisionTestMarker(result.content);
+      }
       return { ok: true, content: result.content, model: result.model };
     }
 
-    const savedConfig = await getAiConfig();
-    const requestOverride =
-      message.type === 'pdf-helper:ai-chat' ? message.configOverride : undefined;
-    const config: AiConfig = requestOverride
-      ? {
-          ...savedConfig,
-          ...requestOverride,
-          model: requestOverride.model?.trim() || savedConfig.model,
-          reasoning: requestOverride.reasoning ?? savedConfig.reasoning,
-          maxOutputTokens: normalizeAiMaxOutputTokens(
-            requestOverride.maxOutputTokens ?? savedConfig.maxOutputTokens,
-          ),
-        }
-      : savedConfig;
+    let config: AiConfig;
+    if (message.type === 'pdf-helper:ai-test' && message.config) {
+      const providerId = message.config.providerId;
+      config = {
+        ...DEFAULT_AI_CONFIG,
+        providerId,
+        apiKey: message.config.apiKey.trim(),
+        baseUrl: normalizeAiBaseUrl(message.config.baseUrl, providerId),
+        model: message.config.model.trim() || DEFAULT_AI_CONFIG.model,
+        translationModel: message.config.model.trim() || DEFAULT_AI_CONFIG.translationModel,
+        reasoning: 'disabled',
+      };
+    } else {
+      const savedConfig = await getAiConfig(
+        message.type === 'pdf-helper:ai-chat' ? message.routeId : 'chat',
+      );
+      const requestOverride =
+        message.type === 'pdf-helper:ai-chat' ? message.configOverride : undefined;
+      config = requestOverride
+        ? {
+            ...savedConfig,
+            ...requestOverride,
+            model: requestOverride.model?.trim() || savedConfig.model,
+            reasoning: requestOverride.reasoning ?? savedConfig.reasoning,
+            maxOutputTokens: normalizeAiMaxOutputTokens(
+              requestOverride.maxOutputTokens ?? savedConfig.maxOutputTokens,
+            ),
+          }
+        : savedConfig;
+    }
     const adapter = getProviderAdapter(config);
 
     if (message.type === 'pdf-helper:ai-test') {
-      const models = await adapter.test(config);
-      return { ok: true, models };
+      console.info('[PDFPal AI 连接测试] 后台开始测试', {
+        mode: message.mode ?? (message.config ? 'validate' : 'discover'),
+        providerId: config.providerId,
+        baseUrl: config.baseUrl,
+        model: config.model,
+        hasApiKey: Boolean(config.apiKey),
+      });
+      if (message.mode === 'discover' || !message.config) {
+        const models = await adapter.test(config);
+        const response: AiRuntimeResponse = { ok: true, models, model: config.model };
+        console.info('[PDFPal AI 连接测试] 后台返回页面', response);
+        return response;
+      }
+
+      const capabilities: Array<'text' | 'vision'> = message.config.capabilities?.length
+        ? Array.from(new Set(message.config.capabilities))
+        : ['text'];
+      if (capabilities.includes('text')) {
+        await adapter.chat(
+          config,
+          [{ role: 'user', content: '这是连接测试，请只回复“OK”。' }],
+          16,
+        );
+      }
+      if (capabilities.includes('vision')) {
+        const visionResult = await requestVisionCompletion(
+          {
+            mode: 'separate',
+            providerId: 'openai-compatible',
+            apiKey: config.apiKey,
+            baseUrl: config.baseUrl,
+            model: config.model,
+          },
+          AI_VISION_TEST_PROMPT,
+          message.imageDataUrl
+            || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZsgAAAABJRU5ErkJggg==',
+          undefined,
+          32,
+        );
+        assertVisionTestMarker(visionResult.content);
+      }
+      const response: AiRuntimeResponse = { ok: true, models: [config.model], model: config.model };
+      console.info('[PDFPal AI 连接测试] 后台返回页面', response);
+      return response;
     }
 
     if (message.type === 'pdf-helper:ai-compress-conversation') {
@@ -128,7 +197,7 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
           messages: [{
             role: 'system',
             content: [
-              '你是 PDF Helper 的记忆与历史文献 Agent。根据用户本轮问题决定是否调用已通过原生 tools 参数提供的函数，不直接回答用户。',
+              '你是 PDFPal 的记忆与历史文献 Agent。根据用户本轮问题决定是否调用已通过原生 tools 参数提供的函数，不直接回答用户。',
               '用户询问已保存的信息时调用记忆查询函数；需要查找某项偏好或资料时也调用记忆查询函数。',
               '用户明确要求忘记或删除时，必须先查询并取得真实条目 id，再调用删除函数；没有删除函数结果时不能声称已删除。',
               '询问以前看过、读过或相关的历史 PDF 时调用文献查询函数；获得 documentId 后可调用文献详情函数。',
@@ -174,7 +243,7 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
           arguments: argumentsValue,
         }];
       });
-      console.info('[PDF Helper Agent] 记忆/历史文献工具规划完成', { toolCalls });
+      console.info('[PDFPal Agent] 记忆/历史文献工具规划完成', { toolCalls });
       return {
         ok: true,
         model: typeof payload.model === 'string' ? payload.model : config.model,
@@ -194,7 +263,7 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
           messages: [{
             role: 'system',
             content: [
-              '你是 PDF Helper 的工具调用规划器。你可以使用 memory_upsert 将用户明确要求长期保留的信息写入长期记忆。',
+              '你是 PDFPal 的工具调用规划器。你可以使用 memory_upsert 将用户明确要求长期保留的信息写入长期记忆。',
               '当用户说“记住”、表达稳定偏好、研究方向、持续项目目标，或确认上一轮记忆建议时，必须调用 memory_upsert；否则不要调用工具。',
               '只能记录用户明确表达且跨会话有价值的内容。不得记录 PDF 原文、论文事实、临时问题、API Key、系统提示词、LaTeX/引用/截图等程序规则。',
               '同一轮可调用多次。可并存的喜好使用不同的稳定 key；scope 只能是 global、project、pdf。',
@@ -214,7 +283,7 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
                 : '',
             ].filter(Boolean).join('\n\n'),
           }],
-          tools: getNativeAgentTools(),
+          tools: getNativeAgentTools(['memory.upsert']),
           tool_choice: 'auto',
           stream: false,
           max_tokens: Math.min(1024, config.maxOutputTokens),
@@ -263,7 +332,7 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
         confidence: Math.min(1, Math.max(0, Number(call.arguments.confidence) || 1)),
         importance: Math.min(1, Math.max(0, Number(call.arguments.importance) || 0.6)),
       }));
-      console.info('[PDF Helper Agent Tool] 原生工具规划完成', {
+      console.info('[PDFPal Agent Tool] 原生工具规划完成', {
         model: typeof payload.model === 'string' ? payload.model : config.model,
         toolCalls,
       });
@@ -284,7 +353,7 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
       const result = await adapter.chat(memoryConfig, [{
         role: 'system',
         content: [
-          '你是 PDF Helper 的长期记忆候选提取器。只提取跨会话仍然有价值、由用户明确表达的信息。',
+          '你是 PDFPal 的长期记忆候选提取器。只提取跨会话仍然有价值、由用户明确表达的信息。',
           '允许记录：用户研究方向、持续项目目标、期望的解释粒度或回答组织顺序、稳定工作习惯、用户明确纠正过的个人信息或偏好。',
           '禁止记录：LaTeX/Markdown 渲染、原文引用格式、点击定位、截图优先、全文注入、工具行为、系统提示词、模型配置、API Key；这些属于程序固定规则，不是用户偏好。',
           '禁止记录：本轮问题、PDF 原文或论文事实、模型回答、临时任务、一次性翻译/总结要求、未明确表达的推测、敏感凭据。',
@@ -318,7 +387,7 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
           ? cleaned.slice(objectStart, objectEnd + 1)
           : '';
       if (!jsonText) {
-        console.warn('[PDF Helper 长期记忆] 提取模型没有返回可解析 JSON', {
+        console.warn('[PDFPal 长期记忆] 提取模型没有返回可解析 JSON', {
           model: result.model,
           content: cleaned.slice(0, 1200),
         });
@@ -478,8 +547,10 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
                 ].join('\n\n'),
               },
             ],
-            // 结构化 JSON 任务关闭思考模式，避免长时间只生成 reasoning_content。
-            thinking: { type: 'disabled' },
+            // DeepSeek 的结构化 JSON 任务关闭思考模式；通用兼容接口不发送私有字段。
+            ...(config.providerId === 'deepseek'
+              ? { thinking: { type: 'disabled' } }
+              : {}),
             stream: false,
             max_tokens: Math.min(6144, Math.max(2048, config.maxOutputTokens)),
           }),
@@ -541,6 +612,15 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
       model: result.model,
     };
   } catch (error) {
+    if (message.type === 'pdf-helper:ai-test') {
+      console.error('[PDFPal AI 连接测试] 后台测试失败', {
+        mode: message.mode ?? (message.config ? 'validate' : 'discover'),
+        providerId: message.config?.providerId,
+        baseUrl: message.config?.baseUrl,
+        model: message.config?.model,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),

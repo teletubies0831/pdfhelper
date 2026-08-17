@@ -15,7 +15,7 @@ import { AnnotationEditorType } from "pdfjs-dist";
 
 
 
-import { annotationActionBar, clearRecentFilesButton, closeHighlightNoteButton, closeRecentFilesButton, contextCleanCopyButton, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteAnnotationButton, deleteHighlightNoteButton, editorModeButtons, eraseSelectedAnnotationButton, fileInput, findBar, findCloseButton, findInput, findNextButton, findPreviousButton, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, highlightColorInput, highlightNotePopover, highlightNoteText, nextButton, openFileButton, pageNumberInput, previousButton, quickCurrentLocationButton, quickHighlightButtons, quickLastLocationButton, recentFilesButton, recentFilesDialog, redoAnnotationButton, saveHighlightNoteButton, selectionContextMenu, smartCopyButton, translationHistoryDialog, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton } from "../viewer-elements";
+import { annotationActionBar, clearRecentFilesButton, closeHighlightNoteButton, closeRecentFilesButton, contextCleanCopyButton, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteAnnotationButton, deleteHighlightNoteButton, editorModeButtons, eraseSelectedAnnotationButton, fileInput, findBar, findCloseButton, findInput, findNextButton, findPreviousButton, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, highlightColorHistoryButtons, highlightColorInput, highlightNotePopover, highlightNoteText, nextButton, openFileButton, pageNumberInput, previousButton, quickCurrentLocationButton, quickHighlightButtons, quickLastLocationButton, recentFilesButton, recentFilesDialog, redoAnnotationButton, saveHighlightNoteButton, selectionContextMenu, smartCopyButton, translationHistoryDialog, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton } from "../viewer-elements";
 import { getViewerSelectionRawText, getViewerSelectionText, navigateToPdfPageWhenVisible, normalizeCopiedText, updateControls } from "../../core/pdf-reader/public";
 
 
@@ -25,13 +25,15 @@ import { annotationEditor, contextHighlightEditor, contextSelectionText, lastPoi
 import { confirmDiscardUnsavedChanges, isHighlightEditor } from "../../features/annotations/public";
 import { hideRecentFilesDialog, renderRecentFiles, returnToLastReadingPosition, setStatus, showRecentFilesDialog, writeRecentFiles } from "../../features/recent-files/public";
 import { closeFindBar, openFindBar, openPdf, runSearch, saveAnnotatedPdf } from "../../core/pdf-reader/public";
-import { clearDomSelection, clearSelectedAnnotationState, createQuickHighlight, deleteSelectedAnnotation, deleteSelectedHighlight, findAnnotationEditor, findAnnotationEditorAtPoint, getFreeTextSize, getHighlightNote, hideAnnotationActionBar, hideHighlightNote, hideSelectionContextMenu, highlightCurrentSelectionFromToolbar, isEditableOrControl, isInkMode, isPointInsideSavedSelection, isPointInsideTextGlyph, isTextSelectionMode, saveContextSelection, saveHighlightNote, selectAnnotation, selectHighlight, setEditorMode, setFreeTextColor, setFreeTextSize, setHighlightColor, showAnnotationActionBar, showHighlightNote, showSelectionContextMenuAt, toggleHighlightNote } from "../../features/annotations/public";
+import { clearDomSelection, clearSelectedAnnotationState, createQuickHighlight, deleteSelectedAnnotation, deleteSelectedHighlight, findAnnotationEditor, findAnnotationEditorAtPoint, getFreeTextSize, getHighlightNote, hideAnnotationActionBar, hideHighlightNote, hideSelectionContextMenu, highlightCurrentSelectionFromToolbar, initializeHighlightColorHistory, isEditableOrControl, isInkMode, isPointInsideSavedSelection, isPointInsideTextGlyph, isTextSelectionMode, saveContextSelection, saveHighlightNote, selectAnnotation, selectHighlight, setEditorMode, setFreeTextColor, setFreeTextSize, setHighlightColor, showAnnotationActionBar, showHighlightNote, showSelectionContextMenuAt, toggleHighlightNote } from "../../features/annotations/public";
 
 
 import type { FilePickerWindow } from "../viewer-types";
 
 
 export function registerReaderEvents(): void {
+  setHighlightColor(initializeHighlightColorHistory());
+
   for (const searchButton of document.querySelectorAll<HTMLButtonElement>(
     "#outline-search-button, #reader-search-button",
   )) {
@@ -184,8 +186,19 @@ export function registerReaderEvents(): void {
   eraseSelectedAnnotationButton.addEventListener("click", deleteSelectedAnnotation);
   
   highlightColorInput.addEventListener("input", () => {
-      setHighlightColor(highlightColorInput.value);
+      setHighlightColor(highlightColorInput.value, false);
     });
+
+  highlightColorInput.addEventListener("change", () => {
+    setHighlightColor(highlightColorInput.value);
+  });
+
+  for (const button of highlightColorHistoryButtons) {
+    button.addEventListener("click", () => {
+      const color = button.dataset.highlightColor;
+      if (color) setHighlightColor(color);
+    });
+  }
   
   freeTextColorInput.addEventListener("input", () => {
       setFreeTextColor(freeTextColorInput.value);
@@ -405,7 +418,11 @@ export function registerReaderEvents(): void {
       }
     
       clearDomSelection();
-      selectAnnotation(editor);
+      if (isHighlightEditor(editor)) {
+        selectAnnotation(editor, false);
+      } else {
+        selectAnnotation(editor);
+      }
       if (isHighlightEditor(editor) && getHighlightNote(editor))
         toggleHighlightNote(editor);
     });

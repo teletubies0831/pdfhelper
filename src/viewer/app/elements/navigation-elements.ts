@@ -2,6 +2,10 @@ import { requiredElement } from "./required-element";
 
 export const appFrame = document.querySelector<HTMLElement>(".app-frame");
 
+export const readerWorkspaceElement = requiredElement<HTMLElement>(
+  "reader-workspace",
+);
+
 export const assistantPanelToggleButton = requiredElement<HTMLButtonElement>(
   "assistant-panel-toggle",
 );

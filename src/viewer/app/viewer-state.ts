@@ -34,7 +34,7 @@ export const pdfViewer = new PDFViewer({
   linkService,
   findController,
   // Keep the PDF annotation layer enabled so native internal citations and
-  // external links remain interactive. PDF Helper's own editor layer stays
+  // external links remain interactive. PDFPal's own editor layer stays
   // independent from it.
   annotationMode: AnnotationMode.ENABLE,
   annotationEditorHighlightColors:

@@ -1,3 +1,5 @@
 @import url("../features/assistant/settings-theme.css");
+@import url("../features/assistant/settings-connection-theme.css");
+@import url("../features/assistant/settings-memory-theme.css");
 @import url("./toolbar-theme.css");
 @import url("../features/paper-card/form-theme.css");

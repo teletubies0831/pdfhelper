@@ -1,16 +1,9 @@
 
 
-import { type AiMemoryCandidate } from "../../../../shared/ai";
 import { type LongTermMemory } from "../../../../shared/memory";
 import { memoryTools } from "../../../../entrypoints/viewer/memory-store";
-import { chatHistory } from "../../core/pdf-reader/public";
 
 import { longTermMemoryCount, longTermMemoryList, refreshLongTermMemoriesButton } from "../../app/viewer-elements";
-
-
-
-
-import { createLocalExplicitMemoryCandidates, findConfirmedMemoryProposal } from "./memory-candidate-parser";
 
 export const LONG_TERM_MEMORY_CATEGORY_LABELS: Record<LongTermMemory["category"], string> = {
   preference: "偏好",
@@ -20,67 +13,66 @@ export const LONG_TERM_MEMORY_CATEGORY_LABELS: Record<LongTermMemory["category"]
   correction: "纠正",
 };
 
-export async function backfillExplicitMemoriesFromCurrentChat(): Promise<void> {
-  const existing = await memoryTools.list({ limit: 100 });
-  const existingByKey = new Map(
-    existing.map((memory) => [`${memory.key}:${memory.scope}:${memory.scopeId ?? ""}`, memory]),
-  );
-  const pending = new Map<string, AiMemoryCandidate>();
+const LONG_TERM_MEMORY_SCOPE_LABELS: Record<LongTermMemory["scope"], string> = {
+  global: "全局",
+  project: "当前项目",
+  pdf: "当前文档",
+};
 
-  const recentHistory = chatHistory.value.slice(-50);
-  for (const [index, message] of recentHistory.entries()) {
-    if (message.role !== "user") continue;
-    for (const candidate of createLocalExplicitMemoryCandidates(message.content)) {
-      pending.set(`${candidate.key}:${candidate.scope}:`, candidate);
-    }
-    const confirmedProposal = findConfirmedMemoryProposal(recentHistory, index);
-    if (confirmedProposal) {
-      for (const candidate of createLocalExplicitMemoryCandidates(
-        `请记住：${confirmedProposal}`,
-      )) {
-        pending.set(`${candidate.key}:${candidate.scope}:`, candidate);
-      }
-    }
-  }
+let renderedMemories = new Map<string, LongTermMemory>();
 
-  const candidatesToStore = [...pending.entries()]
-    .filter(([identity, candidate]) =>
-      existingByKey.get(identity)?.content !== candidate.content,
-    )
-    .map(([, candidate]) => candidate);
-  if (candidatesToStore.length === 0) return;
-  await Promise.all(
-    candidatesToStore.map((candidate) =>
-      memoryTools.upsert({
-        ...candidate,
-        sourceConversationId: "current-chat-backfill",
-      }),
-      ),
-  );
-  const legacyLikesMemories = existing.filter(
-    (memory) => memory.key === "profile.personal.likes",
-  );
-  if (
-    legacyLikesMemories.length > 0 &&
-    [...pending.values()].some((candidate) =>
-      candidate.key.startsWith("profile.personal.likes."),
-    )
-  ) {
-    await Promise.all(
-      legacyLikesMemories.map((memory) => memoryTools.forget(memory.id)),
-    );
-  }
-  console.info("[PDF Helper 长期记忆] 已补录当前对话中的明确偏好", {
-    storedCount: candidatesToStore.length,
-    keys: candidatesToStore.map((candidate) => candidate.key),
+export async function createLongTermMemory(): Promise<void> {
+  const content = window.prompt("输入希望长期记住的内容：")?.trim();
+  if (!content) return;
+  await memoryTools.upsert({
+    key: `manual.fact.${Date.now()}`,
+    category: "fact",
+    content,
+    scope: "global",
+    confidence: 1,
+    importance: 0.8,
+    sourceType: "explicit",
   });
+  await refreshLongTermMemoryList();
+}
+
+export async function editLongTermMemory(memoryId: string): Promise<void> {
+  const memory = renderedMemories.get(memoryId);
+  if (!memory) return;
+  const content = window.prompt("编辑长期记忆：", memory.content)?.trim();
+  if (!content || content === memory.content) return;
+  await memoryTools.upsert({
+    id: memory.id,
+    key: memory.key,
+    category: memory.category,
+    content,
+    scope: memory.scope,
+    scopeId: memory.scopeId,
+    confidence: memory.confidence,
+    importance: memory.importance,
+    sourceType: "explicit",
+    sourceConversationId: memory.sourceConversationId,
+    sourcePdfId: memory.sourcePdfId,
+    expiresAt: memory.expiresAt,
+  });
+  await refreshLongTermMemoryList();
+}
+
+export async function deleteLongTermMemory(memoryId: string): Promise<void> {
+  if (!renderedMemories.has(memoryId)) {
+    throw new Error("找不到要删除的长期记忆。");
+  }
+  const deleted = await memoryTools.forget(memoryId);
+  if (!deleted) throw new Error("这条长期记忆已经不存在。");
+  renderedMemories.delete(memoryId);
+  await refreshLongTermMemoryList();
 }
 
 export async function refreshLongTermMemoryList(): Promise<void> {
   refreshLongTermMemoriesButton.disabled = true;
   try {
-    await backfillExplicitMemoriesFromCurrentChat();
     const memories = await memoryTools.list({ limit: 100 });
+    renderedMemories = new Map(memories.map((memory) => [memory.id, memory]));
     longTermMemoryCount.textContent = `${memories.length} 条`;
     longTermMemoryList.replaceChildren();
     if (memories.length === 0) {
@@ -102,17 +94,28 @@ export async function refreshLongTermMemoryList(): Promise<void> {
       content.className = "settings-memory-content";
       content.textContent = memory.content;
       const meta = document.createElement("small");
-      meta.textContent = `${memory.key} · ${memory.scope}`;
+      meta.textContent = LONG_TERM_MEMORY_SCOPE_LABELS[memory.scope];
       content.append(meta);
+
+      const actions = document.createElement("div");
+      actions.className = "settings-memory-item-actions";
+      const edit = document.createElement("button");
+      edit.className = "settings-memory-edit";
+      edit.type = "button";
+      edit.dataset.memoryId = memory.id;
+      edit.dataset.memoryAction = "edit";
+      edit.textContent = "编辑";
 
       const remove = document.createElement("button");
       remove.className = "settings-memory-delete";
       remove.type = "button";
       remove.dataset.memoryId = memory.id;
+      remove.dataset.memoryAction = "delete";
       remove.setAttribute("aria-label", `删除长期记忆：${memory.content}`);
       remove.title = "删除";
       remove.textContent = "×";
-      item.append(category, content, remove);
+      actions.append(edit, remove);
+      item.append(category, content, actions);
       longTermMemoryList.append(item);
     }
   } catch (error) {

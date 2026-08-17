@@ -55,11 +55,14 @@ export async function streamAiResponse(
   const toDebugMessage = (item: ProviderMessage): AiStreamDebugInfo['messages'][number] => ({
     role: item.role,
     content: item.content,
+    ...(item.reasoning_content ? { reasoningContent: item.reasoning_content } : {}),
     ...(item.tool_calls?.length
       ? {
         toolCalls: item.tool_calls.map((call) => ({
           id: call.id,
           name: call.function.name,
+          ...(typeof call.index === 'number' ? { index: call.index } : {}),
+          rawArguments: call.function.arguments,
           arguments: (() => {
             try {
               const parsed = JSON.parse(call.function.arguments);
@@ -137,7 +140,7 @@ export async function streamAiResponse(
       return;
     }
 
-    console.info('[PDF Helper AI] 原生工具调用请求', {
+    console.info('[PDFPal AI] 原生工具调用请求', {
       requestId: request.requestId,
       round,
       calls: result.toolCalls,
@@ -160,12 +163,14 @@ export async function streamAiResponse(
     workingConversation.push({
       role: 'assistant',
       content: result.content || '',
-      tool_calls: result.toolCalls.map((call) => ({
+      ...(result.reasoningContent ? { reasoning_content: result.reasoningContent } : {}),
+      tool_calls: result.toolCalls.map((call, index) => ({
         id: call.id,
         type: 'function',
+        index: call.index ?? index,
         function: {
           name: call.name,
-          arguments: JSON.stringify(call.arguments ?? {}),
+          arguments: call.rawArguments || JSON.stringify(call.arguments ?? {}),
         },
       })),
     });
@@ -180,7 +185,7 @@ export async function streamAiResponse(
         arguments: result.toolCalls.find((call) => call.id === toolResult.toolCallId)?.arguments,
       });
     }
-    console.info('[PDF Helper AI] 原生工具结果', {
+    console.info('[PDFPal AI] 原生工具结果', {
       requestId: request.requestId,
       round,
       results: toolResults,

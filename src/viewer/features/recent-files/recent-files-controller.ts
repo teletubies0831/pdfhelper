@@ -152,7 +152,7 @@ export async function rememberRecentPdf(
     if (!recentFilesDialog.hidden) void renderRecentFiles();
     return entry;
   } catch (error) {
-    console.warn("PDF Helper failed to remember recent PDF.", error);
+    console.warn("PDFPal failed to remember recent PDF.", error);
     return null;
   }
 }
@@ -221,7 +221,7 @@ export async function persistCurrentReadingPosition() {
   try {
     await writeCurrentEntryReadingPosition(recentEntryId, readingPosition);
   } catch (error) {
-    console.warn("PDF Helper failed to persist reading position.", error);
+    console.warn("PDFPal failed to persist reading position.", error);
   }
 }
 
@@ -267,7 +267,7 @@ export async function preserveReadingPositionForSourceNavigation(): Promise<void
     await writeCurrentEntryReadingPosition(recentEntryId, readingPosition);
   } catch (error) {
     console.warn(
-      "PDF Helper failed to preserve the reading position before source navigation.",
+      "PDFPal failed to preserve the reading position before source navigation.",
       error,
     );
   }
@@ -411,7 +411,7 @@ export async function restoreMostRecentPdf(): Promise<boolean> {
     await openPdf(await file.arrayBuffer(), file.name, entry.fileHandle, false);
     return pdfDocument.value !== null;
   } catch (error) {
-    console.warn("PDF Helper failed to restore the most recent PDF.", error);
+    console.warn("PDFPal failed to restore the most recent PDF.", error);
     setStatus("未能自动打开上次阅读的 PDF，可从“文件 → 最近打开”重试。", true);
     return false;
   }

@@ -271,7 +271,7 @@ export async function executeNativeToolCalls(
   return Promise.all(calls.map(async (call): Promise<AiStreamToolResult> => {
     const definition = getAgentToolDefinitionByApiName(call.name);
     const toolName = definition?.name ?? call.name;
-    console.info("[PDF Helper Agent] native tool call", {
+    console.info("[PDFPal Agent] native tool call", {
       toolCallId: call.id,
       requestedName: call.name,
       toolName,
@@ -336,7 +336,7 @@ export async function executeNativeToolCalls(
           result.data = enrichPaperLibraryData(result.data);
         }
         const content = JSON.stringify(result, null, 2).slice(0, 30000);
-        console.info("[PDF Helper Agent] native tool result", { toolCallId: call.id, toolName, result });
+        console.info("[PDFPal Agent] native tool result", { toolCallId: call.id, toolName, result });
         return { toolCallId: call.id, name: toolName, ok: result.ok, content };
       }
       const evidence = context?.agentEvidence?.trim()
@@ -349,11 +349,11 @@ export async function executeNativeToolCalls(
         sourcePages: context?.sourcePages ?? [],
         evidence: evidence.slice(0, 14000),
       });
-      console.info("[PDF Helper Agent] native document tool result", { toolCallId: call.id, toolName });
+      console.info("[PDFPal Agent] native document tool result", { toolCallId: call.id, toolName });
       return { toolCallId: call.id, name: toolName, ok: true, content };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error("[PDF Helper Agent] native tool failed", { toolCallId: call.id, toolName, error: message });
+      console.error("[PDFPal Agent] native tool failed", { toolCallId: call.id, toolName, error: message });
       return { toolCallId: call.id, name: toolName, ok: false, content: message };
     }
   }));

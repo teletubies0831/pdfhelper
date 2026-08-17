@@ -151,7 +151,7 @@ export async function sendChatMessage(): Promise<void> {
         "active",
         attachment.name,
       );
-      console.info("[PDF Helper 工具调用] analyze_screenshot", {
+      console.info("[PDFPal 工具调用] analyze_screenshot", {
         index: index + 1,
         name: attachment.name,
         width: attachment.width,
@@ -164,7 +164,7 @@ export async function sendChatMessage(): Promise<void> {
           userPrompt,
           visionContext,
         );
-        console.info("[PDF Helper 工具结果] analyze_screenshot", {
+        console.info("[PDFPal 工具结果] analyze_screenshot", {
           index: index + 1,
           name: attachment.name,
           analysis,
@@ -186,7 +186,7 @@ export async function sendChatMessage(): Promise<void> {
           "error",
           message,
         );
-        console.error("[PDF Helper 工具失败] analyze_screenshot", {
+        console.error("[PDFPal 工具失败] analyze_screenshot", {
           index: index + 1,
           name: attachment.name,
           error,
@@ -384,7 +384,7 @@ export async function sendChatMessage(): Promise<void> {
       finalAssistantResponse: streamedContent,
     };
     console.groupCollapsed(
-      `[PDF Helper AI] 本轮最终完整交互 · ${response.requestId}`,
+      `[PDFPal AI] 本轮最终完整交互 · ${response.requestId}`,
     );
     console.log("实际发送给模型的全部上下文", response.requestMessages);
     console.log(
@@ -429,7 +429,7 @@ export async function sendChatMessage(): Promise<void> {
       details?: unknown;
     };
     console.groupCollapsed(
-      `[PDF Helper AI] 本轮交互失败 · ${failure.requestId ?? "未知请求"}`,
+      `[PDFPal AI] 本轮交互失败 · ${failure.requestId ?? "未知请求"}`,
     );
     console.error("异常", error);
     console.log("模型配置（不包含 API Key）", {

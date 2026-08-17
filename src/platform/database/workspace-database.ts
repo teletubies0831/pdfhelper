@@ -75,7 +75,7 @@ export function openDocumentAgentDatabase(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error('Unable to open document agent database.'));
-    request.onblocked = () => reject(new Error('数据库升级被其他已打开的 PDF Helper 页面阻塞，请关闭旧页面后重试。'));
+    request.onblocked = () => reject(new Error('数据库升级被其他已打开的 PDFPal 页面阻塞，请关闭旧页面后重试。'));
   });
 }
 

@@ -1,4 +1,4 @@
-# PDF Helper architecture rules
+# PDFPal architecture rules
 
 ## Required dependency direction
 

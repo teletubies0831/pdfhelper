@@ -119,13 +119,6 @@
   background: #fff;
 }
 
-.toolbar-settings-button.saved {
-  border-color: #a7e7cf;
-  background: #ecfdf5;
-  box-shadow: 0 4px 14px rgb(5 150 105 / 10%);
-  color: #087a57;
-}
-
 .toolbar-menu:has(.toolbar-menu-panel .active) > .toolbar-menu-trigger,
 .toolbar-menu.open > .toolbar-menu-trigger,
 .toolbar-settings-button.active {
@@ -298,9 +291,12 @@
 .settings-popover {
   z-index: 500;
   inset: 24px 0;
-  width: min(520px, calc(100vw - 40px));
-  height: max-content;
-  max-height: min(760px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  width: min(900px, calc(100vw - 40px));
+  height: min(832px, calc(100vh - 48px));
+  max-height: min(832px, calc(100vh - 48px));
+  overflow: hidden;
   margin: auto;
   border-color: #dce5f1;
   border-radius: 18px;
@@ -308,7 +304,7 @@
     0 18px 48px rgb(15 23 42 / 18%),
     0 2px 8px rgb(15 23 42 / 5%);
   opacity: 0;
-  padding: 20px;
+  padding: 24px;
   pointer-events: none;
   transform: translateY(14px) scale(0.965);
   transform-origin: 50% 18%;
@@ -316,6 +312,31 @@
   transition:
     opacity 260ms cubic-bezier(0.4, 0, 0.2, 1),
     transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-popover .settings-heading,
+.settings-popover .settings-primary-tabs,
+.settings-popover .settings-footer {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.settings-popover .settings-heading,
+.settings-popover .settings-primary-tabs {
+  top: auto;
+}
+
+.settings-popover .settings-pages {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.settings-popover .settings-footer {
+  bottom: auto;
 }
 
 .settings-popover.is-open {
@@ -330,16 +351,16 @@
 .settings-heading {
   position: sticky;
   z-index: 3;
-  top: -20px;
-  margin: -20px -20px 16px;
+  top: -24px;
+  margin: -24px -24px 16px;
   border-bottom: 1px solid #edf1f7;
   border-radius: 18px 18px 0 0;
   background: rgb(255 255 255 / 98%);
-  padding: 16px 20px 12px;
+  padding: 24px 26px 16px;
 }
 
 .settings-heading strong {
-  font-size: 16px;
+  font-size: 22px;
 }
 
 .settings-field input,

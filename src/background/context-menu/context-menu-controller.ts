@@ -24,7 +24,7 @@ export async function registerContextMenus() {
 
   browser.contextMenus.create({
     id: MENU_ROOT_ID,
-    title: '发送给 PDF Helper',
+    title: '发送给 PDFPal',
     contexts: ['selection'],
   });
 

@@ -1,0 +1,67 @@
+.highlight-color-history {
+  display: inline-flex;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 1px;
+  margin-left: -2px;
+  padding: 0 3px 0 0;
+}
+
+.highlight-color-history-button {
+  position: relative;
+  display: grid;
+  width: 25px;
+  height: 30px;
+  cursor: pointer;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0;
+}
+
+.highlight-color-history-button::before {
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgb(15 23 42 / 14%);
+  border-radius: 50%;
+  background: var(--recent-highlight-color, #fff066);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 35%),
+    0 1px 2px rgb(15 23 42 / 8%);
+  content: "";
+  transition:
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.highlight-color-history-button:hover {
+  background: rgb(31 103 232 / 5%);
+}
+
+.highlight-color-history-button:hover::before {
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 42%),
+    0 2px 5px rgb(15 23 42 / 14%);
+  transform: scale(1.08);
+}
+
+.highlight-color-history-button:active::before {
+  transform: scale(0.94);
+}
+
+.highlight-color-history-button:focus-visible {
+  outline: 2px solid #5b8ff9;
+  outline-offset: -1px;
+}
+
+@media (max-width: 1180px) {
+  .highlight-color-history {
+    gap: 0;
+  }
+
+  .highlight-color-history-button {
+    width: 22px;
+  }
+}

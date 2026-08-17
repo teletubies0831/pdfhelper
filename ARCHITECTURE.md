@@ -1,4 +1,4 @@
-# PDF Helper 架构说明
+# PDFPal 架构说明
 
 ## 目标
 

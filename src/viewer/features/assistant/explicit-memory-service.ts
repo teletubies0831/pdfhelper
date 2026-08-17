@@ -58,7 +58,7 @@ export async function persistImmediateExplicitMemories(
       .find((message) => message.role === "assistant")?.content ?? "";
     let modelCandidates: AiMemoryCandidate[] = [];
     try {
-      console.info("[PDF Helper 模型工具决策] 请求判断长期记忆写入", {
+      console.info("[PDFPal 模型工具决策] 请求判断长期记忆写入", {
         operationId,
         userMessage,
         confirmedProposal: confirmedProposal || undefined,
@@ -81,14 +81,14 @@ export async function persistImmediateExplicitMemories(
         throw new Error(response?.error || "长期记忆工具决策失败。");
       }
       modelCandidates = response.memoryCandidates ?? [];
-      console.info("[PDF Helper Agent Tool] 模型返回原生 tool_calls", {
+      console.info("[PDFPal Agent Tool] 模型返回原生 tool_calls", {
         operationId,
         toolCalls: response.toolCalls ?? [],
         candidates: modelCandidates,
       });
     } catch (planningError) {
       console.warn(
-        "[PDF Helper 模型工具决策] 模型判断失败，使用明确指令兜底",
+        "[PDFPal 模型工具决策] 模型判断失败，使用明确指令兜底",
         { operationId, error: planningError },
       );
     }
@@ -133,7 +133,7 @@ export async function persistImmediateExplicitMemories(
       "active",
       `${candidates.length} 条待写入`,
     );
-    console.info("[PDF Helper 工具调用] memory.upsert", {
+    console.info("[PDFPal 工具调用] memory.upsert", {
       operationId,
       candidates,
       requestedBy: "model-memory-planner",
@@ -156,7 +156,7 @@ export async function persistImmediateExplicitMemories(
           .map((memory) => memoryTools.forget(memory.id)),
       );
     }
-    console.info("[PDF Helper 工具结果] memory.upsert", {
+    console.info("[PDFPal 工具结果] memory.upsert", {
       operationId,
       stored,
     });
@@ -195,7 +195,7 @@ export async function persistImmediateExplicitMemories(
       })),
     };
   } catch (error) {
-    console.error("[PDF Helper 工具失败] memory.upsert", {
+    console.error("[PDFPal 工具失败] memory.upsert", {
       operationId,
       error,
     });

@@ -249,6 +249,7 @@ export async function translateSelectedText(text: string): Promise<void> {
       {
         signal: controller.signal,
         timeoutMs: 75_000,
+        routeId: "translation",
       },
     );
 
@@ -337,6 +338,7 @@ export async function generateMoreVocabularyExamples(): Promise<void> {
       {
         signal: controller.signal,
         timeoutMs: 75_000,
+        routeId: "translation",
       },
     );
     if (controller.signal.aborted || currentEnglishLearningResult.value !== result) return;

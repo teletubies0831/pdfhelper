@@ -1,4 +1,4 @@
-<div class="workspace">
+<div id="reader-workspace" class="workspace">
         <aside class="left-panel" aria-label="左侧目录">
           <div class="side-tabs single-tab">
             <button class="active" type="button">目录</button>
@@ -82,12 +82,19 @@
             </div>
 
             <footer class="reader-footer">
-              <div class="toolbar-group page-controls">
-                <button id="previous-page" type="button" title="上一页">‹ 上一页</button>
-                <input id="page-number" type="number" min="1" value="0" aria-label="当前页" />
-                <span>/ <span id="page-count">0</span></span>
-                <button id="next-page" type="button" title="下一页">下一页 ›</button>
-              </div>
+              <nav class="toolbar-group page-controls" aria-label="PDF 翻页">
+                <button id="previous-page" type="button" title="上一页" aria-label="上一页">
+                  <svg class="page-control-icon previous" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-chevron-down" /></svg>
+                </button>
+                <span class="page-position">
+                  <input id="page-number" type="number" min="1" value="0" aria-label="当前页" />
+                  <span class="page-separator" aria-hidden="true">/</span>
+                  <span id="page-count" class="page-count">0</span>
+                </span>
+                <button id="next-page" type="button" title="下一页" aria-label="下一页">
+                  <svg class="page-control-icon next" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-chevron-down" /></svg>
+                </button>
+              </nav>
 
             </footer>
           </section>
@@ -107,7 +114,7 @@
               </div>
               <div id="chat-messages" class="chat-messages" aria-live="polite">
                 <article class="chat-message assistant">
-                  <div class="chat-message-role">PDF Helper</div>
+                  <div class="chat-message-role">PDFPal</div>
                   <div class="chat-message-content">你好，我会根据阅读模式结合当前页与选区回答。首次使用 AI 工具时，请先在“设置”中配置 API Key。</div>
                 </article>
               </div>
@@ -123,15 +130,26 @@
                 <div class="chat-composer-footer">
                   <div class="chat-composer-meta">
                     <input id="chat-image-input" type="file" accept="image/*" multiple hidden />
-                    <button id="chat-image-button" class="chat-image-button" type="button" title="添加截图，也可以直接粘贴截图" aria-label="添加截图">截图</button>
+                    <button id="chat-image-button" class="chat-image-button" type="button" title="添加截图，也可以直接粘贴截图" aria-label="添加截图">
+                      <img src="/resources/ai-settings/image.svg" alt="" aria-hidden="true" />
+                    </button>
                     <span id="chat-provider-status">AI 尚未配置</span>
-                    <label class="chat-reasoning-control" title="设置聊天回答是否启用思考模式">
-                      <span>思考</span>
-                      <select id="deepseek-thinking" aria-label="聊天思考模式">
+                    <div id="chat-reasoning-control" class="chat-reasoning-control" title="设置聊天回答是否启用思考模式">
+                      <select id="deepseek-thinking" aria-label="聊天思考模式" hidden>
                         <option value="disabled">关闭</option>
                         <option value="enabled">开启</option>
                       </select>
-                    </label>
+                      <button id="chat-reasoning-trigger" class="chat-reasoning-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="chat-reasoning-menu">
+                        <svg class="chat-reasoning-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
+                        <span class="chat-reasoning-trigger-label">思考</span>
+                        <span id="chat-reasoning-value" class="chat-reasoning-value">关闭</span>
+                        <svg class="chat-reasoning-chevron" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-chevron-down" /></svg>
+                      </button>
+                      <div id="chat-reasoning-menu" class="chat-reasoning-menu" role="listbox" aria-label="聊天思考模式" hidden>
+                        <button type="button" role="option" aria-selected="true" data-chat-reasoning-value="disabled">关闭</button>
+                        <button type="button" role="option" aria-selected="false" data-chat-reasoning-value="enabled">开启</button>
+                      </div>
+                    </div>
                   </div>
                   <button id="chat-send" class="primary-button" type="submit">发送</button>
                 </div>
@@ -141,172 +159,182 @@
             <section id="assistant-settings-panel" class="assistant-panel settings-panel settings-popover" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title" hidden>
               <div class="settings-heading">
                 <div>
-                  <strong id="ai-settings-title">AI 模型配置</strong>
-                  <p>配置会安全保存在当前浏览器扩展中。</p>
+                  <strong id="ai-settings-title">AI 配置</strong>
+                  <p>先添加供应商，再为不同任务选择模型。</p>
                 </div>
                 <div class="settings-heading-actions">
                   <button id="close-deepseek-settings" class="settings-close-button" type="button" aria-label="关闭设置">×</button>
                 </div>
               </div>
 
-              <div class="settings-section-title">文本模型</div>
-              <label class="settings-field">
-                <span>模型供应商</span>
-                <select id="ai-provider">
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="openai-compatible" disabled>OpenAI 兼容接口（即将支持）</option>
-                  <option value="anthropic" disabled>Anthropic（即将支持）</option>
-                  <option value="gemini" disabled>Gemini（即将支持）</option>
-                </select>
-              </label>
-
-              <label class="settings-field">
-                <span>API Key</span>
-                <input id="deepseek-api-key" type="text" autocomplete="off" placeholder="sk-..." />
-              </label>
-
-              <label class="settings-field">
-                <span>模型</span>
-                <select id="deepseek-model">
-                  <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
-                  <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
-                </select>
-              </label>
-
-              <label class="settings-field">
-                <span>翻译模型</span>
-                <select id="translation-model">
-                  <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
-                  <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
-                </select>
-                <small>仅用于英语学习，自动关闭思考模式，优先获得快速的词典式释义。</small>
-              </label>
-
-              <label class="settings-field">
-                <span>最大输出 Token</span>
-                <input
-                  id="deepseek-max-output-tokens"
-                  type="number"
-                  min="256"
-                  max="65536"
-                  step="256"
-                  value="8192"
-                  inputmode="numeric"
-                  aria-describedby="deepseek-max-output-tokens-hint"
-                />
-                <small id="deepseek-max-output-tokens-hint">思考过程和最终回答共同占用该额度，默认 8192。</small>
-              </label>
-
-              <input id="deepseek-base-url" type="hidden" value="https://api.deepseek.com" />
-
-              <div class="settings-section-divider" role="separator"></div>
-              <div class="settings-section-heading">
-                <div>
-                  <strong>视觉模型</strong>
-                  <p>用于识别 PDF 中的图表、公式和页面布局。</p>
-                </div>
-                <select id="vision-ai-mode" aria-label="视觉模型状态">
-                  <option value="disabled">暂不配置</option>
-                  <option value="separate">启用</option>
-                </select>
+              <div class="settings-primary-tabs" role="tablist" aria-label="AI 设置分类">
+                <button class="active" type="button" role="tab" aria-selected="true" data-settings-tab="models">模型与任务</button>
+                <button type="button" role="tab" aria-selected="false" data-settings-tab="tools">Agent 工具</button>
+                <button type="button" role="tab" aria-selected="false" data-settings-tab="memory">记忆</button>
               </div>
 
-              <div id="vision-ai-fields" class="settings-nested-fields" hidden>
-                <label class="settings-field">
-                  <span>模型供应商</span>
-                  <select id="vision-ai-provider">
-                    <option value="openai-compatible">OpenAI 兼容接口</option>
-                  </select>
-                </label>
-                <label class="settings-field">
-                  <span>API Key</span>
-                  <input id="vision-api-key" type="text" autocomplete="off" placeholder="视觉模型 API Key" />
-                </label>
-                <label class="settings-field">
-                  <span>模型</span>
-                  <input id="vision-model" type="text" autocomplete="off" placeholder="例如 qwen-vl-max" />
-                </label>
-                <label class="settings-field">
-                  <span>API 地址</span>
-                  <input id="vision-base-url" type="url" autocomplete="off" placeholder="https://example.com/v1" />
-                </label>
-                <button id="test-vision-ai" class="settings-inline-test" type="button">测试视觉连接</button>
-              </div>
-              <div id="vision-settings-status" class="settings-status" aria-live="polite"></div>
+              <div id="settings-pages" class="settings-pages">
+                <div class="settings-page" data-settings-panel="models">
+                  <div id="settings-model-navigation" class="settings-model-navigation">
+                  <div id="settings-model-overview" class="settings-model-screen">
+                    <div class="settings-section-heading settings-connections-heading">
+                      <div>
+                        <strong>供应商连接</strong>
+                        <p>API Key 只保存一次，任务配置不再重复填写。</p>
+                      </div>
+                      <button id="add-ai-provider" class="settings-outline-button" type="button">＋ 添加供应商</button>
+                    </div>
 
-              <div class="settings-section-divider" role="separator"></div>
-              <div class="settings-section-heading settings-agent-tools-heading">
-                <div>
-                  <strong>Agent 工具</strong>
-                  <p>这些工具会真实发送给模型，并由 PDF Helper 执行。</p>
-                </div>
-                <span class="settings-agent-tools-count">12 个已启用</span>
-              </div>
-              <div class="settings-agent-tools-list">
-                <article class="settings-agent-tool-item">
-                  <span class="settings-agent-tool-status">已启用</span>
-                  <div>
-                    <strong>PDF 文档工具 · 6 个</strong>
-                    <p>document.search、document.readPages、document.readSection、document.getProfile、document.getOutline、document.inspectPageImage</p>
-                    <small>Agent 按需搜索全文、读取页或章节，并可用视觉模型检查页面图表与公式。</small>
+                    <div id="settings-connection-grid" class="settings-connection-grid" aria-live="polite">
+                      <div class="settings-connection-empty">还没有供应商连接，点击“添加供应商”开始配置。</div>
+                    </div>
+
+                    <div class="settings-section-divider" role="separator"></div>
+                    <div class="settings-section-heading">
+                      <div>
+                        <strong>任务分配</strong>
+                        <p>为不同用途选择合适的模型。</p>
+                      </div>
+                    </div>
+                    <div class="settings-routing-list">
+                      <label class="settings-routing-row">
+                        <span class="settings-route-icon chat"><img src="/resources/ai-settings/chat.svg" alt="" /></span>
+                        <span><strong>聊天与文档分析</strong><small>问答、总结、论文卡片和 Agent 工具</small></span>
+                        <select id="deepseek-model"><option value="">请先添加文本模型连接</option></select>
+                      </label>
+                      <label class="settings-routing-row">
+                        <span class="settings-route-icon translate"><img src="/resources/ai-settings/translate.svg" alt="" /></span>
+                        <span><strong>翻译与英语学习</strong><small>优先速度和成本，自动关闭深度思考</small></span>
+                        <select id="translation-model"><option value="">请先添加文本模型连接</option></select>
+                      </label>
+                      <label class="settings-routing-row">
+                        <span class="settings-route-icon vision"><img src="/resources/ai-settings/image.svg" alt="" /></span>
+                        <span><strong>页面与图表识别</strong><small>截图、公式、图表和页面布局</small></span>
+                        <select id="vision-route-summary"><option value="">请先添加视觉模型连接</option></select>
+                      </label>
+                    </div>
+
+                    <details class="settings-advanced">
+                      <summary>高级设置</summary>
+                      <label class="settings-field">
+                        <span>最大输出 Token</span>
+                        <input id="deepseek-max-output-tokens" type="number" min="256" max="65536" step="256" value="8192" inputmode="numeric" aria-describedby="deepseek-max-output-tokens-hint" />
+                        <small id="deepseek-max-output-tokens-hint">思考过程和最终回答共同占用该额度，默认 8192。</small>
+                      </label>
+                    </details>
                   </div>
-                </article>
-                <article class="settings-agent-tool-item">
-                  <span class="settings-agent-tool-status">已启用</span>
-                  <div>
-                    <strong>长期记忆工具 · 4 个</strong>
-                    <p>memory.search、memory.list、memory.upsert、memory.forget</p>
-                    <small>搜索、查看、写入和删除用户长期记忆；删除仅在用户明确要求时执行。</small>
-                  </div>
-                </article>
-                <article class="settings-agent-tool-item">
-                  <span class="settings-agent-tool-status">已启用</span>
-                  <div>
-                    <strong>历史文献工具 · 2 个</strong>
-                    <p>library.searchPapers、library.getPaper</p>
-                    <small>搜索用户以前打开过的 PDF，并读取指定文献的记录与摘要。</small>
-                  </div>
-                </article>
-              </div>
 
-              <div class="settings-section-divider" role="separator"></div>
-              <div class="settings-section-heading settings-memory-heading">
-                <div>
-                  <strong>会话记忆</strong>
-                  <p>较早对话自动压缩；明确的长期记忆通过 Agent 工具在回答前写入。</p>
-                </div>
-              </div>
-              <div class="settings-compact-grid">
-                <label class="settings-field">
-                  <span>触发压缩字符数</span>
-                  <input id="chat-compression-trigger-characters" type="number" min="5000" max="500000" step="1000" value="40000" inputmode="numeric" />
-                </label>
-                <label class="settings-field">
-                  <span>未压缩消息上限</span>
-                  <input id="chat-compression-max-recent-messages" type="number" min="4" max="100" step="1" value="16" inputmode="numeric" />
-                </label>
-                <label class="settings-field">
-                  <span>压缩后保留消息</span>
-                  <input id="chat-compression-keep-recent-messages" type="number" min="2" max="99" step="1" value="4" inputmode="numeric" />
-                </label>
-              </div>
-              <small class="settings-memory-hint">任一上限达到后触发压缩；保留消息数必须小于未压缩消息上限。</small>
+                  <div id="settings-connection-editor" class="settings-model-screen" hidden>
+                    <button id="settings-connection-back" class="settings-back-button" type="button">← 返回模型与任务</button>
+                    <div class="settings-detail-heading">
+                      <div>
+                        <strong id="settings-connection-title">编辑连接</strong>
+                        <p>填写连接信息，测试后自动发现并验证可用模型。</p>
+                      </div>
+                    </div>
 
-              <div class="settings-memory-toolbar">
-                <div>
-                  <strong>长期记忆</strong>
-                  <span id="long-term-memory-count">0 条</span>
+                    <div id="settings-connection-fields">
+                      <select id="settings-connection-capability" hidden aria-hidden="true" tabindex="-1">
+                        <option value="both" selected>自动识别</option>
+                      </select>
+                      <textarea id="settings-connection-models" hidden aria-hidden="true" tabindex="-1"></textarea>
+                      <div class="settings-connection-form-grid">
+                        <label class="settings-field">
+                          <span>连接名称</span>
+                          <input id="settings-connection-name" type="text" autocomplete="off" placeholder="例如：火山方舟" />
+                        </label>
+                        <label class="settings-field">
+                          <span>接口协议</span>
+                          <select id="ai-provider">
+                            <option value="openai-compatible" selected>OpenAI 兼容接口</option>
+                            <option value="deepseek" hidden>OpenAI 兼容接口</option>
+                          </select>
+                          <small>只有原生协议不同并已适配后，才会增加其他选项。</small>
+                        </label>
+                      </div>
+                      <label class="settings-field">
+                        <span>API 地址</span>
+                        <input id="deepseek-base-url" type="url" autocomplete="off" placeholder="https://example.com/v1" />
+                        <small>填写兼容接口的基础地址，不包含 /chat/completions；例如火山方舟填写到 /api/v3。</small>
+                      </label>
+                      <label class="settings-field">
+                        <span>API Key</span>
+                        <span class="settings-secret-field">
+                          <input id="deepseek-api-key" type="password" autocomplete="off" placeholder="sk-..." />
+                          <button type="button" data-toggle-secret="deepseek-api-key" aria-label="显示或隐藏 API Key">◉</button>
+                        </span>
+                        <small>密钥仅保存在当前浏览器扩展中。</small>
+                      </label>
+
+                      <section class="settings-model-discovery" aria-labelledby="settings-connection-model-heading">
+                        <div class="settings-model-discovery-heading">
+                          <div>
+                            <strong id="settings-connection-model-heading">已验证模型</strong>
+                            <small>测试连接后自动获取，并分别验证文本与视觉能力。</small>
+                          </div>
+                          <span id="settings-connection-model-count">0 个</span>
+                        </div>
+                        <div id="settings-connection-model-results" class="settings-model-results" aria-live="polite">
+                          <div class="settings-model-results-empty">尚未测试连接</div>
+                        </div>
+                        <details class="settings-manual-model-fallback">
+                          <summary>接口没有提供模型列表？</summary>
+                          <p>少数兼容接口不支持 /models，可手动加入 Model ID，再点击“测试并获取模型”。</p>
+                          <div>
+                            <input id="settings-connection-manual-model" type="text" autocomplete="off" spellcheck="false" placeholder="输入 Model ID" />
+                            <button id="settings-connection-add-manual-model" type="button">加入待测试</button>
+                          </div>
+                        </details>
+                      </section>
+                      <button id="settings-connection-delete" class="settings-danger-button" type="button" hidden>删除这个连接</button>
+                    </div>
+                  </div>
+                  </div>
                 </div>
-                <button id="refresh-long-term-memories" type="button">刷新</button>
-              </div>
-              <div id="long-term-memory-list" class="settings-memory-list" aria-live="polite">
-                <div class="settings-memory-empty">暂无长期记忆</div>
+
+                <div class="settings-page" data-settings-panel="tools" hidden>
+                  <div class="settings-tools-summary"><span>模型只在回答需要时调用，工具由 PDFPal 执行。</span><strong><span id="settings-agent-tool-count">0</span> 个真实工具</strong></div>
+                  <div id="settings-agent-tool-catalog" class="settings-tool-catalog" aria-live="polite"></div>
+                  <div class="settings-tool-policy">
+                    <strong>调用规则</strong>
+                    <span><b>保存内容</b>　仅在你明确要求保存或记住时</span>
+                    <span><b>删除记忆</b>　仅在你明确要求忘记时</span>
+                  </div>
+                </div>
+
+                <div class="settings-page" data-settings-panel="memory" hidden>
+                  <div class="settings-compression-card">
+                    <div><strong>自动压缩较早对话</strong><small>保留最近交流，减少上下文占用。</small></div>
+                    <span class="settings-toggle is-on" aria-label="自动压缩已启用"></span>
+                    <div class="settings-compact-grid">
+                      <label class="settings-field"><span>触发压缩字符数</span><input id="chat-compression-trigger-characters" type="number" min="5000" max="500000" step="1000" value="40000" inputmode="numeric" /></label>
+                      <label class="settings-field"><span>未压缩消息上限</span><input id="chat-compression-max-recent-messages" type="number" min="4" max="100" step="1" value="16" inputmode="numeric" /></label>
+                      <label class="settings-field"><span>压缩后保留消息</span><input id="chat-compression-keep-recent-messages" type="number" min="2" max="99" step="1" value="4" inputmode="numeric" /></label>
+                    </div>
+                  </div>
+                  <small class="settings-memory-hint">达到任一上限后触发压缩；保留消息数必须小于未压缩消息上限。</small>
+
+                  <div class="settings-section-divider" role="separator"></div>
+                  <div class="settings-memory-toolbar">
+                    <div><strong>长期记忆</strong><span id="long-term-memory-count">0 条</span></div>
+                    <div class="settings-memory-actions"><button id="refresh-long-term-memories" type="button">刷新</button><button id="add-long-term-memory" type="button">＋ 新增记忆</button></div>
+                  </div>
+                  <p class="settings-section-copy">保存长期有效的偏好、目标和背景信息。</p>
+                  <label class="settings-memory-search"><span aria-hidden="true">⌕</span><input id="long-term-memory-search" type="search" placeholder="搜索长期记忆" /></label>
+                  <div id="long-term-memory-list" class="settings-memory-list" aria-live="polite"><div class="settings-memory-empty">暂无长期记忆</div></div>
+                  <div class="settings-memory-write-policy"><strong>AI 建议写入记忆</strong><span>先征求确认</span></div>
+                </div>
               </div>
 
               <div id="deepseek-settings-status" class="settings-status" aria-live="polite"></div>
-              <div class="settings-actions">
-                <button id="test-deepseek" type="button">测试连接</button>
-                <button id="save-deepseek-settings" class="primary-button" type="button">保存设置</button>
+              <div id="vision-settings-status" class="settings-status" aria-live="polite"></div>
+              <div class="settings-footer">
+                <small id="settings-footer-note">密钥默认隐藏；连接测试位于编辑连接中。</small>
+                <div class="settings-footer-actions">
+                  <button id="test-deepseek" type="button" hidden>测试并获取模型</button>
+                  <button id="test-vision-ai" type="button" hidden>测试连接</button>
+                  <button id="save-deepseek-settings" class="primary-button" type="button">保存配置</button>
+                </div>
               </div>
             </section>
 

@@ -29,6 +29,22 @@
   color: transparent !important;
 }
 
+/* Text highlights are drawn by PDF.js as SVG overlays. A small rounded clip
+   softens the hard rectangular ends without changing freehand highlights. */
+.pdfViewer .canvasWrapper svg.highlight:not(.free) {
+  border-radius: 3px;
+  clip-path: inset(0 round 3px);
+}
+
+/* Keep PDF.js' blue selection outline as soft as the rounded highlight fill. */
+.pdfViewer
+  .canvasWrapper
+  svg.highlightOutline:not(.free)
+  :is(.mainOutline, .secondaryOutline) {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* The project uses its own context menu; hide PDF.js' floating toolbar to
    avoid duplicate/mispositioned delete and color controls. */
 .pdfViewer .annotationEditorLayer .editToolbar {
@@ -134,15 +150,77 @@
   z-index: 7;
   top: 0;
   left: 0;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: 0;
-  border-radius: 50%;
-  background: url("/resources/note-marker.png") center / 132% 132% no-repeat;
-  box-shadow: 0 2px 8px rgba(52, 51, 39, 0.3);
+  background: transparent;
+  border-radius: 4px;
+  box-shadow: none;
   font-size: 0;
-  pointer-events: none;
+  cursor: pointer;
+  padding: 0;
+  pointer-events: auto;
   transform: translate(-40%, -50%);
+}
+
+.pdf-helper-note-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.pdf-helper-note-indicator:hover,
+.pdf-helper-note-indicator:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+.pdf-helper-note-preview {
+  position: absolute;
+  right: -8px;
+  bottom: calc(100% + 9px);
+  width: max-content;
+  max-width: 260px;
+  max-height: 96px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgb(15 23 42 / 13%);
+  color: #27364b;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  opacity: 0;
+  padding: 8px 11px;
+  pointer-events: none;
+  text-align: left;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  visibility: hidden;
+  white-space: normal;
+}
+
+.pdf-helper-note-preview::after {
+  position: absolute;
+  right: 15px;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.pdf-helper-note-indicator:hover .pdf-helper-note-preview,
+.pdf-helper-note-indicator:focus-visible .pdf-helper-note-preview {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
 }
 
 .pdf-helper-note-indicator.is-open {

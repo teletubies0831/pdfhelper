@@ -1,6 +1,6 @@
-# PDF Helper
+# PDFPal
 
-一个基于 WXT、TypeScript 和 PDF.js 的浏览器 PDF 阅读助手。
+一个基于 WXT、TypeScript 和 PDF.js 的 AI PDF 阅读助手。
 
 ## 功能
 

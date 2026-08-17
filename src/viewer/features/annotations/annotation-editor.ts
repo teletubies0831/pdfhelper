@@ -21,6 +21,7 @@ import { FREE_TEXT_DEFAULT_SIZE, FREE_TEXT_MAX_SIZE, FREE_TEXT_MIN_SIZE, isFreeT
 import { updateControls } from "../../core/pdf-reader/public";
 import { getSelectionHeightRatio, mergeHighlightBoxes } from '../text-selection/public';
 import { scheduleHighlightNoteIndicatorRefresh } from './annotation-notes';
+import { rememberHighlightColor } from './highlight-color-history';
 
 
 
@@ -56,8 +57,9 @@ export function installHighlightGeometry(uiManager: AnnotationEditorUIManager) {
 
 
 
-export function setHighlightColor(color: string) {
+export function setHighlightColor(color: string, remember = true) {
   highlightColorInput.value = color;
+  if (remember) rememberHighlightColor(color);
   annotationEditor.value?.updateParams(
     AnnotationEditorParamsType.HIGHLIGHT_COLOR,
     color,
@@ -150,7 +152,7 @@ export async function warmUpAnnotationEditorManager(
     await uiManager.updateMode(AnnotationEditorType.HIGHLIGHT, null, false);
     await uiManager.updateMode(AnnotationEditorType.NONE, null, false);
   } catch (error) {
-    console.warn("PDF Helper annotation editor warm-up failed.", error);
+    console.warn("PDFPal annotation editor warm-up failed.", error);
   } finally {
     if (pdfDocument.value !== documentAtStart) return;
     activeEditorMode.value = AnnotationEditorType.NONE;

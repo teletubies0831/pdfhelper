@@ -100,7 +100,7 @@ export async function executeExplicitMemoryForget(
         "active",
         memory.content,
       );
-      console.info("[PDF Helper Agent 工具调用] memory.forget", {
+      console.info("[PDFPal Agent 工具调用] memory.forget", {
         operationId,
         id: memory.id,
         content: memory.content,
@@ -109,7 +109,7 @@ export async function executeExplicitMemoryForget(
         name: "memory.forget",
         arguments: { id: memory.id },
       });
-      console.info("[PDF Helper Agent 工具结果] memory.forget", { operationId, result });
+      console.info("[PDFPal Agent 工具结果] memory.forget", { operationId, result });
       if (result.ok && result.data === true) {
         deleted.push(memory);
         completedTools.push({ name: "memory.forget", arguments: { id: memory.id } });
@@ -144,7 +144,7 @@ export async function executeExplicitMemoryForget(
       completedTools,
     };
   } catch (error) {
-    console.error("[PDF Helper Agent 工具失败] memory.forget", { operationId, error });
+    console.error("[PDFPal Agent 工具失败] memory.forget", { operationId, error });
     updateChatActivity(
       assistantElement,
       "long-term-memory",

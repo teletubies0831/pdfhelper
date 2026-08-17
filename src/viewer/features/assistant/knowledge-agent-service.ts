@@ -49,7 +49,7 @@ export async function runKnowledgeAgentTools(
         args.id = args.documentId;
       }
       if (call.name === "memory.forget" && !/(?:忘记|删除|移除)/i.test(userMessage)) {
-        console.warn("[PDF Helper Agent] 已阻止没有用户明确授权的 memory.forget", call);
+        console.warn("[PDFPal Agent] 已阻止没有用户明确授权的 memory.forget", call);
         continue;
       }
       const executable = { name: call.name, arguments: args } as MemoryToolCall;
@@ -60,12 +60,12 @@ export async function runKnowledgeAgentTools(
         "active",
         call.name.startsWith("library.") ? "历史文献" : "长期记忆",
       );
-      console.info(`[PDF Helper 工具调用] ${call.name}`, executable.arguments);
+      console.info(`[PDFPal 工具调用] ${call.name}`, executable.arguments);
       const result = await executeMemoryTool(executable);
       if (result.ok && call.name.startsWith("library.")) {
         result.data = enrichPaperLibraryData(result.data);
       }
-      console.info(`[PDF Helper 工具结果] ${call.name}`, result);
+      console.info(`[PDFPal 工具结果] ${call.name}`, result);
       results.push({ call, result });
       updateChatActivity(
         assistantElement,
@@ -98,7 +98,7 @@ export async function runKnowledgeAgentTools(
       })),
     };
   } catch (error) {
-    console.error("[PDF Helper Agent] 记忆/文献工具流程失败", error);
+    console.error("[PDFPal Agent] 记忆/文献工具流程失败", error);
     updateChatActivity(
       assistantElement,
       "knowledge-agent",

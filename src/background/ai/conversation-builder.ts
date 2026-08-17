@@ -91,10 +91,10 @@ export function buildSystemContent(context?: AiDocumentContext): string {
     || context?.selectedText?.trim(),
   );
   const primaryInstruction = context?.imageAnalysis?.trim()
-    ? '你是 PDF Helper 的视觉问答助手。本轮首要对象是用户上传的截图，请依据视觉工具分析结果直接回答截图问题。'
+    ? '你是 PDFPal 的视觉问答助手。本轮首要对象是用户上传的截图，请依据视觉工具分析结果直接回答截图问题。'
     : context?.agentEvidence?.trim()
-      ? '你是 PDF Helper 的 Agent 论文阅读助手。应用已经在回答前自主调用文档工具，请依据返回的可核验证据回答。'
-      : '你是 PDF Helper 的论文阅读助手。请依据本轮实际提供的文档证据，用清晰、准确、可核验的中文回答。';
+      ? '你是 PDFPal 的 Agent 论文阅读助手。应用已经在回答前自主调用文档工具，请依据返回的可核验证据回答。'
+      : '你是 PDFPal 的论文阅读助手。请依据本轮实际提供的文档证据，用清晰、准确、可核验的中文回答。';
 
   return [
     primaryInstruction,

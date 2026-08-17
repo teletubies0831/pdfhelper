@@ -170,7 +170,7 @@ export function createEmbeddedHelperPayload(): EmbeddedHelperAnnotations {
   return {
     format: "pdf-helper.annotations",
     version: 1,
-    app: "PDF Helper",
+    app: "PDFPal",
     sourceName: sourceName.value,
     fingerprint: getPdfFingerprint(pdfDocument.value),
     savedAt: new Date().toISOString(),

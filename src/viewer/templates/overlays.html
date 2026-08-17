@@ -6,11 +6,9 @@
         <button id="context-delete-highlight" class="context-menu-item danger" type="button" hidden>删除高亮</button>
       </div>
       <div id="context-colors" class="quick-colors" aria-label="高亮颜色">
-        <button type="button" data-quick-highlight-color="#fff066" title="黄色"></button>
-        <button type="button" data-quick-highlight-color="#9be7a5" title="绿色"></button>
-        <button type="button" data-quick-highlight-color="#8ec5ff" title="蓝色"></button>
-        <button type="button" data-quick-highlight-color="#ff9fc9" title="粉色"></button>
-        <button type="button" data-quick-highlight-color="#ffc078" title="橙色"></button>
+        <button type="button" data-quick-highlight-color-history-index="0" aria-label="最近颜色 1"></button>
+        <button type="button" data-quick-highlight-color-history-index="1" aria-label="最近颜色 2"></button>
+        <button type="button" data-quick-highlight-color-history-index="2" aria-label="最近颜色 3"></button>
       </div>
     </div>
 
@@ -211,14 +209,18 @@ $$"
 
     <aside id="highlight-note-popover" class="highlight-note-popover" hidden>
       <header>
-        <strong id="highlight-note-title">高亮笔记</strong>
-        <button id="close-highlight-note" type="button" aria-label="关闭">×</button>
+        <strong id="highlight-note-title" hidden>高亮笔记</strong>
+        <button id="close-highlight-note" type="button" aria-label="关闭笔记" title="关闭">×</button>
       </header>
-      <p id="highlight-note-quote"></p>
-      <textarea id="highlight-note-text" rows="5" placeholder="记录你的理解、疑问或联想…"></textarea>
+      <p id="highlight-note-quote" hidden></p>
+      <textarea id="highlight-note-text" rows="4" aria-label="笔记内容" placeholder="写下你的笔记…"></textarea>
       <footer>
-        <button id="delete-highlight-note" type="button">删除笔记</button>
-        <button id="save-highlight-note" class="primary-button" type="button">保存笔记</button>
+        <button id="delete-highlight-note" type="button" hidden>删除笔记</button>
+        <button id="save-highlight-note" type="button" aria-label="保存笔记" title="保存">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="m4 10 4 4 8-9" />
+          </svg>
+        </button>
       </footer>
     </aside>
 

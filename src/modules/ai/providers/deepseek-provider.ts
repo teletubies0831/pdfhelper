@@ -9,7 +9,7 @@ async function fetchProviderJson(
   config: AiConfig,
   init?: RequestInit,
 ): Promise<unknown> {
-  if (!config.apiKey) throw new Error('请先在 PDF Helper 的设置中配置 API Key。');
+  if (!config.apiKey) throw new Error('请先在 PDFPal 的设置中配置 API Key。');
   const requestController = new AbortController();
   let timedOut = false;
   const handleCallerAbort = (): void => requestController.abort(init?.signal?.reason);
@@ -24,7 +24,8 @@ async function fetchProviderJson(
   }
 
   try {
-    const response = await fetch(`${config.baseUrl}${path}`, {
+    const requestUrl = `${config.baseUrl}${path}`;
+    const response = await fetch(requestUrl, {
       ...init,
       signal: requestController.signal,
       headers: {
@@ -34,6 +35,17 @@ async function fetchProviderJson(
       },
     });
     const payload = await response.json().catch(() => null);
+    if (path === '/models') {
+      console.info('[PDFPal AI 连接测试] 供应商 HTTP 返回', {
+        providerId: config.providerId,
+        url: requestUrl,
+        method: init?.method ?? 'GET',
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        payload,
+      });
+    }
     if (!response.ok) {
       throw new Error(getProviderErrorMessage(payload, `AI 请求失败：HTTP ${response.status}`));
     }
@@ -41,6 +53,14 @@ async function fetchProviderJson(
   } catch (error) {
     if (timedOut) {
       throw new Error('AI 供应商超过 120 秒仍未响应，请检查网络、接口地址或模型状态后重试。');
+    }
+    if (path === '/models') {
+      console.error('[PDFPal AI 连接测试] 供应商请求异常', {
+        providerId: config.providerId,
+        url: `${config.baseUrl}${path}`,
+        method: init?.method ?? 'GET',
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
     throw error;
   } finally {
@@ -51,19 +71,113 @@ async function fetchProviderJson(
 
 const getProviderError = getProviderErrorMessage;
 
+function isBailianCompatibleEndpoint(baseUrl: string): boolean {
+  try {
+    return new URL(baseUrl).hostname.toLowerCase().endsWith('.aliyuncs.com');
+  } catch {
+    return baseUrl.toLowerCase().includes('aliyuncs.com');
+  }
+}
+
+function isMiniMaxM3Model(model: string): boolean {
+  return model.toLowerCase().replace(/[\s_/.]+/g, '-').includes('minimax-m3');
+}
+
+function supportsEnableThinkingParameter(model: string): boolean {
+  const normalized = model.toLowerCase();
+  return [
+    'qwen',
+    'deepseek',
+    'glm',
+    'kimi',
+    'stepfun',
+    'step-',
+    'mimo',
+  ].some((family) => normalized.includes(family));
+}
+
+function appendStreamFragment(current: string, fragment: string): string {
+  if (!fragment) return current;
+  if (!current) return fragment;
+  // Most providers return disjoint fragments. A few return the cumulative
+  // value again, so avoid duplicating it without discarding real fragments.
+  if (fragment.startsWith(current)) return fragment;
+  if (current.endsWith(fragment)) return current;
+  return current + fragment;
+}
+
+function prepareProviderMessages(baseUrl: string, messages: ProviderMessage[]): ProviderMessage[] {
+  const keepToolCallIndex = isBailianCompatibleEndpoint(baseUrl);
+  return messages.map((message) => {
+    if (!message.tool_calls?.length) return message;
+    return {
+      ...message,
+      tool_calls: message.tool_calls.map((call, index) => ({
+        id: call.id,
+        type: call.type,
+        ...(keepToolCallIndex ? { index: call.index ?? index } : {}),
+        function: { ...call.function },
+      })),
+    };
+  });
+}
+
+function summarizeProviderMessages(messages: ProviderMessage[]): Array<Record<string, unknown>> {
+  return messages.map((message) => ({
+    role: message.role,
+    contentLength: message.content.length,
+    reasoningLength: message.reasoning_content?.length ?? 0,
+    toolCallId: message.tool_call_id,
+    toolCalls: message.tool_calls?.map((call) => ({
+      index: call.index,
+      id: call.id,
+      name: call.function.name,
+      argumentsLength: call.function.arguments.length,
+    })),
+  }));
+}
+
 export class DeepSeekProviderAdapter implements AiProviderAdapter {
-  readonly id = 'deepseek' as const;
-  readonly descriptor = {
-    id: this.id,
-    label: 'DeepSeek',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      reasoning: true,
-      modelDiscovery: true,
-    },
-  } as const;
+  readonly descriptor;
+
+  constructor(
+    readonly id: 'deepseek' | 'openai-compatible' = 'deepseek',
+    label = id === 'deepseek' ? 'DeepSeek' : 'OpenAI 兼容接口',
+  ) {
+    this.descriptor = {
+      id,
+      label,
+      capabilities: {
+        streaming: true,
+        tools: true,
+        vision: id === 'openai-compatible',
+        reasoning: true,
+        modelDiscovery: true,
+      },
+    };
+  }
+
+  private reasoningPayload(config: AiConfig): Record<string, unknown> {
+    if (this.id === 'deepseek') {
+      return { thinking: { type: config.reasoning } };
+    }
+
+    const enabled = config.reasoning === 'enabled';
+    if (isMiniMaxM3Model(config.model)) {
+      return { thinking: { type: enabled ? 'adaptive' : 'disabled' } };
+    }
+    if (
+      isBailianCompatibleEndpoint(config.baseUrl)
+      || supportsEnableThinkingParameter(config.model)
+    ) {
+      return { enable_thinking: enabled };
+    }
+
+    // A generic OpenAI-compatible endpoint has no universal reasoning field.
+    // Unknown model families keep the standard payload so ordinary chat
+    // models are not broken by a vendor-specific parameter.
+    return {};
+  }
 
   async test(config: AiConfig): Promise<string[]> {
     const payload = await fetchProviderJson('/models', config);
@@ -83,7 +197,7 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
       body: JSON.stringify({
         model: config.model,
         messages,
-        thinking: { type: config.reasoning },
+        ...this.reasoningPayload(config),
         stream: false,
         max_tokens: maxOutputTokens,
       }),
@@ -112,7 +226,21 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
       tools?: Array<Record<string, unknown>>;
     } = {},
   ): Promise<ProviderChatResult> {
-    if (!config.apiKey) throw new Error('请先在 PDF Helper 的“设置”中配置 API Key。');
+    if (!config.apiKey) throw new Error('请先在 PDFPal 的“设置”中配置 API Key。');
+    const providerMessages = prepareProviderMessages(config.baseUrl, messages);
+    const requestSummary = {
+      providerId: config.providerId,
+      model: config.model,
+      baseUrl: config.baseUrl,
+      reasoning: config.reasoning,
+      toolChoice: options.tools?.length ? options.toolChoice ?? 'auto' : 'none',
+      tools: (options.tools ?? []).map((tool) => (
+        tool && typeof tool === 'object' && 'function' in tool
+          ? (tool as { function?: { name?: unknown } }).function?.name
+          : undefined
+      )).filter(Boolean),
+      messages: summarizeProviderMessages(providerMessages),
+    };
     let response: Response;
     try {
       response = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -123,8 +251,8 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
         },
         body: JSON.stringify({
           model: config.model,
-          messages,
-          thinking: { type: config.reasoning },
+          messages: providerMessages,
+          ...this.reasoningPayload(config),
           // Tool definitions are sent through the provider's native `tools`
           // parameter. They are intentionally not duplicated in the system
           // prompt, so the provider can emit standard tool_calls.
@@ -135,14 +263,7 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
         }),
         signal,
       });
-      console.info('[PDF Helper AI] native tools payload', {
-        toolChoice: options.tools?.length ? options.toolChoice ?? 'auto' : 'none',
-        tools: (options.tools ?? []).map((tool) => (
-          tool && typeof tool === 'object' && 'function' in tool
-            ? (tool as { function?: { name?: unknown } }).function?.name
-            : undefined
-        )).filter(Boolean),
-      });
+      console.info('[PDFPal AI] 供应商请求格式（已隐藏正文与密钥）', requestSummary);
     } catch (error) {
       if (signal.aborted) throw error;
       throw new AiProviderRequestError(
@@ -166,6 +287,12 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
       } catch {
         // Keep the raw body in the safe diagnostics below.
       }
+      console.error('[PDFPal AI] 供应商 HTTP 请求失败', {
+        ...requestSummary,
+        httpStatus: response.status,
+        providerRequestId,
+        responseBody: responseBody.slice(0, 4000),
+      });
       throw new AiProviderRequestError(
         getProviderError(payload, `AI 请求失败：HTTP ${response.status}`),
         {
@@ -291,8 +418,10 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
       for (const part of delta?.tool_calls ?? []) {
         const index = Number.isFinite(Number(part.index)) ? Number(part.index) : toolCallParts.size;
         const existing = toolCallParts.get(index) ?? { id: '', name: '', arguments: '' };
-        if (typeof part.id === 'string' && part.id) existing.id = part.id;
-        if (typeof part.function?.name === 'string') existing.name += part.function.name;
+        if (typeof part.id === 'string') existing.id = appendStreamFragment(existing.id, part.id);
+        if (typeof part.function?.name === 'string') {
+          existing.name = appendStreamFragment(existing.name, part.function.name);
+        }
         if (typeof part.function?.arguments === 'string') existing.arguments += part.function.arguments;
         toolCallParts.set(index, existing);
       }
@@ -344,6 +473,8 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
           id: part.id || `tool-call-${index + 1}`,
           name: part.name,
           arguments: args,
+          rawArguments: part.arguments,
+          index,
         }];
       });
 

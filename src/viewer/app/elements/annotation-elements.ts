@@ -19,6 +19,12 @@ export const toggleNotesButton = requiredElement<HTMLButtonElement>("toggle-note
 export const highlightColorInput =
   requiredElement<HTMLInputElement>("highlight-color");
 
+export const highlightColorHistoryButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>(
+    "[data-highlight-color-history-index]",
+  ),
+);
+
 export const freeTextSizeInput = requiredElement<HTMLInputElement>("free-text-size");
 
 export const freeTextColorInput = requiredElement<HTMLInputElement>("free-text-color");
@@ -91,7 +97,9 @@ export const freeTextSizeControl = requiredElement<HTMLElement>(
 );
 
 export const quickHighlightButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>("[data-quick-highlight-color]"),
+  document.querySelectorAll<HTMLButtonElement>(
+    "[data-quick-highlight-color-history-index]",
+  ),
 );
 
 export const editorModeButtons = Array.from(

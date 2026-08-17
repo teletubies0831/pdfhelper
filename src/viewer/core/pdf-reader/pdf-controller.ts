@@ -157,7 +157,7 @@ export async function openPdf(
       updateControls();
     }, 500);
     if (restoredAnnotations > 0) {
-      setStatus(`已载入 PDF 内嵌 PDF Helper 批注：${restoredAnnotations} 条。`);
+      setStatus(`已载入 PDF 内嵌 PDFPal 批注：${restoredAnnotations} 条。`);
     }
     updateControls();
   } catch (error) {
@@ -257,7 +257,7 @@ export async function saveAnnotatedPdf(): Promise<boolean> {
   isSavingAnnotatedPdf.value = true;
 
   try {
-    setStatus("正在把 PDF Helper 批注嵌入 PDF…");
+    setStatus("正在把 PDFPal 批注嵌入 PDF…");
     const { bytes, count } = await embedHelperAnnotationsIntoPdf();
     const result = await writeEmbeddedPdfBytes(bytes);
     sourcePdfBytes.value = new Uint8Array(bytes);
@@ -266,11 +266,11 @@ export async function saveAnnotatedPdf(): Promise<boolean> {
       setStatus(`批注已嵌入当前 PDF（${count} 条）。`);
     } else if (result === "permission-denied-downloaded") {
       setStatus(
-        `未获得覆盖原文件的写入权限，已下载带 PDF Helper 数据的新 PDF（${count} 条）。`,
+        `未获得覆盖原文件的写入权限，已下载带 PDFPal 数据的新 PDF（${count} 条）。`,
       );
     } else {
       setStatus(
-        `当前打开方式不能覆盖原文件，已下载带 PDF Helper 数据的新 PDF（${count} 条）。`,
+        `当前打开方式不能覆盖原文件，已下载带 PDFPal 数据的新 PDF（${count} 条）。`,
       );
     }
     return true;

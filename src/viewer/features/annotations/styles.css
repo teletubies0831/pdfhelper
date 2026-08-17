@@ -1,6 +1,7 @@
 @import url("./editor-and-search.css");
 @import url("../../styles/shared-ui/overlay-dialogs.css");
 @import url("./context-menu-and-notes.css");
+@import url("./highlight-color-history.css");
 @import url("../paper-card/foundation.css");
 @import url("../assistant/panel-shell.css");
 @import url("../assistant/chat-messages.css");

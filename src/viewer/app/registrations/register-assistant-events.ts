@@ -4,24 +4,20 @@
 
 
 
-import { browser } from "wxt/browser";
-import { AI_CONFIG_STORAGE_KEY, AI_PROVIDERS, type AiProviderId, type AiReasoningMode } from "../../../../shared/ai";
+import { AI_PROVIDERS, type AiProviderId, type AiReasoningMode } from "../../../modules/ai/public";
 import { isReadingModePreference } from "../../../../shared/reading-mode";
 
 
 
 
-import { memoryTools } from "../../../../entrypoints/viewer/memory-store";
-
-
-
-import { aiPanelToggleButton, aiProviderSelect, aiSettingsButton, aiTabButtons, appFrame, assistantPanelToggleButton, assistantSettingsPanel, assistantViewButtons, chatCompressionKeepRecentMessagesInput, chatCompressionMaxRecentMessagesInput, chatForm, chatImageButton, chatImageInput, chatInput, chatMessagesElement, clearChatButton, closeDeepSeekSettingsButton, deepSeekBaseUrlInput, deepSeekSettingsStatus, deepSeekThinkingSelect, detectReadingModeButton, focusModeButton, knowledgeBasePageElement, longTermMemoryList, outlineToggleButton, paperCardPageElement, readingModeMenuButtons, readingModeSelect, refreshLongTermMemoriesButton, saveDeepSeekSettingsButton, settingsModalBackdrop, testDeepSeekButton, testVisionAiButton, visionAiModeSelect } from "../viewer-elements";
+import { aiPanelToggleButton, aiProviderSelect, aiSettingsButton, aiTabButtons, appFrame, assistantPanelToggleButton, assistantSettingsPanel, assistantViewButtons, chatCompressionKeepRecentMessagesInput, chatCompressionMaxRecentMessagesInput, chatForm, chatImageButton, chatImageInput, chatInput, chatMessagesElement, chatReasoningControl, chatReasoningMenu, chatReasoningOptionButtons, chatReasoningTrigger, clearChatButton, closeDeepSeekSettingsButton, deepSeekBaseUrlInput, deepSeekThinkingSelect, detectReadingModeButton, focusModeButton, knowledgeBasePageElement, longTermMemoryList, outlineToggleButton, paperCardPageElement, readingModeMenuButtons, readingModeSelect, refreshLongTermMemoriesButton, saveDeepSeekSettingsButton, settingsModalBackdrop, testDeepSeekButton, testVisionAiButton } from "../viewer-elements";
+import { addAiProviderButton, addLongTermMemoryButton, longTermMemorySearchInput, secretToggleButtons, settingsConnectionAddManualModelButton, settingsConnectionBackButton, settingsConnectionDeleteButton, settingsConnectionGrid, settingsConnectionManualModelInput, settingsPrimaryTabButtons } from "../viewer-elements";
 import { aiConfig, aiConfigLoaded, chatHistory, chatImagePreviewOverlay, chatRequestPending, readingModePreference, setAssistantView, setDeepSeekSettingsOpen, setFocusMode, setLeftPanelCollapsed, showSettingsSavedFeedback } from "../../core/pdf-reader/public";
 import { jumpToPdfCitations } from "../../features/translation/public";
 
 import { bindPaperCardTextareaAutoResize, closePaperCardPage } from "../../features/paper-card/public";
 import { pdfDocument } from "../viewer-state";
-import { addChatImageFiles, closeChatImagePreview, detectReadingMode, getDocumentChatId, openChatImagePreview, queueChatConversationPersistence, refreshLongTermMemoryList, resetChatConversation, saveDeepSeekConfig, sendChatMessage, setCurrentApplicationView, setReadingModePreference, testDeepSeekConnection, testVisionAiConnection, updateVisionAiFieldsVisibility } from "../../features/assistant/public";
+import { activateSettingsTab, addChatImageFiles, cancelSettingsConnectionActivity, closeChatImagePreview, createLongTermMemory, deleteLongTermMemory, detectReadingMode, editLongTermMemory, filterLongTermMemoryList, getDocumentChatId, isEditingSettingsConnection, isSettingsConnectionDraftVerified, openChatImagePreview, queueChatConversationPersistence, queueSettingsConnectionModelForValidation, refreshLongTermMemoryList, removeActiveSettingsConnection, renderAgentToolCatalog, resetChatConversation, saveDeepSeekConfig, saveSettingsConnection, saveSettingsRoutes, sendChatMessage, setCurrentApplicationView, setReadingModePreference, showSettingsConnectionEditor, showSettingsModelOverview, showSettingsStatus, syncAiConfigsFromConnectionCatalog, testDeepSeekConnection, testVisionAiConnection, toggleSettingsSecret } from "../../features/assistant/public";
 
 
 
@@ -29,8 +25,12 @@ import { closeKnowledgeBasePage } from "../../features/knowledge-base/public";
 import type { AssistantView } from "../../core/pdf-reader/public";
 
 import { toolbarMenus, setToolbarMenuOpen, closeToolbarMenus, activateAiTab } from '../app-ui';
+import { selectChatReasoningMode, setChatReasoningMenuOpen, syncChatReasoningControl } from '../chat-reasoning-control';
 
 export function registerAssistantEvents(): void {
+  renderAgentToolCatalog();
+  syncChatReasoningControl();
+
   for (const menu of toolbarMenus) {
       const trigger = menu.querySelector<HTMLButtonElement>(
         ".toolbar-menu-trigger",
@@ -57,12 +57,20 @@ export function registerAssistantEvents(): void {
   document.addEventListener("pointerdown", (event) => {
       const target = event.target as Node;
       if (!toolbarMenus.some((menu) => menu.contains(target))) closeToolbarMenus();
+      if (!chatReasoningControl.contains(target)) setChatReasoningMenuOpen(false);
     });
   
   document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
       closeToolbarMenus();
-      if (!assistantSettingsPanel.hidden) setDeepSeekSettingsOpen(false);
+      if (!chatReasoningMenu.hidden) {
+        setChatReasoningMenuOpen(false);
+        chatReasoningTrigger.focus();
+      }
+      if (!assistantSettingsPanel.hidden) {
+        cancelSettingsConnectionActivity();
+        setDeepSeekSettingsOpen(false);
+      }
     });
   
   outlineToggleButton?.addEventListener("click", () => {
@@ -103,9 +111,48 @@ export function registerAssistantEvents(): void {
     }
   
   aiSettingsButton.addEventListener("click", () => {
-      setDeepSeekSettingsOpen(assistantSettingsPanel.hidden);
+      const willOpen = assistantSettingsPanel.hidden;
+      if (!willOpen) cancelSettingsConnectionActivity();
+      setDeepSeekSettingsOpen(willOpen);
     });
-  
+
+  for (const button of settingsPrimaryTabButtons) {
+    button.addEventListener("click", () => {
+      const tab = button.dataset.settingsTab;
+      if (tab === "models" || tab === "tools" || tab === "memory") {
+        activateSettingsTab(tab);
+      }
+    });
+  }
+
+  settingsConnectionGrid.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-edit-connection-id]");
+    const connectionId = button?.dataset.editConnectionId;
+    if (connectionId) showSettingsConnectionEditor(connectionId);
+  });
+
+  addAiProviderButton.addEventListener("click", () => {
+    showSettingsConnectionEditor();
+  });
+
+  settingsConnectionDeleteButton.addEventListener("click", () => {
+    if (!window.confirm("确定删除这个供应商连接吗？相关任务会自动选择其他可用连接。")) return;
+    settingsConnectionDeleteButton.disabled = true;
+    void removeActiveSettingsConnection().finally(() => {
+      settingsConnectionDeleteButton.disabled = false;
+      void syncAiConfigsFromConnectionCatalog();
+    });
+  });
+
+  settingsConnectionBackButton.addEventListener("click", showSettingsModelOverview);
+
+  for (const button of secretToggleButtons) {
+    button.addEventListener("click", () => {
+      const inputId = button.dataset.toggleSecret;
+      if (inputId) toggleSettingsSecret(inputId);
+    });
+  }
+
   readingModeSelect.addEventListener("change", () => {
       const preference = readingModeSelect.value;
       if (isReadingModePreference(preference))
@@ -129,27 +176,37 @@ export function registerAssistantEvents(): void {
   aiProviderSelect.addEventListener("change", () => {
       const providerId = aiProviderSelect.value as AiProviderId;
       const provider = AI_PROVIDERS.find((item) => item.id === providerId);
-      if (!provider?.available) {
-        aiProviderSelect.value = aiConfig.value.providerId;
-        deepSeekSettingsStatus.classList.add("error");
-        deepSeekSettingsStatus.textContent = "该模型供应商尚未接入。";
+      if (provider && !provider.available) {
+        aiProviderSelect.value = "";
+        showSettingsStatus("该模型供应商尚未接入。", 'error');
         return;
       }
-      deepSeekBaseUrlInput.value = provider.defaultBaseUrl;
+      if (provider?.defaultBaseUrl && !deepSeekBaseUrlInput.value.trim()) {
+        deepSeekBaseUrlInput.value = provider.defaultBaseUrl;
+      }
     });
   
-  visionAiModeSelect.addEventListener("change", updateVisionAiFieldsVisibility);
-  
   closeDeepSeekSettingsButton.addEventListener("click", () => {
+      cancelSettingsConnectionActivity();
       setDeepSeekSettingsOpen(false);
     });
   
   settingsModalBackdrop.addEventListener("pointerdown", (event) => {
       if (event.target !== settingsModalBackdrop) return;
+      cancelSettingsConnectionActivity();
       setDeepSeekSettingsOpen(false);
     });
   
-  saveDeepSeekSettingsButton.addEventListener("click", () => {
+  saveDeepSeekSettingsButton.addEventListener("click", async () => {
+      if (isEditingSettingsConnection()) {
+        if (!isSettingsConnectionDraftVerified()) {
+          const tested = await testDeepSeekConnection();
+          if (!tested) return;
+        }
+        const saved = await saveSettingsConnection();
+        if (saved) await syncAiConfigsFromConnectionCatalog();
+        return;
+      }
       void saveDeepSeekConfig().then((saved) => {
         if (!saved) return;
     
@@ -165,6 +222,20 @@ export function registerAssistantEvents(): void {
   testDeepSeekButton.addEventListener("click", () => {
       void testDeepSeekConnection();
     });
+
+  const addManualConnectionModel = () => {
+    const model = settingsConnectionManualModelInput.value.trim();
+    if (!queueSettingsConnectionModelForValidation(model)) return;
+    settingsConnectionManualModelInput.value = '';
+    showSettingsStatus(`已加入 ${model}，请点击“测试并获取模型”。`, 'info');
+  };
+
+  settingsConnectionAddManualModelButton.addEventListener('click', addManualConnectionModel);
+  settingsConnectionManualModelInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    event.preventDefault();
+    addManualConnectionModel();
+  });
   
   testVisionAiButton.addEventListener("click", () => {
       void testVisionAiConnection();
@@ -173,6 +244,14 @@ export function registerAssistantEvents(): void {
   refreshLongTermMemoriesButton.addEventListener("click", () => {
       void refreshLongTermMemoryList();
     });
+
+  addLongTermMemoryButton.addEventListener("click", () => {
+    void createLongTermMemory();
+  });
+
+  longTermMemorySearchInput.addEventListener("input", () => {
+    filterLongTermMemoryList(longTermMemorySearchInput.value);
+  });
   
   longTermMemoryList.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>(
@@ -180,13 +259,16 @@ export function registerAssistantEvents(): void {
       );
       const memoryId = button?.dataset.memoryId;
       if (!memoryId) return;
+      if (button.dataset.memoryAction === "edit") {
+        void editLongTermMemory(memoryId);
+        return;
+      }
+      if (!window.confirm("确定删除这条长期记忆吗？")) return;
       button.disabled = true;
-      void memoryTools
-        .forget(memoryId)
-        .then(() => refreshLongTermMemoryList())
+      void deleteLongTermMemory(memoryId)
         .catch((error) => {
           button.disabled = false;
-          console.warn("[PDF Helper 长期记忆] 删除失败", error);
+          console.warn("[PDFPal 长期记忆] 删除失败", error);
         });
     });
   
@@ -199,13 +281,29 @@ export function registerAssistantEvents(): void {
     });
   
   deepSeekThinkingSelect.addEventListener("change", () => {
+      syncChatReasoningControl();
       aiConfig.value = {
         ...aiConfig.value,
         reasoning: deepSeekThinkingSelect.value as AiReasoningMode,
       };
-      if (aiConfigLoaded.value)
-        void browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: aiConfig.value });
+      if (aiConfigLoaded.value) {
+        void saveSettingsRoutes(aiConfig.value.reasoning, aiConfig.value.maxOutputTokens);
+      }
     });
+
+  chatReasoningTrigger.addEventListener("click", () => {
+      setChatReasoningMenuOpen(chatReasoningMenu.hidden);
+    });
+
+  for (const button of chatReasoningOptionButtons) {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.chatReasoningValue;
+      if (mode === "enabled" || mode === "disabled") {
+        selectChatReasoningMode(mode);
+        chatReasoningTrigger.focus();
+      }
+    });
+  }
   
   chatForm.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -242,7 +340,7 @@ export function registerAssistantEvents(): void {
       const documentAtClear = pdfDocument.value;
       resetChatConversation();
       void queueChatConversationPersistence(documentAtClear).then(() => {
-        console.info("[PDF Helper 对话存储] 已清空当前 PDF 对话", {
+        console.info("[PDFPal 对话存储] 已清空当前 PDF 对话", {
           documentId: documentAtClear
             ? getDocumentChatId(documentAtClear)
             : undefined,

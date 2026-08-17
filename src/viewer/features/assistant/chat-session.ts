@@ -81,7 +81,7 @@ export function requestAiStream(
 
       if (message.type === "started") {
         const debug = message.debug;
-        console.groupCollapsed(`[PDF Helper AI] 聊天请求 · ${message.model}`);
+        console.groupCollapsed(`[PDFPal AI] 聊天请求 · ${message.model}`);
         if (debug) {
           debugConversation = debug.messages.map((item) => ({ ...item }));
           console.log("模型配置", {
@@ -134,7 +134,7 @@ export function requestAiStream(
       if (message.type === "tool-calls") {
         if (handledToolRounds.has(message.round)) return;
         handledToolRounds.add(message.round);
-        console.info("[PDF Helper AI] native Agent tool calls", {
+        console.info("[PDFPal AI] native Agent tool calls", {
           requestId,
           round: message.round,
           calls: message.calls,
@@ -146,7 +146,7 @@ export function requestAiStream(
         });
         onDelta({ toolCalls: message.calls });
         void executeNativeToolCalls(message.calls, context).then((results) => {
-          console.info("[PDF Helper AI] native Agent tool results", { requestId, round: message.round, results });
+          console.info("[PDFPal AI] native Agent tool results", { requestId, round: message.round, results });
           onDelta({ toolResults: results });
           results.forEach((result) => {
             debugConversation.push({
@@ -187,7 +187,7 @@ export function requestAiStream(
           { role: "assistant" as const, content },
         ];
         console.groupCollapsed(
-          `[PDF Helper AI] 聊天响应完成 · ${message.model}`,
+          `[PDFPal AI] 聊天响应完成 · ${message.model}`,
         );
         const systemMessage = completedConversation.find(
           (item) => item.role === "system",
@@ -219,7 +219,7 @@ export function requestAiStream(
         return;
       }
       if (message.type === "error") {
-        console.groupCollapsed(`[PDF Helper AI] 聊天请求失败 · ${requestId}`);
+        console.groupCollapsed(`[PDFPal AI] 聊天请求失败 · ${requestId}`);
         console.error("错误原因", message.error);
         console.log("安全诊断（不包含 API Key）", message.details ?? "后台未返回诊断详情");
         console.log("失败前已接收内容", {
@@ -245,7 +245,7 @@ export function requestAiStream(
         new Error("AI 流式连接已中断，请重新加载扩展后再试。"),
         { requestId },
       );
-      console.error("[PDF Helper AI] 流式连接异常中断", {
+      console.error("[PDFPal AI] 流式连接异常中断", {
         requestId,
         contentLength: content.length,
         reasoningLength: reasoningContent.length,
@@ -341,7 +341,7 @@ export function queueChatConversationPersistence(
       });
     })
     .catch((error) => {
-      console.warn("[PDF Helper 对话存储] 保存失败", {
+      console.warn("[PDFPal 对话存储] 保存失败", {
         documentId,
         error,
       });
@@ -413,7 +413,7 @@ export async function restoreChatConversation(
       : 0;
     renderChatConversation(messages);
     if (citationsChanged) void queueChatConversationPersistence(documentProxy);
-    console.info("[PDF Helper 对话存储] 已恢复当前 PDF 对话", {
+    console.info("[PDFPal 对话存储] 已恢复当前 PDF 对话", {
       documentId,
       messages: messages.length,
       citationsRevalidated: citationsChanged,
@@ -422,7 +422,7 @@ export async function restoreChatConversation(
     });
   } catch (error) {
     if (pdfDocument.value === documentProxy) resetChatConversation();
-    console.warn("[PDF Helper 对话存储] 恢复失败", {
+    console.warn("[PDFPal 对话存储] 恢复失败", {
       documentId,
       error,
     });
@@ -481,7 +481,7 @@ export async function prepareChatRequestHistory(
     "active",
     `${messagesToCompress.length} 条`,
   );
-  console.groupCollapsed("[PDF Helper AI] 对话上下文压缩");
+  console.groupCollapsed("[PDFPal AI] 对话上下文压缩");
   console.log("已有长期摘要\n", chatConversationSummary.value || "（无）");
   console.log("本次压缩对话\n", messagesToCompress);
   console.groupEnd();
@@ -497,7 +497,7 @@ export async function prepareChatRequestHistory(
     }
     chatConversationSummary.value = response.content.trim().slice(0, 12000);
     chatSummarizedMessageCount.value = compressThrough;
-    console.log("[PDF Helper AI] 对话长期摘要\n", chatConversationSummary.value);
+    console.log("[PDFPal AI] 对话长期摘要\n", chatConversationSummary.value);
     updateChatActivity(
       assistantMessage,
       "conversation-compression",
@@ -517,7 +517,7 @@ export async function prepareChatRequestHistory(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn("[PDF Helper AI] 对话压缩失败，回退到最近对话", error);
+    console.warn("[PDFPal AI] 对话压缩失败，回退到最近对话", error);
     updateChatActivity(
       assistantMessage,
       "conversation-compression",

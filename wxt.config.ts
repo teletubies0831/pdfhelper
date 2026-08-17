@@ -11,12 +11,24 @@ export default defineConfig({
     },
   }),
   manifest: {
-    name: 'PDF Read Helper',
-    description: 'PDF Helper 增强阅读器，支持 PDF 阅读、批注、记忆和 AI 阅读助手。',
+    name: 'PDFPal',
+    description: 'PDFPal AI PDF 阅读器，支持翻译、批注、记忆和智能问答。',
+    icons: {
+      16: 'resources/pdfpal/icon-16.png',
+      32: 'resources/pdfpal/icon-32.png',
+      48: 'resources/pdfpal/icon-48.png',
+      128: 'resources/pdfpal/icon-128.png',
+    },
     permissions: ['tabs', 'storage', 'contextMenus'],
     host_permissions: ['<all_urls>'],
     action: {
-      default_title: '打开 PDF Helper 阅读器',
+      default_title: '打开 PDFPal 阅读器',
+      default_icon: {
+        16: 'resources/pdfpal/icon-16.png',
+        32: 'resources/pdfpal/icon-32.png',
+        48: 'resources/pdfpal/icon-48.png',
+        128: 'resources/pdfpal/icon-128.png',
+      },
     },
   },
 });

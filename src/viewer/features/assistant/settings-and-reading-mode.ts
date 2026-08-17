@@ -5,7 +5,7 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 
 import { browser } from "wxt/browser";
-import { AI_CONFIG_STORAGE_KEY, DEFAULT_AI_CONFIG, DEFAULT_VISION_AI_CONFIG, LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY, VISION_AI_CONFIG_STORAGE_KEY, isVisionAiConfigured, normalizeAiBaseUrl, normalizeAiMaxOutputTokens, type AiConfig, type AiReasoningMode, type AiRuntimeResponse, type VisionAiConfig, type VisionAiMode } from "../../../../shared/ai";
+import { AI_PROVIDERS, AI_VISION_TEST_MARKER, aiConnectionCatalog, normalizeAiMaxOutputTokens, normalizeConnectionModels, type AiConfig, type AiConnectionCapability, type AiProviderId, type AiRuntimeResponse } from "../../../modules/ai/public";
 import { READING_MODE_STORAGE_KEY, getReadingModeLabel, isReadingModePreference, type ReadingModePreference, type ReadingModeState } from "../../../../shared/reading-mode";
 
 
@@ -17,7 +17,7 @@ import { CONVERSATION_MEMORY_CONFIG_STORAGE_KEY, normalizeConversationMemoryConf
 
 import { aiConfig, aiConfigLoaded, conversationMemoryConfig, navigateToPdfPageWhenVisible, readingModeDetectionPending, readingModeDocumentKey, readingModeError, readingModePreference, readingModeRationale, resolvedReadingMode, setDeepSeekSettingsOpen, updateControls, visionAiConfig } from "../../core/pdf-reader/public";
 
-import { aiProviderSelect, citationReturnButton, citationReturnPosition, deepSeekApiKeyInput, deepSeekBaseUrlInput, deepSeekMaxOutputTokensInput, deepSeekModelSelect, deepSeekSettingsStatus, deepSeekThinkingSelect, detectReadingModeButton, readingModeMenuButtons, readingModeSelect, readingModeStatus, readingModeTriggerLabel, testDeepSeekButton, testVisionAiButton, translationModelSelect, viewerContainer, visionAiFields, visionAiModeSelect, visionApiKeyInput, visionBaseUrlInput, visionModelInput, visionSettingsStatus } from "../../app/viewer-elements";
+import { aiProviderSelect, citationReturnButton, citationReturnPosition, deepSeekApiKeyInput, deepSeekBaseUrlInput, deepSeekMaxOutputTokensInput, deepSeekThinkingSelect, detectReadingModeButton, readingModeMenuButtons, readingModeSelect, readingModeStatus, readingModeTriggerLabel, saveDeepSeekSettingsButton, settingsConnectionModelsInput, testDeepSeekButton, testVisionAiButton, viewerContainer, visionSettingsStatus } from "../../app/viewer-elements";
 import { getPdfFingerprint } from "../annotations/public";
 import { getCurrentReadingPosition, scheduleReadingPositionSave } from "../recent-files/public";
 import { internalNavigationHistory, isOpeningDocument, isRestoringReadingPosition, isReturningFromInternalNavigation, linkService, pdfDocument, pdfViewer, sourceName, suppressInternalNavigationCapture } from "../../app/viewer-state";
@@ -26,54 +26,14 @@ import { internalNavigationHistory, isOpeningDocument, isRestoringReadingPositio
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { extractPageText } from "../translation/public";
 
-import { populateConversationMemoryConfigForm, readConversationMemoryConfigFromForm, readDeepSeekConfigFromForm, updateDeepSeekProviderStatus } from './memory-controller';
+import { populateConversationMemoryConfigForm, readConversationMemoryConfigFromForm, updateDeepSeekProviderStatus } from './memory-controller';
+import { clearSettingsStatus, loadSettingsConnectionCatalog, markSettingsConnectionModelsVerified, saveSettingsRoutes, showSettingsStatus, updateSettingsConnectionSummaries, type SettingsConnectionVerifiedModel } from './settings-navigation';
 import { updateModeNavigation } from './library-tools';
+import { syncChatReasoningControl } from '../../app/chat-reasoning-control';
 
 
+const MODEL_VALIDATION_CONCURRENCY = 30;
 
-
-export function updateVisionAiFieldsVisibility(): void {
-  const enabled = visionAiModeSelect.value === "separate";
-  visionAiFields.hidden = !enabled;
-  testVisionAiButton.disabled = !enabled;
-  if (!enabled) {
-    visionSettingsStatus.classList.remove("error");
-    visionSettingsStatus.textContent = "";
-  }
-}
-
-
-
-export function readVisionAiConfigFromForm(): VisionAiConfig {
-  return {
-    mode: visionAiModeSelect.value as VisionAiMode,
-    providerId: "openai-compatible",
-    apiKey: visionApiKeyInput.value.trim(),
-    baseUrl: visionBaseUrlInput.value.trim().replace(/\/+$/, ""),
-    model: visionModelInput.value.trim(),
-  };
-}
-
-
-
-export function populateVisionAiConfigForm(config: VisionAiConfig): void {
-  visionAiModeSelect.value = config.mode;
-  visionApiKeyInput.value = config.apiKey;
-  visionModelInput.value = config.model;
-  visionBaseUrlInput.value = config.baseUrl;
-  updateVisionAiFieldsVisibility();
-}
-
-
-
-export function validateVisionAiConfig(config: VisionAiConfig): boolean {
-  if (config.mode === "disabled") return true;
-  if (isVisionAiConfigured(config)) return true;
-  visionSettingsStatus.classList.add("error");
-  visionSettingsStatus.textContent =
-    "启用视觉模型后，请填写 API Key、模型和 API 地址。";
-  return false;
-}
 
 
 
@@ -173,6 +133,7 @@ export function returnToPreviousInternalNavigationPosition() {
       if (viewerContainer.offsetParent) pdfViewer.currentScale = scale;
     });
   }
+  updateSettingsConnectionSummaries();
   navigateToPdfPageWhenVisible(pageNumber);
 
   const exactTop = Math.max(0, entry.scrollTop);
@@ -203,143 +164,248 @@ export const goToPdfDestination = linkService.goToDestination.bind(linkService);
 
 
 export function populateDeepSeekConfigForm(config: AiConfig): void {
-  aiProviderSelect.value = config.providerId;
-  deepSeekApiKeyInput.value = config.apiKey;
-  deepSeekModelSelect.value = config.model;
-  translationModelSelect.value = config.translationModel || config.model;
   deepSeekMaxOutputTokensInput.value = String(config.maxOutputTokens);
   deepSeekThinkingSelect.value = config.reasoning;
-  deepSeekBaseUrlInput.value = config.baseUrl;
+  syncChatReasoningControl();
+  updateSettingsConnectionSummaries();
+}
+
+
+
+export async function syncAiConfigsFromConnectionCatalog(): Promise<void> {
+  aiConfig.value = await aiConnectionCatalog.resolveTextConfig('chat');
+  visionAiConfig.value = await aiConnectionCatalog.resolveVisionConfig();
+  aiConfigLoaded.value = true;
+  populateDeepSeekConfigForm(aiConfig.value);
+  updateDeepSeekProviderStatus();
 }
 
 
 
 export async function loadDeepSeekConfig(): Promise<void> {
-  const stored = await browser.storage.local.get([
-    AI_CONFIG_STORAGE_KEY,
-    LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
-    VISION_AI_CONFIG_STORAGE_KEY,
-    CONVERSATION_MEMORY_CONFIG_STORAGE_KEY,
-  ]);
-  const current = stored[AI_CONFIG_STORAGE_KEY] as
-    | Partial<AiConfig>
-    | undefined;
-  const legacy = stored[LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY] as
-    | (Partial<AiConfig> & {
-        thinking?: AiReasoningMode;
-      })
-    | undefined;
-  const value = current || legacy;
-  const providerId = value?.providerId ?? DEFAULT_AI_CONFIG.providerId;
-  aiConfig.value = {
-    ...DEFAULT_AI_CONFIG,
-    ...value,
-    providerId,
-    apiKey: value?.apiKey?.trim() ?? "",
-    baseUrl: normalizeAiBaseUrl(
-      value?.baseUrl ?? DEFAULT_AI_CONFIG.baseUrl,
-      providerId,
-    ),
-    reasoning:
-      value?.reasoning ?? legacy?.thinking ?? DEFAULT_AI_CONFIG.reasoning,
-    translationModel:
-      value?.translationModel?.trim()
-      || value?.model?.trim()
-      || DEFAULT_AI_CONFIG.translationModel,
-    maxOutputTokens: normalizeAiMaxOutputTokens(value?.maxOutputTokens),
-  };
-  if (!current && legacy)
-    await browser.storage.local.set({ [AI_CONFIG_STORAGE_KEY]: aiConfig.value });
-  const storedVision = stored[VISION_AI_CONFIG_STORAGE_KEY] as
-    | Partial<VisionAiConfig>
-    | undefined;
-  visionAiConfig.value = {
-    ...DEFAULT_VISION_AI_CONFIG,
-    ...storedVision,
-    mode: storedVision?.mode === "separate" ? "separate" : "disabled",
-    providerId: "openai-compatible",
-    apiKey: storedVision?.apiKey?.trim() ?? "",
-    baseUrl: storedVision?.baseUrl?.trim().replace(/\/+$/, "") ?? "",
-    model: storedVision?.model?.trim() ?? "",
-  };
+  await loadSettingsConnectionCatalog();
+  await syncAiConfigsFromConnectionCatalog();
+  const stored = await browser.storage.local.get(CONVERSATION_MEMORY_CONFIG_STORAGE_KEY);
   conversationMemoryConfig.value = normalizeConversationMemoryConfig(
     stored[CONVERSATION_MEMORY_CONFIG_STORAGE_KEY] as
       | Partial<ConversationMemoryConfig>
       | undefined,
   );
-  aiConfigLoaded.value = true;
-  populateDeepSeekConfigForm(aiConfig.value);
-  populateVisionAiConfigForm(visionAiConfig.value);
   populateConversationMemoryConfigForm(conversationMemoryConfig.value);
-  updateDeepSeekProviderStatus();
+  updateSettingsConnectionSummaries();
 }
 
 
 
 export async function saveDeepSeekConfig(showSuccess = true): Promise<boolean> {
-  const nextConfig = readDeepSeekConfigFromForm();
-  const nextVisionConfig = readVisionAiConfigFromForm();
   const nextConversationMemoryConfig = readConversationMemoryConfigFromForm();
-
-  if (!nextConfig.apiKey) {
-    deepSeekSettingsStatus.textContent = "请输入 DeepSeek API Key。";
-    deepSeekSettingsStatus.classList.add("error");
-    return false;
-  }
-  if (!validateVisionAiConfig(nextVisionConfig)) return false;
-
-  aiConfig.value = nextConfig;
-  visionAiConfig.value = nextVisionConfig;
+  await saveSettingsRoutes(
+    deepSeekThinkingSelect.value === 'enabled' ? 'enabled' : 'disabled',
+    normalizeAiMaxOutputTokens(deepSeekMaxOutputTokensInput.value),
+  );
+  await syncAiConfigsFromConnectionCatalog();
   conversationMemoryConfig.value = nextConversationMemoryConfig;
-  aiConfigLoaded.value = true;
   await browser.storage.local.set({
-    [AI_CONFIG_STORAGE_KEY]: nextConfig,
-    [VISION_AI_CONFIG_STORAGE_KEY]: nextVisionConfig,
     [CONVERSATION_MEMORY_CONFIG_STORAGE_KEY]: nextConversationMemoryConfig,
   });
-  populateDeepSeekConfigForm(nextConfig);
-  populateVisionAiConfigForm(nextVisionConfig);
   populateConversationMemoryConfigForm(nextConversationMemoryConfig);
-  updateDeepSeekProviderStatus();
-  deepSeekSettingsStatus.classList.remove("error");
-  deepSeekSettingsStatus.textContent = showSuccess
-    ? "设置已保存到当前浏览器。"
-    : "";
+  updateSettingsConnectionSummaries();
+  if (showSuccess) showSettingsStatus("设置已保存到当前浏览器。", 'success');
+  else clearSettingsStatus();
   visionSettingsStatus.classList.remove("error");
-  if (showSuccess) {
-    visionSettingsStatus.textContent =
-      nextVisionConfig.mode === "separate"
-        ? `视觉模型已保存：${nextVisionConfig.model}`
-        : "";
-  }
+  visionSettingsStatus.textContent = "";
   return true;
 }
 
 
 
-export async function testDeepSeekConnection(): Promise<void> {
-  if (!(await saveDeepSeekConfig(false))) return;
-
+export async function testDeepSeekConnection(): Promise<boolean> {
+  const providerId = aiProviderSelect.value as AiProviderId;
+  const provider = AI_PROVIDERS.find((item) => item.id === providerId && item.available);
+  const apiKey = deepSeekApiKeyInput.value.trim();
+  const baseUrl = deepSeekBaseUrlInput.value.trim() || provider?.defaultBaseUrl || '';
+  const existingModels = normalizeConnectionModels(
+    settingsConnectionModelsInput.value.split(/[\n,，]+/),
+  );
+  if (!provider) {
+    showSettingsStatus('请先选择已支持的接口类型。', 'error');
+    return false;
+  }
+  if (!apiKey || !baseUrl) {
+    showSettingsStatus('请先填写 API Key 和 API 地址。', 'error');
+    return false;
+  }
+  const testRunId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const isCurrentTest = (): boolean => testDeepSeekButton.dataset.testRunId === testRunId;
+  testDeepSeekButton.dataset.testRunId = testRunId;
   testDeepSeekButton.disabled = true;
-  deepSeekSettingsStatus.classList.remove("error");
-  deepSeekSettingsStatus.textContent = "正在连接 DeepSeek…";
+  saveDeepSeekSettingsButton.disabled = true;
+  showSettingsStatus("正在获取模型列表…", 'progress');
 
   try {
-    const response = (await browser.runtime.sendMessage({
-      type: "pdf-helper:ai-test",
-    })) as AiRuntimeResponse;
+    console.info('[PDFPal AI 连接测试] 页面发起模型发现', {
+      providerId,
+      baseUrl,
+      hasApiKey: Boolean(apiKey),
+    });
+    let discoveredModels: string[] = [];
+    let discoveryError = '';
+    try {
+      const discoveryResponse = (await browser.runtime.sendMessage({
+        type: 'pdf-helper:ai-test',
+        mode: 'discover',
+        config: {
+          providerId,
+          apiKey,
+          baseUrl,
+          model: existingModels[0] ?? '',
+        },
+      })) as AiRuntimeResponse;
+      console.info('[PDFPal AI 连接测试] 页面收到模型列表', discoveryResponse);
+      if (!discoveryResponse?.ok) {
+        throw new Error(discoveryResponse?.error || '扩展后台没有返回模型列表。');
+      }
+      discoveredModels = discoveryResponse.models ?? [];
+    } catch (error) {
+      discoveryError = error instanceof Error ? error.message : String(error);
+      console.warn('[PDFPal AI 连接测试] 模型发现失败，将尝试手动 Model ID', {
+        providerId,
+        baseUrl,
+        error: discoveryError,
+      });
+    }
+    if (!isCurrentTest()) return false;
 
-    if (!response?.ok) throw new Error(response?.error || "连接测试失败。");
-    const modelCount = response.models?.length ?? 0;
-    deepSeekSettingsStatus.textContent = modelCount
-      ? `连接成功，可用模型 ${modelCount} 个。`
-      : "连接成功。";
+    const candidates = normalizeConnectionModels([
+      ...discoveredModels,
+      ...existingModels,
+    ]);
+    if (candidates.length === 0) {
+      throw new Error(
+        discoveryError
+          ? '接口没有提供标准 /models 列表，请在“接口没有提供模型列表？”中手动加入 Model ID 后再测试。'
+          : '接口没有返回可验证的模型。',
+      );
+    }
+
+    const capabilities: AiConnectionCapability[] = ['text', 'vision'];
+    const validationTasks = candidates.flatMap((model) => capabilities.map((capability) => ({
+      model,
+      capability,
+    })));
+    showSettingsStatus(`正在并发验证 0/${validationTasks.length} 项能力…`, 'progress');
+    const imageDataUrl = createVisionTestImage();
+    const results: Array<{
+      model: string;
+      capability: AiConnectionCapability;
+      ok: boolean;
+      error?: string;
+    } | undefined> = new Array(validationTasks.length);
+    let nextTaskIndex = 0;
+    let completedCount = 0;
+
+    const validateNextCapability = async (): Promise<void> => {
+      while (isCurrentTest() && nextTaskIndex < validationTasks.length) {
+        const taskIndex = nextTaskIndex;
+        nextTaskIndex += 1;
+        const task = validationTasks[taskIndex];
+        if (!task) return;
+        let response: AiRuntimeResponse;
+        try {
+          response = (await browser.runtime.sendMessage({
+            type: 'pdf-helper:ai-test',
+            mode: 'validate',
+            config: {
+              providerId,
+              apiKey,
+              baseUrl,
+              model: task.model,
+              capabilities: [task.capability],
+            },
+            imageDataUrl: task.capability === 'vision' ? imageDataUrl : undefined,
+          })) as AiRuntimeResponse;
+        } catch (error) {
+          response = {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+        results[taskIndex] = response?.ok
+          ? { ...task, ok: true }
+          : {
+              ...task,
+              ok: false,
+              error: response?.error || '扩展后台没有返回测试结果。',
+            };
+        completedCount += 1;
+        if (isCurrentTest()) {
+          showSettingsStatus(
+            `正在并发验证 ${completedCount}/${validationTasks.length} 项能力…`,
+            'progress',
+          );
+        }
+        console.info('[PDFPal AI 连接测试] 页面收到模型能力验证结果', {
+          model: task.model,
+          capability: task.capability,
+          response,
+          progress: `${completedCount}/${validationTasks.length}`,
+        });
+      }
+    };
+
+    const workerCount = Math.min(MODEL_VALIDATION_CONCURRENCY, validationTasks.length);
+    await Promise.all(Array.from({ length: workerCount }, () => validateNextCapability()));
+    if (!isCurrentTest()) return false;
+
+    const completedResults = results.filter(
+      (result): result is NonNullable<typeof result> => Boolean(result),
+    );
+    const verifiedModels: SettingsConnectionVerifiedModel[] = candidates.flatMap((model) => {
+      const verifiedCapabilities = capabilities.filter((capability) => completedResults.some(
+        (result) => result.model === model && result.capability === capability && result.ok,
+      ));
+      return verifiedCapabilities.length > 0
+        ? [{ model, capabilities: verifiedCapabilities }]
+        : [];
+    });
+    const failures = completedResults.filter((result) => !result.ok);
+    if (verifiedModels.length === 0) {
+      console.error('[PDFPal AI 连接测试] 所有模型均验证失败', failures);
+      throw new Error(`已实测 ${candidates.length} 个模型，但没有可调用的模型。请在 Console 查看每个模型的返回。`);
+    }
+    markSettingsConnectionModelsVerified(verifiedModels);
+    const textModelCount = verifiedModels.filter((item) => item.capabilities.includes('text')).length;
+    const visionModelCount = verifiedModels.filter((item) => item.capabilities.includes('vision')).length;
+    const unavailableModelCount = candidates.length - verifiedModels.length;
+    console.info('[PDFPal AI 连接测试] 并发验证完成', {
+      concurrency: workerCount,
+      total: candidates.length,
+      verifiedModels,
+      failures,
+    });
+    showSettingsStatus([
+      discoveryError ? '接口未提供标准模型列表，已验证手动加入的模型。' : '连接成功。',
+      `已验证 ${verifiedModels.length} 个可用模型：${textModelCount} 个支持文本，${visionModelCount} 个支持视觉。`,
+      unavailableModelCount > 0 ? `${unavailableModelCount} 个不可用模型已排除。` : '',
+    ].filter(Boolean).join(' '), 'success');
+    return true;
   } catch (error) {
-    deepSeekSettingsStatus.classList.add("error");
-    deepSeekSettingsStatus.textContent =
-      error instanceof Error ? error.message : String(error);
+    console.error('[PDFPal AI 连接测试] 页面测试失败', {
+      providerId,
+      baseUrl,
+      models: existingModels,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    if (isCurrentTest()) {
+      showSettingsStatus(error instanceof Error ? error.message : String(error), 'error');
+    }
+    return false;
   } finally {
-    testDeepSeekButton.disabled = false;
+    if (isCurrentTest()) {
+      delete testDeepSeekButton.dataset.testRunId;
+      testDeepSeekButton.disabled = false;
+      saveDeepSeekSettingsButton.disabled = false;
+    }
   }
 }
 
@@ -347,26 +413,32 @@ export async function testDeepSeekConnection(): Promise<void> {
 
 export function createVisionTestImage(): string {
   const canvas = document.createElement("canvas");
-  canvas.width = 32;
-  canvas.height = 32;
+  canvas.width = 480;
+  canvas.height = 180;
   const context = canvas.getContext("2d");
   if (!context) return "";
   context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, 32, 32);
-  context.fillStyle = "#1f67e8";
-  context.fillRect(8, 8, 16, 16);
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = "#cbd5e1";
+  context.lineWidth = 4;
+  context.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+  context.fillStyle = "#0f172a";
+  context.font = "700 64px Arial, sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(AI_VISION_TEST_MARKER, canvas.width / 2, canvas.height / 2);
   return canvas.toDataURL("image/png");
 }
 
 
 
 export async function testVisionAiConnection(): Promise<void> {
-  const nextConfig = readVisionAiConfigFromForm();
-  if (!validateVisionAiConfig(nextConfig)) return;
-  visionAiConfig.value = nextConfig;
-  await browser.storage.local.set({
-    [VISION_AI_CONFIG_STORAGE_KEY]: nextConfig,
-  });
+  if (!(await saveDeepSeekConfig(false))) return;
+  if (visionAiConfig.value.mode !== 'separate') {
+    visionSettingsStatus.classList.add('error');
+    visionSettingsStatus.textContent = '请先为页面识别任务选择视觉模型。';
+    return;
+  }
 
   testVisionAiButton.disabled = true;
   visionSettingsStatus.classList.remove("error");
@@ -378,7 +450,7 @@ export async function testVisionAiConnection(): Promise<void> {
     })) as AiRuntimeResponse;
     if (!response?.ok)
       throw new Error(response?.error || "视觉模型连接测试失败。");
-    visionSettingsStatus.textContent = `视觉连接成功：${response.model || nextConfig.model}`;
+    visionSettingsStatus.textContent = `视觉连接成功：${response.model || visionAiConfig.value.model}`;
   } catch (error) {
     visionSettingsStatus.classList.add("error");
     visionSettingsStatus.textContent =
@@ -523,9 +595,10 @@ export async function detectReadingMode(force = false): Promise<void> {
   if (!aiConfigLoaded.value) await loadDeepSeekConfig();
   if (!aiConfig.value.apiKey) {
     setDeepSeekSettingsOpen(true);
-    deepSeekSettingsStatus.classList.add("error");
-    deepSeekSettingsStatus.textContent =
-      "“AI 自动识别阅读模式”需要 API Key；也可以先手动选择阅读模式。";
+    showSettingsStatus(
+      "“AI 自动识别阅读模式”需要 API Key；也可以先手动选择阅读模式。",
+      'error',
+    );
     readingModeError.value = "自动识别需配置 API Key";
     updateReadingModeUi();
     return;

@@ -293,7 +293,7 @@ export async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
       return;
     }
   } catch (error) {
-    console.warn("PDF Helper outline load failed.", error);
+    console.warn("PDFPal outline load failed.", error);
   }
 
   if (pdfDocument.value !== documentProxy) return;

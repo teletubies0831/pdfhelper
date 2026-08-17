@@ -241,7 +241,7 @@ export function appendChatMessage(
 
   const roleLabel = document.createElement("div");
   roleLabel.className = "chat-message-role";
-  roleLabel.textContent = role === "user" ? "你" : "PDF Helper";
+  roleLabel.textContent = role === "user" ? "你" : "PDFPal";
 
   const body = document.createElement("div");
   body.className = "chat-message-content";

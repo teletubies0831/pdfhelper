@@ -115,14 +115,22 @@
 }
 
 .chat-image-button {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
-  min-height: 28px;
+  place-items: center;
   border-color: #d7e1ee;
-  border-radius: 7px;
+  border-radius: 8px;
   background: #f8fafc;
   color: #475569;
-  font-size: 11px;
-  padding: 0 9px;
+  padding: 0;
+}
+
+.chat-image-button img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 
 .chat-image-button:hover {
@@ -132,28 +140,141 @@
 }
 
 .chat-reasoning-control {
-  display: inline-flex;
-  height: 28px;
+  position: relative;
+  display: inline-block;
   flex: 0 0 auto;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid #dce5f1;
-  border-radius: 7px;
-  background: #f8fafc;
-  color: #64748b;
-  font-size: 10px;
-  padding: 0 5px 0 8px;
 }
 
-.chat-reasoning-control select {
-  max-width: 54px;
-  height: 22px;
-  border: 0;
+.chat-reasoning-trigger {
+  display: inline-flex;
+  min-width: 98px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #d7e1ee;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 11px;
+  line-height: 1;
   outline: 0;
+  padding: 0 7px;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.chat-reasoning-trigger:hover,
+.chat-reasoning-trigger.open {
+  border-color: #9bbcff;
+  background: #eaf2ff;
+  color: #1257d8;
+}
+
+.chat-reasoning-trigger.open {
+  box-shadow: 0 0 0 2px rgb(31 103 232 / 6%);
+}
+
+.chat-reasoning-trigger:focus-visible {
+  border-color: #7aa9ff;
+  box-shadow: 0 0 0 2px rgb(31 103 232 / 8%);
+}
+
+.chat-reasoning-trigger.is-enabled {
+  border-color: #b9cff7;
+  background: #f0f5ff;
+  color: #1257d8;
+}
+
+.chat-reasoning-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.chat-reasoning-trigger-label {
+  color: #64748b;
+}
+
+.chat-reasoning-value {
+  min-width: 22px;
+  color: currentColor;
+  font-weight: 600;
+  text-align: center;
+}
+
+.chat-reasoning-chevron {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  transition: transform 120ms ease;
+}
+
+.chat-reasoning-trigger.open .chat-reasoning-chevron {
+  transform: rotate(180deg);
+}
+
+.chat-reasoning-menu {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 6px);
+  width: 100%;
+  min-width: 98px;
+  padding: 4px;
+  border: 1px solid #dce5f1;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow:
+    0 4px 14px rgb(15 23 42 / 7%),
+    0 1px 3px rgb(15 23 42 / 4%);
+}
+
+.chat-reasoning-menu button {
+  display: flex;
+  width: 100%;
+  height: 30px;
+  align-items: center;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
   color: #334155;
-  font-size: 10px;
-  padding: 0;
+  font-size: 11px;
+  justify-content: space-between;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.chat-reasoning-menu button::after {
+  color: transparent;
+  content: "✓";
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chat-reasoning-menu button:hover,
+.chat-reasoning-menu button:focus-visible {
+  background: #f1f5f9;
+  outline: none;
+}
+
+.chat-reasoning-menu button.selected {
+  background: #eaf2ff;
+  color: #1257d8;
+  font-weight: 600;
+}
+
+.chat-reasoning-menu button.selected::after {
+  color: #1257d8;
 }
 
 #chat-provider-status {
@@ -232,12 +353,12 @@
 }
 
 .settings-close-button {
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
-  border-radius: 7px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 10px;
   color: #64748b;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   padding: 0;
 }
@@ -258,7 +379,7 @@
 .settings-heading p {
   margin: 5px 0 0;
   color: #718096;
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1.5;
 }
 
@@ -343,10 +464,18 @@
   color: #16805b;
   font-size: 11px;
   line-height: 1.45;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .settings-status.error {
   color: #b42318;
+}
+
+.settings-status.is-dismissing:not(:empty) {
+  opacity: 0;
+  transform: translateY(3px);
 }
 
 .settings-actions {

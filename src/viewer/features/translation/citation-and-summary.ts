@@ -364,13 +364,13 @@ export async function validatePdfCitations(
         contentEnd: start + match[0].length,
       };
     } else if (isDuplicateAdjacentCitation) {
-      console.info("[PDF Helper 引用校验] 已合并相邻的重复原文引用", {
+      console.info("[PDFPal 引用校验] 已合并相邻的重复原文引用", {
         pageNumber,
         quote,
         overlapRatio: overlappingSourceCharacters / shorterSourceLength,
       });
     } else {
-      console.warn("[PDF Helper 引用校验] 已移除无法匹配原文的引用", {
+      console.warn("[PDFPal 引用校验] 已移除无法匹配原文的引用", {
         pageNumber,
         quote,
       });
@@ -520,7 +520,7 @@ export async function jumpToPdfCitations(
     return;
   }
 
-  console.info("[PDF Helper 引用定位] 开始查找原文", {
+  console.info("[PDFPal 引用定位] 开始查找原文", {
     pageNumber,
     citedQuotes: normalizedQuotes,
   });
@@ -532,7 +532,7 @@ export async function jumpToPdfCitations(
   navigateToPdfPageWhenVisible(pageNumber);
   const textLayer = await waitForCitationTextLayer(pageNumber);
   if (!textLayer) {
-    console.warn("[PDF Helper 引用定位] 文字层未加载，无法核对原文", {
+    console.warn("[PDFPal 引用定位] 文字层未加载，无法核对原文", {
       pageNumber,
       citedQuotes: normalizedQuotes,
     });
@@ -542,13 +542,13 @@ export async function jumpToPdfCitations(
     const locatedCitation = findCitationRange(textLayer, quote);
     if (!locatedCitation) {
       console.warn(
-        "[PDF Helper 引用定位] 页面已打开，但文字层中未找到对应原句",
+        "[PDFPal 引用定位] 页面已打开，但文字层中未找到对应原句",
         { pageNumber, citedQuote: quote },
       );
       return [];
     }
     const { range, match } = locatedCitation;
-    console.info("[PDF Helper 引用定位] 已匹配到 PDF 原文", {
+    console.info("[PDFPal 引用定位] 已匹配到 PDF 原文", {
       pageNumber,
       citedQuote: quote,
       matchedOriginalText: range.toString(),

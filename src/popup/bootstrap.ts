@@ -20,7 +20,7 @@ async function openViewer() {
 }
 
 void openViewer().catch((error: unknown) => {
-  console.error('打开 PDF Helper 失败：', error);
+  console.error('打开 PDFPal 失败：', error);
   if (statusElement) {
     statusElement.textContent = '打开失败，请在扩展管理页重新加载后再试。';
   }

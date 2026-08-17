@@ -210,7 +210,7 @@ async function load(force = false): Promise<void> {
     force,
   });
   if (!response.ok) {
-    console.error("[PDF Helper] LangGraph research failed", response.error);
+    console.error("[PDFPal] LangGraph research failed", response.error);
     renderStatus(target.result, `${UI.error} ${response.error}`, true);
     return;
   }

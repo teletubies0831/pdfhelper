@@ -1,6 +1,5 @@
 
-import { DeepSeekProviderAdapter } from "../../modules/ai/providers/deepseek-provider";
-import { AiProviderRegistry } from '../../modules/ai/providers/provider-registry';
+import { AiProviderRegistry, DeepSeekProviderAdapter } from '../../modules/ai/public';
 
 import { type AiConfig } from "../../../shared/ai";
 
@@ -33,7 +32,7 @@ export async function fetchProviderJson(
   init?: RequestInit,
 ): Promise<unknown> {
   if (!config.apiKey) {
-    throw new Error('请先在 PDF Helper 的“设置”中配置 API Key。');
+    throw new Error('请先在 PDFPal 的“设置”中配置 API Key。');
   }
 
   const response = await fetch(`${config.baseUrl}${path}`, {
@@ -56,6 +55,7 @@ export async function fetchProviderJson(
 export const providerRegistry = new AiProviderRegistry();
 
 providerRegistry.register(new DeepSeekProviderAdapter());
+providerRegistry.register(new DeepSeekProviderAdapter('openai-compatible'));
 
 export const providerAdapters: Partial<Record<AiConfig['providerId'], AiProviderAdapter>> =
   new Proxy({}, {

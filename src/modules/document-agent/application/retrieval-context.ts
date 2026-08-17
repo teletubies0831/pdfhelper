@@ -49,7 +49,7 @@ export async function buildDocumentRetrievalContext(
         previousResults: toolResults,
         round,
       });
-      console.debug(`[PDF Helper Agent] 第 ${round} 轮工具规划提示词`, planningPrompt);
+      console.debug(`[PDFPal Agent] 第 ${round} 轮工具规划提示词`, planningPrompt);
       const plan = await options.requestAi(
         [{ role: 'user', content: planningPrompt }],
         {
@@ -70,7 +70,7 @@ export async function buildDocumentRetrievalContext(
         throw new Error(decision.reason);
       }
       plannerReason = decision.reason;
-      console.debug(`[PDF Helper Agent] 第 ${round} 轮工具决策`, decision);
+      console.debug(`[PDFPal Agent] 第 ${round} 轮工具决策`, decision);
       if (decision.decision === 'answer' || decision.calls.length === 0) break;
 
       const remainingCallCount = maximumToolCalls - seenToolCalls.size;
@@ -86,7 +86,7 @@ export async function buildDocumentRetrievalContext(
 
       const roundResults = await executeDocumentToolCalls(calls, options);
       toolResults.push(...roundResults);
-      console.debug(`[PDF Helper Agent] 第 ${round} 轮工具结果`, roundResults.map((result) => ({
+      console.debug(`[PDFPal Agent] 第 ${round} 轮工具结果`, roundResults.map((result) => ({
         name: result.name,
         label: result.label,
         pages: result.pages,
@@ -99,7 +99,7 @@ export async function buildDocumentRetrievalContext(
     } catch (error) {
       plannerFailed = true;
       plannerReason = error instanceof Error ? error.message : String(error);
-      console.warn('[PDF Helper Agent] 证据规划失败，准备使用通用检索回退', error);
+      console.warn('[PDFPal Agent] 证据规划失败，准备使用通用检索回退', error);
       break;
     }
   }

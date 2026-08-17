@@ -16,7 +16,7 @@ export function getCurrentAnnotationSnapshot(): string {
     );
     return JSON.stringify(entries);
   } catch (error) {
-    console.warn("PDF Helper annotation snapshot failed.", error);
+    console.warn("PDFPal annotation snapshot failed.", error);
     return "";
   }
 }

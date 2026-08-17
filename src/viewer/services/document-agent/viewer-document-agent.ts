@@ -165,7 +165,7 @@ export async function buildAgentEvidence(
       targetQuestion,
     ),
   });
-  console.groupCollapsed(`[PDF Helper Agent] 证据检索完成 · ${result.planningRounds} 轮`);
+  console.groupCollapsed(`[PDFPal Agent] 证据检索完成 · ${result.planningRounds} 轮`);
   console.log("规划原因", result.plannerReason);
   console.log("工具调用结果", result.toolResults);
   console.log("送入最终回答的证据", result.text);

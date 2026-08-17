@@ -50,7 +50,7 @@ export function bootstrapBackground(): void {
       const timeoutId = setTimeout(() => {
         if (pendingToolResults?.requestId !== requestId) return;
         pendingToolResults = undefined;
-        console.error('[PDF Helper AI] 工具结果等待超时', { requestId, timeoutMs: 45_000 });
+        console.error('[PDFPal AI] 工具结果等待超时', { requestId, timeoutMs: 45_000 });
         resolve([]);
       }, 45_000);
       const finish = (results: AiStreamToolResult[]): void => {
@@ -87,7 +87,7 @@ export function bootstrapBackground(): void {
       void streamAiResponse(message, port, signal, waitForToolResults).catch((error) => {
         if (signal.aborted) return;
         const details = getSafeErrorDetails(error);
-        console.error('[PDF Helper AI] 流式请求失败', {
+        console.error('[PDFPal AI] 流式请求失败', {
           requestId: message.requestId,
           error: error instanceof Error ? error.message : String(error),
           details,
