@@ -4,34 +4,25 @@ import {
   type AiStreamErrorInfo,
   type AiNativeToolCall,
   type VisionAiConfig,
-  normalizeAiBaseUrl,
 } from "../../../shared/ai";
 
 export function getProviderError(payload: unknown, fallback: string): string {
   if (!payload || typeof payload !== "object") return fallback;
-  const record = payload as { error?: unknown; code?: unknown; message?: unknown };
-  const nestedError = record.error;
-  if (typeof nestedError === "string" && nestedError.trim()) return nestedError.trim();
-  if (nestedError && typeof nestedError === "object") {
-    const nestedMessage = (nestedError as { message?: unknown }).message;
-    if (typeof nestedMessage === "string" && nestedMessage.trim()) return nestedMessage.trim();
-  }
-  if (typeof record.message === "string" && record.message.trim()) {
-    const code = typeof record.code === "string" && record.code.trim() ? record.code.trim() : "";
-    return code ? `${code}: ${record.message.trim()}` : record.message.trim();
-  }
-  return fallback;
+  const error = (payload as { error?: unknown }).error;
+  if (!error || typeof error !== "object") return fallback;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" && message.trim()
+    ? message.trim()
+    : fallback;
 }
 
 export type ProviderMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
-  reasoning_content?: string;
   tool_call_id?: string;
   tool_calls?: Array<{
     id: string;
     type: "function";
-    index?: number;
     function: { name: string; arguments: string };
   }>;
 };
@@ -89,7 +80,6 @@ export async function requestVisionCompletion(
   prompt: string,
   imageDataUrl: string,
   context?: AiDocumentContext,
-  maxOutputTokens = 1600,
 ): Promise<ProviderChatResult> {
   if (
     config.mode !== "separate" ||
@@ -99,8 +89,7 @@ export async function requestVisionCompletion(
   ) {
     throw new Error("请先在“设置”中完成视觉模型配置。");
   }
-  const baseUrl = normalizeAiBaseUrl(config.baseUrl, config.providerId);
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
@@ -112,7 +101,7 @@ export async function requestVisionCompletion(
         {
           role: "system",
           content: [
-            "你是 PDFPal 的视觉阅读工具，只分析图片中实际可见的内容。",
+            "你是 PDF Helper 的视觉阅读工具，只分析图片中实际可见的内容。",
             "优先识别图表、公式、表格、流程图、页面结构以及文字抽取遗漏的信息。",
             "不确定时明确说明，不要补写图片中不存在的内容。",
             context?.documentName ? `文档：${context.documentName}` : "",
@@ -133,7 +122,7 @@ export async function requestVisionCompletion(
         },
       ],
       stream: false,
-      max_tokens: maxOutputTokens,
+      max_tokens: 1600,
     }),
   });
   const payload = await response.json().catch(() => null);
