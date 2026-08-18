@@ -39,7 +39,7 @@ li {
   margin: 0;
   color: #1f67e8;
   font-weight: 700;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
 }
 
 .updated {
@@ -47,6 +47,12 @@ li {
 }
 
 @media (max-width: 640px) {
-  body { padding: 0; }
-  main { border: 0; border-radius: 0; padding: 28px 22px 48px; }
+  body {
+    padding: 0;
+  }
+  main {
+    border: 0;
+    border-radius: 0;
+    padding: 28px 22px 48px;
+  }
 }
