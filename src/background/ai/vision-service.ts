@@ -4,6 +4,7 @@ import {
   type AiStreamErrorInfo,
   type AiNativeToolCall,
   type VisionAiConfig,
+  normalizeAiBaseUrl,
 } from "../../../shared/ai";
 
 export function getProviderError(payload: unknown, fallback: string): string {
@@ -98,7 +99,8 @@ export async function requestVisionCompletion(
   ) {
     throw new Error("请先在“设置”中完成视觉模型配置。");
   }
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
+  const baseUrl = normalizeAiBaseUrl(config.baseUrl, config.providerId);
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.apiKey}`,

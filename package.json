@@ -1,14 +1,16 @@
 {
   "name": "pdfpal",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "wxt -b edge",
     "dev:chrome": "wxt -b chrome",
     "typecheck": "tsc --noEmit",
+    "test:ai-contracts": "node --experimental-strip-types --no-warnings scripts/test-ai-contracts.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
-    "check": "pnpm typecheck && pnpm check:architecture && pnpm build",
+    "check:production": "node scripts/check-production.mjs",
+    "check": "pnpm typecheck && pnpm test:ai-contracts && pnpm check:architecture && pnpm build && pnpm check:production",
     "build": "wxt build -b edge",
     "build:chrome": "wxt build -b chrome",
     "zip": "wxt zip -b edge",

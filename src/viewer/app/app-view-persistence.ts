@@ -16,7 +16,7 @@ import { DEFAULT_CONVERSATION_MEMORY_CONFIG, type ConversationMemoryConfig } fro
 
 
 
-import { aiSettingsButton, appFrame, assistantChatPanel, assistantSettingsPanel, assistantToolsRuntime, assistantViewButtons, chatInput, knowledgeBasePageElement, knowledgeGroupSelect, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeSearchInput, knowledgeSortSelect, paperCardPageElement, settingsModalBackdrop } from "./viewer-elements";
+import { aiSettingsButton, appFrame, assistantChatPanel, assistantSettingsPanel, assistantToolsRuntime, assistantViewButtons, chatInput, knowledgeGroupSelect, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeSearchInput, knowledgeSortSelect, paperCardPageElement, settingsModalBackdrop } from "./viewer-elements";
 import { refreshLongTermMemoryList, resetSettingsPresentation } from "../features/assistant/public";
 import { cancelPendingAutomaticTranslation } from "../features/translation/public";
 import { collectKnowledgeItems, openKnowledgeBasePage, setKnowledgePageMode } from "../features/knowledge-base/public";

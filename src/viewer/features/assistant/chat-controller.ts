@@ -376,29 +376,6 @@ export async function sendChatMessage(): Promise<void> {
           : "模型流已结束，但没有返回正文或思考内容。",
       );
     }
-    const completeInteractionLog = {
-      requestId: response.requestId,
-      requestMessages: response.requestMessages,
-      reasoningContent: streamedReasoningContent,
-      rawAssistantResponse: rawModelContent,
-      finalAssistantResponse: streamedContent,
-    };
-    console.groupCollapsed(
-      `[PDFPal AI] 本轮最终完整交互 · ${response.requestId}`,
-    );
-    console.log("实际发送给模型的全部上下文", response.requestMessages);
-    console.log(
-      "思考过程\n",
-      streamedReasoningContent || "本轮没有返回思考过程",
-    );
-    console.log("模型原始回答\n", rawModelContent);
-    console.log("引用校验后的最终回答\n", streamedContent);
-    console.log(
-      "本轮完整交互 JSON（可直接复制）\n",
-      JSON.stringify(completeInteractionLog, null, 2),
-    );
-    console.groupEnd();
-
     updateChatReasoning(assistantMessage, streamedReasoningContent, false);
     updateChatMessage(assistantMessage, streamedContent, { streaming: false });
     chatHistory.value.push({ role: "assistant", content: streamedContent });
@@ -424,27 +401,6 @@ export async function sendChatMessage(): Promise<void> {
     );
   } catch (error) {
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
-    const failure = error as Error & {
-      requestId?: string;
-      details?: unknown;
-    };
-    console.groupCollapsed(
-      `[PDFPal AI] 本轮交互失败 · ${failure.requestId ?? "未知请求"}`,
-    );
-    console.error("异常", error);
-    console.log("模型配置（不包含 API Key）", {
-      provider: aiConfig.value.providerId,
-      model: aiConfig.value.model,
-      baseUrl: aiConfig.value.baseUrl,
-      reasoning: aiConfig.value.reasoning,
-      maxOutputTokens: aiConfig.value.maxOutputTokens,
-    });
-    console.log("供应商/流式诊断", failure.details ?? "没有额外诊断信息");
-    console.log("失败前接收长度", {
-      contentLength: streamedContent.length,
-      reasoningLength: streamedReasoningContent.length,
-    });
-    console.groupEnd();
     const failureMessage =
       error instanceof Error ? error.message : String(error);
     failActiveChatActivities(

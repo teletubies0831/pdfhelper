@@ -1,4 +1,4 @@
-import type { AiConfig, AiNativeToolCall, AiStreamCompletionInfo } from '../contracts';
+import { normalizeAiBaseUrl, type AiConfig, type AiNativeToolCall, type AiStreamCompletionInfo } from '../contracts';
 import { AiProviderRequestError, getProviderErrorMessage } from './provider-error';
 import type { AiProviderAdapter, ProviderChatResult, ProviderMessage, ProviderStreamDelta } from './provider';
 
@@ -24,7 +24,7 @@ async function fetchProviderJson(
   }
 
   try {
-    const requestUrl = `${config.baseUrl}${path}`;
+    const requestUrl = `${normalizeAiBaseUrl(config.baseUrl, config.providerId)}${path}`;
     const response = await fetch(requestUrl, {
       ...init,
       signal: requestController.signal,
@@ -35,17 +35,6 @@ async function fetchProviderJson(
       },
     });
     const payload = await response.json().catch(() => null);
-    if (path === '/models') {
-      console.info('[PDFPal AI 连接测试] 供应商 HTTP 返回', {
-        providerId: config.providerId,
-        url: requestUrl,
-        method: init?.method ?? 'GET',
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        payload,
-      });
-    }
     if (!response.ok) {
       throw new Error(getProviderErrorMessage(payload, `AI 请求失败：HTTP ${response.status}`));
     }
@@ -53,14 +42,6 @@ async function fetchProviderJson(
   } catch (error) {
     if (timedOut) {
       throw new Error('AI 供应商超过 120 秒仍未响应，请检查网络、接口地址或模型状态后重试。');
-    }
-    if (path === '/models') {
-      console.error('[PDFPal AI 连接测试] 供应商请求异常', {
-        providerId: config.providerId,
-        url: `${config.baseUrl}${path}`,
-        method: init?.method ?? 'GET',
-        error: error instanceof Error ? error.message : String(error),
-      });
     }
     throw error;
   } finally {
@@ -120,21 +101,6 @@ function prepareProviderMessages(baseUrl: string, messages: ProviderMessage[]): 
       })),
     };
   });
-}
-
-function summarizeProviderMessages(messages: ProviderMessage[]): Array<Record<string, unknown>> {
-  return messages.map((message) => ({
-    role: message.role,
-    contentLength: message.content.length,
-    reasoningLength: message.reasoning_content?.length ?? 0,
-    toolCallId: message.tool_call_id,
-    toolCalls: message.tool_calls?.map((call) => ({
-      index: call.index,
-      id: call.id,
-      name: call.function.name,
-      argumentsLength: call.function.arguments.length,
-    })),
-  }));
 }
 
 export class DeepSeekProviderAdapter implements AiProviderAdapter {
@@ -227,23 +193,11 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
     } = {},
   ): Promise<ProviderChatResult> {
     if (!config.apiKey) throw new Error('请先在 PDFPal 的“设置”中配置 API Key。');
-    const providerMessages = prepareProviderMessages(config.baseUrl, messages);
-    const requestSummary = {
-      providerId: config.providerId,
-      model: config.model,
-      baseUrl: config.baseUrl,
-      reasoning: config.reasoning,
-      toolChoice: options.tools?.length ? options.toolChoice ?? 'auto' : 'none',
-      tools: (options.tools ?? []).map((tool) => (
-        tool && typeof tool === 'object' && 'function' in tool
-          ? (tool as { function?: { name?: unknown } }).function?.name
-          : undefined
-      )).filter(Boolean),
-      messages: summarizeProviderMessages(providerMessages),
-    };
+    const baseUrl = normalizeAiBaseUrl(config.baseUrl, config.providerId);
+    const providerMessages = prepareProviderMessages(baseUrl, messages);
     let response: Response;
     try {
-      response = await fetch(`${config.baseUrl}/chat/completions`, {
+      response = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${config.apiKey}`,
@@ -263,7 +217,6 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
         }),
         signal,
       });
-      console.info('[PDFPal AI] 供应商请求格式（已隐藏正文与密钥）', requestSummary);
     } catch (error) {
       if (signal.aborted) throw error;
       throw new AiProviderRequestError(
@@ -287,20 +240,13 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
       } catch {
         // Keep the raw body in the safe diagnostics below.
       }
-      console.error('[PDFPal AI] 供应商 HTTP 请求失败', {
-        ...requestSummary,
-        httpStatus: response.status,
-        providerRequestId,
-        responseBody: responseBody.slice(0, 4000),
-      });
       throw new AiProviderRequestError(
         getProviderError(payload, `AI 请求失败：HTTP ${response.status}`),
         {
           name: 'ProviderHttpError',
           httpStatus: response.status,
-          responseBody: responseBody.slice(0, 4000),
           model: config.model,
-          baseUrl: config.baseUrl,
+          baseUrl,
           providerRequestId,
         },
       );
@@ -369,9 +315,8 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
         throw new AiProviderRequestError('AI 流式响应包含无法解析的数据。', {
           name: error instanceof Error ? error.name : 'StreamParseError',
           httpStatus: response.status,
-          responseBody: data.slice(0, 2000),
           model: config.model,
-          baseUrl: config.baseUrl,
+          baseUrl,
           contentLength: completeContent.length,
           reasoningLength: completeReasoningContent.length,
           finishReason,
@@ -386,9 +331,8 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
           {
             name: 'ProviderStreamError',
             httpStatus: response.status,
-            responseBody: JSON.stringify(payload).slice(0, 4000),
             model: config.model,
-            baseUrl: config.baseUrl,
+            baseUrl,
             contentLength: completeContent.length,
             reasoningLength: completeReasoningContent.length,
             finishReason,

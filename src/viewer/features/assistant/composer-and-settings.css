@@ -459,6 +459,19 @@
   padding: 9px 10px;
 }
 
+.settings-privacy-note a,
+.chat-data-notice a {
+  color: #1f67e8;
+  font-weight: 600;
+}
+
+.chat-data-notice {
+  margin: -2px 2px 2px;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .settings-status {
   min-height: 20px;
   color: #16805b;

@@ -44,10 +44,6 @@ export function requestAiStream(
   content: string;
   reasoningContent: string;
   requestId: string;
-  requestMessages: Array<{
-    role: "system" | "user" | "assistant" | "tool";
-    content: string;
-  }>;
 }> {
   const requestId = crypto.randomUUID();
   const port = browser.runtime.connect({ name: AI_STREAM_PORT_NAME });
@@ -56,12 +52,6 @@ export function requestAiStream(
     let settled = false;
     let content = "";
     let reasoningContent = "";
-    let debugConversation: Array<{
-      role: "system" | "user" | "assistant" | "tool";
-      content: string;
-      toolCalls?: AiNativeToolCall[];
-      toolCallId?: string;
-    }> = [];
     const handledToolRounds = new Set<number>();
 
     const finish = (callback: () => void): void => {
@@ -80,45 +70,6 @@ export function requestAiStream(
       if (!message || message.requestId !== requestId) return;
 
       if (message.type === "started") {
-        const debug = message.debug;
-        console.groupCollapsed(`[PDFPal AI] 聊天请求 · ${message.model}`);
-        if (debug) {
-          debugConversation = debug.messages.map((item) => ({ ...item }));
-          console.log("模型配置", {
-            provider: debug.providerId,
-            model: debug.model,
-            baseUrl: debug.baseUrl,
-            reasoning: debug.reasoning,
-            maxOutputTokens: debug.maxOutputTokens,
-          });
-          console.log("Native tools payload", {
-            toolChoice: debug.toolChoice ?? "none",
-            tools: debug.nativeTools ?? [],
-          });
-          const [systemMessage, ...conversationMessages] = debug.messages;
-          if (systemMessage)
-            console.log("System Prompt\n", systemMessage.content);
-          conversationMessages.forEach((item, index) => {
-            console.log(
-              `${item.role === "user" ? "User" : item.role === "tool" ? "Tool" : "Assistant"} Prompt #${index + 1}\n`,
-              item.content,
-            );
-          });
-          console.log(
-            "可用 Agent 工具（已随请求发送）",
-            debug.availableTools.length
-              ? debug.availableTools
-              : "没有向模型发送工具定义",
-          );
-          console.log(
-            "本轮回答前已完成的工具调用",
-            debug.completedTools.length
-              ? debug.completedTools
-              : "本轮回答前未执行工具",
-          );
-          console.log("完整模型对话（实际发送内容）", debugConversation);
-        }
-        console.groupEnd();
         return;
       }
       if (message.type === "delta") {
@@ -134,27 +85,9 @@ export function requestAiStream(
       if (message.type === "tool-calls") {
         if (handledToolRounds.has(message.round)) return;
         handledToolRounds.add(message.round);
-        console.info("[PDFPal AI] native Agent tool calls", {
-          requestId,
-          round: message.round,
-          calls: message.calls,
-        });
-        debugConversation.push({
-          role: "assistant",
-          content: "",
-          toolCalls: message.calls,
-        });
         onDelta({ toolCalls: message.calls });
         void executeNativeToolCalls(message.calls, context).then((results) => {
-          console.info("[PDFPal AI] native Agent tool results", { requestId, round: message.round, results });
           onDelta({ toolResults: results });
-          results.forEach((result) => {
-            debugConversation.push({
-              role: "tool",
-              content: result.content,
-              toolCallId: result.toolCallId,
-            });
-          });
           port.postMessage({ type: "tool-results", requestId, results });
         }).catch((error) => {
           const errorText = error instanceof Error ? error.message : String(error);
@@ -165,71 +98,21 @@ export function requestAiStream(
             content: errorText,
           }));
           onDelta({ toolResults: results });
-          results.forEach((result) => {
-            debugConversation.push({
-              role: "tool",
-              content: result.content,
-              toolCallId: result.toolCallId,
-            });
-          });
           port.postMessage({ type: "tool-results", requestId, results });
         });
         return;
       }
       if (message.type === "done") {
-        if (message.debug) {
-          debugConversation = message.debug.messages.map((item) => ({
-            ...item,
-          }));
-        }
-        const completedConversation = [
-          ...debugConversation,
-          { role: "assistant" as const, content },
-        ];
-        console.groupCollapsed(
-          `[PDFPal AI] 聊天响应完成 · ${message.model}`,
-        );
-        const systemMessage = completedConversation.find(
-          (item) => item.role === "system",
-        );
-        if (systemMessage)
-          console.log("System Prompt / 角色设定\n", systemMessage.content);
-        console.log("发送给模型的全部历史对话", debugConversation);
-        console.log("思考过程\n", reasoningContent || "本轮没有返回思考过程");
-        console.log("最终回答\n", content);
-        console.log("流式完成信息", message.completion ?? {
-          contentLength: content.length,
-          reasoningLength: reasoningContent.length,
-          note: "供应商未返回完成诊断",
-        });
-        console.log("完整模型对话（包含最终回答）", completedConversation);
-        console.log(
-          "完整模型对话 JSON（可直接复制）\n",
-          JSON.stringify(completedConversation, null, 2),
-        );
-        console.groupEnd();
         finish(() =>
           resolve({
             content,
             reasoningContent,
             requestId,
-            requestMessages: debugConversation.map((item) => ({ ...item })),
           }),
         );
         return;
       }
       if (message.type === "error") {
-        console.groupCollapsed(`[PDFPal AI] 聊天请求失败 · ${requestId}`);
-        console.error("错误原因", message.error);
-        console.log("安全诊断（不包含 API Key）", message.details ?? "后台未返回诊断详情");
-        console.log("失败前已接收内容", {
-          contentLength: content.length,
-          reasoningLength: reasoningContent.length,
-          content,
-          reasoningContent,
-        });
-        console.log("本轮实际发送上下文", debugConversation);
-        console.groupEnd();
         const streamError = Object.assign(new Error(message.error), {
           requestId,
           details: message.details,
@@ -245,11 +128,6 @@ export function requestAiStream(
         new Error("AI 流式连接已中断，请重新加载扩展后再试。"),
         { requestId },
       );
-      console.error("[PDFPal AI] 流式连接异常中断", {
-        requestId,
-        contentLength: content.length,
-        reasoningLength: reasoningContent.length,
-      });
       reject(error);
     });
 

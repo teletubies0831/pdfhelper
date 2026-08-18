@@ -243,33 +243,6 @@ export interface AiStreamToolResultsMessage {
   results: AiStreamToolResult[];
 }
 
-export interface AiStreamDebugInfo {
-  providerId: AiProviderId;
-  model: string;
-  baseUrl: string;
-  reasoning: AiReasoningMode;
-  maxOutputTokens: number;
-  messages: Array<{
-    role: 'system' | 'user' | 'assistant' | 'tool';
-    content: string;
-    toolCalls?: AiNativeToolCall[];
-    toolCallId?: string;
-    reasoningContent?: string;
-  }>;
-  availableTools: Array<{
-    name: string;
-    description: string;
-    parameters: string;
-  }>;
-  /** The exact native OpenAI-compatible tools payload sent separately from messages. */
-  nativeTools?: Array<Record<string, unknown>>;
-  toolChoice?: 'auto' | 'none' | 'required';
-  completedTools: Array<{
-    name: string;
-    arguments?: Record<string, unknown>;
-  }>;
-}
-
 export interface AiStreamCompletionInfo {
   finishReason?: string;
   promptTokens?: number;
@@ -286,7 +259,6 @@ export interface AiStreamCompletionInfo {
 export interface AiStreamErrorInfo {
   name?: string;
   httpStatus?: number;
-  responseBody?: string;
   model?: string;
   baseUrl?: string;
   finishReason?: string;
@@ -298,7 +270,7 @@ export interface AiStreamErrorInfo {
 }
 
 export type AiStreamServerMessage =
-  | { type: 'started'; requestId: string; model: string; debug?: AiStreamDebugInfo }
+  | { type: 'started'; requestId: string; model: string }
   | { type: 'delta'; requestId: string; content: string }
   | { type: 'reasoning-delta'; requestId: string; content: string }
   | {
@@ -311,7 +283,6 @@ export type AiStreamServerMessage =
       type: 'done';
       requestId: string;
       model: string;
-      debug?: AiStreamDebugInfo;
       completion?: AiStreamCompletionInfo;
     }
   | { type: 'error'; requestId: string; error: string; details?: AiStreamErrorInfo };
@@ -365,9 +336,33 @@ export function isVisionAiConfigured(config: VisionAiConfig): boolean {
 }
 
 export function normalizeAiBaseUrl(value: string, providerId: AiProviderId): string {
-  const normalized = value.trim().replace(/\/+$/, '');
-  if (normalized) return normalized;
-  return AI_PROVIDERS.find((provider) => provider.id === providerId)?.defaultBaseUrl || '';
+  const candidate = value.trim()
+    || AI_PROVIDERS.find((provider) => provider.id === providerId)?.defaultBaseUrl
+    || '';
+  if (!candidate) return '';
+
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    throw new Error('请输入有效的 API 地址。');
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const isLoopback = hostname === 'localhost'
+    || hostname === '[::1]'
+    || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
+    throw new Error('API 地址必须使用 HTTPS；本机 localhost 服务可使用 HTTP。');
+  }
+  if (url.username || url.password) {
+    throw new Error('API 地址不能包含用户名或密码。');
+  }
+  if (url.search || url.hash) {
+    throw new Error('API 地址不能包含查询参数或锚点。');
+  }
+
+  return candidate.replace(/\/+$/, '');
 }
 
 export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {

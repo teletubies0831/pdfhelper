@@ -1,7 +1,7 @@
 
 import { AiProviderRegistry, DeepSeekProviderAdapter } from '../../modules/ai/public';
 
-import { type AiConfig } from "../../../shared/ai";
+import { normalizeAiBaseUrl, type AiConfig } from "../../../shared/ai";
 
 import { getProviderError } from './vision-service';
 import type { ProviderChatResult, ProviderMessage, ProviderStreamDelta } from './vision-service';
@@ -35,7 +35,8 @@ export async function fetchProviderJson(
     throw new Error('请先在 PDFPal 的“设置”中配置 API Key。');
   }
 
-  const response = await fetch(`${config.baseUrl}${path}`, {
+  const baseUrl = normalizeAiBaseUrl(config.baseUrl, config.providerId);
+  const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${config.apiKey}`,

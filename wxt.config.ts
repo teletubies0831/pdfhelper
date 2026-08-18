@@ -8,10 +8,25 @@ export default defineConfig({
   vite: () => ({
     build: {
       modulePreload: false,
+      rolldownOptions: {
+        output: {
+          // Production packages must not retain diagnostics that can expose
+          // PDF text, prompts, model responses, or API endpoint details.
+          minify: {
+            compress: {
+              dropConsole: true,
+              dropDebugger: true,
+            },
+            mangle: true,
+            codegen: true,
+          },
+        },
+      },
     },
   }),
   manifest: {
     name: 'PDFPal',
+    version: '1.0.0',
     description: 'PDFPal AI PDF 阅读器，支持翻译、批注、记忆和智能问答。',
     icons: {
       16: 'resources/pdfpal/icon-16.png',

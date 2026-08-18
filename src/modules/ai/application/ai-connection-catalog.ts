@@ -178,7 +178,7 @@ export class AiConnectionCatalog {
     return {
       providerId: connection.providerId,
       apiKey: connection.apiKey,
-      baseUrl: connection.baseUrl,
+      baseUrl: normalizeAiBaseUrl(connection.baseUrl, connection.providerId),
       model: route.model,
       translationModel: state.routes.translation?.model ?? route.model,
       reasoning: state.reasoning,
@@ -199,7 +199,7 @@ export class AiConnectionCatalog {
       mode: 'separate',
       providerId: 'openai-compatible',
       apiKey: connection.apiKey,
-      baseUrl: connection.baseUrl,
+      baseUrl: normalizeAiBaseUrl(connection.baseUrl, connection.providerId),
       model: route.model,
     };
   }
