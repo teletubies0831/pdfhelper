@@ -1,32 +1,104 @@
 import { AnnotationEditorType, getDocument } from "pdfjs-dist";
 
-
-
-
-
-
-
-
-
-
-
-
 import { executeMemoryTool } from "../../../../entrypoints/viewer/memory-store";
 
-
-
-import { activeEditorMode, annotationEditor, annotationEditorWarmUpInFlight, canRedoAnnotation, canUndoAnnotation, currentFileHandle, currentRecentEntryId, eventBus, findController, isOpeningDocument, isRestoringReadingPosition, isSavingAnnotatedPdf, lastReadingPosition, linkService, nativeAnnotationNotes, pdfDocument, pdfViewer, pendingReadingPosition, restoredAnnotationWarmUpPending, restoredHelperNotesBySignature, restoredHelperNotesByStorageKey, sourceName, sourcePdfBytes } from '../../app/viewer-state';
-import { confirmDiscardUnsavedChanges, embedHelperAnnotationsIntoPdf, getPdfFingerprint, markSavedChanges, restoreHelperAnnotations, writeEmbeddedPdfBytes } from '../../features/annotations/public';
-import { cancelReadingPositionSave, rememberRecentPdf, setStatus } from '../../features/recent-files/public';
-import { cancelPendingAutomaticTranslation, ensureTranslationHistoryLoaded, renderTranslationHistory, setMoreExamplesButtonVisible, setTranslationLearningTitle, setTranslationSelectionEditor, setTranslationState } from '../../features/translation/public';
-import { cancelPendingSummaryGeneration, resetSummaryState } from '../../services/document-agent/viewer-document-agent';
-import { cancelPendingCardGeneration, generatePaperOverviewCard, resetCardState, resetPaperCardPageState } from '../../features/paper-card/public';
-import { cardAbortController, clearOutlineList, currentEnglishLearningResult, currentEnglishLearningSourceSentence, lastTranslatedText, lastViewerSelectionText, moreExamplesAbortController, readingModeDocumentKey, readingModeError, readingModePreference, readingModeRationale, renderDocumentOutline, resolvedReadingMode, selectedTextForAi, selectedTextPageNumber, summaryAbortController, translationAbortController, translationHistoryDocumentKey, translationHistoryEntries, updateControls } from './reader-ui';
-import { clearInternalNavigationHistory, clearPendingChatImages, getDocumentChatId, loadReadingModeForDocument, restoreChatConversation, updateReadingModeUi } from '../../features/assistant/public';
-import { findBar, findCount, findInput, paperCardPageElement, textStatus, translationLearningHintElement, viewerContainer } from '../../app/viewer-elements';
-import type { FileHandleLike } from '../../app/viewer-types';
-
-
+import {
+  activeEditorMode,
+  annotationEditor,
+  annotationEditorWarmUpInFlight,
+  canRedoAnnotation,
+  canUndoAnnotation,
+  currentFileHandle,
+  currentRecentEntryId,
+  eventBus,
+  findController,
+  isOpeningDocument,
+  isRestoringReadingPosition,
+  isSavingAnnotatedPdf,
+  lastReadingPosition,
+  linkService,
+  nativeAnnotationNotes,
+  pdfDocument,
+  pdfViewer,
+  pendingReadingPosition,
+  restoredAnnotationWarmUpPending,
+  restoredHelperNotesBySignature,
+  restoredHelperNotesByStorageKey,
+  sourceName,
+  sourcePdfBytes,
+} from "../../app/viewer-state";
+import {
+  confirmDiscardUnsavedChanges,
+  embedHelperAnnotationsIntoPdf,
+  getPdfFingerprint,
+  markSavedChanges,
+  restoreHelperAnnotations,
+  writeEmbeddedPdfBytes,
+} from "../../features/annotations/public";
+import {
+  cancelReadingPositionSave,
+  rememberRecentPdf,
+  setStatus,
+} from "../../features/recent-files/public";
+import {
+  cancelPendingAutomaticTranslation,
+  ensureTranslationHistoryLoaded,
+  renderTranslationHistory,
+  setMoreExamplesButtonVisible,
+  setTranslationLearningTitle,
+  setTranslationSelectionEditor,
+  setTranslationState,
+} from "../../features/translation/public";
+import {
+  cancelPendingSummaryGeneration,
+  resetSummaryState,
+} from "../../services/document-agent/viewer-document-agent";
+import {
+  cancelPendingCardGeneration,
+  generatePaperOverviewCard,
+  resetCardState,
+  resetPaperCardPageState,
+} from "../../features/paper-card/public";
+import {
+  cardAbortController,
+  clearOutlineList,
+  currentEnglishLearningResult,
+  currentEnglishLearningSourceSentence,
+  lastTranslatedText,
+  lastViewerSelectionText,
+  moreExamplesAbortController,
+  readingModeDocumentKey,
+  readingModeError,
+  readingModePreference,
+  readingModeRationale,
+  renderDocumentOutline,
+  resolvedReadingMode,
+  selectedTextForAi,
+  selectedTextPageNumber,
+  summaryAbortController,
+  translationAbortController,
+  translationHistoryDocumentKey,
+  translationHistoryEntries,
+  updateControls,
+} from "./reader-ui";
+import {
+  clearInternalNavigationHistory,
+  clearPendingChatImages,
+  getDocumentChatId,
+  loadReadingModeForDocument,
+  restoreChatConversation,
+  updateReadingModeUi,
+} from "../../features/assistant/public";
+import {
+  findBar,
+  findCount,
+  findInput,
+  paperCardPageElement,
+  textStatus,
+  translationLearningHintElement,
+  viewerContainer,
+} from "../../app/viewer-elements";
+import type { FileHandleLike } from "../../app/viewer-types";
 
 export async function openPdf(
   data: ArrayBuffer | Uint8Array,
@@ -116,9 +188,10 @@ export async function openPdf(
         recentEntryId: recentEntry?.id,
         sourceKind: recentEntry?.kind,
         sourceUrl: recentEntry?.url,
-        sourceLocator: recentEntry?.kind === "local"
-          ? `local-file-handle:${recentEntry.id}`
-          : recentEntry?.url,
+        sourceLocator:
+          recentEntry?.kind === "local"
+            ? `local-file-handle:${recentEntry.id}`
+            : recentEntry?.url,
       },
     });
 
@@ -188,7 +261,6 @@ export async function openPdf(
   }
 }
 
-
 export function getDisplayFileName(source: string): string {
   try {
     const pathname =
@@ -204,7 +276,6 @@ export function getDisplayFileName(source: string): string {
   }
 }
 
-
 export async function openRemotePdf(url: string) {
   setStatus(`正在下载 ${url}…`);
 
@@ -216,7 +287,6 @@ export async function openRemotePdf(url: string) {
     setStatus(error instanceof Error ? error.message : String(error), true);
   }
 }
-
 
 export function runSearch(findPrevious: boolean, again: boolean) {
   const query = findInput.value.trim();
@@ -235,7 +305,6 @@ export function runSearch(findPrevious: boolean, again: boolean) {
   });
 }
 
-
 export function openFindBar() {
   if (!pdfDocument.value) return;
   findBar.hidden = false;
@@ -243,14 +312,12 @@ export function openFindBar() {
   findInput.select();
 }
 
-
 export function closeFindBar() {
   findBar.hidden = true;
   findCount.textContent = "0/0";
   eventBus.dispatch("findbarclose", { source: window });
   viewerContainer.focus();
 }
-
 
 export async function saveAnnotatedPdf(): Promise<boolean> {
   if (!pdfDocument.value || isSavingAnnotatedPdf.value) return false;

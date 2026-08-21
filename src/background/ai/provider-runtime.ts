@@ -1,18 +1,25 @@
-
-import { AiProviderRegistry, DeepSeekProviderAdapter } from '../../modules/ai/public';
+import {
+  AiProviderRegistry,
+  DeepSeekProviderAdapter,
+} from "../../modules/ai/public";
 
 import { normalizeAiBaseUrl, type AiConfig } from "../../../shared/ai";
 
-import { getProviderError } from './vision-service';
-import type { ProviderChatResult, ProviderMessage, ProviderStreamDelta } from './vision-service';
-
-
-
+import { getProviderError } from "./vision-service";
+import type {
+  ProviderChatResult,
+  ProviderMessage,
+  ProviderStreamDelta,
+} from "./vision-service";
 
 export interface AiProviderAdapter {
-  readonly id: AiConfig['providerId'];
+  readonly id: AiConfig["providerId"];
   test(config: AiConfig): Promise<string[]>;
-  chat(config: AiConfig, messages: ProviderMessage[], maxOutputTokens: number): Promise<ProviderChatResult>;
+  chat(
+    config: AiConfig,
+    messages: ProviderMessage[],
+    maxOutputTokens: number,
+  ): Promise<ProviderChatResult>;
   stream(
     config: AiConfig,
     messages: ProviderMessage[],
@@ -20,7 +27,7 @@ export interface AiProviderAdapter {
     signal: AbortSignal,
     onDelta: (delta: ProviderStreamDelta) => void,
     options?: {
-      toolChoice?: 'auto' | 'none' | 'required';
+      toolChoice?: "auto" | "none" | "required";
       tools?: Array<Record<string, unknown>>;
     },
   ): Promise<ProviderChatResult>;
@@ -32,7 +39,7 @@ export async function fetchProviderJson(
   init?: RequestInit,
 ): Promise<unknown> {
   if (!config.apiKey) {
-    throw new Error('请先在 PDFPal 的“设置”中配置 API Key。');
+    throw new Error("请先在 PDFPal 的“设置”中配置 API Key。");
   }
 
   const baseUrl = normalizeAiBaseUrl(config.baseUrl, config.providerId);
@@ -40,14 +47,16 @@ export async function fetchProviderJson(
     ...init,
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...init?.headers,
     },
   });
   const payload = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(getProviderError(payload, `AI 请求失败：HTTP ${response.status}`));
+    throw new Error(
+      getProviderError(payload, `AI 请求失败：HTTP ${response.status}`),
+    );
   }
 
   return payload;
@@ -56,10 +65,13 @@ export async function fetchProviderJson(
 export const providerRegistry = new AiProviderRegistry();
 
 providerRegistry.register(new DeepSeekProviderAdapter());
-providerRegistry.register(new DeepSeekProviderAdapter('openai-compatible'));
+providerRegistry.register(new DeepSeekProviderAdapter("openai-compatible"));
 
-export const providerAdapters: Partial<Record<AiConfig['providerId'], AiProviderAdapter>> =
-  new Proxy({}, {
+export const providerAdapters: Partial<
+  Record<AiConfig["providerId"], AiProviderAdapter>
+> = new Proxy(
+  {},
+  {
     get: (_target, providerId: string) => {
       try {
         return providerRegistry.get(providerId);
@@ -67,10 +79,12 @@ export const providerAdapters: Partial<Record<AiConfig['providerId'], AiProvider
         return undefined;
       }
     },
-  });
+  },
+);
 
 export function getProviderAdapter(config: AiConfig): AiProviderAdapter {
   const adapter = providerAdapters[config.providerId];
-  if (!adapter) throw new Error('当前模型供应商尚未接入，请在设置中选择已支持的供应商。');
+  if (!adapter)
+    throw new Error("当前模型供应商尚未接入，请在设置中选择已支持的供应商。");
   return adapter;
 }

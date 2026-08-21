@@ -1,45 +1,92 @@
 import { type PDFDocumentProxy } from "pdfjs-dist";
 
+import {
+  isVisionAiConfigured,
+  type AiImageAttachment,
+} from "../../../../shared/ai";
 
+import {
+  createDocumentAgentId,
+  type DocumentAgentRecord,
+  type DocumentChunk,
+  type DocumentOutlineItem,
+} from "../../../../shared/document-agent";
 
+import {
+  getDocumentAgentRecord,
+  getDocumentChunks,
+} from "../../../../entrypoints/viewer/document-agent-store";
 
+import {
+  buildDocumentRetrievalContext,
+  initializeDocumentKnowledge,
+} from "../../../../entrypoints/viewer/document-agent-runtime";
 
-
-import { isVisionAiConfigured, type AiImageAttachment } from "../../../../shared/ai";
-
-import { createDocumentAgentId, type DocumentAgentRecord, type DocumentChunk, type DocumentOutlineItem } from "../../../../shared/document-agent";
-
-
-import { getDocumentAgentRecord, getDocumentChunks } from "../../../../entrypoints/viewer/document-agent-store";
-
-import { buildDocumentRetrievalContext, initializeDocumentKnowledge } from "../../../../entrypoints/viewer/document-agent-runtime";
-
-
-import { extractPageText, getCurrentChapterContext, getOutlinePageItems, getSummaryLabels, renderSummaryPoints, setSummaryState, updateSummaryMetadata } from '../../features/translation/public';
-import { getPdfFingerprint } from '../../features/annotations/public';
-import { setStatus } from '../../features/recent-files/public';
-import { documentKnowledgeCache, documentKnowledgeTasks, pdfDocument, pdfViewer, sourceName } from '../../app/viewer-state';
-import { parseAiList, requestAiContent, updateChatActivity } from '../../shared-ui/markdown/markdown-renderer';
-import { MAX_SUMMARY_SOURCE_LENGTH, SUMMARY_NOTES_STORAGE_KEY, activeAssistantView, activeSummaryScope, aiConfig, currentSummaryContext, getViewerSelectionText, lastSummaryPoints, lastSummaryRequestKey, selectedTextForAi, summaryAbortController, summaryGenerationTimer, visionAiConfig } from '../../core/pdf-reader/public';
-import { inspectChatImageWithVision } from '../../features/assistant/public';
-import { getDisplayFileName } from '../../core/pdf-reader/public';
-import { summaryPanelElement, summaryScopeButtons } from '../../app/viewer-elements';
-import { refreshKnowledgeBaseIfOpen } from '../../features/knowledge-base/public';
-import type { SavedSummaryNote, SummaryContext, SummaryScope } from '../../core/pdf-reader/public';
-import { readJsonValue, writeJsonValue } from '../../../platform/storage/browser-json-repository';
-
-
+import {
+  extractPageText,
+  getCurrentChapterContext,
+  getOutlinePageItems,
+  getSummaryLabels,
+  renderSummaryPoints,
+  setSummaryState,
+  updateSummaryMetadata,
+} from "../../features/translation/public";
+import { getPdfFingerprint } from "../../features/annotations/public";
+import { setStatus } from "../../features/recent-files/public";
+import {
+  documentKnowledgeCache,
+  documentKnowledgeTasks,
+  pdfDocument,
+  pdfViewer,
+  sourceName,
+} from "../../app/viewer-state";
+import {
+  parseAiList,
+  requestAiContent,
+  updateChatActivity,
+} from "../../shared-ui/markdown/markdown-renderer";
+import {
+  MAX_SUMMARY_SOURCE_LENGTH,
+  SUMMARY_NOTES_STORAGE_KEY,
+  activeAssistantView,
+  activeSummaryScope,
+  aiConfig,
+  currentSummaryContext,
+  getViewerSelectionText,
+  lastSummaryPoints,
+  lastSummaryRequestKey,
+  selectedTextForAi,
+  summaryAbortController,
+  summaryGenerationTimer,
+  visionAiConfig,
+} from "../../core/pdf-reader/public";
+import { inspectChatImageWithVision } from "../../features/assistant/public";
+import { getDisplayFileName } from "../../core/pdf-reader/public";
+import {
+  summaryPanelElement,
+  summaryScopeButtons,
+} from "../../app/viewer-elements";
+import { refreshKnowledgeBaseIfOpen } from "../../features/knowledge-base/public";
+import type {
+  SavedSummaryNote,
+  SummaryContext,
+  SummaryScope,
+} from "../../core/pdf-reader/public";
+import {
+  readJsonValue,
+  writeJsonValue,
+} from "../../../platform/storage/browser-json-repository";
 
 export function getDocumentAgentOutline(): DocumentOutlineItem[] {
   return getOutlinePageItems().map((item) => ({ ...item, depth: 0 }));
 }
 
-
 export async function ensureDocumentKnowledge(
   documentProxy: PDFDocumentProxy,
   assistantMessage: HTMLElement,
 ): Promise<{ record: DocumentAgentRecord; chunks: DocumentChunk[] }> {
-  const fingerprint = getPdfFingerprint(documentProxy) || sourceName.value || "local-pdf";
+  const fingerprint =
+    getPdfFingerprint(documentProxy) || sourceName.value || "local-pdf";
   const documentId = createDocumentAgentId(
     fingerprint,
     sourceName.value || "未命名 PDF",
@@ -75,17 +122,25 @@ export async function ensureDocumentKnowledge(
       model: aiConfig.value.model,
       // 首次只建立本地索引；不在打开文档时额外消耗模型 Token 生成全文摘要。
       hasApiKey: false,
-      extractPageText: (pageNumber) => extractPageText(documentProxy, pageNumber),
+      extractPageText: (pageNumber) =>
+        extractPageText(documentProxy, pageNumber),
       getOutline: getDocumentAgentOutline,
       requestAi: requestAiContent,
       isCurrent: () => pdfDocument.value === documentProxy,
-      onStatus: (status) => updateChatActivity(
-        assistantMessage,
-        "document-index",
-        status.text,
-        status.status === "error" ? "error" : status.status === "indexed" || status.status === "ready" || status.status === "needs-api-key" ? "done" : "active",
-        status.total ? `${status.completed ?? 0}/${status.total}` : "",
-      ),
+      onStatus: (status) =>
+        updateChatActivity(
+          assistantMessage,
+          "document-index",
+          status.text,
+          status.status === "error"
+            ? "error"
+            : status.status === "indexed" ||
+                status.status === "ready" ||
+                status.status === "needs-api-key"
+              ? "done"
+              : "active",
+          status.total ? `${status.completed ?? 0}/${status.total}` : "",
+        ),
     });
     const result = { record: initialized.record, chunks: initialized.chunks };
     documentKnowledgeCache.set(documentId, result);
@@ -98,7 +153,6 @@ export async function ensureDocumentKnowledge(
     documentKnowledgeTasks.delete(documentId);
   }
 }
-
 
 export async function inspectPdfPageWithVision(
   documentProxy: PDFDocumentProxy,
@@ -124,14 +178,15 @@ export async function inspectPdfPageWithVision(
     height: canvas.height,
   };
   const content = await inspectChatImageWithVision(attachment, question, {
-    documentName: sourceName.value ? getDisplayFileName(sourceName.value) : undefined,
+    documentName: sourceName.value
+      ? getDisplayFileName(sourceName.value)
+      : undefined,
     pageNumber,
     totalPages: documentProxy.numPages,
     readingMode: "paper",
   });
   return { content, model: visionAiConfig.value.model, cached: false };
 }
-
 
 export async function buildAgentEvidence(
   question: string,
@@ -141,9 +196,20 @@ export async function buildAgentEvidence(
   userImageAttached: boolean,
   assistantMessage: HTMLElement,
 ): Promise<Awaited<ReturnType<typeof buildDocumentRetrievalContext>>> {
-  const knowledge = await ensureDocumentKnowledge(documentProxy, assistantMessage);
-  updateChatActivity(assistantMessage, "agent-plan", "Agent 正在规划工具 · document", "active");
-  const currentPageText = await extractPageText(documentProxy, pageNumber).catch(() => "");
+  const knowledge = await ensureDocumentKnowledge(
+    documentProxy,
+    assistantMessage,
+  );
+  updateChatActivity(
+    assistantMessage,
+    "agent-plan",
+    "Agent 正在规划工具 · document",
+    "active",
+  );
+  const currentPageText = await extractPageText(
+    documentProxy,
+    pageNumber,
+  ).catch(() => "");
   const result = await buildDocumentRetrievalContext({
     question,
     currentPage: pageNumber,
@@ -159,24 +225,25 @@ export async function buildAgentEvidence(
     requestAi: requestAiContent,
     hasVisionModel: isVisionAiConfigured(visionAiConfig.value),
     userImageAttached,
-    inspectPageImage: (targetPage, targetQuestion) => inspectPdfPageWithVision(
-      documentProxy,
-      targetPage,
-      targetQuestion,
-    ),
+    inspectPageImage: (targetPage, targetQuestion) =>
+      inspectPdfPageWithVision(documentProxy, targetPage, targetQuestion),
   });
-  console.groupCollapsed(`[PDFPal Agent] 证据检索完成 · ${result.planningRounds} 轮`);
+  console.groupCollapsed(
+    `[PDFPal Agent] 证据检索完成 · ${result.planningRounds} 轮`,
+  );
   console.log("规划原因", result.plannerReason);
   console.log("工具调用结果", result.toolResults);
   console.log("送入最终回答的证据", result.text);
   console.groupEnd();
-  result.toolResults.forEach((tool, index) => updateChatActivity(
-    assistantMessage,
-    `document-tool-${index}`,
-    `Agent 已完成 · ${tool.name}`,
-    "done",
-    tool.pages.length ? `第 ${tool.pages.join("、")} 页` : tool.name,
-  ));
+  result.toolResults.forEach((tool, index) =>
+    updateChatActivity(
+      assistantMessage,
+      `document-tool-${index}`,
+      `Agent 已完成 · ${tool.name}`,
+      "done",
+      tool.pages.length ? `第 ${tool.pages.join("、")} 页` : tool.name,
+    ),
+  );
   updateChatActivity(
     assistantMessage,
     "agent-plan",
@@ -186,7 +253,6 @@ export async function buildAgentEvidence(
   );
   return result;
 }
-
 
 export async function buildSummaryContext(
   scope: SummaryScope,
@@ -233,14 +299,12 @@ export async function buildSummaryContext(
   return { ...labels, text };
 }
 
-
 export function cancelPendingSummaryGeneration(): void {
   if (summaryGenerationTimer.value !== null) {
     clearTimeout(summaryGenerationTimer.value);
     summaryGenerationTimer.value = null;
   }
 }
-
 
 export function scheduleSummaryGeneration(delay = 350): void {
   cancelPendingSummaryGeneration();
@@ -250,7 +314,6 @@ export function scheduleSummaryGeneration(delay = 350): void {
       void generateSummary();
   }, delay);
 }
-
 
 export function setActiveSummaryScope(scope: SummaryScope): void {
   activeSummaryScope.value = scope;
@@ -266,7 +329,6 @@ export function setActiveSummaryScope(scope: SummaryScope): void {
   updateSummaryMetadata();
   scheduleSummaryGeneration(0);
 }
-
 
 export async function generateSummary(force = false): Promise<void> {
   if (!pdfDocument.value) {
@@ -318,7 +380,9 @@ export async function generateSummary(force = false): Promise<void> {
         },
       ],
       {
-        documentName: sourceName.value ? getDisplayFileName(sourceName.value) : undefined,
+        documentName: sourceName.value
+          ? getDisplayFileName(sourceName.value)
+          : undefined,
         pageNumber: Math.max(1, pdfViewer.currentPageNumber || 1),
       },
     );
@@ -338,16 +402,15 @@ export async function generateSummary(force = false): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     setSummaryState(`总结失败：${message}`, true);
   } finally {
-    if (summaryAbortController.value === controller) summaryAbortController.value = null;
+    if (summaryAbortController.value === controller)
+      summaryAbortController.value = null;
   }
 }
-
 
 export function readSavedSummaryNotes(): SavedSummaryNote[] {
   const value = readJsonValue<unknown>(SUMMARY_NOTES_STORAGE_KEY, []);
   return Array.isArray(value) ? value : [];
 }
-
 
 export function saveCurrentSummaryAsNote(): void {
   if (!currentSummaryContext.value || lastSummaryPoints.value.length === 0) {
@@ -370,7 +433,6 @@ export function saveCurrentSummaryAsNote(): void {
   refreshKnowledgeBaseIfOpen();
   setStatus(`已将 ${lastSummaryPoints.value.length} 条总结要点保存为笔记。`);
 }
-
 
 export function resetSummaryState(): void {
   cancelPendingSummaryGeneration();

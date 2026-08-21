@@ -1,35 +1,29 @@
 import type { AiConversationMessage } from "../../../shared/ai";
 import type { ResolvedReadingMode } from "../../../shared/reading-mode";
 
-
-
 export const DOCUMENT_AGENT_SCHEMA_VERSION = 1;
 
 export const DOCUMENT_AGENT_INDEX_VERSION = 1;
 
-
 export type DocumentAgentProcessingStatus =
-  | 'new'
-  | 'extracting'
-  | 'indexed'
-  | 'analyzing'
-  | 'ready'
-  | 'needs-api-key'
-  | 'error';
-
+  | "new"
+  | "extracting"
+  | "indexed"
+  | "analyzing"
+  | "ready"
+  | "needs-api-key"
+  | "error";
 
 export interface DocumentPageText {
   pageNumber: number;
   text: string;
 }
 
-
 export interface DocumentOutlineItem {
   title: string;
   pageNumber: number;
   depth: number;
 }
-
 
 export interface DocumentChunk {
   id: string;
@@ -43,14 +37,12 @@ export interface DocumentChunk {
   keywords?: string[];
 }
 
-
 export interface DocumentSectionProfile {
   title: string;
   startPage: number;
   endPage: number;
   summary: string;
 }
-
 
 export interface DocumentProfile {
   oneSentenceSummary: string;
@@ -63,7 +55,6 @@ export interface DocumentProfile {
   sections: DocumentSectionProfile[];
   chunkSummaries: string[];
 }
-
 
 export interface DocumentAgentRecord {
   id: string;
@@ -81,7 +72,6 @@ export interface DocumentAgentRecord {
   updatedAt: number;
 }
 
-
 export interface DocumentAgentSession {
   id: string;
   documentId: string;
@@ -93,11 +83,10 @@ export interface DocumentAgentSession {
   updatedAt: number;
 }
 
-
 export interface DocumentAgentStrategy {
   id: ResolvedReadingMode;
   autoAnalyzeWholeDocument: boolean;
-  knowledgeBoundary: 'whole-document' | 'current-position';
+  knowledgeBoundary: "whole-document" | "current-position";
   targetChunkCharacters: number;
   chunkOverlapCharacters: number;
   chunkPages(pages: DocumentPageText[], documentId: string): DocumentChunk[];

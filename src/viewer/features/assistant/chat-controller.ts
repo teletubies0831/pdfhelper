@@ -1,23 +1,27 @@
-
-
-
-
-
-
-
 import { isVisionAiConfigured } from "../../../../shared/ai";
-
 
 import { getAgentToolDefinitionByApiName } from "../../../../shared/agent-tools";
 
-
-
-
-
-
-import { aiConfig, chatHistory, chatRequestPending, pendingChatImages, resolvedReadingMode, selectedTextForAi, selectedTextPageNumber, setDeepSeekSettingsOpen, visionAiConfig } from "../../core/pdf-reader/public";
+import {
+  aiConfig,
+  chatHistory,
+  chatRequestPending,
+  pendingChatImages,
+  resolvedReadingMode,
+  selectedTextForAi,
+  selectedTextPageNumber,
+  setDeepSeekSettingsOpen,
+  visionAiConfig,
+} from "../../core/pdf-reader/public";
 import { updateChatActivity } from "../../shared-ui/markdown/markdown-renderer";
-import { chatImageButton, chatInput, chatSendButton, clearChatButton, deepSeekSettingsStatus, visionSettingsStatus } from "../../app/viewer-elements";
+import {
+  chatImageButton,
+  chatInput,
+  chatSendButton,
+  clearChatButton,
+  deepSeekSettingsStatus,
+  visionSettingsStatus,
+} from "../../app/viewer-elements";
 
 import { pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
 
@@ -25,14 +29,28 @@ import { attachChatSaveAction } from "../knowledge-base/public";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { validatePdfCitations } from "../translation/public";
 import { buildAgentEvidence } from "../../services/document-agent/viewer-document-agent";
-import { clearPendingChatImages, inspectChatImageWithVision } from './library-tools';
-import { appendChatMessage, failActiveChatActivities, updateChatMessage, updateChatReasoning } from './chat-view';
-import { prepareChatRequestHistory, queueChatConversationPersistence, requestAiStream } from './chat-session';
-import { extractAndStoreLongTermMemories, loadLongTermMemoryContext, persistImmediateExplicitMemories, runKnowledgeAgentTools } from './memory-controller';
-import type { ImmediateMemoryWriteResult } from './memory-controller';
-
-
-
+import {
+  clearPendingChatImages,
+  inspectChatImageWithVision,
+} from "./library-tools";
+import {
+  appendChatMessage,
+  failActiveChatActivities,
+  updateChatMessage,
+  updateChatReasoning,
+} from "./chat-view";
+import {
+  prepareChatRequestHistory,
+  queueChatConversationPersistence,
+  requestAiStream,
+} from "./chat-session";
+import {
+  extractAndStoreLongTermMemories,
+  loadLongTermMemoryContext,
+  persistImmediateExplicitMemories,
+  runKnowledgeAgentTools,
+} from "./memory-controller";
+import type { ImmediateMemoryWriteResult } from "./memory-controller";
 
 export async function sendChatMessage(): Promise<void> {
   const content = chatInput.value.trim();
@@ -119,13 +137,13 @@ export async function sendChatMessage(): Promise<void> {
     );
     const agentEvidencePromise = documentAtRequestStart
       ? buildAgentEvidence(
-        userPrompt,
-        documentAtRequestStart,
-        pageNumber,
-        requestImages.length === 0 ? selectedTextForAi.value : "",
-        requestImages.length > 0,
-        assistantMessage,
-      )
+          userPrompt,
+          documentAtRequestStart,
+          pageNumber,
+          requestImages.length === 0 ? selectedTextForAi.value : "",
+          requestImages.length > 0,
+          assistantMessage,
+        )
       : Promise.resolve(null);
     const preparedChatHistoryPromise = prepareChatRequestHistory(
       assistantMessage,
@@ -195,7 +213,13 @@ export async function sendChatMessage(): Promise<void> {
       }
     });
     // 文档工具规划、截图分析、会话压缩和长期记忆读取互不依赖，全部并行执行。
-    const [visionResults, agentEvidence, preparedChatHistory, longTermMemoryContext, knowledgeAgentResult] = await Promise.all([
+    const [
+      visionResults,
+      agentEvidence,
+      preparedChatHistory,
+      longTermMemoryContext,
+      knowledgeAgentResult,
+    ] = await Promise.all([
       Promise.allSettled(visionTasks),
       agentEvidencePromise,
       preparedChatHistoryPromise,
@@ -279,10 +303,10 @@ export async function sendChatMessage(): Promise<void> {
         imageAnalysis: imageAnalyses.join("\n\n") || undefined,
         conversationSummary: preparedChatHistory.summary,
         longTermMemory: longTermMemoryContext.text || undefined,
-        memoryOperationResult: [
-          immediateMemoryResult.contextText,
-          knowledgeAgentResult.contextText,
-        ].filter(Boolean).join("\n\n") || undefined,
+        memoryOperationResult:
+          [immediateMemoryResult.contextText, knowledgeAgentResult.contextText]
+            .filter(Boolean)
+            .join("\n\n") || undefined,
         completedTools: [
           ...immediateMemoryResult.completedTools,
           ...knowledgeAgentResult.completedTools,
@@ -291,7 +315,9 @@ export async function sendChatMessage(): Promise<void> {
             arguments: { pages: tool.pages, label: tool.label },
           })) ?? []),
         ],
-        readingMode: documentAtRequestStart ? "paper" : resolvedReadingMode.value,
+        readingMode: documentAtRequestStart
+          ? "paper"
+          : resolvedReadingMode.value,
       },
       (delta) => {
         if (delta.content) streamedContent += delta.content;
@@ -320,7 +346,9 @@ export async function sendChatMessage(): Promise<void> {
             updateChatActivity(
               assistantMessage,
               `native-tool-${result.toolCallId}`,
-              result.ok ? `工具已完成 · ${result.name}` : `工具失败 · ${result.name}`,
+              result.ok
+                ? `工具已完成 · ${result.name}`
+                : `工具失败 · ${result.name}`,
               result.ok ? "done" : "error",
               result.ok ? "" : result.content.slice(0, 160),
             );
@@ -408,11 +436,9 @@ export async function sendChatMessage(): Promise<void> {
       `${failureMessage.slice(0, 180)}${failureMessage.length > 180 ? "…" : ""}`,
     );
     updateChatReasoning(assistantMessage, streamedReasoningContent, false);
-    updateChatMessage(
-      assistantMessage,
-      `请求失败：${failureMessage}`,
-      { error: true },
-    );
+    updateChatMessage(assistantMessage, `请求失败：${failureMessage}`, {
+      error: true,
+    });
   } finally {
     chatRequestPending.value = false;
     chatInput.disabled = false;
