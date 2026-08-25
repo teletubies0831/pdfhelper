@@ -1,6 +1,6 @@
-import { isVisionAiConfigured } from "../../../../shared/ai";
+import { isVisionAiConfigured, type AiEvidenceSource } from "../../../modules/ai/public";
 
-import { getAgentToolDefinitionByApiName } from "../../../../shared/agent-tools";
+import { getAgentToolByProtocolName } from "../../../modules/ai/public";
 
 import {
   aiConfig,
@@ -25,17 +25,16 @@ import {
 
 import { pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
 
-import { attachChatSaveAction } from "../knowledge-base/public";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { validatePdfCitations } from "../translation/public";
-import { buildAgentEvidence } from "../../services/document-agent/viewer-document-agent";
 import {
   clearPendingChatImages,
   inspectChatImageWithVision,
-} from "./library-tools";
+} from "./chat-image-service";
 import {
   appendChatMessage,
   failActiveChatActivities,
+  renderChatEvidenceSources,
   updateChatMessage,
   updateChatReasoning,
 } from "./chat-view";
@@ -44,13 +43,8 @@ import {
   queueChatConversationPersistence,
   requestAiStream,
 } from "./chat-session";
-import {
-  extractAndStoreLongTermMemories,
-  loadLongTermMemoryContext,
-  persistImmediateExplicitMemories,
-  runKnowledgeAgentTools,
-} from "./memory-controller";
-import type { ImmediateMemoryWriteResult } from "./memory-controller";
+import { loadLongTermMemoryContext } from "./memory-controller";
+import { mergeEvidenceSources, readKnowledgeEvidenceSources } from "./tool-evidence";
 
 export async function sendChatMessage(): Promise<void> {
   const content = chatInput.value.trim();
@@ -96,20 +90,14 @@ export async function sendChatMessage(): Promise<void> {
     "context",
     requestImages.length > 0
       ? "正在准备截图分析"
-      : documentAtRequestStart
-        ? "正在准备 Agent 文档检索"
-        : "正在准备对话上下文",
+      : "正在准备对话与工具环境",
     "active",
   );
   let streamedContent = "";
   let streamedReasoningContent = "";
   let renderFrame = 0;
   let modelActivityStarted = false;
-  let immediateMemoryResult: ImmediateMemoryWriteResult = {
-    stored: [],
-    contextText: "",
-    completedTools: [],
-  };
+  let evidenceSources: AiEvidenceSource[] = [];
 
   const flushStreamedContent = (): void => {
     renderFrame = 0;
@@ -118,11 +106,6 @@ export async function sendChatMessage(): Promise<void> {
   };
 
   try {
-    immediateMemoryResult = await persistImmediateExplicitMemories(
-      userPrompt,
-      documentAtRequestStart,
-      assistantMessage,
-    );
     const pageNumber = Math.max(
       1,
       selectedTextPageNumber.value || pdfViewer.currentPageNumber || 1,
@@ -130,21 +113,6 @@ export async function sendChatMessage(): Promise<void> {
     const longTermMemoryPromise = loadLongTermMemoryContext(
       documentAtRequestStart,
     );
-    const knowledgeAgentPromise = runKnowledgeAgentTools(
-      userPrompt,
-      documentAtRequestStart,
-      assistantMessage,
-    );
-    const agentEvidencePromise = documentAtRequestStart
-      ? buildAgentEvidence(
-          userPrompt,
-          documentAtRequestStart,
-          pageNumber,
-          requestImages.length === 0 ? selectedTextForAi.value : "",
-          requestImages.length > 0,
-          assistantMessage,
-        )
-      : Promise.resolve(null);
     const preparedChatHistoryPromise = prepareChatRequestHistory(
       assistantMessage,
       documentAtRequestStart,
@@ -212,19 +180,15 @@ export async function sendChatMessage(): Promise<void> {
         throw error;
       }
     });
-    // 文档工具规划、截图分析、会话压缩和长期记忆读取互不依赖，全部并行执行。
+    // 这里只准备被动上下文。所有 MCP 工具均由主模型在原生工具循环中按需调用。
     const [
       visionResults,
-      agentEvidence,
       preparedChatHistory,
       longTermMemoryContext,
-      knowledgeAgentResult,
     ] = await Promise.all([
       Promise.allSettled(visionTasks),
-      agentEvidencePromise,
       preparedChatHistoryPromise,
       longTermMemoryPromise,
-      knowledgeAgentPromise,
     ]);
     if (pdfDocument.value !== documentAtRequestStart) {
       throw new Error("PDF 已切换，请在新文档中重新发送问题。");
@@ -246,14 +210,10 @@ export async function sendChatMessage(): Promise<void> {
       assistantMessage,
       "context",
       requestImages.length > 0
-        ? "截图与 Agent 证据已准备"
-        : documentAtRequestStart
-          ? "Agent 文档证据已准备"
-          : "对话上下文已准备",
+        ? "截图与工具环境已准备"
+        : "对话与工具环境已准备",
       "done",
-      agentEvidence?.sourcePages.length
-        ? `证据页：${agentEvidence.sourcePages.join("、")}`
-        : "",
+      "",
     );
     const requestHistory = preparedChatHistory.messages.map((message) => ({
       role: message.role,
@@ -284,18 +244,12 @@ export async function sendChatMessage(): Promise<void> {
     const response = await requestAiStream(
       requestHistory,
       {
+        userMessage: userPrompt,
         documentName: documentNameAtRequestStart
           ? getDisplayFileName(documentNameAtRequestStart)
           : undefined,
         pageNumber,
         totalPages: documentAtRequestStart?.numPages,
-        agentEvidence: agentEvidence?.text || undefined,
-        sourceScope: agentEvidence ? "document" : undefined,
-        sourceLabel: agentEvidence ? "Agent 按需检索证据" : undefined,
-        sourcePages: agentEvidence?.sourcePages,
-        contextNote: agentEvidence
-          ? `文档内容由 Agent 经过 ${agentEvidence.planningRounds} 轮规划、按需调用工具获得；未向本轮模型注入整篇 PDF。`
-          : undefined,
         selectedText:
           requestImages.length === 0
             ? selectedTextForAi.value || undefined
@@ -303,18 +257,6 @@ export async function sendChatMessage(): Promise<void> {
         imageAnalysis: imageAnalyses.join("\n\n") || undefined,
         conversationSummary: preparedChatHistory.summary,
         longTermMemory: longTermMemoryContext.text || undefined,
-        memoryOperationResult:
-          [immediateMemoryResult.contextText, knowledgeAgentResult.contextText]
-            .filter(Boolean)
-            .join("\n\n") || undefined,
-        completedTools: [
-          ...immediateMemoryResult.completedTools,
-          ...knowledgeAgentResult.completedTools,
-          ...(agentEvidence?.toolResults.map((tool) => ({
-            name: tool.name,
-            arguments: { pages: tool.pages, label: tool.label },
-          })) ?? []),
-        ],
         readingMode: documentAtRequestStart
           ? "paper"
           : resolvedReadingMode.value,
@@ -328,7 +270,7 @@ export async function sendChatMessage(): Promise<void> {
             updateChatActivity(
               assistantMessage,
               `native-tool-${call.id}`,
-              `Agent 正在调用工具 · ${getAgentToolDefinitionByApiName(call.name)?.label ?? call.name}`,
+              `Agent 正在调用工具 · ${getAgentToolByProtocolName(call.name)?.label ?? call.name}`,
               "active",
               call.name,
             );
@@ -343,6 +285,13 @@ export async function sendChatMessage(): Promise<void> {
         }
         if (delta.toolResults?.length) {
           for (const result of delta.toolResults) {
+            if (result.ok && result.name === "library.searchPapers") {
+              evidenceSources = mergeEvidenceSources(
+                evidenceSources,
+                readKnowledgeEvidenceSources(result.content),
+              );
+              renderChatEvidenceSources(assistantMessage, evidenceSources);
+            }
             updateChatActivity(
               assistantMessage,
               `native-tool-${result.toolCallId}`,
@@ -406,27 +355,12 @@ export async function sendChatMessage(): Promise<void> {
     }
     updateChatReasoning(assistantMessage, streamedReasoningContent, false);
     updateChatMessage(assistantMessage, streamedContent, { streaming: false });
-    chatHistory.value.push({ role: "assistant", content: streamedContent });
+    chatHistory.value.push({
+      role: "assistant",
+      content: streamedContent,
+      evidenceSources,
+    });
     void queueChatConversationPersistence(documentAtRequestStart);
-    if (immediateMemoryResult.stored.length === 0) {
-      void extractAndStoreLongTermMemories(
-        userPrompt,
-        streamedContent,
-        documentAtRequestStart,
-        documentNameAtRequestStart,
-        response.requestId,
-        assistantMessage,
-      );
-    }
-    attachChatSaveAction(
-      assistantMessage,
-      userPrompt,
-      streamedContent,
-      documentNameAtRequestStart
-        ? getDisplayFileName(documentNameAtRequestStart)
-        : "未关联文档",
-      pageNumber,
-    );
   } catch (error) {
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
     const failureMessage =

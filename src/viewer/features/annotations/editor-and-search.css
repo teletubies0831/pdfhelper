@@ -23,6 +23,53 @@
   cursor: move;
 }
 
+/* Ink is a fixed page mark in PDFPal. It can only receive pointer events while
+   PDF.js is actively collecting a new stroke; completed ink cannot be selected,
+   dragged, resized, or given PDF.js' blue selection outline. */
+.pdfViewer .annotationEditorLayer .inkEditor:not(.editing) {
+  border: 0 !important;
+  outline: 0 !important;
+  cursor: default !important;
+  pointer-events: none !important;
+}
+
+.pdfViewer .annotationEditorLayer .inkEditor:not(.editing)::before,
+.pdfViewer .annotationEditorLayer .inkEditor:not(.editing) > .resizers {
+  display: none !important;
+}
+
+.pdfViewer .annotationEditorLayer.inkEditing .inkEditor.editing,
+.pdfViewer .annotationEditorLayer.inkEditing .inkEditor.editing .inkEditorCanvas {
+  pointer-events: auto !important;
+}
+
+.pdfViewer.pdf-helper-ink-eraser-mode,
+.pdfViewer.pdf-helper-ink-eraser-mode .page,
+.pdfViewer.pdf-helper-ink-eraser-mode :is(.canvasWrapper, .textLayer, .annotationLayer, .annotationEditorLayer) {
+  cursor: none !important;
+}
+
+.pdf-helper-ink-eraser-cursor {
+  position: fixed;
+  z-index: 2147483646;
+  top: 0;
+  left: 0;
+  width: var(--pdf-helper-eraser-diameter, 18px);
+  height: var(--pdf-helper-eraser-diameter, 18px);
+  box-sizing: border-box;
+  border: 1.5px solid #1677ff;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 28%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 85%);
+  pointer-events: none;
+  transform: translate3d(-100px, -100px, 0);
+  will-change: transform;
+}
+
+.pdf-helper-ink-eraser-cursor[hidden] {
+  display: none;
+}
+
 /* PDF.js search must only paint the match background. If its transparent text
    becomes visible, it sits above the canvas glyphs and looks like a font swap. */
 .pdfViewer .textLayer .highlight {

@@ -464,6 +464,12 @@
   font-size: 34px;
 }
 
+.knowledge-list-empty > img {
+  width: 96px;
+  height: 64px;
+  object-fit: contain;
+}
+
 .knowledge-list-empty strong {
   margin-top: 8px;
   color: #526176;

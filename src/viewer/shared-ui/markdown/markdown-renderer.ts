@@ -5,7 +5,7 @@ import katex from "katex";
 import { marked } from "marked";
 
 import { browser } from "wxt/browser";
-import { type AiConfig, type AiConversationMessage, type AiRuntimeResponse, type AiStreamStartMessage } from "../../../../shared/ai";
+import { type AiConfig, type AiConversationMessage, type AiRuntimeResponse, type AiStreamStartMessage } from "../../../modules/ai/public";
 
 
 
@@ -130,20 +130,37 @@ export interface MarkdownMathToken {
 }
 
 
-export interface MarkdownCitationToken {
-  pageNumber: number;
-  quotes: string[];
-}
+export type MarkdownCitationToken =
+  | {
+      kind: "current-document";
+      pageNumber: number;
+      quotes: string[];
+    }
+  | {
+      kind: "library-document";
+      documentId: string;
+      pageNumber: number;
+      endPageNumber: number;
+      quote: string;
+    };
 
 
 // A citation may intentionally contain a full paragraph. Keep one page worth
 // of text available so the click target can resolve and highlight the complete
 // source range instead of forcing the model to cite only a short sentence.
 export const PDF_CITATION_PATTERN_SOURCE = String.raw`\[\[PDF:P(\d{1,5})\|([\s\S]{2,6000}?)\]\]`;
+// Historical/library citations use a document id in addition to the page.
+// The source quote is optional for compatibility with citations saved before
+// cross-document quote rendering was introduced.
+export const LIBRARY_CITATION_PATTERN_SOURCE = String.raw`\[\[(?:PDF|LIBRARY):([^|\]\r\n]{1,200})\|P(\d{1,5})(?:-(\d{1,5}))?(?:\|([\s\S]{2,6000}?))?\]\]`;
 
 
 export function createPdfCitationPattern(): RegExp {
   return new RegExp(PDF_CITATION_PATTERN_SOURCE, "g");
+}
+
+export function createLibraryCitationPattern(): RegExp {
+  return new RegExp(LIBRARY_CITATION_PATTERN_SOURCE, "g");
 }
 
 
@@ -152,16 +169,44 @@ export function protectMarkdownCitations(content: string): {
   tokens: MarkdownCitationToken[];
 } {
   const tokens: MarkdownCitationToken[] = [];
+  const libraryTokenByPlaceholder = new Map<string, MarkdownCitationToken>();
+  let libraryTokenSequence = 0;
+  const contentWithProtectedLibraryCitations = content.replace(
+    createLibraryCitationPattern(),
+    (
+      _match,
+      documentIdValue: string,
+      pageValue: string,
+      endPageValue?: string,
+      quoteValue?: string,
+    ) => {
+      const documentId = documentIdValue.trim();
+      const pageNumber = Number(pageValue);
+      const requestedEndPage = Number(endPageValue || pageValue);
+      const quote = (quoteValue || "").replace(/\s+/g, " ").trim();
+      if (!documentId || !Number.isInteger(pageNumber) || pageNumber < 1) return "";
+      const endPageNumber = Math.max(pageNumber, requestedEndPage || pageNumber);
+      const placeholder = `PDFHELPERLIBRARYCITATION${libraryTokenSequence++}END`;
+      libraryTokenByPlaceholder.set(placeholder, {
+        kind: "library-document",
+        documentId,
+        pageNumber,
+        endPageNumber,
+        quote,
+      });
+      return placeholder;
+    },
+  );
   const output: string[] = [];
   let cursor = 0;
   let previousCitation:
     | { tokenIndex: number; sourceEnd: number }
     | undefined;
 
-  for (const match of content.matchAll(createPdfCitationPattern())) {
+  for (const match of contentWithProtectedLibraryCitations.matchAll(createPdfCitationPattern())) {
     const start = match.index ?? 0;
     const end = start + match[0].length;
-    const gap = content.slice(cursor, start);
+    const gap = contentWithProtectedLibraryCitations.slice(cursor, start);
     output.push(gap);
 
     const pageNumber = Number(match[1]);
@@ -176,15 +221,15 @@ export function protectMarkdownCitations(content: string): {
       ? tokens[previousCitation.tokenIndex]
       : undefined;
     const separator = previousCitation
-      ? content.slice(previousCitation.sourceEnd, start)
+      ? contentWithProtectedLibraryCitations.slice(previousCitation.sourceEnd, start)
       : "";
     const isAdjacentSamePage =
-      Boolean(previousToken) &&
-      previousToken?.pageNumber === pageNumber &&
+      previousToken?.kind === "current-document" &&
+      previousToken.pageNumber === pageNumber &&
       separator.length <= 16 &&
       !/[\p{L}\p{N}]/u.test(separator);
 
-    if (isAdjacentSamePage && previousToken) {
+    if (isAdjacentSamePage && previousToken?.kind === "current-document") {
       const normalizedQuote = normalizeCitationMatchText(quote);
       if (
         !previousToken.quotes.some(
@@ -199,15 +244,27 @@ export function protectMarkdownCitations(content: string): {
         sourceEnd: end,
       };
     } else {
-      const tokenIndex = tokens.push({ pageNumber, quotes: [quote] }) - 1;
+      const tokenIndex = tokens.push({
+        kind: "current-document",
+        pageNumber,
+        quotes: [quote],
+      }) - 1;
       output.push(`PDFHELPERCITATIONTOKEN${tokenIndex}END`);
       previousCitation = { tokenIndex, sourceEnd: end };
     }
     cursor = end;
   }
 
-  output.push(content.slice(cursor));
-  return { markdown: output.join(""), tokens };
+  output.push(contentWithProtectedLibraryCitations.slice(cursor));
+  let markdown = output.join("");
+  for (const [placeholder, token] of libraryTokenByPlaceholder) {
+    const tokenIndex = tokens.push(token) - 1;
+    markdown = markdown.replace(
+      placeholder,
+      `PDFHELPERCITATIONTOKEN${tokenIndex}END`,
+    );
+  }
+  return { markdown, tokens };
 }
 
 
@@ -237,17 +294,32 @@ export function restoreMarkdownCitations(
         citation.type = "button";
         citation.className = "pdf-source-citation";
         citation.dataset.pdfPage = String(token.pageNumber);
-        citation.dataset.pdfQuote = token.quotes[0] ?? "";
-        citation.dataset.pdfQuotes = JSON.stringify(token.quotes);
-        citation.dataset.citationTooltip =
-          token.quotes.length > 1
-            ? `点击跳转到第 ${token.pageNumber} 页并高亮 ${token.quotes.length} 处原文`
-            : `点击跳转到第 ${token.pageNumber} 页：${(token.quotes[0] ?? "").slice(0, 88)}${(token.quotes[0]?.length ?? 0) > 88 ? "…" : ""}`;
-        citation.setAttribute("aria-label", citation.dataset.citationTooltip);
-        citation.textContent =
-          token.quotes.length > 1
-            ? `第 ${token.pageNumber} 页 · 查看 ${token.quotes.length} 处原文`
-            : `第 ${token.pageNumber} 页 · 查看原文`;
+        if (token.kind === "library-document") {
+          citation.classList.add("library-source-citation");
+          citation.dataset.pdfDocumentId = token.documentId;
+          citation.dataset.pdfEndPage = String(token.endPageNumber);
+          citation.dataset.pdfQuote = token.quote;
+          const pageLabel = token.endPageNumber > token.pageNumber
+            ? `第 ${token.pageNumber}-${token.endPageNumber} 页`
+            : `第 ${token.pageNumber} 页`;
+          citation.dataset.citationTooltip = token.quote
+            ? `${pageLabel}：${token.quote.slice(0, 88)}${token.quote.length > 88 ? "…" : ""}`
+            : `${pageLabel} · 在新标签页查看知识库原文`;
+          citation.setAttribute("aria-label", citation.dataset.citationTooltip);
+          citation.textContent = `${pageLabel} · 查看原文`;
+        } else {
+          citation.dataset.pdfQuote = token.quotes[0] ?? "";
+          citation.dataset.pdfQuotes = JSON.stringify(token.quotes);
+          citation.dataset.citationTooltip =
+            token.quotes.length > 1
+              ? `点击跳转到第 ${token.pageNumber} 页并高亮 ${token.quotes.length} 处原文`
+              : `点击跳转到第 ${token.pageNumber} 页：${(token.quotes[0] ?? "").slice(0, 88)}${(token.quotes[0]?.length ?? 0) > 88 ? "…" : ""}`;
+          citation.setAttribute("aria-label", citation.dataset.citationTooltip);
+          citation.textContent =
+            token.quotes.length > 1
+              ? `第 ${token.pageNumber} 页 · 查看 ${token.quotes.length} 处原文`
+              : `第 ${token.pageNumber} 页 · 查看原文`;
+        }
         fragment.append(citation);
       }
       cursor = start + match[0].length;
@@ -390,7 +462,9 @@ export function renderChatMarkdown(
   const citationResult = renderCitations
     ? protectMarkdownCitations(content)
     : {
-        markdown: content.replace(createPdfCitationPattern(), ""),
+        markdown: content
+          .replace(createPdfCitationPattern(), "")
+          .replace(createLibraryCitationPattern(), ""),
         tokens: [] as MarkdownCitationToken[],
       };
   const mathResult = protectMarkdownMath(citationResult.markdown);

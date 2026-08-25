@@ -3,6 +3,9 @@ packages:
 
 allowBuilds:
   esbuild: true
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false
   spawn-sync: false
 
 patchedDependencies:

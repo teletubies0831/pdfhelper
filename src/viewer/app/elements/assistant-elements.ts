@@ -38,6 +38,22 @@ export const chatSendButton = requiredElement<HTMLButtonElement>("chat-send");
 
 export const clearChatButton = requiredElement<HTMLButtonElement>("clear-chat");
 
+export const clearChatDialog = requiredElement<HTMLDialogElement>(
+  "clear-chat-dialog",
+);
+
+export const clearChatDialogCloseButton = requiredElement<HTMLButtonElement>(
+  "clear-chat-dialog-close",
+);
+
+export const clearChatDialogCancelButton = requiredElement<HTMLButtonElement>(
+  "clear-chat-dialog-cancel",
+);
+
+export const clearChatDialogConfirmButton = requiredElement<HTMLButtonElement>(
+  "clear-chat-dialog-confirm",
+);
+
 export const chatProviderStatus = requiredElement<HTMLElement>("chat-provider-status");
 
 export const aiProviderSelect = requiredElement<HTMLSelectElement>("ai-provider");
@@ -106,6 +122,30 @@ export const settingsPrimaryPanels = Array.from(
 );
 
 export const settingsPages = requiredElement<HTMLElement>("settings-pages");
+
+export const knowledgeRetrievalModeSelect =
+  requiredElement<HTMLSelectElement>("knowledge-retrieval-mode");
+
+export const knowledgeEmbeddingModelSelect =
+  requiredElement<HTMLSelectElement>("knowledge-embedding-model");
+
+export const knowledgeCustomEmbeddingModelField =
+  requiredElement<HTMLElement>("knowledge-custom-embedding-model-field");
+
+export const knowledgeCustomEmbeddingModelInput =
+  requiredElement<HTMLInputElement>("knowledge-custom-embedding-model");
+
+export const knowledgeEmbeddingActiveStatus =
+  requiredElement<HTMLElement>("knowledge-embedding-active-status");
+
+export const knowledgeEmbeddingProgress =
+  requiredElement<HTMLProgressElement>("knowledge-embedding-progress");
+
+export const knowledgeEmbeddingProgressLabel =
+  requiredElement<HTMLElement>("knowledge-embedding-progress-label");
+
+export const applyKnowledgeRetrievalSettingsButton =
+  requiredElement<HTMLButtonElement>("apply-knowledge-retrieval-settings");
 
 export const settingsAgentToolCount = requiredElement<HTMLElement>(
   "settings-agent-tool-count",

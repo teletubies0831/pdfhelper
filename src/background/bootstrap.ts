@@ -1,27 +1,18 @@
 import { browser } from "wxt/browser";
 
-import { isSelectionAction } from "../../shared/selection";
-import { extractPdfSource } from "../../shared/pdf-source";
+import { isSelectionAction } from "../modules/selection/public";
+import { extractPdfSource } from "../infrastructure/browser/pdf-source";
 
 import {
   AI_STREAM_PORT_NAME,
   isAiRuntimeRequest,
   type AiStreamToolResult,
-} from "../../shared/ai";
-import {
-  isResearchRuntimeRequest,
-  type CcfLookupResponse,
-  type RelatedResearchResponse,
-} from "../../shared/research";
-import {
-  runCcfLookupGraph,
-  runRelatedResearchGraph,
-} from "../modules/research/public";
+} from "../modules/ai/public";
 
 import {
   MENU_PREFIX,
   openEnhancedViewer,
-  openHelperPanelPage,
+  openSelectionPage,
   registerContextMenus,
   saveSelection,
 } from "./context-menu/context-menu-controller";
@@ -42,21 +33,6 @@ export function bootstrapBackground(): void {
   });
 
   browser.runtime.onMessage.addListener((message) => {
-    if (isResearchRuntimeRequest(message)) {
-      if (message.type === "pdf-helper:research-related") {
-        return runRelatedResearchGraph(
-          message,
-        ) satisfies Promise<RelatedResearchResponse>;
-      }
-      return runCcfLookupGraph(message)
-        .then((result): CcfLookupResponse => ({ ok: true, result }))
-        .catch(
-          (error): CcfLookupResponse => ({
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        );
-    }
     if (!isAiRuntimeRequest(message)) return undefined;
     return handleAiRequest(message);
   });
@@ -164,6 +140,6 @@ export function bootstrapBackground(): void {
 
     await saveSelection(action, info.selectionText, tab);
 
-    await openHelperPanelPage();
+    await openSelectionPage();
   });
 }

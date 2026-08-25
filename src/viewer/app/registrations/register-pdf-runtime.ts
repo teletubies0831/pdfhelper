@@ -25,7 +25,7 @@ import { updateCardSourceSnippet } from "../../features/paper-card/public";
 import { activeEditorMode, annotationEditor, canRedoAnnotation, canUndoAnnotation, eventBus, linkService, pdfDocument, pdfViewer, sourceName } from "../viewer-state";
 import { captureInternalNavigationOrigin, goToPdfDestination } from "../../features/assistant/public";
 import { scheduleUnsavedChangesCheck } from "../../features/annotations/public";
-import { restoreReadingPositionAfterPagesInit, scheduleReadingPositionSave, setStatus } from "../../features/recent-files/public";
+import { restoreReadingPositionAfterPagesInit, restoreStartupSourcePageAfterPagesInit, scheduleReadingPositionSave, setStatus } from "../../features/recent-files/public";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { finishEditorModeTransition, getFreeTextSize, installHighlightGeometry, scheduleHighlightNoteIndicatorRefresh, scheduleRestoredAnnotationEditorWarmUp, setEditorMode, setFreeTextColor, setFreeTextSize, setHighlightColor } from "../../features/annotations/public";
 
@@ -46,7 +46,9 @@ export function registerPdfRuntime(): void {
     };
   
   eventBus.on("pagesinit", () => {
-      restoreReadingPositionAfterPagesInit();
+      if (!restoreStartupSourcePageAfterPagesInit()) {
+        restoreReadingPositionAfterPagesInit();
+      }
       setStatus(
         `${getDisplayFileName(sourceName.value)} · ${pdfDocument.value?.numPages ?? 0} 页`,
       );

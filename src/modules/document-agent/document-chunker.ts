@@ -1,4 +1,4 @@
-import type { ResolvedReadingMode } from "../../../shared/reading-mode";
+import type { ResolvedReadingMode } from "../reading-mode/public";
 import type {
   DocumentAgentStrategy,
   DocumentChunk,

@@ -114,4 +114,11 @@ export function scheduleAppViewStateSave(): void {
 
 
 
-export const source = new URLSearchParams(window.location.search).get("src");
+const viewerSearchParams = new URLSearchParams(window.location.search);
+
+export const source = viewerSearchParams.get("src");
+export const requestedRecentEntryId = viewerSearchParams.get("recentEntryId");
+export const requestedSourcePage = Math.max(
+  1,
+  Number.parseInt(viewerSearchParams.get("page") || "1", 10) || 1,
+);

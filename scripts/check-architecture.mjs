@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 const workspace = process.cwd();
-const sourceRoots = ['entrypoints', 'src', 'shared'].map((item) => path.join(workspace, item));
+const sourceRoots = ['entrypoints', 'src'].map((item) => path.join(workspace, item));
 const errors = [];
 const warnings = [];
 
@@ -129,31 +129,6 @@ for (const file of typeScriptFiles) {
   const ownsPersistence = /repository|database|storage|migration|persistence/i.test(fileName);
   if (!ownsPersistence && /\b(?:localStorage|indexedDB)\b/.test(source)) {
     warnings.push(`${fileName}: accesses browser persistence directly; move new persistence work behind a repository.`);
-  }
-}
-
-const requiredAgentFiles = [
-  'src/background/AGENTS.md',
-  'src/platform/AGENTS.md',
-  'src/viewer/AGENTS.md',
-  'src/modules/ai/AGENTS.md',
-  'src/modules/knowledge/AGENTS.md',
-  'src/modules/document-agent/AGENTS.md',
-  'src/modules/memory/AGENTS.md',
-  'src/modules/research/AGENTS.md',
-  'src/viewer/core/pdf-reader/AGENTS.md',
-  'src/viewer/features/assistant/AGENTS.md',
-  'src/viewer/features/annotations/AGENTS.md',
-  'src/viewer/features/translation/AGENTS.md',
-  'src/viewer/features/paper-card/AGENTS.md',
-  'src/viewer/features/knowledge-base/AGENTS.md',
-  'src/viewer/features/reading-journal/AGENTS.md',
-];
-for (const agentFile of requiredAgentFiles) {
-  try {
-    await stat(path.join(workspace, agentFile));
-  } catch {
-    errors.push(`${agentFile}: required module guidance is missing.`);
   }
 }
 

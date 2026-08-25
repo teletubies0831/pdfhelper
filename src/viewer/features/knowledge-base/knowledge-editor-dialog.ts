@@ -7,8 +7,8 @@ import { getDisplayFileName } from "../../core/pdf-reader/public";
 
 
 import type { KnowledgeItem } from "../../core/pdf-reader/public";
-import { knowledgeEditorBodyMode, knowledgeEditorPreviewTimer } from './research-controller';
-import type { KnowledgeEditorBodyMode } from './research-controller';
+import { knowledgeEditorBodyMode, knowledgeEditorPreviewTimer } from './knowledge-base-controller';
+import type { KnowledgeEditorBodyMode } from './knowledge-base-controller';
 import { normalizeKnowledgeCategory } from './knowledge-repository';
 import { getKnowledgeSourceQuote } from "./knowledge-domain";
 

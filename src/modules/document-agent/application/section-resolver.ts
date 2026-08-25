@@ -1,5 +1,5 @@
 
-import { type DocumentOutlineItem, type DocumentProfile } from "../../../../shared/document-agent";
+import { type DocumentOutlineItem, type DocumentProfile } from "../contracts";
 
 
 

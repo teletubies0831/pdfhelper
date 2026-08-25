@@ -1,4 +1,3 @@
-import { type PDFDocumentProxy } from "pdfjs-dist";
 
 
 
@@ -6,14 +5,7 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 
 
-import { type ResolvedReadingMode } from "../../../shared/reading-mode";
-
-
-
-
-
-
-
+import { type ResolvedReadingMode } from "../../modules/reading-mode/public";
 
 
 
@@ -23,11 +15,17 @@ import { type ResolvedReadingMode } from "../../../shared/reading-mode";
 
 
 
-import type { CardType, KnowledgeFilter, KnowledgeFocus, KnowledgeKind, KnowledgePageMode, KnowledgeSource, SummaryScope } from '../core/pdf-reader/reader-controls';
 
 
 
-export type KnowledgeResearchScope = "selected" | "filtered" | "all";
+
+
+
+
+import type { CardType, KnowledgeFilter, KnowledgeFocus, KnowledgeKind, KnowledgeSource, SummaryScope } from '../core/pdf-reader/reader-controls';
+
+
+
 
 
 
@@ -84,51 +82,6 @@ export interface SavedPaperCard extends GeneratedCardContent, CardContext {
   createdAt: string;
 }
 
-
-
-export interface PaperOverviewApiResponse {
-  title?: unknown;
-  authors?: unknown;
-  venue_year?: unknown;
-  research_area?: unknown;
-  keywords?: unknown;
-  one_sentence_summary?: unknown;
-  research_problem?: unknown;
-  core_innovation?: unknown;
-  worth_reading?: unknown;
-  problem_setup?: unknown;
-  research_gap?: unknown;
-  why_important?: unknown;
-  topic_tags?: unknown;
-  method_overview?: unknown;
-  method_intuition?: unknown;
-  method_steps?: unknown;
-  key_assumptions?: unknown;
-  notation_guide?: unknown;
-  datasets?: unknown;
-  experiment_setup?: unknown;
-  metrics?: unknown;
-  main_findings?: unknown;
-  strongest_evidence?: unknown;
-  comparison_with_prior_work?: unknown;
-  limitations?: unknown;
-  reading_status?: unknown;
-  recommend_deep_reading?: unknown;
-  reading_difficulty?: unknown;
-  reading_value_score?: unknown;
-  novelty_score?: unknown;
-  evidence_score?: unknown;
-  relevance_score?: unknown;
-  method_clarity_score?: unknown;
-  reading_advice?: unknown;
-  suitable_stages?: unknown;
-  prerequisites?: unknown;
-  citation_points?: unknown;
-  research_connection?: unknown;
-  followup_questions?: unknown;
-  weekly_plan?: unknown;
-  detail?: unknown;
-}
 
 
 
@@ -317,30 +270,6 @@ export let currentGeneratedCard: { value: GeneratedCardContent | null } = { valu
 export let cardGenerationTimer: { value: ReturnType<typeof setTimeout> | null } = { value: null };
 
 
-export let paperCardPageAbortController: { value: AbortController | null } = { value: null };
-
-
-export let paperCardPageRequestId = { value: "" };
-
-
-export let paperCardPageDocumentKey = { value: "" };
-
-
-export let paperCardPageSourceCache: { value: {
-  document: PDFDocumentProxy;
-  text: string;
-} | null } = { value: null };
-
-
-export let editingPaperOverviewId: { value: string | null } = { value: null };
-
-
-export let paperCardReviewDocumentName = { value: "" };
-
-
-export let paperCardReturnTarget: { value: "pdf" | "knowledge" } = { value: "pdf" };
-
-
 export let activeKnowledgeFilter: { value: KnowledgeFilter } = { value: "all" };
 
 
@@ -475,13 +404,12 @@ export const APP_VIEW_SESSION_STORAGE_KEY = "pdf-helper-app-view-state-v1";
 
 
 
-export type PersistedAppView = "viewer" | "knowledge" | "paper-review";
+export type PersistedAppView = "viewer" | "knowledge";
 
 
 
 export interface PersistedAppViewState {
   view: PersistedAppView;
-  knowledgeMode: KnowledgePageMode;
   knowledgeFilter: KnowledgeFilter;
   knowledgeCategory: string;
   knowledgeTag: string;
@@ -493,12 +421,6 @@ export interface PersistedAppViewState {
   knowledgeSearch: string;
   knowledgeSort: string;
   knowledgeGroup: string;
-  knowledgeResearchScope: string;
-  knowledgeResearchQuestion: string;
-  knowledgeInsightQuestion: string;
   selectedKnowledgeRecordKey: string;
-  selectedKnowledgeResearchKeys: string[];
   knowledgeScrollTop: number;
-  reviewPaperOverviewId: string;
-  paperCardScrollTop: number;
 }

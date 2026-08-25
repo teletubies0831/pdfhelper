@@ -5,6 +5,7 @@ import { setStatus } from "../recent-files/public";
 import { forgetHelperNote, getAnnotationGeometrySignature, getEditorSerializedValue, getEditorStorageKeys, getRememberedHelperNote, isFreeTextEditor, isHighlightEditor, isInkEditor, isRecord, isStoredHighlightValue, markUnsavedChanges, normalizeStorageKey, rememberHelperNote } from "./annotation-persistence";
 import { getViewerSelectionRawText } from "../../core/pdf-reader/public";
 import { findAnnotationEditor, findHighlightNoteAnchor, setHighlightColor, syncFreeTextControls } from './annotation-editor';
+import { setInkEraserMode } from './ink-eraser';
 
 export function clearDomSelection() {
   window.getSelection()?.removeAllRanges();
@@ -641,6 +642,7 @@ export function finishEditorModeTransition(): void {
 
 export function setEditorMode(mode: number) {
   if (!pdfDocument.value) return;
+  setInkEraserMode(false);
   const modeWillChange = activeEditorMode.value !== mode;
   if (modeWillChange) {
     viewerElement.classList.add("pdf-helper-editor-mode-transition");
@@ -684,7 +686,7 @@ export function setEditorMode(mode: number) {
       "高亮模式：拖选文字生成高亮；完成后切回“移动/选择”";
   } else if (mode === AnnotationEditorType.INK) {
     textStatus.textContent =
-      "画笔模式：按住鼠标绘制；完成后切回“移动/选择”再移动";
+      "画笔模式：按住鼠标绘制；墨迹完成后固定在页面上，不可移动";
   } else if (mode === AnnotationEditorType.FREETEXT) {
     textStatus.textContent =
       "文本模式：点击页面输入；点击空白结束，切回“移动/选择”可拖动";

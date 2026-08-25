@@ -1,12 +1,15 @@
 import { browser } from "wxt/browser";
 
-import { getNativeAgentTools } from "../../../shared/agent-tools";
+import {
+  convertMcpToolsToProviderFunctions,
+  getProviderAgentTools,
+} from "../../modules/ai/public";
 import {
   type AiStreamServerMessage,
   type AiStreamStartMessage,
   type AiStreamToolResultsMessage,
   type AiStreamToolResult,
-} from "../../../shared/ai";
+} from "../../modules/ai/public";
 
 import { AiProviderRequestError } from "./vision-service";
 import type { ProviderMessage } from "./vision-service";
@@ -65,7 +68,9 @@ export async function streamAiResponse(
   const adapter = getProviderAdapter(config);
   const maxOutputTokens = config.maxOutputTokens;
   const conversation = buildConversation(request.messages, request.context);
-  const nativeTools = getNativeAgentTools();
+  const providerTools = request.mcpTools?.length
+    ? convertMcpToolsToProviderFunctions(request.mcpTools)
+    : getProviderAgentTools();
   const workingConversation: ProviderMessage[] = [...conversation];
   postAiStreamMessage(port, {
     type: "started",
@@ -95,7 +100,7 @@ export async function streamAiResponse(
           });
         }
       },
-      { tools: nativeTools, toolChoice: "auto" },
+      { tools: providerTools, toolChoice: "auto" },
     );
 
     if (!result.toolCalls?.length) {

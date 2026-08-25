@@ -651,3 +651,20 @@
     min-width: 154px !important;
   }
 }
+.toolbar .knowledge-add-current {
+  flex: 0 0 auto;
+  border-color: #b8d1fb;
+  background: #eef5ff;
+  color: #175cd3;
+  white-space: nowrap;
+}
+
+.toolbar .knowledge-add-current.is-added {
+  border-color: #a6e2c5;
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.toolbar .knowledge-add-current.is-indexing {
+  color: #175cd3;
+}

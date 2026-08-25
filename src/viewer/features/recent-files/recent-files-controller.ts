@@ -26,6 +26,7 @@ import { RECENT_FILES_LIMIT, type ReadingPosition, type RecentPdfEntry } from '.
 import { readRecentFiles, writeRecentFiles } from './recent-files-repository';
 
 let temporarySourceNavigationEntryId: string | null = null;
+let requestedSourcePageAfterOpen: number | null = null;
 
 function isTemporarySourceNavigationActive(): boolean {
   return Boolean(
@@ -287,6 +288,16 @@ export function restoreReadingPositionAfterPagesInit() {
   restoreReadingPosition(position);
 }
 
+export function restoreStartupSourcePageAfterPagesInit(): boolean {
+  const pageNumber = requestedSourcePageAfterOpen;
+  if (!pageNumber) return false;
+  requestedSourcePageAfterOpen = null;
+  pendingReadingPosition.value = null;
+  pdfViewer.currentScaleValue = "page-width";
+  navigateToPdfPageWhenVisible(pageNumber);
+  return true;
+}
+
 
 
 export function restoreReadingPosition(position: ReadingPosition) {
@@ -383,6 +394,25 @@ export async function openRecentFile(entry: RecentPdfEntry) {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
   }
+}
+
+export async function openRecentFileById(
+  recentEntryId: string,
+  pageNumber = 1,
+): Promise<boolean> {
+  const entries = await readRecentFiles();
+  const entry = entries.find((item) => item.id === recentEntryId);
+  if (!entry) {
+    setStatus("找不到这份知识库 PDF 的文件记录，请在原窗口重新添加。", true);
+    return false;
+  }
+  requestedSourcePageAfterOpen = Math.max(1, Math.round(pageNumber));
+  await openRecentFile(entry);
+  if (!pdfDocument.value || currentRecentEntryId.value !== entry.id) {
+    requestedSourcePageAfterOpen = null;
+    return false;
+  }
+  return true;
 }
 
 

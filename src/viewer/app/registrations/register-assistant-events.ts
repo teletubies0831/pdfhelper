@@ -3,12 +3,12 @@ import {
   type AiProviderId,
   type AiReasoningMode,
 } from "../../../modules/ai/public";
-import { isReadingModePreference } from "../../../../shared/reading-mode";
 
 import {
   aiPanelToggleButton,
   aiProviderSelect,
   aiSettingsButton,
+  applyKnowledgeRetrievalSettingsButton,
   aiTabButtons,
   appFrame,
   assistantPanelToggleButton,
@@ -26,17 +26,18 @@ import {
   chatReasoningOptionButtons,
   chatReasoningTrigger,
   clearChatButton,
+  clearChatDialog,
+  clearChatDialogCancelButton,
+  clearChatDialogCloseButton,
+  clearChatDialogConfirmButton,
   closeDeepSeekSettingsButton,
   deepSeekBaseUrlInput,
   deepSeekThinkingSelect,
-  detectReadingModeButton,
   focusModeButton,
   knowledgeBasePageElement,
+  knowledgeEmbeddingModelSelect,
   longTermMemoryList,
   outlineToggleButton,
-  paperCardPageElement,
-  readingModeMenuButtons,
-  readingModeSelect,
   refreshLongTermMemoriesButton,
   saveDeepSeekSettingsButton,
   settingsModalBackdrop,
@@ -61,7 +62,6 @@ import {
   chatHistory,
   chatImagePreviewOverlay,
   chatRequestPending,
-  readingModePreference,
   setAssistantView,
   setDeepSeekSettingsOpen,
   setFocusMode,
@@ -70,10 +70,6 @@ import {
 } from "../../core/pdf-reader/public";
 import { jumpToPdfCitations } from "../../features/translation/public";
 
-import {
-  bindPaperCardTextareaAutoResize,
-  closePaperCardPage,
-} from "../../features/paper-card/public";
 import { pdfDocument } from "../viewer-state";
 import {
   activateSettingsTab,
@@ -82,16 +78,18 @@ import {
   closeChatImagePreview,
   createLongTermMemory,
   deleteLongTermMemory,
-  detectReadingMode,
   editLongTermMemory,
   filterLongTermMemoryList,
   getDocumentChatId,
+  handleKnowledgeEmbeddingModelSelection,
+  initializeKnowledgeRetrievalSettings,
   isEditingSettingsConnection,
   isSettingsConnectionDraftVerified,
   openChatImagePreview,
   queueChatConversationPersistence,
   queueSettingsConnectionModelForValidation,
   refreshLongTermMemoryList,
+  applyKnowledgeRetrievalSettings,
   removeActiveSettingsConnection,
   renderAgentToolCatalog,
   resetChatConversation,
@@ -100,7 +98,6 @@ import {
   saveSettingsRoutes,
   sendChatMessage,
   setCurrentApplicationView,
-  setReadingModePreference,
   showSettingsConnectionEditor,
   showSettingsModelOverview,
   showSettingsStatus,
@@ -110,7 +107,13 @@ import {
   toggleSettingsSecret,
 } from "../../features/assistant/public";
 
-import { closeKnowledgeBasePage } from "../../features/knowledge-base/public";
+import {
+  closeKnowledgeBasePage,
+  getKnowledgeDocument,
+  listKnowledgeDocuments,
+} from "../../features/knowledge-base/public";
+import { setStatus } from "../../features/recent-files/public";
+import { openSourcePdfInNewTab } from "../../shared-ui/navigation/source-pdf-navigation";
 import type { AssistantView } from "../../core/pdf-reader/public";
 
 import {
@@ -128,6 +131,7 @@ import {
 export function registerAssistantEvents(): void {
   renderAgentToolCatalog();
   syncChatReasoningControl();
+  initializeKnowledgeRetrievalSettings();
 
   for (const menu of toolbarMenus) {
     const trigger = menu.querySelector<HTMLButtonElement>(
@@ -179,10 +183,6 @@ export function registerAssistantEvents(): void {
   });
 
   aiPanelToggleButton?.addEventListener("click", () => {
-    if (!paperCardPageElement.hidden) {
-      closePaperCardPage();
-      return;
-    }
     if (!knowledgeBasePageElement.hidden) {
       closeKnowledgeBasePage();
       return;
@@ -191,7 +191,6 @@ export function registerAssistantEvents(): void {
   });
 
   assistantPanelToggleButton.addEventListener("click", () => {
-    if (!paperCardPageElement.hidden) closePaperCardPage();
     if (!knowledgeBasePageElement.hidden) closeKnowledgeBasePage();
     const willOpen =
       appFrame?.classList.contains("right-panel-collapsed") ?? false;
@@ -215,6 +214,15 @@ export function registerAssistantEvents(): void {
     const willOpen = assistantSettingsPanel.hidden;
     if (!willOpen) cancelSettingsConnectionActivity();
     setDeepSeekSettingsOpen(willOpen);
+    if (willOpen) initializeKnowledgeRetrievalSettings();
+  });
+
+  knowledgeEmbeddingModelSelect.addEventListener(
+    "change",
+    handleKnowledgeEmbeddingModelSelection,
+  );
+  applyKnowledgeRetrievalSettingsButton.addEventListener("click", () => {
+    void applyKnowledgeRetrievalSettings();
   });
 
   for (const button of settingsPrimaryTabButtons) {
@@ -264,26 +272,6 @@ export function registerAssistantEvents(): void {
     });
   }
 
-  readingModeSelect.addEventListener("change", () => {
-    const preference = readingModeSelect.value;
-    if (isReadingModePreference(preference))
-      void setReadingModePreference(preference);
-  });
-
-  for (const modeButton of readingModeMenuButtons) {
-    modeButton.addEventListener("click", () => {
-      const preference = modeButton.dataset.readingModeValue;
-      if (!isReadingModePreference(preference)) return;
-      readingModeSelect.value = preference;
-      readingModeSelect.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-  }
-
-  detectReadingModeButton.addEventListener("click", () => {
-    readingModePreference.value = "auto";
-    void detectReadingMode(true);
-  });
-
   aiProviderSelect.addEventListener("change", () => {
     const providerId = aiProviderSelect.value as AiProviderId;
     const provider = AI_PROVIDERS.find((item) => item.id === providerId);
@@ -324,9 +312,6 @@ export function registerAssistantEvents(): void {
       setDeepSeekSettingsOpen(false);
       showSettingsSavedFeedback();
 
-      if (pdfDocument.value && readingModePreference.value === "auto") {
-        void detectReadingMode(true);
-      }
     });
   });
 
@@ -446,13 +431,7 @@ export function registerAssistantEvents(): void {
     void addChatImageFiles(imageFiles);
   });
 
-  clearChatButton.addEventListener("click", () => {
-    if (chatRequestPending.value) return;
-    if (
-      chatHistory.value.length > 0 &&
-      !window.confirm("确定清空当前 PDF 的全部聊天记录吗？")
-    )
-      return;
+  const clearCurrentChatConversation = (): void => {
     const documentAtClear = pdfDocument.value;
     resetChatConversation();
     void queueChatConversationPersistence(documentAtClear).then(() => {
@@ -462,6 +441,31 @@ export function registerAssistantEvents(): void {
           : undefined,
       });
     });
+  };
+
+  const closeClearChatDialog = (): void => {
+    if (clearChatDialog.open) clearChatDialog.close();
+  };
+
+  clearChatButton.addEventListener("click", () => {
+    if (chatRequestPending.value) return;
+    if (chatHistory.value.length === 0) {
+      clearCurrentChatConversation();
+      return;
+    }
+    if (!clearChatDialog.open) clearChatDialog.showModal();
+    window.setTimeout(() => clearChatDialogCancelButton.focus(), 0);
+  });
+
+  clearChatDialogCloseButton.addEventListener("click", closeClearChatDialog);
+  clearChatDialogCancelButton.addEventListener("click", closeClearChatDialog);
+  clearChatDialog.addEventListener("pointerdown", (event) => {
+    if (event.target === clearChatDialog) closeClearChatDialog();
+  });
+  clearChatDialogConfirmButton.addEventListener("click", () => {
+    if (chatRequestPending.value) return;
+    closeClearChatDialog();
+    clearCurrentChatConversation();
   });
 
   chatMessagesElement.addEventListener("click", (event) => {
@@ -477,6 +481,30 @@ export function registerAssistantEvents(): void {
     )?.closest<HTMLButtonElement>(".pdf-source-citation");
     if (!citation) return;
     const pageNumber = Number(citation.dataset.pdfPage);
+    const libraryDocumentId = citation.dataset.pdfDocumentId?.trim();
+    if (libraryDocumentId) {
+      const libraryDocument = getKnowledgeDocument(libraryDocumentId)
+        ?? listKnowledgeDocuments().find(
+          (item) => item.documentName === libraryDocumentId,
+        );
+      if (!libraryDocument) {
+        setStatus("找不到这条引用对应的知识库 PDF。", true);
+        return;
+      }
+      void openSourcePdfInNewTab(
+        libraryDocument.documentName,
+        libraryDocument.recentEntryId,
+        pageNumber,
+      ).then((opened) => {
+        if (!opened) setStatus("这份知识库 PDF 缺少可重新打开的文件记录。", true);
+      }).catch((error) => {
+        setStatus(
+          `新标签页打开原文失败：${error instanceof Error ? error.message : String(error)}`,
+          true,
+        );
+      });
+      return;
+    }
     const fallbackQuote = citation.dataset.pdfQuote?.trim() ?? "";
     let quotes = fallbackQuote ? [fallbackQuote] : [];
     try {
@@ -523,5 +551,4 @@ export function registerAssistantEvents(): void {
     });
   }
 
-  bindPaperCardTextareaAutoResize();
 }

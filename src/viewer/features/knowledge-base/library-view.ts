@@ -15,20 +15,19 @@
 
 
 
-import { activeKnowledgeCategory, activeKnowledgeFilter, activeKnowledgeFocus, activeKnowledgePageMode, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, persistCurrentAppViewState, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
+import { activeKnowledgeCategory, activeKnowledgeFilter, activeKnowledgeFocus, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
 
-import { knowledgeBasePageElement, knowledgeCountAllElement, knowledgeCountOriginGeneralElement, knowledgeCountOriginGeneralNoteElement, knowledgeCountOriginGeneralReadingCardElement, knowledgeCountOriginNovelElement, knowledgeCountOriginNovelNoteElement, knowledgeCountOriginNovelReadingCardElement, knowledgeCountOriginPaperElement, knowledgeCountOriginPaperNoteElement, knowledgeCountOriginPaperReadingCardElement, knowledgeDetailBodyElement, knowledgeDetailContentElement, knowledgeDetailCreatedElement, knowledgeDetailDocumentElement, knowledgeDetailEmptyElement, knowledgeDetailPositionElement, knowledgeDetailTagsElement, knowledgeDetailTimeElement, knowledgeDetailTitleElement, knowledgeDetailTypeElement, knowledgeDetailUpdatedElement, knowledgeEditItemButton, knowledgeFocusButtons, knowledgeFocusCountCitableElement, knowledgeFocusCountDeepElement, knowledgeFocusCountFinishedElement, knowledgeFocusCountMethodsElement, knowledgeFocusCountRelatedElement, knowledgeFocusCountReplicateElement, knowledgeFocusCountTodoElement, knowledgeInsightControls, knowledgeLibraryView, knowledgeListElement, knowledgeModeButtons, knowledgeOpenSourceButton, knowledgePageTitleElement, knowledgePriorityFilterSelect, knowledgeQaControls, knowledgeReadingStatusFilterSelect, knowledgeRecentSummaryElement, knowledgeRelatedSummaryElement, knowledgeResearchDescription, knowledgeResearchHeading, knowledgeResearchQuestionInput, knowledgeResearchView, knowledgeRunResearchButton, knowledgeSearchInput, knowledgeSortSelect, knowledgeTagListElement, knowledgeVenueFilterSelect, knowledgeYearFilterSelect } from "../../app/viewer-elements";
-
-
+import { knowledgeBasePageElement, knowledgeCountAllElement, knowledgeCountOriginGeneralElement, knowledgeCountOriginGeneralNoteElement, knowledgeCountOriginGeneralReadingCardElement, knowledgeCountOriginNovelElement, knowledgeCountOriginNovelNoteElement, knowledgeCountOriginNovelReadingCardElement, knowledgeCountOriginPaperElement, knowledgeCountOriginPaperNoteElement, knowledgeCountOriginPaperReadingCardElement, knowledgeDetailBodyElement, knowledgeDetailContentElement, knowledgeDetailCreatedElement, knowledgeDetailDocumentElement, knowledgeDetailEmptyElement, knowledgeDetailPositionElement, knowledgeDetailTagsElement, knowledgeDetailTimeElement, knowledgeDetailTitleElement, knowledgeDetailTypeElement, knowledgeDetailUpdatedElement, knowledgeEditItemButton, knowledgeFocusButtons, knowledgeFocusCountCitableElement, knowledgeFocusCountDeepElement, knowledgeFocusCountFinishedElement, knowledgeFocusCountMethodsElement, knowledgeFocusCountRelatedElement, knowledgeFocusCountReplicateElement, knowledgeFocusCountTodoElement, knowledgeListElement, knowledgeOpenSourceButton, knowledgePageTitleElement, knowledgePriorityFilterSelect, knowledgeReadingStatusFilterSelect, knowledgeRecentSummaryElement, knowledgeRelatedSummaryElement, knowledgeSearchInput, knowledgeSortSelect, knowledgeTagListElement, knowledgeVenueFilterSelect, knowledgeYearFilterSelect } from "../../app/viewer-elements";
 
 
 
 
-import type { KnowledgeFocus, KnowledgeItem, KnowledgePageMode } from "../../core/pdf-reader/public";
+
+
+import type { KnowledgeFocus, KnowledgeItem } from "../../core/pdf-reader/public";
 import { activeKnowledgeOrigin, activeKnowledgeOriginContent, deriveKnowledgePriority, deriveKnowledgeReadingStatus, extractKnowledgeVenue, extractKnowledgeYear, formatKnowledgeDate, formatKnowledgeRelativeDate, getKnowledgeBaseDocumentName, getKnowledgeExcerptForDashboard, getKnowledgeKindIcon, getKnowledgeKindLabel, getKnowledgeOriginContentType, matchesKnowledgeFocus, syncKnowledgeOriginButtons, type KnowledgeOriginContentFilter, type KnowledgeOriginFilter } from './knowledge-domain';
-import { renderKnowledgeBase, updateKnowledgeResearchScopeSummary } from './research-controller';
+import { renderKnowledgeBase } from './knowledge-base-controller';
 import { deleteKnowledgeItem, openKnowledgeEditor } from './editor-controller';
-import { openSavedPaperOverviewReview } from "../paper-card/public";
 import { getPaperLibraryCardMetadata } from "./paper-library-card-metadata";
 
 
@@ -281,10 +280,6 @@ export function renderKnowledgeSidebar(items: KnowledgeItem[]): void {
 
 export function openKnowledgeItemFromLibrary(item: KnowledgeItem): void {
   selectedKnowledgeRecordKey.value = item.recordKey;
-  if (item.source === "paper-overview") {
-    openSavedPaperOverviewReview(item);
-    return;
-  }
   openKnowledgeEditor(item);
 }
 
@@ -530,39 +525,4 @@ export function renderKnowledgeDetail(
     ? `同一文档中还有 ${relatedNotes} 条笔记、${relatedCards} 张卡片。`
     : "当前文档暂无其他关联内容。";
   knowledgeOpenSourceButton.disabled = false;
-}
-
-
-
-
-export function setKnowledgePageMode(mode: KnowledgePageMode): void {
-  activeKnowledgePageMode.value = mode;
-  for (const button of knowledgeModeButtons) {
-    const isActive = button.dataset.knowledgeMode === mode;
-    button.classList.toggle("active", isActive);
-    button.setAttribute("aria-selected", String(isActive));
-  }
-  const isLibrary = mode === "library";
-  knowledgeLibraryView.hidden = !isLibrary;
-  knowledgeResearchView.hidden = isLibrary;
-  knowledgeQaControls.hidden = mode !== "qa";
-  knowledgeInsightControls.hidden = mode !== "insights";
-  knowledgeBasePageElement.classList.toggle("research-mode", !isLibrary);
-
-  if (mode === "qa") {
-    knowledgePageTitleElement.textContent = "跨文献问答";
-    knowledgeResearchHeading.textContent = "跨文献问答";
-    knowledgeResearchDescription.textContent =
-      "让 AI 综合你保存的论文卡片、阅读卡片和笔记，并用 [K1]、[K2] 标注依据。";
-    knowledgeRunResearchButton.textContent = "✦ 开始回答";
-    window.setTimeout(() => knowledgeResearchQuestionInput.focus(), 0);
-  } else if (mode === "insights") {
-    knowledgePageTitleElement.textContent = "研究洞察";
-    knowledgeResearchHeading.textContent = "研究洞察";
-    knowledgeResearchDescription.textContent =
-      "寻找文献共识、冲突、研究空白与可验证的新假设，并明确区分证据和 AI 推测。";
-    knowledgeRunResearchButton.textContent = "◇ 生成研究洞察";
-  }
-  updateKnowledgeResearchScopeSummary();
-  persistCurrentAppViewState();
 }

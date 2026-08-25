@@ -1,5 +1,5 @@
 import type { LongTermMemory, LongTermMemorySearchOptions, MemoryToolCall, MemoryToolResult, MemoryTools, PaperLibraryRecord, PaperLibrarySearchOptions, PaperLibraryTools, UpsertLongTermMemoryInput, UpsertPaperLibraryInput } from '../../contracts';
-import { LONG_TERM_MEMORIES_STORE, PAPER_LIBRARY_STORE, openDocumentAgentDatabase, requestToPromise, transactionDone } from '../../../../platform/database/workspace-database';
+import { LONG_TERM_MEMORIES_STORE, PAPER_LIBRARY_STORE, openDocumentAgentDatabase, requestToPromise, transactionDone } from '../../../../infrastructure/database/workspace-database';
 
 const clamp = (value: number | undefined, fallback: number): number =>
   Math.min(1, Math.max(0, Number.isFinite(value) ? Number(value) : fallback));

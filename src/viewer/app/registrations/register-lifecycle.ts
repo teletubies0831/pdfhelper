@@ -13,25 +13,25 @@
 
 
 
-import { installOnlineRelatedPapers } from "../../../../entrypoints/viewer/online-related-papers";
-import { installCurrentPaperCcfRank } from "../../../../entrypoints/viewer/ccf-rank";
 import { citationReturnButton, saveAnnotatedPdfButton, selectedSnippetElement, textStatus, toggleNotesButton, translationSourceSentenceField, translationSourceSentenceInput, viewerContainer, viewerElement } from "../viewer-elements";
 import { activeSummaryScope, cardAbortController, clearOutlineList, moreExamplesAbortController, persistCurrentAppViewState, restoreAppViewAfterRefresh, setLeftPanelCollapsed, summaryAbortController, translationAbortController, updateControls } from "../../core/pdf-reader/public";
 import { autoResizeTranslationTextarea, cancelPendingAutomaticTranslation, scheduleAiSelectedSnippetUpdate } from "../../features/translation/public";
 import { cancelPendingSummaryGeneration } from "../../services/document-agent/viewer-document-agent";
-import { cancelPendingCardGeneration, installPaperCardInlineEditing } from "../../features/paper-card/public";
+import { cancelPendingCardGeneration } from "../../features/paper-card/public";
 import { areNoteIndicatorsHidden, hasUnsavedChanges } from "../viewer-state";
-import { loadDeepSeekConfig, returnToPreviousInternalNavigationPosition, setCurrentApplicationView, updateReadingModeUi } from "../../features/assistant/public";
+import { loadDeepSeekConfig, returnToPreviousInternalNavigationPosition, setCurrentApplicationView } from "../../features/assistant/public";
 import { updateNoteIndicatorsVisibility } from "../../features/annotations/public";
-import { cancelReadingPositionSave, persistCurrentReadingPosition, restoreMostRecentPdf, scheduleReadingPositionSave } from "../../features/recent-files/public";
+import { cancelReadingPositionSave, openRecentFileById, persistCurrentReadingPosition, restoreMostRecentPdf, scheduleReadingPositionSave } from "../../features/recent-files/public";
 import { openRemotePdf, saveAnnotatedPdf } from "../../core/pdf-reader/public";
 import { hideAnnotationActionBar, hideHighlightNote, hideSelectionContextMenu } from "../../features/annotations/public";
 
 
 
-import { source } from '../app-ui';
+import { requestedRecentEntryId, requestedSourcePage, source } from '../app-ui';
+import { installReusableSelects } from "../../shared-ui/select/custom-select";
 
 export function registerLifecycle(): void {
+  installReusableSelects();
   let viewerSelectionPointerActive = false;
 
   document.addEventListener("selectionchange", () => {
@@ -128,23 +128,18 @@ export function registerLifecycle(): void {
   
   updateControls();
   
-  updateReadingModeUi();
-  
   void loadDeepSeekConfig();
   
   textStatus.textContent = "交互已就绪";
   
-  restoreAppViewAfterRefresh();
+  if (!requestedRecentEntryId) restoreAppViewAfterRefresh();
   
-  if (source?.startsWith("http://") || source?.startsWith("https://")) {
+  if (requestedRecentEntryId) {
+      void openRecentFileById(requestedRecentEntryId, requestedSourcePage);
+    } else if (source?.startsWith("http://") || source?.startsWith("https://")) {
       void openRemotePdf(source);
     } else {
       void restoreMostRecentPdf();
     }
   
-  installOnlineRelatedPapers();
-  
-  installCurrentPaperCcfRank();
-  
-  installPaperCardInlineEditing();
 }

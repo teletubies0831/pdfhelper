@@ -1,0 +1,40 @@
+.chat-rag-source-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.chat-rag-source-shortcuts button {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #cddcf2;
+  border-radius: 999px;
+  background: #f5f8fd;
+  color: #2f65aa;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-rag-source-shortcuts button:hover {
+  border-color: #8eb4ea;
+  background: #edf4ff;
+}
+
+.chat-rag-source-shortcuts button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.chat-rag-source-shortcuts button[hidden] {
+  display: none;
+}
+
+.chat-rag-source-shortcuts .chat-rag-source-toggle {
+  border-style: dashed;
+  background: transparent;
+  color: #667085;
+}

@@ -25,8 +25,8 @@ import { setStatus } from "../recent-files/public";
 import { getDocumentChatId } from "../assistant/public";
 import { refreshKnowledgeBaseIfOpen } from "../knowledge-base/public";
 import type { CardContext, CardType, GeneratedCardContent, SavedPaperCard, SavedPaperOverview } from "../../core/pdf-reader/public";
-import { readSavedPaperOverviews } from './paper-card-controller';
-import { readJsonValue, writeJsonValue } from '../../../platform/storage/browser-json-repository';
+import { readSavedPaperOverviews } from './paper-overview-repository';
+import { readJsonValue, writeJsonValue } from '../../../infrastructure/storage/browser-json-repository';
 
 
 

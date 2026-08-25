@@ -1,34 +1,24 @@
-import { type PDFDocumentProxy } from "pdfjs-dist";
-
-
-
-
-
 import { browser } from "wxt/browser";
 import { AI_PROVIDERS, AI_VISION_TEST_MARKER, aiConnectionCatalog, normalizeAiMaxOutputTokens, normalizeConnectionModels, type AiConfig, type AiConnectionCapability, type AiProviderId, type AiRuntimeResponse } from "../../../modules/ai/public";
-import { READING_MODE_STORAGE_KEY, getReadingModeLabel, isReadingModePreference, type ReadingModePreference, type ReadingModeState } from "../../../../shared/reading-mode";
 
 
-import { CONVERSATION_MEMORY_CONFIG_STORAGE_KEY, normalizeConversationMemoryConfig, type ConversationMemoryConfig } from "../../../../shared/memory";
-
-
+import { CONVERSATION_MEMORY_CONFIG_STORAGE_KEY, normalizeConversationMemoryConfig, type ConversationMemoryConfig } from "../../../modules/memory/public";
 
 
 
-import { aiConfig, aiConfigLoaded, conversationMemoryConfig, navigateToPdfPageWhenVisible, readingModeDetectionPending, readingModeDocumentKey, readingModeError, readingModePreference, readingModeRationale, resolvedReadingMode, setDeepSeekSettingsOpen, updateControls, visionAiConfig } from "../../core/pdf-reader/public";
 
-import { aiProviderSelect, citationReturnButton, citationReturnPosition, deepSeekApiKeyInput, deepSeekBaseUrlInput, deepSeekMaxOutputTokensInput, deepSeekThinkingSelect, detectReadingModeButton, readingModeMenuButtons, readingModeSelect, readingModeStatus, readingModeTriggerLabel, saveDeepSeekSettingsButton, settingsConnectionModelsInput, testDeepSeekButton, testVisionAiButton, viewerContainer, visionSettingsStatus } from "../../app/viewer-elements";
+
+import { aiConfig, aiConfigLoaded, conversationMemoryConfig, navigateToPdfPageWhenVisible, setDeepSeekSettingsOpen, updateControls, visionAiConfig } from "../../core/pdf-reader/public";
+
+import { aiProviderSelect, citationReturnButton, citationReturnPosition, deepSeekApiKeyInput, deepSeekBaseUrlInput, deepSeekMaxOutputTokensInput, deepSeekThinkingSelect, saveDeepSeekSettingsButton, settingsConnectionModelsInput, testDeepSeekButton, testVisionAiButton, viewerContainer, visionSettingsStatus } from "../../app/viewer-elements";
 import { getPdfFingerprint } from "../annotations/public";
 import { getCurrentReadingPosition, scheduleReadingPositionSave } from "../recent-files/public";
 import { internalNavigationHistory, isOpeningDocument, isRestoringReadingPosition, isReturningFromInternalNavigation, linkService, pdfDocument, pdfViewer, sourceName, suppressInternalNavigationCapture } from "../../app/viewer-state";
 
 
-import { getDisplayFileName } from "../../core/pdf-reader/public";
-import { extractPageText } from "../translation/public";
 
 import { populateConversationMemoryConfigForm, readConversationMemoryConfigFromForm, updateDeepSeekProviderStatus } from './memory-controller';
 import { clearSettingsStatus, loadSettingsConnectionCatalog, markSettingsConnectionModelsVerified, saveSettingsRoutes, showSettingsStatus, updateSettingsConnectionSummaries, type SettingsConnectionVerifiedModel } from './settings-navigation';
-import { updateModeNavigation } from './library-tools';
 import { syncChatReasoningControl } from '../../app/chat-reasoning-control';
 
 
@@ -462,6 +452,8 @@ export async function testVisionAiConnection(): Promise<void> {
 
 
 
+/* Reading-mode selection was removed when the knowledge base became a single
+ * explicit PDF corpus. This migration reference is not emitted or executed.
 export function getReadingModeDocumentKey(
   documentProxy: PDFDocumentProxy | null = pdfDocument.value,
 ): string {
@@ -685,3 +677,4 @@ export async function setReadingModePreference(
   });
   updateReadingModeUi();
 }
+*/

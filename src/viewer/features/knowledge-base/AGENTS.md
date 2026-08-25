@@ -1,6 +1,6 @@
 # Knowledge base feature
 
-Owns knowledge-library presentation: navigation, filters, dashboard, details, editor, import UI, and cross-document research UI.
+Owns knowledge-library presentation: navigation, filters, dashboard, details, editor, and import UI.
 
 - All records come from the knowledge module; do not read feature-specific legacy storage.
 - Filtering and ranking belong to the knowledge module when they are not presentation-only.

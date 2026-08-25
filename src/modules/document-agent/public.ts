@@ -7,4 +7,3 @@ export * from './application/runtime-contracts';
 export * from './application/initialize-document-knowledge';
 export * from './application/section-resolver';
 export * from './application/document-tool-executor';
-export * from './application/retrieval-context';

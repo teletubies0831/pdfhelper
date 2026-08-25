@@ -1,6 +1,6 @@
 
 
-import { type LongTermMemory } from "../../../../shared/memory";
+import { type LongTermMemory } from "../../../modules/memory/public";
 import { memoryTools } from "../../../../entrypoints/viewer/memory-store";
 
 import { longTermMemoryCount, longTermMemoryList, refreshLongTermMemoriesButton } from "../../app/viewer-elements";

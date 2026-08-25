@@ -37,6 +37,9 @@ export default defineConfig({
     },
     permissions: ["tabs", "storage", "contextMenus"],
     host_permissions: ["<all_urls>"],
+    content_security_policy: {
+      extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
+    },
     action: {
       default_title: "打开 PDFPal 阅读器",
       default_icon: {

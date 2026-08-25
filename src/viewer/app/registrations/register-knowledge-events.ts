@@ -15,93 +15,24 @@
 
 
 
-import { cardTypeButtons, editPaperCardButton, knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeClearResearchButton, knowledgeClearSelectionButton, knowledgeDeleteItemButton, knowledgeDetailCloseButton, knowledgeEditItemButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeEditorOpenSourceButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeInsightPresetButtons, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeModeButtons, knowledgeNewNoteButton, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgeOpenSourceButton, knowledgePriorityFilterSelect, knowledgeQuestionPresetButtons, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeRunResearchButton, knowledgeSaveResearchResultButton, knowledgeSearchInput, knowledgeSelectVisibleButton, knowledgeSortSelect, knowledgeVenueFilterSelect, knowledgeYearFilterSelect, paperCardBackButton, exportPaperCardButton, paperCardCloseButton, paperCardPageElement, paperCardScrollContainers, paperCardSectionButtons, regeneratePaperCardButton, returnToPdfButton, savePaperCardPageButton, summaryScopeButtons } from "../viewer-elements";
-import { activeKnowledgeCategory, activeKnowledgeFocus, activeKnowledgeInsightPrompt, activeKnowledgePageMode, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, editingPaperOverviewId, knowledgeEditorTargetKey, paperCardPageDocumentKey, paperCardReturnTarget, persistCurrentAppViewState, selectedKnowledgeRecordKey, selectedKnowledgeResearchKeys } from "../../core/pdf-reader/public";
+import { cardTypeButtons, knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeDeleteItemButton, knowledgeDetailCloseButton, knowledgeEditItemButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeEditorOpenSourceButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeMainElement, knowledgeNewNoteButton, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgeOpenSourceButton, knowledgePriorityFilterSelect, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeSearchInput, knowledgeSortSelect, knowledgeVenueFilterSelect, knowledgeYearFilterSelect, summaryScopeButtons } from "../viewer-elements";
+import { activeKnowledgeCategory, activeKnowledgeFocus, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, knowledgeEditorTargetKey, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
 
 import { setActiveSummaryScope } from "../../services/document-agent/viewer-document-agent";
-import { closePaperCardPage, exportPaperOverviewCard, generatePaperOverviewCard, openSavedPaperCardSourcePdf, openSavedPaperOverviewReview, paperCardEditMode, savePaperOverviewCard, setActiveCardType, setActivePaperCardSection, setPaperCardEditMode, setPaperCardPageStatus, syncPaperCardSectionFromScroll } from "../../features/paper-card/public";
+import { setActiveCardType } from "../../features/paper-card/public";
 
 
-import { addCurrentPdfToLibrary, clearKnowledgeResearchResult, closeKnowledgeBasePage, closeKnowledgeEditor, collectKnowledgeItems, deleteKnowledgeItem, deleteSelectedKnowledgeItem, getFilteredKnowledgeItems, getSelectedKnowledgeItem, importKnowledgeNotes, knowledgeEditorBodyMode, normalizeKnowledgeCategory, openKnowledgeBasePage, openKnowledgeEditor, openSelectedKnowledgeSource, renderKnowledgeBase, renderKnowledgeDetail, runKnowledgeResearch, saveKnowledgeEditor, saveKnowledgeResearchResult, scheduleKnowledgeEditorPreview, setKnowledgeEditorBodyMode, resetKnowledgeOriginFilter, setKnowledgeFilter, setKnowledgeOrigin, setKnowledgeOriginContent, setKnowledgePageMode, setKnowledgePageStatus, updateKnowledgeResearchScopeSummary } from "../../features/knowledge-base/public";
-import type { CardType, KnowledgeFilter, KnowledgeFocus, KnowledgePageMode, SummaryScope } from "../../core/pdf-reader/public";
+import { addCurrentPdfToLibrary, closeKnowledgeBasePage, closeKnowledgeEditor, collectKnowledgeItems, deleteKnowledgeItem, deleteSelectedKnowledgeItem, getSelectedKnowledgeItem, importKnowledgeNotes, knowledgeEditorBodyMode, normalizeKnowledgeCategory, openKnowledgeBasePage, openKnowledgeEditor, openSelectedKnowledgeSource, registerKnowledgeCorpusEvents, renderKnowledgeBase, renderKnowledgeDetail, saveKnowledgeEditor, scheduleKnowledgeEditorPreview, setKnowledgeEditorBodyMode, resetKnowledgeOriginFilter, setKnowledgeFilter, setKnowledgeOrigin, setKnowledgeOriginContent, setKnowledgePageStatus } from "../../features/knowledge-base/public";
+import type { CardType, KnowledgeFilter, KnowledgeFocus, SummaryScope } from "../../core/pdf-reader/public";
 import type { KnowledgeOriginContentFilter, KnowledgeOriginFilter } from "../../features/knowledge-base/public";
 
 import { scheduleAppViewStateSave } from '../app-ui';
 
 export function registerKnowledgeEvents(): void {
+  registerKnowledgeCorpusEvents();
   knowledgeBaseEntryButton.addEventListener("click", openKnowledgeBasePage);
   
   knowledgeBaseBackButton.addEventListener("click", closeKnowledgeBasePage);
-  
-  for (const button of knowledgeModeButtons) {
-      button.addEventListener("click", () => {
-        const mode = button.dataset.knowledgeMode as KnowledgePageMode | undefined;
-        if (mode) setKnowledgePageMode(mode);
-      });
-    }
-  
-  knowledgeResearchScopeSelect.addEventListener(
-      "change",
-      updateKnowledgeResearchScopeSummary,
-    );
-  
-  knowledgeSelectVisibleButton.addEventListener("click", () => {
-      for (const item of getFilteredKnowledgeItems(collectKnowledgeItems())) {
-        selectedKnowledgeResearchKeys.value.add(item.recordKey);
-      }
-      knowledgeResearchScopeSelect.value = "selected";
-      renderKnowledgeBase();
-      setKnowledgePageMode(
-        activeKnowledgePageMode.value === "library" ? "qa" : activeKnowledgePageMode.value,
-      );
-    });
-  
-  knowledgeClearSelectionButton.addEventListener("click", () => {
-      selectedKnowledgeResearchKeys.value.clear();
-      renderKnowledgeBase();
-    });
-  
-  for (const button of knowledgeQuestionPresetButtons) {
-      button.addEventListener("click", () => {
-        knowledgeResearchQuestionInput.value =
-          button.dataset.knowledgeQuestion || "";
-        knowledgeResearchQuestionInput.focus();
-      });
-    }
-  
-  for (const button of knowledgeInsightPresetButtons) {
-      button.addEventListener("click", () => {
-        activeKnowledgeInsightPrompt.value =
-          button.dataset.knowledgeInsight || activeKnowledgeInsightPrompt.value;
-        for (const candidate of knowledgeInsightPresetButtons)
-          candidate.classList.toggle("active", candidate === button);
-      });
-    }
-  
-  knowledgeRunResearchButton.addEventListener(
-      "click",
-      () => void runKnowledgeResearch(),
-    );
-  
-  knowledgeClearResearchButton.addEventListener(
-      "click",
-      clearKnowledgeResearchResult,
-    );
-  
-  knowledgeSaveResearchResultButton.addEventListener(
-      "click",
-      saveKnowledgeResearchResult,
-    );
-  
-  knowledgeResearchQuestionInput.addEventListener("keydown", (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter")
-        void runKnowledgeResearch();
-    });
-  
-  knowledgeInsightQuestionInput.addEventListener("keydown", (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter")
-        void runKnowledgeResearch();
-    });
   
   knowledgeRefreshButton.addEventListener("click", () => {
       setKnowledgePageStatus();
@@ -109,6 +40,9 @@ export function registerKnowledgeEvents(): void {
     });
   
   knowledgeNewNoteButton.addEventListener("click", addCurrentPdfToLibrary);
+  document.getElementById("add-current-pdf-to-library")?.addEventListener("click", () => {
+    void addCurrentPdfToLibrary();
+  });
   
   knowledgeImportButton.addEventListener("click", () =>
       knowledgeImportInput.click(),
@@ -126,43 +60,6 @@ export function registerKnowledgeEvents(): void {
   knowledgeMainElement?.addEventListener("scroll", scheduleAppViewStateSave, {
       passive: true,
     });
-  
-  paperCardPageElement.addEventListener("scroll", () => {
-      scheduleAppViewStateSave();
-    }, { passive: true });
-  
-  for (const container of paperCardScrollContainers) {
-      container.addEventListener("scroll", () => {
-        scheduleAppViewStateSave();
-        syncPaperCardSectionFromScroll(container);
-      }, { passive: true });
-    }
-  
-  for (const button of paperCardSectionButtons) {
-      button.addEventListener("click", () => {
-        const sectionId = button.dataset.paperCardSection;
-        if (!sectionId) return;
-        const section = document.getElementById(sectionId);
-        if (!section) return;
-        setActivePaperCardSection(sectionId);
-        section.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
-  
-  knowledgeResearchQuestionInput.addEventListener(
-      "input",
-      scheduleAppViewStateSave,
-    );
-  
-  knowledgeInsightQuestionInput.addEventListener(
-      "input",
-      scheduleAppViewStateSave,
-    );
-  
-  knowledgeResearchScopeSelect.addEventListener(
-      "change",
-      persistCurrentAppViewState,
-    );
   
   knowledgeGroupSelect.addEventListener("change", renderKnowledgeBase);
   
@@ -262,10 +159,6 @@ export function registerKnowledgeEvents(): void {
   knowledgeEditItemButton.addEventListener("click", () => {
       const item = getSelectedKnowledgeItem();
       if (!item) return;
-      if (item.source === "paper-overview") {
-        openSavedPaperOverviewReview(item);
-        return;
-      }
       openKnowledgeEditor(item);
     });
   
@@ -330,41 +223,6 @@ export function registerKnowledgeEvents(): void {
       event.preventDefault();
       saveKnowledgeEditor();
     });
-  
-  paperCardBackButton.addEventListener("click", () =>
-      closePaperCardPage(paperCardReturnTarget.value),
-    );
-  
-  returnToPdfButton.addEventListener("click", () => {
-      if (editingPaperOverviewId.value) {
-        void openSavedPaperCardSourcePdf();
-        return;
-      }
-      closePaperCardPage("pdf");
-    });
-
-  paperCardCloseButton.addEventListener("click", () =>
-      closePaperCardPage(paperCardReturnTarget.value),
-    );
-
-  editPaperCardButton.addEventListener("click", () => {
-      const enteringEditMode = !paperCardEditMode.value;
-      setPaperCardEditMode(enteringEditMode);
-      if (enteringEditMode) {
-        setPaperCardPageStatus("已进入编辑模式，可直接点击字段修改内容。");
-      }
-      else if (!editingPaperOverviewId.value) {
-        setPaperCardPageStatus("编辑完成，修改已保存到本地草稿。");
-      }
-    });
-  
-  regeneratePaperCardButton.addEventListener("click", () => {
-      paperCardPageDocumentKey.value = "";
-      void generatePaperOverviewCard(true);
-    });
-  
-  savePaperCardPageButton.addEventListener("click", savePaperOverviewCard);
-  exportPaperCardButton.addEventListener("click", exportPaperOverviewCard);
   
   for (const button of summaryScopeButtons) {
       button.addEventListener("click", () => {

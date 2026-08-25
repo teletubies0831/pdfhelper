@@ -4,7 +4,7 @@ import {
   type AiStreamErrorInfo,
   type AiNativeToolCall,
   type VisionAiConfig,
-} from "../../../shared/ai";
+} from "../../modules/ai/public";
 
 export function getProviderError(payload: unknown, fallback: string): string {
   if (!payload || typeof payload !== "object") return fallback;

@@ -1,6 +1,12 @@
-import type { AiConversationMessage, AiStreamStartMessage } from "../../../../shared/ai";
-import { type DocumentAgentRecord, type DocumentChunk, type DocumentOutlineItem, type DocumentProfile, type DocumentSectionProfile, type DocumentToolResult } from "../../../../shared/document-agent";
-import type { ResolvedReadingMode } from "../../../../shared/reading-mode";
+import type { AiConversationMessage, AiStreamStartMessage } from "../../ai/public";
+import type {
+  DocumentAgentRecord,
+  DocumentChunk,
+  DocumentOutlineItem,
+  DocumentProfile,
+  DocumentSectionProfile,
+} from "../contracts";
+import type { ResolvedReadingMode } from "../../reading-mode/public";
 
 
 
@@ -60,15 +66,6 @@ export interface BuildRetrievalContextOptions {
   hasVisionModel: boolean;
   userImageAttached?: boolean;
   inspectPageImage?(pageNumber: number, question: string): Promise<{ content: string; model: string; cached: boolean }>;
-}
-
-
-export interface DocumentRetrievalContext {
-  text: string;
-  sourcePages: number[];
-  toolResults: DocumentToolResult[];
-  plannerReason: string;
-  planningRounds: number;
 }
 
 

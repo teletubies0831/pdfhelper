@@ -1,5 +1,6 @@
 export * from './contracts';
-export * from './tool-catalog';
+export * from './mcp/agent-tool-catalog';
+export * from './mcp/agent-tool-server';
 export * from './providers/provider';
 export * from './providers/provider-error';
 export * from './providers/provider-registry';

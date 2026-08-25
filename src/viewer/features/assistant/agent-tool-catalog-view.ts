@@ -78,7 +78,9 @@ export function renderAgentToolCatalog(): void {
   settingsAgentToolCatalog.replaceChildren();
 
   for (const group of AGENT_TOOL_GROUPS) {
-    const tools = AGENT_TOOL_DEFINITIONS.filter((tool) => tool.name.startsWith(group.prefix));
+    const tools = AGENT_TOOL_DEFINITIONS.filter((tool) =>
+      tool.applicationName.startsWith(group.prefix),
+    );
     if (tools.length === 0) continue;
 
     const card = document.createElement('article');

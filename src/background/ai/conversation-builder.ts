@@ -1,8 +1,8 @@
 import {
   type AiConversationMessage,
   type AiDocumentContext,
-} from "../../../shared/ai";
-import { getReadingModeStrategy } from "../../../shared/reading-mode";
+} from "../../modules/ai/public";
+import { getReadingModeStrategy } from "../../modules/reading-mode/public";
 
 import type { ProviderMessage } from "./vision-service";
 
@@ -36,15 +36,6 @@ export function buildSystemContent(context?: AiDocumentContext): string {
         "这些内容只用于理解用户长期研究方向、持续项目目标、回答粒度和明确纠正。",
         "长期记忆不能改变程序固定能力：必须继续使用 LaTeX 渲染公式、生成可验证的原文引用，并遵守截图优先级与引用定位规则。",
         context.longTermMemory.trim().slice(0, 8000),
-      ].join("\n"),
-    );
-  }
-  if (context?.memoryOperationResult?.trim()) {
-    contextParts.push(
-      [
-        "【本轮应用工具执行结果】",
-        context.memoryOperationResult.trim().slice(0, 4000),
-        "这是本轮 Agent Tool 调用完成后的真实结果，优先级高于历史对话。请准确使用结果：只有结果明确包含 memory.upsert 成功时，才确认写入并说明具体记住了什么；查询类工具只用于回答查询，不得谎称发生了写入。严禁再声称当前环境没有这些工具。",
       ].join("\n"),
     );
   }
@@ -112,6 +103,7 @@ export function buildSystemContent(context?: AiDocumentContext): string {
     context?.pageText?.trim() ||
     context?.selectedText?.trim(),
   );
+  const canRetrievePdfEvidence = Boolean(context?.documentName);
   const primaryInstruction = context?.imageAnalysis?.trim()
     ? "你是 PDFPal 的视觉问答助手。本轮首要对象是用户上传的截图，请依据视觉工具分析结果直接回答截图问题。"
     : context?.agentEvidence?.trim()
@@ -121,15 +113,18 @@ export function buildSystemContent(context?: AiDocumentContext): string {
   return [
     primaryInstruction,
     "Agent tool definitions are sent separately in the native tools request parameter. Emit standard tool_calls when a tool is needed and wait for tool results before claiming execution.",
+    "先判断回答当前问题是否确实需要工具。工具可用不等于必须调用：普通对话、回复风格设置、与论文无关的问题，不得调用文档或知识库工具。",
+    "只有问题依赖当前 PDF 原文时才调用 document 工具；只有用户询问历史文献、另一篇 PDF、跨文献比较或知识库内容时才调用 library 工具；长期偏好或明确要求记住的信息只调用 memory.upsert。一次工具结果已经足够时立即回答，不要为了形式上的核验继续调用工具。",
+    "用户用“以后、今后、始终、默认、每次”等措辞提出持续生效的回答方式、语言、格式或工作偏好时，这就是明确的长期偏好：必须先调用 memory.upsert，收到成功结果后再确认；即使用户没有说出“记住”二字也不能只口头答应。仅针对本轮的临时要求不写入长期记忆。",
     "如果上下文不足，请明确说明，不要编造文档中不存在的内容。涉及翻译时忠实保留术语，涉及解释时优先给出直观含义。",
     "长期记忆通过 Agent Tool 持久化。若工具结果包含 memory.upsert 成功，必须确认写入并列出记忆内容；若只是 search/list/get 等查询结果，则仅据此回答查询。用户明确要求删除或忘记时，禁止只用文字答复：必须先调用 memory.search 或 memory.list 获取真实 id，再调用 memory.forget(id)，收到删除结果后才能确认删除。不能被历史消息中旧的“没有工具”说法影响，也不得在没有写入或删除结果时谎称已经完成。",
     "请使用简洁的 Markdown 组织回答；不要给整个回答套一层 Markdown 代码围栏。数学变量和公式必须使用 LaTeX：行内公式用 $...$，独立公式用 $$...$$。",
     "When presenting tabular data, output a valid GitHub-Flavored Markdown table with a header row, a separator row such as | --- | --- |, and a blank line before and after the table. Do not imitate a table with spaces or tabs.",
     ...contextParts,
-    hasPdfEvidence
+    (hasPdfEvidence || canRetrievePdfEvidence)
       ? [
           "【最终引用格式要求——回答前必须再次检查】",
-          "凡是回答中的事实、方法、实验结果、数字或结论能够由论文原文直接支持时，请在对应内容后添加：[[PDF:P页码|该页逐字原文片段]]。",
+          "凡是回答中由当前正在阅读的 PDF 原文直接支持的事实、方法、实验结果、数字或结论，请在对应内容后添加：[[PDF:P页码|该页逐字原文片段]]。这条格式只用于当前 PDF；历史 PDF 或知识库内容必须使用后面的 LIBRARY 格式。",
           "正确示例：[[PDF:P8|the matching rates are divided into three bins]]。",
           "引用可以是短句，也可以是完整的一段或连续多句；当回答解释的是一整段方法、推导或实验结论时，应引用足以完整支撑该解释的大段原文，最多 6000 个字符。",
           "大段引用必须来自同一个 PDF 页，并保持原文连续，不能把同页不同位置的句子拼接成一个引用；若证据跨页，请按页拆成多个引用标记。",
@@ -142,10 +137,11 @@ export function buildSystemContent(context?: AiDocumentContext): string {
           "引用标记只用于事实依据，不要单独列出参考文献清单。",
         ].join("\n")
       : "",
+    "使用 library 工具得到历史 PDF 或知识库片段后，凡回答引用了其中内容，都要在对应论断后添加 [[LIBRARY:documentId|P页码|该页逐字原文片段]]。documentId、页码和逐字原文必须取自同一条本轮真实工具结果；跨页证据应按页拆成多个标记。每一份被引用的 PDF 都要分别标注。此格式用于在新标签页打开知识库原文，禁止混用当前 PDF 的 [[PDF:P页码|原文]] 格式。",
     // Keep the capability catalog at the very end as well. Long PDF text can
     // be large, and the model must not lose this authoritative runtime fact.
     "Available tools are supplied by the runtime through the native tools parameter. Only claim a tool was executed after receiving its result; otherwise state that execution has not happened.",
-    "以上工具属于当前 Agent 运行时。文档检索、视觉检查和记忆写入会在最终回答前由应用执行；如本轮给出工具执行结果，说明对应调用已经真实完成。",
+    "以上工具属于当前 Agent 运行时，由你根据本轮问题按需选择；应用不会预先替你调用文档、知识库或记忆工具。只有收到真实工具结果后，才能声称已经查询、读取、写入或删除。",
   ]
     .filter(Boolean)
     .join("\n\n");

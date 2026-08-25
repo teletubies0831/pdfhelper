@@ -1,6 +1,6 @@
 import { browser } from "wxt/browser";
 
-import { ACTION_LABELS, SELECTION_STORAGE_KEY, type SelectionAction, type SelectionRequest } from "../../../shared/selection";
+import { ACTION_LABELS, SELECTION_STORAGE_KEY, type SelectionAction, type SelectionRequest } from "../../modules/selection/public";
 
 
 
@@ -13,11 +13,6 @@ import { ACTION_LABELS, SELECTION_STORAGE_KEY, type SelectionAction, type Select
 export const MENU_ROOT_ID = 'pdf-helper-selection';
 
 export const MENU_PREFIX = 'pdf-helper-action-';
-
-export const PAPER_OVERVIEW_TIMEOUT_MS = 120_000;
-
-export const paperOverviewRequestControllers = new Map<string, AbortController>();
-
 
 export async function registerContextMenus() {
   await browser.contextMenus.removeAll();
@@ -74,6 +69,6 @@ export async function openEnhancedViewer() {
 }
 
 
-export async function openHelperPanelPage() {
-  await browser.tabs.create({ url: browser.runtime.getURL('/helper-panel.html') });
+export async function openSelectionPage() {
+  await browser.tabs.create({ url: browser.runtime.getURL('/selection-page.html') });
 }

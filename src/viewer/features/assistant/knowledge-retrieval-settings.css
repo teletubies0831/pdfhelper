@@ -1,0 +1,42 @@
+.settings-embedding-section {
+  margin: 14px 0;
+  border-top: 1px solid #e2e9f2;
+  padding-top: 14px;
+}
+
+.settings-embedding-heading {
+  margin-bottom: 12px;
+}
+
+.settings-embedding-heading strong,
+.settings-embedding-heading small,
+.settings-embedding-status-card span,
+.settings-embedding-status-card small {
+  display: block;
+}
+
+.settings-embedding-heading strong {
+  color: #344054;
+}
+
+.settings-embedding-heading small,
+.settings-embedding-status-card small {
+  margin-top: 4px;
+  color: #718096;
+  line-height: 1.45;
+}
+
+.settings-embedding-status-card {
+  margin: 12px 0;
+  border: 1px solid #dfe7f1;
+  border-radius: 10px;
+  background: #fbfcfe;
+  padding: 10px 12px;
+}
+
+.settings-embedding-status-card progress {
+  width: 100%;
+  height: 8px;
+  margin-top: 9px;
+  accent-color: #16805b;
+}

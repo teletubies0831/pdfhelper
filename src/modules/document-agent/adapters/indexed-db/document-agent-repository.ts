@@ -1,5 +1,5 @@
 import type { DocumentAgentRecord, DocumentAgentSession, DocumentChunk } from '../../contracts';
-import { CHUNKS_STORE, DOCUMENTS_STORE, DOCUMENT_ID_INDEX, SESSIONS_STORE, VISION_CACHE_STORE, openDocumentAgentDatabase, requestToPromise, transactionDone } from '../../../../platform/database/workspace-database';
+import { CHUNKS_STORE, DOCUMENTS_STORE, DOCUMENT_ID_INDEX, SESSIONS_STORE, VISION_CACHE_STORE, openDocumentAgentDatabase, requestToPromise, transactionDone } from '../../../../infrastructure/database/workspace-database';
 
 export function isDocumentAgentStorageAvailable(): boolean {
   return typeof indexedDB !== 'undefined';
@@ -13,6 +13,19 @@ export async function getDocumentAgentRecord(id: string): Promise<DocumentAgentR
       transaction.objectStore(DOCUMENTS_STORE).get(id),
     );
     return value ?? null;
+  } finally {
+    database.close();
+  }
+}
+
+export async function listDocumentAgentRecords(): Promise<DocumentAgentRecord[]> {
+  const database = await openDocumentAgentDatabase();
+  try {
+    const transaction = database.transaction(DOCUMENTS_STORE, 'readonly');
+    const records = await requestToPromise<DocumentAgentRecord[]>(
+      transaction.objectStore(DOCUMENTS_STORE).getAll(),
+    );
+    return records.sort((left, right) => right.updatedAt - left.updatedAt);
   } finally {
     database.close();
   }

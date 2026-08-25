@@ -497,3 +497,86 @@
   gap: 8px;
   margin-top: 10px;
 }
+
+.app-confirm-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid #dce5f2;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 35 68 / 24%);
+  color: #243248;
+}
+
+.app-confirm-dialog::backdrop {
+  background: rgb(25 42 70 / 28%);
+  backdrop-filter: blur(2px);
+}
+
+.app-confirm-dialog-card {
+  display: grid;
+  gap: 22px;
+  padding: 22px;
+}
+
+.app-confirm-dialog header {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 32px;
+  gap: 12px;
+  align-items: start;
+}
+
+.app-confirm-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  background: #fff1f0;
+  color: #d92d20;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.app-confirm-dialog h2 {
+  margin: 1px 0 0;
+  font-size: 18px;
+}
+
+.app-confirm-dialog header p {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.app-confirm-dialog .app-confirm-dialog-close {
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #667085;
+  font-size: 20px;
+}
+
+.app-confirm-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.app-confirm-dialog footer button {
+  min-width: 84px;
+}
+
+.app-confirm-dialog footer .danger-button {
+  border-color: #d92d20;
+  background: #d92d20;
+  color: #fff;
+}
+
+.app-confirm-dialog footer .danger-button:hover {
+  border-color: #b42318;
+  background: #b42318;
+}

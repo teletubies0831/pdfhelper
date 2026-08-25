@@ -1,1 +1,1 @@
-import '../../src/popup/bootstrap';
+import '../../src/viewer-launcher/bootstrap';

@@ -7,10 +7,13 @@
     "dev": "wxt -b edge",
     "dev:chrome": "wxt -b chrome",
     "typecheck": "tsc --noEmit",
+    "test:ink-eraser": "node --experimental-strip-types --no-warnings scripts/test-ink-eraser.mjs",
     "test:ai-contracts": "node --experimental-strip-types --no-warnings scripts/test-ai-contracts.mjs",
+    "test:agent-tools": "node --experimental-strip-types --no-warnings scripts/test-agent-tool-contracts.mjs",
+    "test:semantic-retrieval": "node --experimental-strip-types --no-warnings scripts/test-semantic-retrieval.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:production": "node scripts/check-production.mjs",
-    "check": "pnpm typecheck && pnpm test:ai-contracts && pnpm check:architecture && pnpm build && pnpm check:production",
+    "check": "pnpm typecheck && pnpm test:ink-eraser && pnpm test:ai-contracts && pnpm test:agent-tools && pnpm test:semantic-retrieval && pnpm check:architecture && pnpm build && pnpm check:production",
     "build": "wxt build -b edge",
     "build:chrome": "wxt build -b chrome",
     "zip": "wxt zip -b edge",
@@ -18,14 +21,18 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "@langchain/core": "^1.0.0",
+    "@langchain/langgraph": "^1.0.0",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "dompurify": "^3.2.7",
     "katex": "^0.18.1",
     "marked": "^16.3.0",
+    "onnxruntime-web": "1.26.0-dev.20260416-b7804b056c",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "5.7.284",
-    "@langchain/core": "^1.0.0",
-    "zod": "^4.0.0",
-    "@langchain/langgraph": "^1.0.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

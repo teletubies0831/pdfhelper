@@ -3,7 +3,7 @@ import {
   DeepSeekProviderAdapter,
 } from "../../modules/ai/public";
 
-import { normalizeAiBaseUrl, type AiConfig } from "../../../shared/ai";
+import { normalizeAiBaseUrl, type AiConfig } from "../../modules/ai/public";
 
 import { getProviderError } from "./vision-service";
 import type {

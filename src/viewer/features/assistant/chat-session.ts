@@ -5,9 +5,9 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 
 import { browser } from "wxt/browser";
-import { AI_STREAM_PORT_NAME, type AiConversationMessage, type AiRuntimeResponse, type AiNativeToolCall, type AiStreamServerMessage, type AiStreamStartMessage, type AiStreamToolResult } from "../../../../shared/ai";
+import { AI_STREAM_PORT_NAME, type AiConversationMessage, type AiRuntimeResponse, type AiNativeToolCall, type AiStreamServerMessage, type AiStreamStartMessage, type AiStreamToolResult } from "../../../modules/ai/public";
 
-import { createDocumentAgentId } from "../../../../shared/document-agent";
+import { createDocumentAgentId } from "../../../modules/document-agent/public";
 
 
 import { getLatestDocumentSession, isDocumentAgentStorageAvailable, putDocumentSession } from "../../../../entrypoints/viewer/document-agent-store";
@@ -25,8 +25,9 @@ import { pdfDocument, sourceName } from "../../app/viewer-state";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { validatePdfCitations } from "../translation/public";
 
-import { clearPendingChatImages, executeNativeToolCalls } from './library-tools';
+import { clearPendingChatImages } from './chat-image-service';
 import { appendChatMessage } from './chat-view';
+import { embeddedAgentToolRuntime } from './mcp/embedded-agent-tool-runtime';
 
 
 
@@ -86,7 +87,7 @@ export function requestAiStream(
         if (handledToolRounds.has(message.round)) return;
         handledToolRounds.add(message.round);
         onDelta({ toolCalls: message.calls });
-        void executeNativeToolCalls(message.calls, context).then((results) => {
+        void embeddedAgentToolRuntime.executeToolCalls(message.calls, context).then((results) => {
           onDelta({ toolResults: results });
           port.postMessage({ type: "tool-results", requestId, results });
         }).catch((error) => {
@@ -131,16 +132,26 @@ export function requestAiStream(
       reject(error);
     });
 
-    const startMessage: AiStreamStartMessage = {
-      type: "start",
-      requestId,
-      messages,
-      context: {
-        ...context,
-        readingMode: context?.readingMode ?? resolvedReadingMode.value,
-      },
-    };
-    port.postMessage(startMessage);
+    void embeddedAgentToolRuntime.listTools().then(({ tools }) => {
+      if (settled) return;
+      const startMessage: AiStreamStartMessage = {
+        type: "start",
+        requestId,
+        messages,
+        context: {
+          ...context,
+          readingMode: context?.readingMode ?? resolvedReadingMode.value,
+        },
+        mcpTools: tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+        })),
+      };
+      port.postMessage(startMessage);
+    }).catch((error) => {
+      finish(() => reject(error));
+    });
   });
 }
 
@@ -155,6 +166,7 @@ export function renderChatConversation(messages: AiConversationMessage[]): void 
   for (const message of chatHistory.value) {
     appendChatMessage(message.role, message.content, {
       images: message.images,
+      evidenceSources: message.evidenceSources,
     });
   }
   if (chatHistory.value.length > 0) {

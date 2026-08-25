@@ -1,5 +1,5 @@
-import type { AiConversationMessage } from "../../../shared/ai";
-import type { ResolvedReadingMode } from "../../../shared/reading-mode";
+import type { AiConversationMessage } from "../ai/public";
+import type { ResolvedReadingMode } from "../reading-mode/public";
 
 export const DOCUMENT_AGENT_SCHEMA_VERSION = 1;
 

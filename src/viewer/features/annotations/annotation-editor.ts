@@ -22,6 +22,7 @@ import { updateControls } from "../../core/pdf-reader/public";
 import { getSelectionHeightRatio, mergeHighlightBoxes } from '../text-selection/public';
 import { scheduleHighlightNoteIndicatorRefresh } from './annotation-notes';
 import { rememberHighlightColor } from './highlight-color-history';
+import { isPointInsideInkShape } from './ink-eraser';
 
 
 
@@ -535,7 +536,7 @@ export function isPointInsideEditor(
   }
 
   if (isInkEditor(editor)) {
-    return false;
+    return isPointInsideInkShape(editor, clientX, clientY);
   }
 
   if (isFreeTextEditor(editor)) {
@@ -563,8 +564,6 @@ export function isPointInsideEditor(
     isPointInRect(clientX, clientY, rect, 1)
   );
 }
-
-
 
 export function findAnnotationEditorAtPoint(
   clientX: number,

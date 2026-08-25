@@ -45,10 +45,6 @@ export const translationLearningTitleElement = requiredElement<HTMLElement>(
 export const translationResultElement =
   requiredElement<HTMLElement>("translation-result");
 
-export const saveTranslationNoteButton = requiredElement<HTMLButtonElement>(
-  "save-translation-note",
-);
-
 export const generateMoreExamplesButton = requiredElement<HTMLButtonElement>(
   "generate-more-examples",
 );
@@ -103,6 +99,3 @@ export const summaryScopeButtons = Array.from(
 );
 
 export const copySummaryButton = requiredElement<HTMLButtonElement>("copy-summary");
-
-export const saveSummaryNoteButton =
-  requiredElement<HTMLButtonElement>("save-summary-note");

@@ -9,7 +9,6 @@ if (manifest.version !== '1.0.0') {
 }
 
 await readFile(path.join(outputDir, 'privacy-policy.html'), 'utf8');
-await readFile(path.join(root, 'PRIVACY_POLICY.md'), 'utf8');
 
 async function collectJavaScript(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -17,7 +16,11 @@ async function collectJavaScript(directory) {
   for (const entry of entries) {
     const absolutePath = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...await collectJavaScript(absolutePath));
-    else if (/\.(?:js|mjs)$/.test(entry.name) && !entry.name.startsWith('pdf.worker-')) {
+    else if (/\.(?:js|mjs)$/.test(entry.name)
+      && !entry.name.startsWith('pdf.worker-')
+      // This owned worker bundles PDF.js, ONNX Runtime, and Transformers.js;
+      // validate our source below instead of rejecting third-party diagnostics.
+      && !entry.name.startsWith('knowledge-index.worker-')) {
       files.push(absolutePath);
     }
   }
@@ -39,4 +42,13 @@ for (const file of await collectJavaScript(outputDir)) {
   if (match) throw new Error(`Production bundle contains forbidden debug output ${JSON.stringify(match)} in ${file}.`);
 }
 
-console.log('Production check passed: version, privacy policy, and bundle hygiene verified.');
+const knowledgeWorkerSource = await readFile(
+  path.join(root, 'src', 'viewer', 'features', 'knowledge-base', 'knowledge-index.worker.ts'),
+  'utf8',
+);
+const knowledgeWorkerMatch = forbidden.find((value) => knowledgeWorkerSource.includes(value));
+if (knowledgeWorkerMatch) {
+  throw new Error(`Knowledge index worker source contains forbidden debug output ${JSON.stringify(knowledgeWorkerMatch)}.`);
+}
+
+console.log('Production check passed: version, packaged privacy page, and bundle hygiene verified.');

@@ -5,27 +5,26 @@
 
 
 
-import { DEFAULT_AI_CONFIG, DEFAULT_VISION_AI_CONFIG, type AiConfig, type AiConversationMessage, type AiImageAttachment, type VisionAiConfig } from "../../../shared/ai";
-import { type ReadingModePreference, type ResolvedReadingMode } from "../../../shared/reading-mode";
+import { DEFAULT_AI_CONFIG, DEFAULT_VISION_AI_CONFIG, type AiConfig, type AiConversationMessage, type AiImageAttachment, type VisionAiConfig } from "../../modules/ai/public";
+import { type ReadingModePreference, type ResolvedReadingMode } from "../../modules/reading-mode/public";
 
 
-import { DEFAULT_CONVERSATION_MEMORY_CONFIG, type ConversationMemoryConfig } from "../../../shared/memory";
-
-
-
+import { DEFAULT_CONVERSATION_MEMORY_CONFIG, type ConversationMemoryConfig } from "../../modules/memory/public";
 
 
 
-import { aiSettingsButton, appFrame, assistantChatPanel, assistantSettingsPanel, assistantToolsRuntime, assistantViewButtons, chatInput, knowledgeGroupSelect, knowledgeInsightQuestionInput, knowledgeMainElement, knowledgeResearchQuestionInput, knowledgeResearchScopeSelect, knowledgeSearchInput, knowledgeSortSelect, paperCardPageElement, settingsModalBackdrop } from "./viewer-elements";
+
+
+
+import { aiSettingsButton, appFrame, assistantChatPanel, assistantSettingsPanel, assistantToolsRuntime, assistantViewButtons, chatInput, knowledgeGroupSelect, knowledgeMainElement, knowledgeSearchInput, knowledgeSortSelect, settingsModalBackdrop } from "./viewer-elements";
 import { refreshLongTermMemoryList, resetSettingsPresentation } from "../features/assistant/public";
 import { cancelPendingAutomaticTranslation } from "../features/translation/public";
-import { collectKnowledgeItems, openKnowledgeBasePage, setKnowledgePageMode } from "../features/knowledge-base/public";
-import { cancelPendingCardGeneration, openSavedPaperOverviewReview } from "../features/paper-card/public";
+import { openKnowledgeBasePage } from "../features/knowledge-base/public";
+import { cancelPendingCardGeneration } from "../features/paper-card/public";
 import { cancelPendingSummaryGeneration } from "../services/document-agent/viewer-document-agent";
 import { activateAiTab } from "./bootstrap";
-import { APP_VIEW_SESSION_STORAGE_KEY, activeKnowledgeCategory, activeKnowledgeFilter, activeKnowledgeFocus, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, editingPaperOverviewId } from './feature-models';
-import type { KnowledgeItem, PersistedAppView, PersistedAppViewState } from './feature-models';
-import type { KnowledgePageMode } from '../core/pdf-reader/reader-controls';
+import { APP_VIEW_SESSION_STORAGE_KEY, activeKnowledgeCategory, activeKnowledgeFilter, activeKnowledgeFocus, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear } from './feature-models';
+import type { PersistedAppView, PersistedAppViewState } from './feature-models';
 
 
 
@@ -37,17 +36,12 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
     const value = JSON.parse(raw) as Partial<PersistedAppViewState>;
     if (
       value.view !== "viewer" &&
-      value.view !== "knowledge" &&
-      value.view !== "paper-review"
+      value.view !== "knowledge"
     ) {
       return null;
     }
     return {
       view: value.view,
-      knowledgeMode:
-        value.knowledgeMode === "qa" || value.knowledgeMode === "insights"
-          ? value.knowledgeMode
-          : "library",
       knowledgeFilter:
         value.knowledgeFilter === "note" ||
         value.knowledgeFilter === "reading-card" ||
@@ -92,38 +86,12 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
         typeof value.knowledgeGroup === "string"
           ? value.knowledgeGroup
           : "none",
-      knowledgeResearchScope:
-        typeof value.knowledgeResearchScope === "string"
-          ? value.knowledgeResearchScope
-          : "selected",
-      knowledgeResearchQuestion:
-        typeof value.knowledgeResearchQuestion === "string"
-          ? value.knowledgeResearchQuestion
-          : "",
-      knowledgeInsightQuestion:
-        typeof value.knowledgeInsightQuestion === "string"
-          ? value.knowledgeInsightQuestion
-          : "",
       selectedKnowledgeRecordKey:
         typeof value.selectedKnowledgeRecordKey === "string"
           ? value.selectedKnowledgeRecordKey
           : "",
-      selectedKnowledgeResearchKeys: Array.isArray(
-        value.selectedKnowledgeResearchKeys,
-      )
-        ? value.selectedKnowledgeResearchKeys.filter(
-            (key): key is string => typeof key === "string",
-          )
-        : [],
       knowledgeScrollTop: Number.isFinite(value.knowledgeScrollTop)
         ? Number(value.knowledgeScrollTop)
-        : 0,
-      reviewPaperOverviewId:
-        typeof value.reviewPaperOverviewId === "string"
-          ? value.reviewPaperOverviewId
-          : "",
-      paperCardScrollTop: Number.isFinite(value.paperCardScrollTop)
-        ? Number(value.paperCardScrollTop)
         : 0,
     };
   } catch {
@@ -134,8 +102,6 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
 
 
 export function getCurrentPersistedAppView(): PersistedAppView {
-  if (!paperCardPageElement.hidden && editingPaperOverviewId.value)
-    return "paper-review";
   if (appFrame?.classList.contains("knowledge-base-page-open"))
     return "knowledge";
   return "viewer";
@@ -146,7 +112,6 @@ export function getCurrentPersistedAppView(): PersistedAppView {
 export function persistCurrentAppViewState(): void {
   const state: PersistedAppViewState = {
     view: getCurrentPersistedAppView(),
-    knowledgeMode: activeKnowledgePageMode.value,
     knowledgeFilter: activeKnowledgeFilter.value,
     knowledgeCategory: activeKnowledgeCategory.value,
     knowledgeTag: activeKnowledgeTag.value,
@@ -158,14 +123,8 @@ export function persistCurrentAppViewState(): void {
     knowledgeSearch: knowledgeSearchInput.value,
     knowledgeSort: knowledgeSortSelect.value,
     knowledgeGroup: knowledgeGroupSelect.value,
-    knowledgeResearchScope: knowledgeResearchScopeSelect.value,
-    knowledgeResearchQuestion: knowledgeResearchQuestionInput.value,
-    knowledgeInsightQuestion: knowledgeInsightQuestionInput.value,
     selectedKnowledgeRecordKey: selectedKnowledgeRecordKey.value,
-    selectedKnowledgeResearchKeys: Array.from(selectedKnowledgeResearchKeys.value),
     knowledgeScrollTop: knowledgeMainElement?.scrollTop ?? 0,
-    reviewPaperOverviewId: editingPaperOverviewId.value || "",
-    paperCardScrollTop: paperCardPageElement.scrollTop,
   };
 
   try {
@@ -178,7 +137,6 @@ export function persistCurrentAppViewState(): void {
 
 
 export function applyPersistedKnowledgeState(state: PersistedAppViewState): void {
-  activeKnowledgePageMode.value = "library";
   activeKnowledgeFilter.value = "all";
   activeKnowledgeCategory.value = "all";
   activeKnowledgeTag.value = "";
@@ -188,14 +146,10 @@ export function applyPersistedKnowledgeState(state: PersistedAppViewState): void
   activeKnowledgeReadingStatus.value = "all";
   activeKnowledgePriority.value = "all";
   selectedKnowledgeRecordKey.value = state.selectedKnowledgeRecordKey;
-  selectedKnowledgeResearchKeys.value = new Set(state.selectedKnowledgeResearchKeys);
 
   knowledgeSearchInput.value = state.knowledgeSearch;
   knowledgeSortSelect.value = state.knowledgeSort;
   knowledgeGroupSelect.value = "none";
-  knowledgeResearchScopeSelect.value = state.knowledgeResearchScope;
-  knowledgeResearchQuestionInput.value = state.knowledgeResearchQuestion;
-  knowledgeInsightQuestionInput.value = state.knowledgeInsightQuestion;
 }
 
 
@@ -206,23 +160,7 @@ export function restoreAppViewAfterRefresh(): void {
 
   applyPersistedKnowledgeState(state);
 
-  if (state.view === "paper-review" && state.reviewPaperOverviewId) {
-    const item = collectKnowledgeItems().find(
-      (candidate) =>
-        candidate.source === "paper-overview" &&
-        candidate.id === state.reviewPaperOverviewId,
-    );
-    if (item) {
-      openSavedPaperOverviewReview(item);
-      requestAnimationFrame(() => {
-        paperCardPageElement.scrollTop = Math.max(0, state.paperCardScrollTop);
-      });
-      return;
-    }
-  }
-
   openKnowledgeBasePage();
-  setKnowledgePageMode(state.knowledgeMode);
   requestAnimationFrame(() => {
     if (knowledgeMainElement) {
       knowledgeMainElement.scrollTop = Math.max(0, state.knowledgeScrollTop);
@@ -236,28 +174,6 @@ export let selectedKnowledgeRecordKey = { value: "" };
 
 
 export let knowledgeEditorTargetKey: { value: string | null } = { value: null };
-
-
-export let activeKnowledgePageMode: { value: KnowledgePageMode } = { value: "library" };
-
-
-export let selectedKnowledgeResearchKeys = { value: new Set<string>() };
-
-
-export let activeKnowledgeInsightPrompt =
-  { value: "请综合材料生成一份研究洞察报告，包含：文献共识、关键分歧、方法演进、尚未解决的问题、3 个有依据的新想法、每个想法的可检验假设与最小验证方案。" };
-
-
-export let lastKnowledgeResearchAnswer = { value: "" };
-
-
-export let lastKnowledgeResearchQuestion = { value: "" };
-
-
-export let lastKnowledgeResearchItems: { value: KnowledgeItem[] } = { value: [] };
-
-
-export let knowledgeResearchPending = { value: false };
 
 
 export let aiConfig: { value: AiConfig } = { value: { ...DEFAULT_AI_CONFIG } };

@@ -15,19 +15,13 @@
 
 
 
-import { applyTranslationEditButton, clearTranslationHistoryButton, closeTranslationHistoryButton, copyCardButton, copySummaryButton, copyTranslationButton, generateMoreExamplesButton, openTranslationHistoryButton, saveCardButton, saveSummaryNoteButton, saveTranslationNoteButton, selectedSnippetElement, selectedSnippetMathPreview, selectedSnippetModeToggleButton, translationHistoryDialog, translationHistorySearchInput, translationSourceSentenceInput, translationSourceSentenceMathPreview, translationSourceSentenceTranslation } from "../viewer-elements";
+import { applyTranslationEditButton, clearTranslationHistoryButton, closeTranslationHistoryButton, copyCardButton, copySummaryButton, copyTranslationButton, generateMoreExamplesButton, openTranslationHistoryButton, saveCardButton, selectedSnippetElement, selectedSnippetMathPreview, selectedSnippetModeToggleButton, translationHistoryDialog, translationHistorySearchInput, translationSourceSentenceInput, translationSourceSentenceMathPreview, translationSourceSentenceTranslation } from "../viewer-elements";
 import { currentCardContext, currentEnglishLearningResult, currentEnglishLearningSourceSentence, currentGeneratedCard, lastSummaryPoints, lastTranslatedText, moreExamplesAbortController, normalizeCopiedText, selectedTextForAi, selectedTextPageNumber, translationAbortController } from "../../core/pdf-reader/public";
 import { autoResizeTranslationTextarea, cancelPendingAutomaticTranslation, clearCurrentTranslationHistory, ensureTranslationHistoryLoaded, generateMoreVocabularyExamples, getEnglishLearningPlainText, getSelectedEnglishWord, markTranslationEditorChanged, normalizeLearningInlineText, renderLearningRichText, renderTranslationHistoryDialog, renderTranslationMathPreview, selectedSnippetDisplayMode, setSelectedSnippetDisplayMode, setTranslationSelectionEditor, setTranslationState, translateSelectedText } from "../../features/translation/public";
-import { saveCurrentSummaryAsNote } from "../../services/document-agent/viewer-document-agent";
 import { formatGeneratedCardText, saveCurrentPaperCard } from "../../features/paper-card/public";
 import { pdfViewer } from "../viewer-state";
 
 import { setStatus } from "../../features/recent-files/public";
-
-
-import { saveTranslationAndExplanationAsNote } from "../../features/knowledge-base/public";
-
-
 
 
 export function registerTranslationEvents(): void {
@@ -38,7 +32,6 @@ export function registerTranslationEvents(): void {
     "[data-translation-action]",
   )) {
     const targetId = {
-      save: "save-translation-note",
       examples: "generate-more-examples",
       copy: "copy-translation",
     }[actionButton.dataset.translationAction || ""];
@@ -47,11 +40,6 @@ export function registerTranslationEvents(): void {
       document.querySelector<HTMLButtonElement>(`#${targetId}`)?.click();
     });
   }
-  saveTranslationNoteButton.addEventListener(
-      "click",
-      saveTranslationAndExplanationAsNote,
-    );
-  
   generateMoreExamplesButton.addEventListener("click", () => {
       void generateMoreVocabularyExamples();
     });
@@ -182,8 +170,6 @@ export function registerTranslationEvents(): void {
       await navigator.clipboard.writeText(text);
       setStatus(`已复制 ${lastSummaryPoints.value.length} 条总结要点。`);
     });
-  
-  saveSummaryNoteButton.addEventListener("click", saveCurrentSummaryAsNote);
   
   copyCardButton.addEventListener("click", async () => {
       if (!currentCardContext.value || !currentGeneratedCard.value) {

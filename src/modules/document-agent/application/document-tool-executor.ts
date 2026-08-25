@@ -1,9 +1,13 @@
 import {
   getDocumentAgentStrategy,
+} from "../document-chunker";
+import {
   searchDocumentChunks,
-  type DocumentToolCall,
-  type DocumentToolResult,
-} from "../../../../shared/document-agent";
+} from "../document-search";
+import type {
+  DocumentToolCall,
+  DocumentToolResult,
+} from "../document-tools";
 
 import {
   profileToText,

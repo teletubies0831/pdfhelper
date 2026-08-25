@@ -1,6 +1,6 @@
 
 
-import { normalizeConversationMemoryConfig, type ConversationMemoryConfig } from "../../../../shared/memory";
+import { normalizeConversationMemoryConfig, type ConversationMemoryConfig } from "../../../modules/memory/public";
 
 import { aiConfig } from "../../core/pdf-reader/public";
 

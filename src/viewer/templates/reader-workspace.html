@@ -115,7 +115,7 @@
               <div id="chat-messages" class="chat-messages" aria-live="polite">
                 <article class="chat-message assistant">
                   <div class="chat-message-role">PDFPal</div>
-                  <div class="chat-message-content">你好，我会根据阅读模式结合当前页与选区回答。首次使用 AI 工具时，请先在“设置”中配置 API Key。</div>
+                  <div class="chat-message-content">你好，我会结合当前 PDF、选区和知识库回答。首次使用 AI 工具时，请先在“设置”中配置 API Key。</div>
                 </article>
               </div>
 
@@ -225,6 +225,36 @@
                         <input id="deepseek-max-output-tokens" type="number" min="256" max="65536" step="256" value="8192" inputmode="numeric" aria-describedby="deepseek-max-output-tokens-hint" />
                         <small id="deepseek-max-output-tokens-hint">思考过程和最终回答共同占用该额度，默认 8192。</small>
                       </label>
+                      <div class="settings-embedding-section">
+                        <div class="settings-embedding-heading">
+                          <strong>知识库检索</strong>
+                          <small>默认使用关键词检索；本地 embedding 仅在你确认后下载和启用。</small>
+                        </div>
+                        <label class="settings-field">
+                          <span>检索模式</span>
+                          <select id="knowledge-retrieval-mode">
+                            <option value="keyword">关键词与元数据（默认）</option>
+                            <option value="semantic">本地语义检索</option>
+                            <option value="hybrid">关键词 + 本地语义（推荐增强）</option>
+                          </select>
+                        </label>
+                        <label class="settings-field">
+                          <span>Embedding 模型</span>
+                          <select id="knowledge-embedding-model"></select>
+                          <small>模型在本机运行；不同模型的向量不能混用。</small>
+                        </label>
+                        <label id="knowledge-custom-embedding-model-field" class="settings-field" hidden>
+                          <span>Hugging Face Model ID</span>
+                          <input id="knowledge-custom-embedding-model" type="text" spellcheck="false" autocomplete="off" placeholder="例如：组织名/模型名" />
+                          <small>仅支持含 Transformers.js ONNX 权重的 feature-extraction 模型。</small>
+                        </label>
+                        <div class="settings-embedding-status-card">
+                          <span id="knowledge-embedding-active-status">当前：关键词检索，未加载 embedding</span>
+                          <progress id="knowledge-embedding-progress" max="100" value="0" hidden></progress>
+                          <small id="knowledge-embedding-progress-label"></small>
+                        </div>
+                        <button id="apply-knowledge-retrieval-settings" class="settings-outline-button" type="button">应用检索设置</button>
+                      </div>
                     </details>
                   </div>
 
@@ -422,7 +452,6 @@
                   <button id="apply-translation-edit" class="translation-requery-button" type="button" disabled>按修改重新查询</button>
                 </div>
                 <div class="ai-actions translation-native-actions">
-                  <button id="save-translation-note" type="button">保存为笔记</button>
                   <button id="generate-more-examples" type="button" hidden>生成更多例句</button>
                   <button id="copy-translation" class="primary-button" type="button">复制学习结果</button>
                 </div>
@@ -457,7 +486,6 @@
               </section>
 
               <div class="ai-actions summary-actions">
-                <button id="save-summary-note" type="button">▧ 保存为笔记</button>
                 <button id="copy-summary" class="primary-button" type="button">▣ 复制要点</button>
               </div>
             </div>
@@ -525,3 +553,25 @@
           </div>
         </aside>
       </div>
+
+      <dialog
+        id="clear-chat-dialog"
+        class="app-confirm-dialog clear-chat-dialog"
+        aria-labelledby="clear-chat-dialog-title"
+        aria-describedby="clear-chat-dialog-description"
+      >
+        <section class="app-confirm-dialog-card">
+          <header>
+            <div class="app-confirm-dialog-icon" aria-hidden="true">!</div>
+            <div>
+              <h2 id="clear-chat-dialog-title">清空对话</h2>
+              <p id="clear-chat-dialog-description">确定清空当前 PDF 的全部聊天记录吗？清空后无法恢复。</p>
+            </div>
+            <button id="clear-chat-dialog-close" class="app-confirm-dialog-close" type="button" aria-label="关闭">×</button>
+          </header>
+          <footer>
+            <button id="clear-chat-dialog-cancel" type="button">取消</button>
+            <button id="clear-chat-dialog-confirm" class="danger-button" type="button">清空对话</button>
+          </footer>
+        </section>
+      </dialog>

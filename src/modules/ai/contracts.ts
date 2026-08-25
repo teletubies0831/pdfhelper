@@ -1,5 +1,4 @@
 import type { ResolvedReadingMode } from '../reading-mode/public';
-import type { LongTermMemoryCategory, LongTermMemoryScope, LongTermMemorySourceType } from '../memory/public';
 
 export const AI_CONFIG_STORAGE_KEY = 'pdf-helper-ai-config-v1';
 export const VISION_AI_CONFIG_STORAGE_KEY = 'pdf-helper-vision-ai-config-v1';
@@ -78,14 +77,24 @@ export interface AiImageAttachment {
   height?: number;
 }
 
+export interface AiEvidenceSource {
+  documentId: string;
+  documentName: string;
+  pageNumber: number;
+  recentEntryId?: string;
+}
+
 export interface AiConversationMessage {
   role: 'user' | 'assistant';
   content: string;
   images?: AiImageAttachment[];
+  evidenceSources?: AiEvidenceSource[];
 }
 
 export interface AiDocumentContext {
   task?: string;
+  /** Current user turn, used by local tool handlers for authorization checks. */
+  userMessage?: string;
   documentName?: string;
   pageNumber?: number;
   totalPages?: number;
@@ -100,11 +109,6 @@ export interface AiDocumentContext {
   imageAnalysis?: string;
   conversationSummary?: string;
   longTermMemory?: string;
-  memoryOperationResult?: string;
-  completedTools?: Array<{
-    name: string;
-    arguments?: Record<string, unknown>;
-  }>;
   readingMode?: ResolvedReadingMode;
 }
 
@@ -144,61 +148,18 @@ export interface AiDetectReadingModeRequest {
   outlineTitles?: string[];
 }
 
-export interface AiGeneratePaperOverviewRequest {
-  type: 'pdf-helper:ai-generate-paper-overview';
+export interface AiGenerateDocumentOverviewRequest {
+  type: 'pdf-helper:ai-generate-document-overview';
   requestId: string;
   documentName: string;
   pageCount: number;
   text: string;
-  knowledgeContext?: string;
-}
-
-export interface AiCancelPaperOverviewRequest {
-  type: 'pdf-helper:ai-cancel-paper-overview';
-  requestId: string;
 }
 
 export interface AiCompressConversationRequest {
   type: 'pdf-helper:ai-compress-conversation';
   previousSummary?: string;
   messages: AiConversationMessage[];
-}
-
-export interface AiMemoryCandidate {
-  key: string;
-  category: LongTermMemoryCategory;
-  content: string;
-  scope: LongTermMemoryScope;
-  sourceType: LongTermMemorySourceType;
-  confidence: number;
-  importance: number;
-}
-
-export interface AiExtractLongTermMemoryRequest {
-  type: 'pdf-helper:ai-extract-long-term-memory';
-  userMessage: string;
-  assistantMessage: string;
-  confirmedMemoryProposal?: string;
-  documentId?: string;
-  documentName?: string;
-  existingMemories?: Array<{ key: string; content: string; scope: LongTermMemoryScope; scopeId?: string }>;
-}
-
-export interface AiPlanLongTermMemoryToolsRequest {
-  type: 'pdf-helper:ai-plan-long-term-memory-tools';
-  userMessage: string;
-  assistantMessage: string;
-  confirmedMemoryProposal?: string;
-  documentId?: string;
-  documentName?: string;
-  existingMemories?: Array<{ key: string; content: string; scope: LongTermMemoryScope; scopeId?: string }>;
-}
-
-export interface AiPlanKnowledgeToolsRequest {
-  type: 'pdf-helper:ai-plan-knowledge-tools';
-  userMessage: string;
-  documentId?: string;
-  documentName?: string;
 }
 
 export interface AiNativeToolCall {
@@ -228,6 +189,12 @@ export interface AiStreamStartMessage {
   requestId: string;
   messages: AiConversationMessage[];
   context?: AiDocumentContext;
+  /** Serializable result of the embedded MCP client's tools/list request. */
+  mcpTools?: Array<{
+    name: string;
+    description?: string;
+    inputSchema: Record<string, unknown>;
+  }>;
 }
 
 export interface AiStreamToolResult {
@@ -291,12 +258,8 @@ export type AiRuntimeRequest =
   | AiChatRequest
   | AiTestRequest
   | AiDetectReadingModeRequest
-  | AiGeneratePaperOverviewRequest
-  | AiCancelPaperOverviewRequest
+  | AiGenerateDocumentOverviewRequest
   | AiCompressConversationRequest
-  | AiPlanLongTermMemoryToolsRequest
-  | AiPlanKnowledgeToolsRequest
-  | AiExtractLongTermMemoryRequest
   | AiVisionRequest
   | AiVisionTestRequest;
 
@@ -307,7 +270,6 @@ export interface AiRuntimeResponse {
   model?: string;
   readingMode?: ResolvedReadingMode;
   rationale?: string;
-  memoryCandidates?: AiMemoryCandidate[];
   toolCalls?: AiNativeToolCall[];
   error?: string;
 }
@@ -371,12 +333,8 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
   return type === 'pdf-helper:ai-chat'
     || type === 'pdf-helper:ai-test'
     || type === 'pdf-helper:ai-detect-reading-mode'
-    || type === 'pdf-helper:ai-generate-paper-overview'
-    || type === 'pdf-helper:ai-cancel-paper-overview'
+    || type === 'pdf-helper:ai-generate-document-overview'
     || type === 'pdf-helper:ai-compress-conversation'
-    || type === 'pdf-helper:ai-plan-long-term-memory-tools'
-    || type === 'pdf-helper:ai-plan-knowledge-tools'
-    || type === 'pdf-helper:ai-extract-long-term-memory'
     || type === 'pdf-helper:ai-vision'
     || type === 'pdf-helper:ai-vision-test';
 }

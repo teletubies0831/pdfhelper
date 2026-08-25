@@ -1,4 +1,8 @@
-import { AnnotationEditorType, getDocument } from "pdfjs-dist";
+import {
+  AnnotationEditorType,
+  getDocument,
+  VerbosityLevel,
+} from "pdfjs-dist";
 
 import { executeMemoryTool } from "../../../../entrypoints/viewer/memory-store";
 
@@ -33,6 +37,7 @@ import {
   getPdfFingerprint,
   markSavedChanges,
   restoreHelperAnnotations,
+  setInkEraserMode,
   writeEmbeddedPdfBytes,
 } from "../../features/annotations/public";
 import {
@@ -53,11 +58,10 @@ import {
   cancelPendingSummaryGeneration,
   resetSummaryState,
 } from "../../services/document-agent/viewer-document-agent";
+import { syncCurrentPdfLibraryButton } from "../../features/knowledge-base/public";
 import {
   cancelPendingCardGeneration,
-  generatePaperOverviewCard,
   resetCardState,
-  resetPaperCardPageState,
 } from "../../features/paper-card/public";
 import {
   cardAbortController,
@@ -67,12 +71,7 @@ import {
   lastTranslatedText,
   lastViewerSelectionText,
   moreExamplesAbortController,
-  readingModeDocumentKey,
-  readingModeError,
-  readingModePreference,
-  readingModeRationale,
   renderDocumentOutline,
-  resolvedReadingMode,
   selectedTextForAi,
   selectedTextPageNumber,
   summaryAbortController,
@@ -85,15 +84,12 @@ import {
   clearInternalNavigationHistory,
   clearPendingChatImages,
   getDocumentChatId,
-  loadReadingModeForDocument,
   restoreChatConversation,
-  updateReadingModeUi,
 } from "../../features/assistant/public";
 import {
   findBar,
   findCount,
   findInput,
-  paperCardPageElement,
   textStatus,
   translationLearningHintElement,
   viewerContainer,
@@ -113,6 +109,7 @@ export async function openPdf(
   )
     return;
   isOpeningDocument.value = true;
+  setInkEraserMode(false);
   cancelPendingAutomaticTranslation();
   cancelPendingSummaryGeneration();
   cancelPendingCardGeneration();
@@ -141,6 +138,12 @@ export async function openPdf(
     sourcePdfBytes.value = rawPdfBytes;
     const loadingTask = getDocument({
       data: new Uint8Array(rawPdfBytes),
+      // Many third-party PDF editors store annotation /DA operators as
+      // UTF-16 strings. PDF.js can recover and render them, but reports every
+      // NUL/BOM byte as a parser warning. Keep recoverable source-file noise
+      // out of the production console; loading failures still reject the task
+      // and are surfaced by the catch path below.
+      verbosity: VerbosityLevel.ERRORS,
       standardFontDataUrl: new URL(
         "pdfjs-standard-fonts/",
         window.location.href,
@@ -153,6 +156,7 @@ export async function openPdf(
     sourceName.value = name;
     currentFileHandle.value = fileHandle;
     const displayName = getDisplayFileName(name);
+    document.title = `${displayName} · PDFPal`;
     annotationEditor.value = null;
     activeEditorMode.value = AnnotationEditorType.NONE;
     canUndoAnnotation.value = false;
@@ -218,10 +222,8 @@ export async function openPdf(
     await restoreChatConversation(documentProxy);
     resetSummaryState();
     resetCardState();
-    resetPaperCardPageState();
     void renderDocumentOutline(documentProxy);
-    void loadReadingModeForDocument(documentProxy);
-    if (!paperCardPageElement.hidden) void generatePaperOverviewCard();
+    syncCurrentPdfLibraryButton();
     markSavedChanges();
     window.setTimeout(() => {
       if (pdfDocument.value !== documentProxy) return;
@@ -245,16 +247,11 @@ export async function openPdf(
     restoredAnnotationWarmUpPending.value = false;
     annotationEditorWarmUpInFlight.value = false;
     clearOutlineList("打开 PDF 后显示目录");
-    readingModeDocumentKey.value = "";
-    readingModePreference.value = "auto";
-    resolvedReadingMode.value = "general";
-    readingModeRationale.value = "";
-    readingModeError.value = "";
-    updateReadingModeUi();
     resetSummaryState();
     resetCardState();
     sourceName.value = "";
-    resetPaperCardPageState();
+    document.title = "PDFPal 阅读器";
+    syncCurrentPdfLibraryButton();
     updateControls();
     setStatus(error instanceof Error ? error.message : String(error), true);
     textStatus.textContent = "PDF解析失败";

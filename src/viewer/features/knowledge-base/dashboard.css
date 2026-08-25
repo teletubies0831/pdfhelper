@@ -578,10 +578,7 @@
   box-shadow: 0 0 0 3px rgb(47 111 212 / 10%);
 }
 
-/* Cross-paper QA, research insight and editor fields */
-.knowledge-base-page .knowledge-research-question textarea,
-.knowledge-base-page #knowledge-research-question,
-.knowledge-base-page #knowledge-insight-question,
+/* Knowledge editor fields */
 .knowledge-base-page .knowledge-editor-fields input,
 .knowledge-base-page .knowledge-editor-fields textarea {
   border: 1px solid var(--knowledge-input-border);
@@ -593,18 +590,12 @@
   box-shadow: inset 0 1px 2px rgb(47 111 212 / 3%);
 }
 
-.knowledge-base-page .knowledge-research-question textarea::placeholder,
-.knowledge-base-page #knowledge-research-question::placeholder,
-.knowledge-base-page #knowledge-insight-question::placeholder,
 .knowledge-base-page .knowledge-editor-fields input::placeholder,
 .knowledge-base-page .knowledge-editor-fields textarea::placeholder {
   color: var(--knowledge-input-placeholder);
   opacity: 1;
 }
 
-.knowledge-base-page .knowledge-research-question textarea:focus,
-.knowledge-base-page #knowledge-research-question:focus,
-.knowledge-base-page #knowledge-insight-question:focus,
 .knowledge-base-page .knowledge-editor-fields input:focus,
 .knowledge-base-page .knowledge-editor-fields textarea:focus {
   border-color: var(--knowledge-input-border-focus);

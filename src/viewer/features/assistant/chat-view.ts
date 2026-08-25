@@ -5,7 +5,7 @@
 
 
 
-import { type AiImageAttachment } from "../../../../shared/ai";
+import { type AiEvidenceSource, type AiImageAttachment } from "../../../modules/ai/public";
 
 
 
@@ -15,10 +15,11 @@ import { type AiImageAttachment } from "../../../../shared/ai";
 
 
 
-import { chatImagePreviewOverlay, pendingChatImages } from "../../core/pdf-reader/public";
+import { chatImagePreviewOverlay, getDisplayFileName, pendingChatImages } from "../../core/pdf-reader/public";
 import { renderChatMarkdown } from "../../shared-ui/markdown/markdown-renderer";
 import { chatAttachmentsElement, chatInput, chatMessagesElement } from "../../app/viewer-elements";
 import { setStatus } from "../recent-files/public";
+import { openSourcePdfInNewTab } from "../../shared-ui/navigation/source-pdf-navigation";
 
 
 
@@ -96,6 +97,79 @@ export function renderChatMessageImages(
   const body = message.querySelector(".chat-message-content");
   if (body) message.insertBefore(gallery, body);
   else message.append(gallery);
+}
+
+export function renderChatEvidenceSources(
+  message: HTMLElement,
+  sources: AiEvidenceSource[] | undefined,
+): void {
+  message.querySelector(".chat-rag-source-shortcuts")?.remove();
+  if (!sources?.length) return;
+  const uniqueSources = Array.from(
+    new Map(
+      sources.map((source) => [
+        `${source.documentId}:${source.pageNumber}`,
+        source,
+      ]),
+    ).values(),
+  ).slice(0, 8);
+  const container = document.createElement("div");
+  container.className = "chat-rag-source-shortcuts";
+  container.setAttribute("aria-label", "知识库证据来源");
+  let expanded = false;
+  const sourceButtons: HTMLButtonElement[] = [];
+  for (const [index, source] of uniqueSources.entries()) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chat-rag-source-button";
+    button.hidden = index >= 2;
+    button.textContent = `第 ${source.pageNumber} 页 · ${getDisplayFileName(source.documentName)}`;
+    button.title = `在新标签页打开“${getDisplayFileName(source.documentName)}”第 ${source.pageNumber} 页`;
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        if (!source.recentEntryId) {
+          setStatus(`“${getDisplayFileName(source.documentName)}”缺少可重新打开的文件记录，请先从知识库打开一次。`, true);
+          return;
+        }
+        const opened = await openSourcePdfInNewTab(
+          source.documentName,
+          source.recentEntryId,
+          source.pageNumber,
+        );
+        if (!opened) {
+          setStatus(`“${getDisplayFileName(source.documentName)}”缺少可重新打开的文件记录。`, true);
+        }
+      } catch (error) {
+        setStatus(`新标签页打开证据 PDF 失败：${error instanceof Error ? error.message : String(error)}`, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    sourceButtons.push(button);
+    container.append(button);
+  }
+  if (uniqueSources.length > 2) {
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "chat-rag-source-toggle";
+    toggle.addEventListener("click", () => {
+      expanded = !expanded;
+      sourceButtons.forEach((button, index) => {
+        button.hidden = !expanded && index >= 2;
+      });
+      toggle.textContent = expanded
+        ? "收起证据"
+        : `展开其余 ${uniqueSources.length - 2} 条`;
+      toggle.setAttribute("aria-expanded", String(expanded));
+    });
+    toggle.textContent = `展开其余 ${uniqueSources.length - 2} 条`;
+    toggle.setAttribute("aria-expanded", "false");
+    container.append(toggle);
+  }
+  const body = message.querySelector(".chat-message-content");
+  if (body) message.insertBefore(container, body);
+  else message.append(container);
 }
 
 
@@ -232,6 +306,7 @@ export function appendChatMessage(
     pending?: boolean;
     error?: boolean;
     images?: AiImageAttachment[];
+    evidenceSources?: AiEvidenceSource[];
   } = {},
 ): HTMLElement {
   const message = document.createElement("article");
@@ -249,6 +324,7 @@ export function appendChatMessage(
   message.append(roleLabel, body);
   chatMessagesElement.append(message);
   renderChatMessageImages(message, options.images);
+  renderChatEvidenceSources(message, options.evidenceSources);
   updateChatMessage(message, content, options);
   return message;
 }

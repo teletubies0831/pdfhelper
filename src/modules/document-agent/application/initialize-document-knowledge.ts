@@ -1,11 +1,11 @@
 import {
   DOCUMENT_AGENT_INDEX_VERSION,
-  createDocumentAgentId,
-  getDocumentAgentStrategy,
   type DocumentAgentRecord,
   type DocumentChunk,
   type DocumentPageText,
-} from "../../../../shared/document-agent";
+} from "../contracts";
+import { getDocumentAgentStrategy } from "../document-chunker";
+import { createDocumentAgentId } from "../document-search";
 
 import {
   getDocumentAgentRecord,

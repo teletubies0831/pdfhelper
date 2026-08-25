@@ -1,4 +1,4 @@
-import { SAVED_CARDS_STORAGE_KEY, SAVED_PAPER_OVERVIEWS_STORAGE_KEY, SUMMARY_NOTES_STORAGE_KEY, knowledgeEditorTargetKey, selectedKnowledgeRecordKey, selectedKnowledgeResearchKeys } from "../../core/pdf-reader/public";
+import { SAVED_CARDS_STORAGE_KEY, SAVED_PAPER_OVERVIEWS_STORAGE_KEY, SUMMARY_NOTES_STORAGE_KEY, knowledgeEditorTargetKey, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
 import { readSavedSummaryNotes } from "../../services/document-agent/viewer-document-agent";
 import { openReadingJournalSource, readSavedPaperCards, readSavedPaperOverviews } from "../paper-card/public";
 import { knowledgeEditorBodyInput, knowledgeEditorCategoryInput, knowledgeEditorTagsInput, knowledgeEditorTitleInput } from "../../app/viewer-elements";
@@ -11,11 +11,11 @@ import {
   setStatus,
 } from "../recent-files/public";
 import type { KnowledgeItem } from "../../core/pdf-reader/public";
-import { addKnowledgeNote, closeKnowledgeBasePage, getSelectedKnowledgeItem, renderKnowledgeBase } from './research-controller';
+import { addKnowledgeNote, closeKnowledgeBasePage, getSelectedKnowledgeItem, renderKnowledgeBase } from './knowledge-base-controller';
 
 import { collectKnowledgeItems, getKnowledgeRecordKey, normalizeKnowledgeCategory, normalizeKnowledgeTags, readKnowledgeItemMetaStore, readReadingJournalEntries, readSavedKnowledgeNotes, writeKnowledgeItemMetaStore, writeReadingJournalEntries, writeSavedKnowledgeNotes } from './knowledge-repository';
 import { getKnowledgeExcerpt, getKnowledgeSourceQuote, setKnowledgePageStatus } from './knowledge-domain';
-import { writeJsonValue } from '../../../platform/storage/browser-json-repository';
+import { writeJsonValue } from '../../../infrastructure/storage/browser-json-repository';
 import { closeKnowledgeEditor } from "./knowledge-editor-dialog";
 import { ensureSourcePdfOpen } from "../../shared-ui/navigation/source-pdf-navigation";
 
@@ -131,7 +131,6 @@ export function deleteKnowledgeItem(
   const metaStore = readKnowledgeItemMetaStore();
   delete metaStore[item.recordKey];
   writeKnowledgeItemMetaStore(metaStore);
-  selectedKnowledgeResearchKeys.value.delete(item.recordKey);
 
   if (selectedKnowledgeRecordKey.value === item.recordKey) {
     selectedKnowledgeRecordKey.value = "";

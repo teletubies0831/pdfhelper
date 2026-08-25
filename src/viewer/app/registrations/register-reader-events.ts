@@ -12,7 +12,6 @@ import {
   deleteAnnotationButton,
   deleteHighlightNoteButton,
   editorModeButtons,
-  eraseSelectedAnnotationButton,
   fileInput,
   findBar,
   findCloseButton,
@@ -100,6 +99,8 @@ import {
   initializeHighlightColorHistory,
   isEditableOrControl,
   isInkMode,
+  isInkEraserMode,
+  installInkEraserInteractions,
   isPointInsideSavedSelection,
   isPointInsideTextGlyph,
   isTextSelectionMode,
@@ -111,6 +112,7 @@ import {
   setFreeTextColor,
   setFreeTextSize,
   setHighlightColor,
+  setInkEraserMode,
   showAnnotationActionBar,
   showHighlightNote,
   showSelectionContextMenuAt,
@@ -264,6 +266,7 @@ export function registerReaderEvents(): void {
     });
 
     button.addEventListener("click", () => {
+      setInkEraserMode(false);
       const mode = button.dataset.editorMode;
       if (mode === "select") setEditorMode(AnnotationEditorType.NONE);
       if (mode === "highlight") {
@@ -275,10 +278,7 @@ export function registerReaderEvents(): void {
     });
   }
 
-  eraseSelectedAnnotationButton.addEventListener(
-    "click",
-    deleteSelectedAnnotation,
-  );
+  installInkEraserInteractions();
 
   highlightColorInput.addEventListener("input", () => {
     setHighlightColor(highlightColorInput.value, false);
@@ -604,6 +604,12 @@ export function registerReaderEvents(): void {
       if (event.key === "Escape" && !findBar.hidden) {
         event.preventDefault();
         closeFindBar();
+        return;
+      }
+      if (event.key === "Escape" && isInkEraserMode()) {
+        event.preventDefault();
+        setInkEraserMode(false);
+        setStatus("已退出橡皮擦模式。");
         return;
       }
       if (

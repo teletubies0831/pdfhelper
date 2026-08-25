@@ -15,7 +15,7 @@
 
 
 
-import { activeKnowledgeFilter, activeKnowledgePageMode } from "../../core/pdf-reader/public";
+import { activeKnowledgeFilter } from "../../core/pdf-reader/public";
 
 
 import { knowledgeDashboardMetricsElement, knowledgeFilterButtons, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgePageStatusElement, knowledgeStudentWorkbenchElement, knowledgeWeeklyTasksElement } from "../../app/viewer-elements";
@@ -27,8 +27,7 @@ import { knowledgeDashboardMetricsElement, knowledgeFilterButtons, knowledgeOrig
 
 import type { KnowledgeFilter, KnowledgeFocus, KnowledgeItem, KnowledgeKind } from "../../core/pdf-reader/public";
 import type { ResolvedReadingMode } from "../../../modules/reading-mode/public";
-import { setKnowledgePageMode } from './library-view';
-import { renderKnowledgeBase } from './research-controller';
+import { renderKnowledgeBase } from './knowledge-base-controller';
 import { normalizeKnowledgeTags, readKnowledgeItemMetaStore, readSavedKnowledgeNotes, writeKnowledgeItemMetaStore, writeSavedKnowledgeNotes } from './knowledge-repository';
 
 
@@ -170,7 +169,6 @@ export function setKnowledgeOrigin(
   activeKnowledgeOrigin.value = origin;
   activeKnowledgeOriginContent.value = "all";
   activeKnowledgeFilter.value = "all";
-  if (activeKnowledgePageMode.value !== "library") setKnowledgePageMode("library");
   syncKnowledgeOriginButtons();
   renderKnowledgeBase();
 }
@@ -182,7 +180,6 @@ export function setKnowledgeOriginContent(
   activeKnowledgeOrigin.value = origin;
   activeKnowledgeOriginContent.value = content;
   activeKnowledgeFilter.value = "all";
-  if (activeKnowledgePageMode.value !== "library") setKnowledgePageMode("library");
   syncKnowledgeOriginButtons();
   renderKnowledgeBase();
 }
@@ -191,7 +188,6 @@ export function setKnowledgeFilter(filter: KnowledgeFilter): void {
   activeKnowledgeFilter.value = filter;
   activeKnowledgeOrigin.value = "all";
   activeKnowledgeOriginContent.value = "all";
-  if (activeKnowledgePageMode.value !== "library") setKnowledgePageMode("library");
   syncKnowledgeOriginButtons();
   renderKnowledgeBase();
 }

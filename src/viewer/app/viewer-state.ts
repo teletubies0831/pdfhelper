@@ -7,7 +7,7 @@ import { EventBus, PDFFindController, PDFLinkService, PDFViewer } from "pdfjs-di
 
 
 
-import { type DocumentAgentRecord, type DocumentChunk } from "../../../shared/document-agent";
+import { type DocumentAgentRecord, type DocumentChunk } from "../../modules/document-agent/public";
 
 
 

@@ -47,49 +47,6 @@
   </div>
   <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" />
 
-  <div class="toolbar-menu reading-mode-menu" data-toolbar-menu>
-    <button
-      class="toolbar-pill toolbar-menu-trigger toolbar-nav-button reading-mode-trigger"
-      type="button"
-      aria-haspopup="menu"
-      aria-expanded="false"
-      title="选择当前 PDF 的阅读策略"
-    >
-      <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-mode" /></svg>
-      <span id="reading-mode-trigger-label">通用阅读</span>
-      <svg class="toolbar-menu-caret" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-chevron-down" /></svg>
-    </button>
-    <div class="toolbar-menu-panel reading-mode-menu-panel" role="menu" hidden>
-      <div class="toolbar-menu-section">
-        <div class="toolbar-menu-heading">阅读模式</div>
-        <button class="toolbar-menu-item reading-mode-menu-item" type="button" role="menuitemradio" aria-checked="false" data-reading-mode-value="auto">
-          <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
-          <span><strong>AI 自动识别</strong><small>根据当前文档自动选择模式</small></span>
-        </button>
-        <button class="toolbar-menu-item reading-mode-menu-item" type="button" role="menuitemradio" aria-checked="false" data-reading-mode-value="general">
-          <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-mode" /></svg>
-          <span><strong>通用阅读</strong><small>适合一般资料和技术文档</small></span>
-        </button>
-        <button class="toolbar-menu-item reading-mode-menu-item" type="button" role="menuitemradio" aria-checked="false" data-reading-mode-value="paper">
-          <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pdf" /></svg>
-          <span><strong>论文精读</strong><small>突出论文结构与研究信息</small></span>
-        </button>
-        <button class="toolbar-menu-item reading-mode-menu-item" type="button" role="menuitemradio" aria-checked="false" data-reading-mode-value="novel">
-          <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>
-          <span><strong>小说阅读</strong><small>侧重原句翻译和语言学习</small></span>
-        </button>
-      </div>
-    </div>
-    <select id="reading-mode-select" class="reading-mode-native-select" title="选择当前 PDF 的阅读策略" aria-hidden="true" tabindex="-1">
-      <option value="auto">AI 自动识别（通用阅读）</option>
-      <option value="general">通用阅读</option>
-      <option value="paper">论文精读</option>
-      <option value="novel">小说阅读</option>
-    </select>
-    <button id="detect-reading-mode" type="button" title="重新识别阅读模式" aria-label="重新识别阅读模式">↻</button>
-    <small id="reading-mode-status">AI自动 · 通用阅读</small>
-  </div>
-
   <div class="toolbar-group annotation-tools expanded-toolbar-group" aria-label="批注工具">
     <button class="toolbar-nav-button" type="button" data-editor-mode="select" title="选择文字；选择批注后可移动或编辑">
       <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pointer" /></svg>
@@ -111,19 +68,21 @@
     </div>
     <button class="toolbar-nav-button" type="button" data-editor-mode="ink" title="自由绘制"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pen" /></svg>画笔</button>
     <button class="toolbar-nav-button" type="button" data-editor-mode="text" title="在页面上添加文本"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-note" /></svg>批注</button>
-    <button id="erase-selected-annotation" class="toolbar-nav-button" type="button" title="删除当前选中的批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eraser" /></svg>擦除</button>
+    <button id="erase-selected-annotation" class="toolbar-nav-button" type="button" title="橡皮擦：仅删除拖过的画笔线段" aria-pressed="false"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eraser" /></svg>擦除</button>
     <button id="undo-annotation" class="toolbar-nav-button" type="button" title="撤销批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-undo" /></svg>撤销</button>
     <button id="redo-annotation" class="toolbar-nav-button" type="button" title="重做批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-redo" /></svg>重做</button>
     <button id="smart-copy" class="toolbar-nav-button" type="button" title="整理复制选中文本"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-copy" /></svg>整理复制</button>
     <button id="toggle-notes" class="toolbar-nav-button" type="button" title="隐藏/显示所有笔记标记"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eye-off" /></svg><span data-toggle-notes-label>隐藏笔记</span></button>
   </div>
 
+  <button id="add-current-pdf-to-library" class="toolbar-pill toolbar-nav-button knowledge-add-current" type="button" disabled><img class="toolbar-action-icon" src="/resources/add.svg" alt="" /> <span>添加到知识库</span></button>
+
   <div class="toolbar-group ai-tools expanded-toolbar-group" aria-label="AI 工具">
     <button id="ai-panel-toggle" class="toolbar-pill toolbar-nav-button ai-entry active" type="button">
       <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pdf" /></svg>
       PDF 阅读
     </button>
-    <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>知识卡</button>
+    <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>知识库</button>
   </div>
 
   <button id="assistant-panel-toggle" class="toolbar-pill toolbar-nav-button assistant-entry active" type="button" title="显示或隐藏右侧 AI 助手">

@@ -1,19 +1,11 @@
-import { currentEnglishLearningResult, resolvedReadingMode, selectedKnowledgeRecordKey, selectedTextForAi, selectedTextPageNumber } from "../../core/pdf-reader/public";
-
-import { saveReadingJournalEntry } from "../paper-card/public";
+import { selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
 import { knowledgeImportInput } from "../../app/viewer-elements";
-
-import { pdfViewer, sourceName } from "../../app/viewer-state";
-import { getDisplayFileName } from "../../core/pdf-reader/public";
-import { getCurrentChapterContext, getEnglishLearningPlainText } from "../translation/public";
-import { setStatus } from "../recent-files/public";
 import type { SavedKnowledgeNote } from "../../core/pdf-reader/public";
-import { addKnowledgeNote, renderKnowledgeBase } from './research-controller';
+import { renderKnowledgeBase } from './knowledge-base-controller';
 
 import { getKnowledgeRecordKey, normalizeKnowledgeTags, readSavedKnowledgeNotes, writeSavedKnowledgeNotes } from './knowledge-repository';
 import { getKnowledgeExcerpt, setKnowledgePageStatus } from './knowledge-domain';
 
-import { prepareKnowledgeEditorMarkdown } from "./knowledge-markdown-normalizer";
 
 export async function importKnowledgeNotes(file: File): Promise<void> {
   try {
@@ -80,99 +72,4 @@ export async function importKnowledgeNotes(file: File): Promise<void> {
   } finally {
     knowledgeImportInput.value = "";
   }
-}
-
-export function saveTranslationAndExplanationAsNote(): void {
-  const sourceText = selectedTextForAi.value.trim();
-  const learningResult = currentEnglishLearningResult.value;
-  const learningText = getEnglishLearningPlainText();
-  if (!sourceText || !learningResult || !learningText) {
-    setStatus("当前没有可保存的英语学习结果。", true);
-    return;
-  }
-
-  const pageNumber = Math.max(
-    1,
-    selectedTextPageNumber.value || pdfViewer.currentPageNumber || 1,
-  );
-  const chapter = getCurrentChapterContext(pageNumber).title;
-  const isWord = learningResult.kind === "word";
-  if (resolvedReadingMode.value !== "paper") {
-    const entry = saveReadingJournalEntry({
-      title: `${isWord ? "单词" : "句子"}：${getKnowledgeExcerpt(sourceText).slice(0, 34)}`,
-      quote: sourceText,
-      content: [
-        isWord ? "## 单词学习" : "## 原句翻译",
-        learningText,
-      ].join("\n\n"),
-      tags: isWord ? ["英语学习", "单词"] : ["英语学习", "原句翻译"],
-      origin: "translation",
-      pageNumber,
-    });
-    setStatus(`已保存“${entry.title}”到知识库。`);
-    return;
-  }
-  const note = addKnowledgeNote({
-    title: `${isWord ? "单词学习" : "原句翻译"}：${getKnowledgeExcerpt(sourceText).slice(0, 34)}`,
-    content: [
-      "原文",
-      prepareKnowledgeEditorMarkdown(sourceText),
-      "",
-      isWord ? "单词学习" : "句子学习",
-      prepareKnowledgeEditorMarkdown(learningText),
-    ].join("\n"),
-    documentName: sourceName.value ? getDisplayFileName(sourceName.value) : "未关联文档",
-    pageNumber,
-    positionLabel: `${chapter} · 第 ${pageNumber} 页`,
-    category: "英语学习",
-    tags: isWord ? ["英语学习", "单词"] : ["英语学习", "原句翻译"],
-  });
-  setStatus(`已保存“${note.title}”到知识库。`);
-}
-
-export function attachChatSaveAction(
-  message: HTMLElement,
-  question: string,
-  answer: string,
-  documentName: string,
-  pageNumber: number,
-): void {
-  const actions = document.createElement("div");
-  actions.className = "chat-message-actions";
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = "保存为笔记";
-  button.addEventListener("click", () => {
-    const chapter = getCurrentChapterContext(pageNumber).title;
-    if (resolvedReadingMode.value !== "paper") {
-      const entry = saveReadingJournalEntry({
-        title: question ? `AI 问答：${getKnowledgeExcerpt(question).slice(0, 34)}` : "AI 问答札记",
-        quote: question,
-        content: ["## AI 回答", answer].join("\n\n"),
-        tags: ["AI 问答"],
-        origin: "ai",
-        pageNumber,
-      });
-      button.disabled = true;
-      button.textContent = "已保存";
-      setStatus(`已保存“${entry.title}”到知识库。`);
-      return;
-    }
-    const note = addKnowledgeNote({
-      title: question
-        ? `AI 问答：${getKnowledgeExcerpt(question).slice(0, 34)}`
-        : "AI 问答笔记",
-      content: [`问题`, question, "", "AI 回答", answer].join("\n"),
-      documentName,
-      pageNumber,
-      positionLabel: `${chapter} · 第 ${pageNumber} 页`,
-      category: "AI 对话",
-      tags: ["AI 问答"],
-    });
-    button.disabled = true;
-    button.textContent = "已保存";
-    setStatus(`已保存“${note.title}”到知识库。`);
-  });
-  actions.append(button);
-  message.append(actions);
 }

@@ -16,7 +16,7 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 
 import { canRedoAnnotation, canUndoAnnotation, lastReadingPosition, pdfDocument, pdfViewer } from "../../app/viewer-state";
-import { appFrame, cardTypeButtons, copyCardButton, copySummaryButton, editorModeButtons, findInput, findNextButton, findPreviousButton, focusModeButton, focusModeLabel, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, nextButton, outlineList, outlineToggleButton, pageCountElement, pageNumberInput, previousButton, quickCurrentLocationButton, quickCurrentLocationLabel, quickLastLocationButton, quickLastLocationLabel, redoAnnotationButton, saveAnnotatedPdfButton, saveCardButton, saveSummaryNoteButton, smartCopyButton, summaryScopeButtons, toggleNotesButton, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton, zoomValueElement } from "../../app/viewer-elements";
+import { appFrame, cardTypeButtons, copyCardButton, copySummaryButton, editorModeButtons, findInput, findNextButton, findPreviousButton, focusModeButton, focusModeLabel, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, nextButton, outlineList, outlineToggleButton, pageCountElement, pageNumberInput, previousButton, quickCurrentLocationButton, quickCurrentLocationLabel, quickLastLocationButton, quickLastLocationLabel, redoAnnotationButton, saveAnnotatedPdfButton, saveCardButton, smartCopyButton, summaryScopeButtons, toggleNotesButton, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton, zoomValueElement } from "../../app/viewer-elements";
 import { navigateToDestinationWithoutReturnHistory } from "../../features/assistant/public";
 import { getSelectionSurroundingText, updateSummaryMetadata, type SelectionSurroundingText } from "../../features/translation/public";
 
@@ -67,7 +67,6 @@ export function updateControls() {
     saveAnnotatedPdfButton,
     toggleNotesButton,
     copySummaryButton,
-    saveSummaryNoteButton,
     copyCardButton,
     saveCardButton,
     ...summaryScopeButtons,
@@ -422,7 +421,6 @@ export type KnowledgeSource =
   | "paper-overview";
 
 
-export type KnowledgePageMode = "library" | "qa" | "insights";
 
 
 export type KnowledgeFocus =

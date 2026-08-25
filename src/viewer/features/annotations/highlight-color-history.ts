@@ -5,7 +5,7 @@ import {
 import {
   readJsonValue,
   writeJsonValue,
-} from "../../../platform/storage/browser-json-repository";
+} from "../../../infrastructure/storage/browser-json-repository";
 
 const HIGHLIGHT_COLOR_HISTORY_STORAGE_KEY =
   "pdf-helper.highlight-color-history.v1";
