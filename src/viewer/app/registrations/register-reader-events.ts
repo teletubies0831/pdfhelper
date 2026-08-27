@@ -24,6 +24,7 @@ import {
   freeTextSizeUpButton,
   highlightColorHistoryButtons,
   highlightColorInput,
+  inkThicknessControl,
   highlightNotePopover,
   highlightNoteText,
   nextButton,
@@ -92,11 +93,14 @@ import {
   findAnnotationEditorAtPoint,
   getFreeTextSize,
   getHighlightNote,
+  installAnnotationSizePopoverDismissal,
+  installInkThicknessInteractions,
   hideAnnotationActionBar,
   hideHighlightNote,
   hideSelectionContextMenu,
   highlightCurrentSelectionFromToolbar,
   initializeHighlightColorHistory,
+  installHighlightNoteTextEditingProtection,
   isEditableOrControl,
   isInkMode,
   isInkEraserMode,
@@ -112,6 +116,7 @@ import {
   setFreeTextColor,
   setFreeTextSize,
   setHighlightColor,
+  openAnnotationSizePopover,
   setInkEraserMode,
   showAnnotationActionBar,
   showHighlightNote,
@@ -123,6 +128,9 @@ import type { FilePickerWindow } from "../viewer-types";
 
 export function registerReaderEvents(): void {
   setHighlightColor(initializeHighlightColorHistory());
+  installHighlightNoteTextEditingProtection();
+  installAnnotationSizePopoverDismissal();
+  installInkThicknessInteractions();
 
   for (const searchButton of document.querySelectorAll<HTMLButtonElement>(
     "#outline-search-button, #reader-search-button",
@@ -273,7 +281,10 @@ export function registerReaderEvents(): void {
         void highlightCurrentSelectionFromToolbar();
         return;
       }
-      if (mode === "ink") setEditorMode(AnnotationEditorType.INK);
+      if (mode === "ink") {
+        setEditorMode(AnnotationEditorType.INK);
+        openAnnotationSizePopover(inkThicknessControl, button);
+      }
       if (mode === "text") setEditorMode(AnnotationEditorType.FREETEXT);
     });
   }
@@ -604,6 +615,19 @@ export function registerReaderEvents(): void {
       if (event.key === "Escape" && !findBar.hidden) {
         event.preventDefault();
         closeFindBar();
+        return;
+      }
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !isEditingText &&
+        pdfDocument.value &&
+        (event.key.toLowerCase() === "z" || event.key.toLowerCase() === "y")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        const redo = event.key.toLowerCase() === "y" || event.shiftKey;
+        if (redo) annotationEditor.value?.redo();
+        else annotationEditor.value?.undo();
         return;
       }
       if (event.key === "Escape" && isInkEraserMode()) {

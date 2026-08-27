@@ -640,7 +640,7 @@
   }
 }
 
-@media (max-width: 1220px) {
+@media (max-width: 1380px) {
   .toolbar .expanded-toolbar-group .toolbar-action-icon,
   .toolbar .ai-tools .toolbar-action-icon {
     display: none;

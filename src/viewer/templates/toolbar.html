@@ -48,9 +48,9 @@
   <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" />
 
   <div class="toolbar-group annotation-tools expanded-toolbar-group" aria-label="批注工具">
-    <button class="toolbar-nav-button" type="button" data-editor-mode="select" title="选择文字；选择批注后可移动或编辑">
+    <button class="toolbar-nav-button" type="button" data-editor-mode="select" title="选择文字或已有批注">
       <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pointer" /></svg>
-      移动/选择
+      选择
     </button>
     <button class="toolbar-nav-button" type="button" data-editor-mode="highlight" title="选中文字并高亮">
       <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-highlight" /></svg>
@@ -66,16 +66,27 @@
       <button class="highlight-color-history-button" type="button" data-highlight-color-history-index="1" aria-label="最近颜色 2"></button>
       <button class="highlight-color-history-button" type="button" data-highlight-color-history-index="2" aria-label="最近颜色 3"></button>
     </div>
-    <button class="toolbar-nav-button" type="button" data-editor-mode="ink" title="自由绘制"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pen" /></svg>画笔</button>
+    <button class="toolbar-nav-button" type="button" data-editor-mode="ink" title="自由绘制" aria-haspopup="true" aria-expanded="false" aria-controls="ink-thickness-control"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pen" /></svg>画笔</button>
+    <label id="ink-thickness-control" class="annotation-size-control" role="group" aria-label="调节画笔粗细" hidden>
+      <span>粗细</span>
+      <input id="ink-thickness" type="range" min="1" max="20" step="1" value="3" aria-label="画笔粗细" />
+      <output id="ink-thickness-value" for="ink-thickness">3</output>
+    </label>
     <button class="toolbar-nav-button" type="button" data-editor-mode="text" title="在页面上添加文本"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-note" /></svg>批注</button>
-    <button id="erase-selected-annotation" class="toolbar-nav-button" type="button" title="橡皮擦：仅删除拖过的画笔线段" aria-pressed="false"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eraser" /></svg>擦除</button>
+    <button id="erase-selected-annotation" class="toolbar-nav-button" type="button" title="橡皮擦：仅删除拖过的画笔线段" aria-pressed="false" aria-haspopup="true" aria-expanded="false" aria-controls="ink-eraser-size-control"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eraser" /></svg>擦除</button>
+    <label id="ink-eraser-size-control" class="annotation-size-control" role="group" aria-label="调节橡皮擦大小" hidden>
+      <span>大小</span>
+      <input id="ink-eraser-size" type="range" min="8" max="64" step="2" value="18" aria-label="橡皮擦大小" />
+      <output id="ink-eraser-size-value" for="ink-eraser-size">18</output>
+    </label>
     <button id="undo-annotation" class="toolbar-nav-button" type="button" title="撤销批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-undo" /></svg>撤销</button>
     <button id="redo-annotation" class="toolbar-nav-button" type="button" title="重做批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-redo" /></svg>重做</button>
     <button id="smart-copy" class="toolbar-nav-button" type="button" title="整理复制选中文本"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-copy" /></svg>整理复制</button>
     <button id="toggle-notes" class="toolbar-nav-button" type="button" title="隐藏/显示所有笔记标记"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eye-off" /></svg><span data-toggle-notes-label>隐藏笔记</span></button>
   </div>
 
-  <button id="add-current-pdf-to-library" class="toolbar-pill toolbar-nav-button knowledge-add-current" type="button" disabled><img class="toolbar-action-icon" src="/resources/add.svg" alt="" /> <span>添加到知识库</span></button>
+  <button id="add-current-pdf-to-library" class="toolbar-pill toolbar-nav-button knowledge-add-current" type="button" disabled><span>添加到知识库</span></button>
+  <button id="save-current-pdf" class="toolbar-pill toolbar-nav-button annotation-save-current" type="button" title="当前 PDF 已保存" disabled><img class="toolbar-action-icon annotation-save-icon" src="/resources/saved.svg" alt="" /><span>已保存</span></button>
 
   <div class="toolbar-group ai-tools expanded-toolbar-group" aria-label="AI 工具">
     <button id="ai-panel-toggle" class="toolbar-pill toolbar-nav-button ai-entry active" type="button">
@@ -83,6 +94,7 @@
       PDF 阅读
     </button>
     <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>知识库</button>
+    <button id="vocabulary-library-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-vocabulary" /></svg>单词库</button>
   </div>
 
   <button id="assistant-panel-toggle" class="toolbar-pill toolbar-nav-button assistant-entry active" type="button" title="显示或隐藏右侧 AI 助手">
@@ -93,8 +105,8 @@
     id="ai-settings-button"
     class="toolbar-icon-button toolbar-settings-button toolbar-nav-button"
     type="button"
-    title="AI 设置"
-    aria-label="打开 AI 设置"
+    title="设置"
+    aria-label="打开设置"
   >
     <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-settings" /></svg>
   </button>

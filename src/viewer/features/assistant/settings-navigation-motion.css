@@ -1,0 +1,50 @@
+.settings-pages {
+  position: relative;
+  min-height: 584px;
+  padding-top: 18px;
+  perspective: 1400px;
+}
+
+.settings-pages.is-primary-transitioning {
+  display: grid;
+  overflow: hidden;
+}
+
+.settings-pages.is-primary-transitioning > .settings-page {
+  min-width: 0;
+  grid-area: 1 / 1;
+  align-self: start;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.settings-model-navigation {
+  position: relative;
+  perspective: 1400px;
+}
+
+.settings-model-navigation.is-transitioning {
+  overflow: hidden;
+}
+
+.settings-model-navigation.is-transitioning > .settings-model-screen {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  background: #fff;
+  backface-visibility: hidden;
+  will-change: transform, opacity, box-shadow;
+}
+
+.settings-page[hidden],
+#settings-model-overview[hidden],
+#settings-connection-editor[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-model-navigation,
+  .settings-model-navigation > .settings-model-screen {
+    scroll-behavior: auto;
+  }
+}

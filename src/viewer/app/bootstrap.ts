@@ -4,6 +4,7 @@ import { registerKnowledgeEvents } from './registrations/register-knowledge-even
 import { registerKnowledgeRecentEvents } from './registrations/register-knowledge-recent-events';
 import { registerReaderEvents } from './registrations/register-reader-events';
 import { registerTranslationEvents } from './registrations/register-translation-events';
+import { registerVocabularyEvents } from './registrations/register-vocabulary-events';
 import { registerLifecycle } from './registrations/register-lifecycle';
 
 export * from './app-ui';
@@ -15,5 +16,6 @@ export function bootstrapViewer(): void {
   registerKnowledgeRecentEvents();
   registerReaderEvents();
   registerTranslationEvents();
+  registerVocabularyEvents();
   registerLifecycle();
 }

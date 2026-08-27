@@ -119,6 +119,89 @@
   background: #fff;
 }
 
+.expanded-toolbar-group .annotation-size-control {
+  position: fixed;
+  z-index: 1000025;
+  display: grid;
+  width: 196px;
+  min-height: 54px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #d8e3f2;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgb(15 23 42 / 18%);
+  color: #526176;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.expanded-toolbar-group .annotation-size-control::before {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border-top: 1px solid #d8e3f2;
+  border-left: 1px solid #d8e3f2;
+  background: #fff;
+  content: "";
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.expanded-toolbar-group .annotation-size-control[hidden] {
+  display: none !important;
+}
+
+.annotation-size-control > span,
+.annotation-size-control output {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.annotation-size-control output {
+  width: 19px;
+  color: #175cd3;
+  text-align: right;
+}
+
+.annotation-size-control input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  accent-color: #1f67e8;
+  cursor: ew-resize;
+}
+
+.toolbar .annotation-save-current {
+  min-width: 88px;
+  border-color: #d7e0eb;
+  background: #fff;
+  color: #64748b;
+}
+
+.toolbar .annotation-save-current .annotation-save-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.toolbar .annotation-save-current:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.toolbar .annotation-save-current.needs-save {
+  border-color: #8fb4ff;
+  background: #edf4ff;
+  color: #1559d6;
+}
+
+.toolbar .annotation-save-current.is-saving {
+  color: #175cd3;
+}
+
 .toolbar-menu:has(.toolbar-menu-panel .active) > .toolbar-menu-trigger,
 .toolbar-menu.open > .toolbar-menu-trigger,
 .toolbar-settings-button.active {

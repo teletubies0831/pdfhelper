@@ -1,11 +1,11 @@
 import { AnnotationEditorType } from "pdfjs-dist";
-import { annotationActionBar, annotationTypeLabel, contextCleanCopyButton, contextColors, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteHighlightNoteButton, editorModeButtons, freeTextSizeControl, highlightColorInput, highlightContextActions, highlightNotePopover, highlightNoteQuote, highlightNoteText, highlightNoteTitle, selectionContextMenu, textStatus, viewerElement } from "../../app/viewer-elements";
-import { activeEditorMode, annotationEditor, contextHighlightEditor, contextSelectionRanges, contextSelectionText, nativeAnnotationNotes, openHighlightNoteEditor, pdfDocument, pdfViewer, restoredHelperNotesBySignature, selectedAnnotationEditor, selectedHighlightEditor } from "../../app/viewer-state";
+import { annotationActionBar, annotationTypeLabel, contextCleanCopyButton, contextColors, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteHighlightNoteButton, freeTextSizeControl, highlightColorInput, highlightContextActions, highlightNotePopover, highlightNoteQuote, highlightNoteText, highlightNoteTitle, selectionContextMenu, viewerElement } from "../../app/viewer-elements";
+import { annotationEditor, contextHighlightEditor, contextSelectionRanges, contextSelectionText, nativeAnnotationNotes, openHighlightNoteEditor, pdfDocument, restoredHelperNotesBySignature, SELECT_TOOL_EDITOR_BACKING_MODE, selectedAnnotationEditor, selectedHighlightEditor } from "../../app/viewer-state";
 import { setStatus } from "../recent-files/public";
 import { forgetHelperNote, getAnnotationGeometrySignature, getEditorSerializedValue, getEditorStorageKeys, getRememberedHelperNote, isFreeTextEditor, isHighlightEditor, isInkEditor, isRecord, isStoredHighlightValue, markUnsavedChanges, normalizeStorageKey, rememberHelperNote } from "./annotation-persistence";
 import { getViewerSelectionRawText } from "../../core/pdf-reader/public";
 import { findAnnotationEditor, findHighlightNoteAnchor, setHighlightColor, syncFreeTextControls } from './annotation-editor';
-import { setInkEraserMode } from './ink-eraser';
+import { setEditorMode } from './annotation-tool-mode';
 
 export function clearDomSelection() {
   window.getSelection()?.removeAllRanges();
@@ -355,6 +355,15 @@ export function showAnnotationActionBar(editor: any) {
 
 export function selectAnnotation(editor: any, showActions = true) {
   if (!annotationEditor.value || !editor) return;
+  // Ink is edited exclusively by the pen/eraser workflow. Let pointer input
+  // pass through to the PDF text layer and never expose the generic Delete UI.
+  if (isInkEditor(editor)) {
+    annotationEditor.value.unselectAll();
+    selectedAnnotationEditor.value = null;
+    selectedHighlightEditor.value = null;
+    hideAnnotationActionBar();
+    return;
+  }
   annotationEditor.value.setSelected(editor);
   selectedAnnotationEditor.value = editor;
   selectedHighlightEditor.value = isHighlightEditor(editor) ? editor : null;
@@ -383,6 +392,33 @@ export function positionFloatingElement(element: HTMLElement, anchor: DOMRect) {
   );
   element.style.left = `${left}px`;
   element.style.top = `${top}px`;
+}
+
+
+export function installHighlightNoteTextEditingProtection() {
+  highlightNoteText.addEventListener("focus", () => {
+    // PDF.js otherwise keeps the highlight selected while its note is edited.
+    // Keep selectedHighlightEditor for saving, but clear the PDF.js selection
+    // so its Delete shortcut cannot remove the annotation.
+    annotationEditor.value?.unselectAll();
+    selectedAnnotationEditor.value = null;
+    hideAnnotationActionBar();
+  });
+
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.target === highlightNoteText &&
+        (event.key === "Delete" || event.key === "Backspace")
+      ) {
+        // Preserve the textarea's default deletion while preventing PDF.js
+        // document-level shortcuts from receiving the same key event.
+        event.stopPropagation();
+      }
+    },
+    true,
+  );
 }
 
 
@@ -471,6 +507,13 @@ export function saveHighlightNote() {
 
 export function deleteSelectedAnnotation() {
   if (!annotationEditor.value || !selectedAnnotationEditor.value) return;
+  if (isInkEditor(selectedAnnotationEditor.value)) {
+    annotationEditor.value.unselectAll();
+    selectedAnnotationEditor.value = null;
+    hideAnnotationActionBar();
+    setStatus("画笔墨迹请使用橡皮擦删除。", true);
+    return;
+  }
   const typeName = getAnnotationTypeName(selectedAnnotationEditor.value);
   annotationEditor.value.setSelected(selectedAnnotationEditor.value);
   annotationEditor.value.delete();
@@ -595,7 +638,11 @@ export async function createQuickHighlight(color: string): Promise<any | null> {
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
   } finally {
-    await annotationEditor.value.updateMode(AnnotationEditorType.NONE, null, true);
+    await annotationEditor.value.updateMode(
+      SELECT_TOOL_EDITOR_BACKING_MODE,
+      null,
+      true,
+    );
     setEditorMode(AnnotationEditorType.NONE);
     clearDomSelection();
   }
@@ -609,7 +656,7 @@ export async function createQuickHighlight(color: string): Promise<any | null> {
     return null;
   }
 
-  setStatus("高亮已创建，当前仍为移动/选择模式。");
+  setStatus("高亮已创建，当前仍为选择模式。");
   markUnsavedChanges();
   return createdEditor;
 }
@@ -626,69 +673,4 @@ export async function highlightCurrentSelectionFromToolbar() {
   }
 
   await createQuickHighlight(highlightColorInput.value);
-}
-
-
-
-let editorModeTransitionTimeout: number | null = null;
-
-export function finishEditorModeTransition(): void {
-  viewerElement.classList.remove("pdf-helper-editor-mode-transition");
-  if (editorModeTransitionTimeout !== null) {
-    window.clearTimeout(editorModeTransitionTimeout);
-    editorModeTransitionTimeout = null;
-  }
-}
-
-export function setEditorMode(mode: number) {
-  if (!pdfDocument.value) return;
-  setInkEraserMode(false);
-  const modeWillChange = activeEditorMode.value !== mode;
-  if (modeWillChange) {
-    viewerElement.classList.add("pdf-helper-editor-mode-transition");
-    if (editorModeTransitionTimeout !== null) {
-      window.clearTimeout(editorModeTransitionTimeout);
-    }
-    // PDF.js normally emits annotationeditormodechanged after the affected
-    // pages have rendered. Keep a timeout only as a fail-safe for interrupted
-    // document loads so the transition class can never become permanent.
-    editorModeTransitionTimeout = window.setTimeout(
-      finishEditorModeTransition,
-      3_000,
-    );
-  }
-  pdfViewer.annotationEditorMode = { mode };
-  activeEditorMode.value = mode;
-  viewerElement.classList.toggle(
-    "pdf-helper-ink-mode",
-    mode === AnnotationEditorType.INK,
-  );
-
-  const modeNames: Record<string, number> = {
-    select: AnnotationEditorType.NONE,
-    highlight: AnnotationEditorType.HIGHLIGHT,
-    ink: AnnotationEditorType.INK,
-    text: AnnotationEditorType.FREETEXT,
-  };
-
-  for (const button of editorModeButtons) {
-    button.classList.toggle(
-      "active",
-      modeNames[button.dataset.editorMode || ""] === mode,
-    );
-  }
-
-  if (mode === AnnotationEditorType.NONE) {
-    textStatus.textContent =
-      "选择模式：拖选可复制；单击批注后拖动，双击文本可修改";
-  } else if (mode === AnnotationEditorType.HIGHLIGHT) {
-    textStatus.textContent =
-      "高亮模式：拖选文字生成高亮；完成后切回“移动/选择”";
-  } else if (mode === AnnotationEditorType.INK) {
-    textStatus.textContent =
-      "画笔模式：按住鼠标绘制；墨迹完成后固定在页面上，不可移动";
-  } else if (mode === AnnotationEditorType.FREETEXT) {
-    textStatus.textContent =
-      "文本模式：点击页面输入；点击空白结束，切回“移动/选择”可拖动";
-  }
 }

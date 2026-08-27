@@ -16,14 +16,13 @@ import { AnnotationEditorParamsType, AnnotationEditorType, type AnnotationEditor
 
 
 import { freeTextColorInput, freeTextSizeInput, highlightColorInput, viewerElement } from "../../app/viewer-elements";
-import { activeEditorMode, annotationEditor, annotationEditorWarmUpInFlight, contextSelectionRanges, isOpeningDocument, pdfDocument, restoredAnnotationWarmUpPending, selectedAnnotationEditor } from "../../app/viewer-state";
+import { activeEditorMode, annotationEditor, annotationEditorWarmUpInFlight, contextSelectionRanges, isOpeningDocument, pdfDocument, restoredAnnotationWarmUpPending, SELECT_TOOL_EDITOR_BACKING_MODE, selectedAnnotationEditor } from "../../app/viewer-state";
 import { FREE_TEXT_DEFAULT_SIZE, FREE_TEXT_MAX_SIZE, FREE_TEXT_MIN_SIZE, isFreeTextEditor, isHighlightEditor, isInkEditor, markSavedChanges, markUnsavedChanges, rgbColorToHex } from "./annotation-persistence";
 import { updateControls } from "../../core/pdf-reader/public";
 import { getSelectionHeightRatio, mergeHighlightBoxes } from '../text-selection/public';
 import { scheduleHighlightNoteIndicatorRefresh } from './annotation-notes';
 import { rememberHighlightColor } from './highlight-color-history';
 import { isPointInsideInkShape } from './ink-eraser';
-
 
 
 
@@ -151,12 +150,17 @@ export async function warmUpAnnotationEditorManager(
 
   try {
     await uiManager.updateMode(AnnotationEditorType.HIGHLIGHT, null, false);
-    await uiManager.updateMode(AnnotationEditorType.NONE, null, false);
+    await uiManager.updateMode(
+      SELECT_TOOL_EDITOR_BACKING_MODE,
+      null,
+      false,
+    );
   } catch (error) {
     console.warn("PDFPal annotation editor warm-up failed.", error);
   } finally {
     if (pdfDocument.value !== documentAtStart) return;
     activeEditorMode.value = AnnotationEditorType.NONE;
+    viewerElement.classList.toggle("pdf-helper-select-mode", true);
     viewerElement.classList.toggle("pdf-helper-ink-mode", false);
     scheduleHighlightNoteIndicatorRefresh();
     if (isOpeningDocument.value) markSavedChanges();
@@ -207,10 +211,11 @@ export function scheduleRestoredAnnotationEditorWarmUp() {
 
 export function findAnnotationEditor(
   target: EventTarget | null,
-  options: { includeHighlight?: boolean } = {},
+  options: { includeHighlight?: boolean; includeInk?: boolean } = {},
 ): any | null {
   if (!(target instanceof Element) || !annotationEditor.value) return null;
   const includeHighlight = options.includeHighlight ?? true;
+  const includeInk = options.includeInk ?? false;
   const editorElement = target.closest<HTMLDivElement>(
     ".highlightEditor, .freeTextEditor, .inkEditor, .stampEditor, .signatureEditor",
   );
@@ -221,6 +226,7 @@ export function findAnnotationEditor(
 
   for (const editor of annotationEditor.value.getEditors(pageNumber - 1)) {
     if (!includeHighlight && isHighlightEditor(editor)) continue;
+    if (!includeInk && isInkEditor(editor)) continue;
     if (editor.div === editorElement || editor.div?.contains(target))
       return editor;
   }
@@ -568,10 +574,15 @@ export function isPointInsideEditor(
 export function findAnnotationEditorAtPoint(
   clientX: number,
   clientY: number,
-  options: { highlightOnly?: boolean; includeHighlight?: boolean } = {},
+  options: {
+    highlightOnly?: boolean;
+    includeHighlight?: boolean;
+    includeInk?: boolean;
+  } = {},
 ): any | null {
   if (!annotationEditor.value) return null;
   const includeHighlight = options.includeHighlight ?? true;
+  const includeInk = options.includeInk ?? false;
 
   const hit = document.elementFromPoint(clientX, clientY);
   const pageElement = hit?.closest<HTMLElement>(".pdfViewer .page");
@@ -581,6 +592,7 @@ export function findAnnotationEditorAtPoint(
   const editors = [...annotationEditor.value.getEditors(pageNumber - 1)].reverse();
   for (const editor of editors) {
     if (!includeHighlight && isHighlightEditor(editor)) continue;
+    if (!includeInk && isInkEditor(editor)) continue;
     if (options.highlightOnly && !isHighlightEditor(editor)) continue;
     if (isPointInsideEditor(editor, clientX, clientY)) return editor;
   }

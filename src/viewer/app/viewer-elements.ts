@@ -5,4 +5,5 @@ export * from "./elements/knowledge-elements";
 export * from "./elements/assistant-elements";
 export * from "./elements/translation-elements";
 export * from "./elements/reading-card-elements";
+export * from "./elements/vocabulary-elements";
 export { requiredElement } from "./elements/required-element";

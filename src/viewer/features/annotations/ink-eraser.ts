@@ -3,6 +3,9 @@ import { AnnotationEditorType } from "pdfjs-dist";
 import {
   editorModeButtons,
   eraseSelectedAnnotationButton,
+  inkEraserSizeControl,
+  inkEraserSizeInput,
+  inkEraserSizeValue,
   textStatus,
   viewerElement,
 } from "../../app/viewer-elements";
@@ -15,18 +18,36 @@ import {
 import { setStatus } from "../recent-files/public";
 import { type InkScreenPoint } from "./ink-eraser-geometry";
 import {
+  clearInkEraserPreview,
+  flushInkEraserPreview,
+  scheduleInkEraserPreview,
+} from "./ink-eraser-preview";
+import {
   buildInkEraserSession,
   eraseInkSweep,
   getInkSvgPath,
-  getSurvivingInkStrokes,
+  getSurvivingInkPaths,
   INK_ERASER_RADIUS_PX,
   isPointInsideSerializedInk,
+  type SurvivingInkPaths,
   type InkEraserEntry,
   type InkEraserSession,
 } from "./ink-eraser-session";
 import { markUnsavedChanges } from "./annotation-persistence";
+import {
+  readJsonValue,
+  writeJsonValue,
+} from "../../../infrastructure/storage/browser-json-repository";
+import {
+  closeAnnotationSizePopover,
+  openAnnotationSizePopover,
+} from "./annotation-size-popover";
 
 const REPLACEMENT_ANNOTATION_GUARD_PREFIX = "pdfpal-ink-eraser";
+const INK_ERASER_SIZE_STORAGE_KEY = "pdf-helper-ink-eraser-size-v1";
+const INK_ERASER_SIZE_MIN = 8;
+const INK_ERASER_SIZE_MAX = 64;
+const INK_ERASER_SIZE_DEFAULT = INK_ERASER_RADIUS_PX * 2;
 
 interface PreparedReplacement {
   editor: any;
@@ -65,7 +86,7 @@ function getPageElementAtPoint(
 
 function getReplacementRect(
   entry: InkEraserEntry,
-  strokes: number[][],
+  strokes: ArrayLike<number>[],
 ): number[] {
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
@@ -90,16 +111,16 @@ function getReplacementRect(
 
 function createReplacementData(
   entry: InkEraserEntry,
-  strokes: number[][],
+  paths: SurvivingInkPaths,
   guardId: string,
 ): Record<string, any> {
   const data: Record<string, any> = {
     ...entry.serialized,
     annotationElementId: guardId,
-    // PDF.js rebuilds Bezier controls from these sampled typed arrays. This
-    // avoids preserving a curve segment that the eraser split in the middle.
-    paths: { points: strokes.map((stroke) => new Float32Array(stroke)) },
-    rect: getReplacementRect(entry, strokes),
+    // Untouched strokes retain their original PDF.js Bezier controls. Only
+    // split strokes are rebuilt, using the same curve algorithm as preview.
+    paths,
+    rect: getReplacementRect(entry, paths.points),
   };
   delete data.id;
   delete data.deleted;
@@ -109,18 +130,21 @@ function createReplacementData(
 }
 
 function setDrawVisibility(editor: any, visible: boolean): void {
-  const svg = getInkSvgPath(editor)?.ownerSVGElement;
-  if (svg) svg.style.visibility = visible ? "" : "hidden";
+  // PDF.js keeps all ink editors from one page inside the same SVG. Hiding
+  // ownerSVGElement would therefore blank every stroke on the page while a
+  // replacement is prepared. Only the replacement path itself is buffered.
+  const path = getInkSvgPath(editor);
+  if (path) path.style.visibility = visible ? "" : "hidden";
 }
 
 async function prepareReplacement(
   entry: InkEraserEntry,
-  strokes: number[][],
+  paths: SurvivingInkPaths,
   index: number,
 ): Promise<PreparedReplacement> {
   const guardId = `${REPLACEMENT_ANNOTATION_GUARD_PREFIX}-${index}-${crypto.randomUUID()}`;
   const editor = await entry.layer.deserialize(
-    createReplacementData(entry, strokes, guardId),
+    createReplacementData(entry, paths, guardId),
   );
   if (!editor) throw new Error("PDF.js 无法重建擦除后的画笔墨迹。");
   setDrawVisibility(editor, false);
@@ -150,8 +174,9 @@ function discardPreparedReplacement(replacement: PreparedReplacement): void {
 async function commitEraserSession(session: InkEraserSession): Promise<void> {
   const changes = session.entries
     .filter((entry) => entry.changed)
-    .map((entry) => ({ entry, strokes: getSurvivingInkStrokes(entry) }));
+    .map((entry) => ({ entry, paths: getSurvivingInkPaths(entry) }));
   if (changes.length === 0) {
+    clearInkEraserPreview(session);
     setStatus("没有擦到画笔墨迹。", false);
     resetToolHint();
     return;
@@ -164,8 +189,8 @@ async function commitEraserSession(session: InkEraserSession): Promise<void> {
     for (let index = 0; index < changes.length; index += 1) {
       const change = changes[index]!;
       prepared.push(
-        change.strokes.length > 0
-          ? await prepareReplacement(change.entry, change.strokes, index)
+        change.paths.points.length > 0
+          ? await prepareReplacement(change.entry, change.paths, index)
           : null,
       );
     }
@@ -173,15 +198,20 @@ async function commitEraserSession(session: InkEraserSession): Promise<void> {
       for (const replacement of prepared) {
         if (replacement) discardPreparedReplacement(replacement);
       }
+      clearInkEraserPreview(session);
       return;
     }
 
     const uiManager = annotationEditor.value as any;
     const apply = () => {
-      for (const { entry } of changes) entry.editor.remove();
       for (const replacement of prepared) {
         if (replacement) addReplacementWithoutOwnUndo(replacement);
       }
+      // Restore the original path data before removing its editor so undo can
+      // rebuild the exact source. All changes happen in one task after the
+      // replacement is visible, hence there is no intermediate paint.
+      clearInkEraserPreview(session);
+      for (const { entry } of changes) entry.editor.remove();
     };
     const undo = () => {
       for (const replacement of prepared) replacement?.editor.remove();
@@ -197,6 +227,7 @@ async function commitEraserSession(session: InkEraserSession): Promise<void> {
     markUnsavedChanges();
     setStatus("已擦除经过的画笔线段，可使用撤销恢复。", false);
   } catch (error) {
+    clearInkEraserPreview(session);
     for (const replacement of prepared) {
       if (replacement) discardPreparedReplacement(replacement);
     }
@@ -214,6 +245,34 @@ let applying = false;
 let currentSession: InkEraserSession | null = null;
 let installed = false;
 let eraserCursor: HTMLDivElement | null = null;
+let eraserDiameterPx = INK_ERASER_SIZE_DEFAULT;
+
+function normalizeEraserDiameter(value: number): number {
+  return Math.min(
+    INK_ERASER_SIZE_MAX,
+    Math.max(
+      INK_ERASER_SIZE_MIN,
+      Number.isFinite(value) ? Math.round(value / 2) * 2 : INK_ERASER_SIZE_DEFAULT,
+    ),
+  );
+}
+
+function setInkEraserSize(value: number, persist = true): void {
+  eraserDiameterPx = normalizeEraserDiameter(value);
+  inkEraserSizeInput.value = String(eraserDiameterPx);
+  inkEraserSizeValue.value = String(eraserDiameterPx);
+  if (persist) {
+    try {
+      writeJsonValue(INK_ERASER_SIZE_STORAGE_KEY, eraserDiameterPx);
+    } catch {
+      // Erasing remains available even if browser preference storage fails.
+    }
+  }
+  eraserCursor?.style.setProperty(
+    "--pdf-helper-eraser-diameter",
+    `${eraserDiameterPx}px`,
+  );
+}
 
 function getEraserCursor(): HTMLDivElement {
   if (eraserCursor) return eraserCursor;
@@ -222,7 +281,7 @@ function getEraserCursor(): HTMLDivElement {
   eraserCursor.setAttribute("aria-hidden", "true");
   eraserCursor.style.setProperty(
     "--pdf-helper-eraser-diameter",
-    `${INK_ERASER_RADIUS_PX * 2}px`,
+    `${eraserDiameterPx}px`,
   );
   document.body.append(eraserCursor);
   return eraserCursor;
@@ -238,8 +297,9 @@ function updateEraserCursor(clientX: number, clientY: number): void {
     return;
   }
   const cursor = getEraserCursor();
+  const radius = eraserDiameterPx / 2;
   cursor.hidden = false;
-  cursor.style.transform = `translate3d(${clientX - INK_ERASER_RADIUS_PX}px, ${clientY - INK_ERASER_RADIUS_PX}px, 0)`;
+  cursor.style.transform = `translate3d(${clientX - radius}px, ${clientY - radius}px, 0)`;
 }
 
 function resetToolHint(): void {
@@ -252,11 +312,11 @@ function resetToolHint(): void {
     [AnnotationEditorType.NONE]:
       "选择模式：拖选可复制；单击批注后拖动，双击文本可修改",
     [AnnotationEditorType.HIGHLIGHT]:
-      "高亮模式：拖选文字生成高亮；完成后切回“移动/选择”",
+      "高亮模式：拖选文字生成高亮；完成后切回“选择”",
     [AnnotationEditorType.INK]:
       "画笔模式：按住鼠标绘制；墨迹完成后固定在页面上，不可移动",
     [AnnotationEditorType.FREETEXT]:
-      "文本模式：点击页面输入；点击空白结束，切回“移动/选择”可拖动",
+      "文本模式：点击页面输入；点击空白结束，切回“选择”可编辑",
   };
   textStatus.textContent = hints[activeEditorMode.value] ?? "";
 }
@@ -283,6 +343,7 @@ function cancelCurrentSession(): void {
   const session = currentSession;
   if (!session) return;
   currentSession = null;
+  clearInkEraserPreview(session);
   if (viewerElement.hasPointerCapture?.(session.pointerId)) {
     viewerElement.releasePointerCapture(session.pointerId);
   }
@@ -295,6 +356,8 @@ export function isInkEraserMode(): boolean {
 export function setInkEraserMode(enabled: boolean): void {
   const nextActive = enabled && Boolean(pdfDocument.value);
   if (!nextActive) cancelCurrentSession();
+  if (nextActive) closeAnnotationSizePopover();
+  else closeAnnotationSizePopover(inkEraserSizeControl);
   active = nextActive;
   if (!active) hideEraserCursor();
   viewerElement.classList.toggle("pdf-helper-ink-eraser-mode", active);
@@ -307,6 +370,12 @@ export function setInkEraserMode(enabled: boolean): void {
     selectedAnnotationEditor.value = null;
   }
   resetToolHint();
+  if (active) {
+    openAnnotationSizePopover(
+      inkEraserSizeControl,
+      eraseSelectedAnnotationButton,
+    );
+  }
 }
 
 export function isPointInsideInkShape(
@@ -336,6 +405,7 @@ function beginSession(event: PointerEvent): void {
     event.pointerId,
     pageNumber - 1,
     point,
+    eraserDiameterPx / 2,
   );
   if (!currentSession) {
     setStatus("当前页没有可擦除的画笔墨迹。", false);
@@ -346,7 +416,9 @@ function beginSession(event: PointerEvent): void {
   } catch {
     // Capture is optional; capture-phase handlers still block PDF.js drawing.
   }
-  if (eraseInkSweep(currentSession, point, point)) {
+  const hitEntries = eraseInkSweep(currentSession, point, point);
+  if (hitEntries.length > 0) {
+    scheduleInkEraserPreview(currentSession, hitEntries);
     textStatus.textContent = "正在擦除画笔线段，松开鼠标后可撤销";
   }
 }
@@ -359,19 +431,26 @@ function moveSession(event: PointerEvent): void {
   event.stopImmediatePropagation();
   const coalesced = event.getCoalescedEvents?.() ?? [event];
   let lastPoint: InkScreenPoint = session.lastPoint;
-  let hit = false;
+  const hitEntries = new Set<InkEraserEntry>();
   for (const sample of coalesced) {
     const nextPoint = { x: sample.clientX, y: sample.clientY };
-    hit = eraseInkSweep(session, lastPoint, nextPoint) || hit;
+    for (const entry of eraseInkSweep(session, lastPoint, nextPoint)) {
+      hitEntries.add(entry);
+    }
     lastPoint = nextPoint;
   }
   const eventPoint = { x: event.clientX, y: event.clientY };
   if (lastPoint.x !== eventPoint.x || lastPoint.y !== eventPoint.y) {
-    hit = eraseInkSweep(session, lastPoint, eventPoint) || hit;
+    for (const entry of eraseInkSweep(session, lastPoint, eventPoint)) {
+      hitEntries.add(entry);
+    }
     lastPoint = eventPoint;
   }
   session.lastPoint = lastPoint;
-  if (hit) textStatus.textContent = "正在擦除画笔线段，松开鼠标后可撤销";
+  if (hitEntries.size > 0) {
+    scheduleInkEraserPreview(session, hitEntries);
+    textStatus.textContent = "正在擦除画笔线段，松开鼠标后可撤销";
+  }
 }
 
 function finishSession(event: PointerEvent, cancelled: boolean): void {
@@ -386,16 +465,36 @@ function finishSession(event: PointerEvent, cancelled: boolean): void {
     event.stopImmediatePropagation();
   }
   if (cancelled) {
+    clearInkEraserPreview(session);
     setStatus("已取消本次画笔擦除。", false);
     resetToolHint();
     return;
   }
+  flushInkEraserPreview(session);
   void commitEraserSession(session);
 }
 
 export function installInkEraserInteractions(): void {
   if (installed) return;
   installed = true;
+  setInkEraserSize(
+    Number.parseInt(
+      String(
+        readJsonValue(
+          INK_ERASER_SIZE_STORAGE_KEY,
+          Number.parseInt(inkEraserSizeInput.value, 10),
+        ),
+      ),
+      10,
+    ),
+    false,
+  );
+  inkEraserSizeInput.addEventListener("input", () => {
+    setInkEraserSize(Number.parseInt(inkEraserSizeInput.value, 10));
+  });
+  inkEraserSizeInput.addEventListener("change", () => {
+    closeAnnotationSizePopover(inkEraserSizeControl);
+  });
   eraseSelectedAnnotationButton.addEventListener("click", () => {
     setInkEraserMode(!active);
   });

@@ -5,6 +5,10 @@ import { updateControls } from "../../core/pdf-reader/public";
 
 
 import { getSerializableAnnotationEntries } from "./embedded-helper-payload";
+import {
+  cancelScheduledAnnotationAutoSave,
+  scheduleAnnotationAutoSave,
+} from "./annotation-auto-save";
 
 export function getCurrentAnnotationSnapshot(): string {
   if (!pdfDocument.value) return "";
@@ -29,6 +33,8 @@ export function updateUnsavedChangesFromSnapshot() {
 
 export function markUnsavedChanges() {
   updateUnsavedChangesFromSnapshot();
+  updateControls();
+  scheduleAnnotationAutoSave();
 }
 
 export function scheduleUnsavedChangesCheck() {
@@ -40,6 +46,7 @@ export function scheduleUnsavedChangesCheck() {
     unsavedChangesCheckHandle.value = null;
     updateUnsavedChangesFromSnapshot();
     updateControls();
+    scheduleAnnotationAutoSave();
   }, 0);
 }
 
@@ -51,4 +58,6 @@ export function markSavedChanges() {
 
   savedAnnotationSnapshot.value = getCurrentAnnotationSnapshot();
   hasUnsavedChanges.value = false;
+  cancelScheduledAnnotationAutoSave();
+  updateControls();
 }

@@ -60,6 +60,15 @@ export const documentKnowledgeTasks = new Map<string, Promise<{
 
 export let annotationEditor: { value: AnnotationEditorUIManager | null } = { value: null };
 
+// PDF.js treats NONE as "leave annotation editing" and swaps editor DOM for
+// native/fake annotation appearances. PDFPal's Select tool must keep the
+// editor DOM mounted so note markers and free-text metrics stay unchanged.
+// FREETEXT is only the internal backing mode; select-mode CSS and capture
+// handlers prevent blank-page clicks from creating new text annotations.
+export const SELECT_TOOL_EDITOR_BACKING_MODE = AnnotationEditorType.FREETEXT;
+
+// This is the logical PDFPal toolbar mode, not necessarily PDF.js' backing
+// annotationEditorMode (Select remains represented by NONE here).
 export let activeEditorMode = { value: AnnotationEditorType.NONE };
 
 export let canUndoAnnotation = { value: false };

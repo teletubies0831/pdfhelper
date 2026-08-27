@@ -2,6 +2,10 @@ import { requiredElement } from "./required-element";
 
 export const appFrame = document.querySelector<HTMLElement>(".app-frame");
 
+export const workspaceStageElement = requiredElement<HTMLElement>(
+  "workspace-stage",
+);
+
 export const readerWorkspaceElement = requiredElement<HTMLElement>(
   "reader-workspace",
 );

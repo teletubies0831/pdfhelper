@@ -34,7 +34,6 @@ import {
   deepSeekBaseUrlInput,
   deepSeekThinkingSelect,
   focusModeButton,
-  knowledgeBasePageElement,
   knowledgeEmbeddingModelSelect,
   longTermMemoryList,
   outlineToggleButton,
@@ -112,6 +111,7 @@ import {
   getKnowledgeDocument,
   listKnowledgeDocuments,
 } from "../../features/knowledge-base/public";
+import { closeVocabularyLibraryPage } from "../../features/vocabulary-library/public";
 import { setStatus } from "../../features/recent-files/public";
 import { openSourcePdfInNewTab } from "../../shared-ui/navigation/source-pdf-navigation";
 import type { AssistantView } from "../../core/pdf-reader/public";
@@ -127,6 +127,7 @@ import {
   setChatReasoningMenuOpen,
   syncChatReasoningControl,
 } from "../chat-reasoning-control";
+import { getActiveWorkspaceView } from "../workspace-navigation";
 
 export function registerAssistantEvents(): void {
   renderAgentToolCatalog();
@@ -183,15 +184,22 @@ export function registerAssistantEvents(): void {
   });
 
   aiPanelToggleButton?.addEventListener("click", () => {
-    if (!knowledgeBasePageElement.hidden) {
+    const activeWorkspace = getActiveWorkspaceView();
+    if (activeWorkspace === "knowledge") {
       closeKnowledgeBasePage();
+      return;
+    }
+    if (activeWorkspace === "vocabulary") {
+      closeVocabularyLibraryPage();
       return;
     }
     setCurrentApplicationView("viewer");
   });
 
   assistantPanelToggleButton.addEventListener("click", () => {
-    if (!knowledgeBasePageElement.hidden) closeKnowledgeBasePage();
+    const activeWorkspace = getActiveWorkspaceView();
+    if (activeWorkspace === "knowledge") closeKnowledgeBasePage();
+    if (activeWorkspace === "vocabulary") closeVocabularyLibraryPage();
     const willOpen =
       appFrame?.classList.contains("right-panel-collapsed") ?? false;
     appFrame?.classList.toggle("right-panel-collapsed");
@@ -228,7 +236,12 @@ export function registerAssistantEvents(): void {
   for (const button of settingsPrimaryTabButtons) {
     button.addEventListener("click", () => {
       const tab = button.dataset.settingsTab;
-      if (tab === "models" || tab === "tools" || tab === "memory") {
+      if (
+        tab === "general" ||
+        tab === "models" ||
+        tab === "tools" ||
+        tab === "memory"
+      ) {
         activateSettingsTab(tab);
       }
     });

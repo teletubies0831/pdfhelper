@@ -1,0 +1,50 @@
+<section id="vocabulary-library-page" class="vocabulary-library-page" aria-label="单词库" hidden>
+  <div class="vocabulary-library-shell">
+    <header class="vocabulary-library-header">
+      <div class="vocabulary-library-title-row">
+        <button id="vocabulary-library-back" class="vocabulary-back-button" type="button" aria-label="返回 PDF 阅读">←</button>
+        <span class="vocabulary-brand-mark" aria-hidden="true">
+          <svg><use href="/resources/icons.svg#toolbar-icon-vocabulary" /></svg>
+        </span>
+        <div>
+          <div class="vocabulary-heading-line">
+            <h1>单词库</h1>
+            <span id="vocabulary-total-count" class="vocabulary-count-badge">0 张卡片</span>
+          </div>
+          <p>收藏英语学习结果，用 Markdown 继续补充释义、语境和例句。</p>
+        </div>
+      </div>
+      <button id="vocabulary-new-card" class="vocabulary-primary-button" type="button">＋ 新建卡片</button>
+    </header>
+
+    <div class="vocabulary-library-toolbar">
+      <label class="vocabulary-search-box">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
+        <input id="vocabulary-search" type="search" placeholder="搜索单词、释义、标签或原文…" />
+      </label>
+      <label class="vocabulary-filter-field">
+        <span>添加时间</span>
+        <select id="vocabulary-time-filter" aria-label="按添加时间筛选">
+          <option value="all">全部时间</option>
+          <option value="today">今天</option>
+          <option value="week">最近 7 天</option>
+          <option value="month">最近 30 天</option>
+        </select>
+      </label>
+      <label class="vocabulary-filter-field">
+        <span>排序</span>
+        <select id="vocabulary-sort" aria-label="单词卡片排序">
+          <option value="newest">最新添加</option>
+          <option value="oldest">最早添加</option>
+          <option value="updated">最近修改</option>
+          <option value="alphabetical">字母 A–Z</option>
+        </select>
+      </label>
+    </div>
+
+    <main id="vocabulary-library-main" class="vocabulary-library-main">
+      <div id="vocabulary-library-status" class="vocabulary-library-status" aria-live="polite"></div>
+      <div id="vocabulary-card-grid" class="vocabulary-card-grid" aria-live="polite"></div>
+    </main>
+  </div>
+</section>

@@ -19,6 +19,7 @@ import { applyTranslationEditButton, clearTranslationHistoryButton, closeTransla
 import { currentCardContext, currentEnglishLearningResult, currentEnglishLearningSourceSentence, currentGeneratedCard, lastSummaryPoints, lastTranslatedText, moreExamplesAbortController, normalizeCopiedText, selectedTextForAi, selectedTextPageNumber, translationAbortController } from "../../core/pdf-reader/public";
 import { autoResizeTranslationTextarea, cancelPendingAutomaticTranslation, clearCurrentTranslationHistory, ensureTranslationHistoryLoaded, generateMoreVocabularyExamples, getEnglishLearningPlainText, getSelectedEnglishWord, markTranslationEditorChanged, normalizeLearningInlineText, renderLearningRichText, renderTranslationHistoryDialog, renderTranslationMathPreview, selectedSnippetDisplayMode, setSelectedSnippetDisplayMode, setTranslationSelectionEditor, setTranslationState, translateSelectedText } from "../../features/translation/public";
 import { formatGeneratedCardText, saveCurrentPaperCard } from "../../features/paper-card/public";
+import { saveCurrentTranslationToVocabulary } from "../../features/vocabulary-library/public";
 import { pdfViewer } from "../viewer-state";
 
 import { setStatus } from "../../features/recent-files/public";
@@ -31,6 +32,12 @@ export function registerTranslationEvents(): void {
   for (const actionButton of document.querySelectorAll<HTMLButtonElement>(
     "[data-translation-action]",
   )) {
+    if (actionButton.dataset.translationAction === "save") {
+      actionButton.addEventListener("click", () => {
+        void saveCurrentTranslationToVocabulary();
+      });
+      continue;
+    }
     const targetId = {
       examples: "generate-more-examples",
       copy: "copy-translation",

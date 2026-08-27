@@ -16,13 +16,15 @@ import { DEFAULT_CONVERSATION_MEMORY_CONFIG, type ConversationMemoryConfig } fro
 
 
 
-import { aiSettingsButton, appFrame, assistantChatPanel, assistantSettingsPanel, assistantToolsRuntime, assistantViewButtons, chatInput, knowledgeGroupSelect, knowledgeMainElement, knowledgeSearchInput, knowledgeSortSelect, settingsModalBackdrop } from "./viewer-elements";
+import { aiSettingsButton, appFrame, assistantChatPanel, assistantSettingsPanel, assistantToolsRuntime, assistantViewButtons, chatInput, knowledgeGroupSelect, knowledgeMainElement, knowledgeSearchInput, knowledgeSortSelect, settingsModalBackdrop, vocabularyLibraryMainElement, vocabularySearchInput, vocabularySortSelect, vocabularyTimeFilterSelect } from "./viewer-elements";
 import { refreshLongTermMemoryList, resetSettingsPresentation } from "../features/assistant/public";
 import { cancelPendingAutomaticTranslation } from "../features/translation/public";
 import { openKnowledgeBasePage } from "../features/knowledge-base/public";
+import { applyPersistedVocabularyState, isVocabularyLibraryEnabled, openVocabularyLibraryPage } from "../features/vocabulary-library/public";
 import { cancelPendingCardGeneration } from "../features/paper-card/public";
 import { cancelPendingSummaryGeneration } from "../services/document-agent/viewer-document-agent";
 import { activateAiTab } from "./bootstrap";
+import { getActiveWorkspaceView } from "./workspace-navigation";
 import { APP_VIEW_SESSION_STORAGE_KEY, activeKnowledgeCategory, activeKnowledgeFilter, activeKnowledgeFocus, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear } from './feature-models';
 import type { PersistedAppView, PersistedAppViewState } from './feature-models';
 
@@ -36,7 +38,8 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
     const value = JSON.parse(raw) as Partial<PersistedAppViewState>;
     if (
       value.view !== "viewer" &&
-      value.view !== "knowledge"
+      value.view !== "knowledge" &&
+      value.view !== "vocabulary"
     ) {
       return null;
     }
@@ -93,6 +96,17 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
       knowledgeScrollTop: Number.isFinite(value.knowledgeScrollTop)
         ? Number(value.knowledgeScrollTop)
         : 0,
+      vocabularySearch:
+        typeof value.vocabularySearch === "string" ? value.vocabularySearch : "",
+      vocabularySort:
+        typeof value.vocabularySort === "string" ? value.vocabularySort : "newest",
+      vocabularyTimeFilter:
+        typeof value.vocabularyTimeFilter === "string"
+          ? value.vocabularyTimeFilter
+          : "all",
+      vocabularyScrollTop: Number.isFinite(value.vocabularyScrollTop)
+        ? Number(value.vocabularyScrollTop)
+        : 0,
     };
   } catch {
     return null;
@@ -101,10 +115,8 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
 
 
 
-export function getCurrentPersistedAppView(): PersistedAppView {
-  if (appFrame?.classList.contains("knowledge-base-page-open"))
-    return "knowledge";
-  return "viewer";
+function getCurrentPersistedAppView(): PersistedAppView {
+  return getActiveWorkspaceView();
 }
 
 
@@ -125,6 +137,10 @@ export function persistCurrentAppViewState(): void {
     knowledgeGroup: knowledgeGroupSelect.value,
     selectedKnowledgeRecordKey: selectedKnowledgeRecordKey.value,
     knowledgeScrollTop: knowledgeMainElement?.scrollTop ?? 0,
+    vocabularySearch: vocabularySearchInput.value,
+    vocabularySort: vocabularySortSelect.value,
+    vocabularyTimeFilter: vocabularyTimeFilterSelect.value,
+    vocabularyScrollTop: vocabularyLibraryMainElement.scrollTop,
   };
 
   try {
@@ -158,8 +174,24 @@ export function restoreAppViewAfterRefresh(): void {
   const state = readPersistedAppViewState();
   if (!state || state.view === "viewer") return;
 
-  applyPersistedKnowledgeState(state);
+  if (state.view === "vocabulary") {
+    if (!isVocabularyLibraryEnabled()) return;
+    applyPersistedVocabularyState({
+      search: state.vocabularySearch,
+      sort: state.vocabularySort,
+      timeFilter: state.vocabularyTimeFilter,
+    });
+    openVocabularyLibraryPage();
+    requestAnimationFrame(() => {
+      vocabularyLibraryMainElement.scrollTop = Math.max(
+        0,
+        state.vocabularyScrollTop,
+      );
+    });
+    return;
+  }
 
+  applyPersistedKnowledgeState(state);
   openKnowledgeBasePage();
   requestAnimationFrame(() => {
     if (knowledgeMainElement) {
@@ -268,7 +300,7 @@ export let settingsCloseAnimationTimer: number | undefined;
 
 export function showSettingsSavedFeedback(): void {
   aiSettingsButton.classList.remove("saved");
-  aiSettingsButton.setAttribute("aria-label", "打开 AI 设置");
+  aiSettingsButton.setAttribute("aria-label", "打开设置");
 }
 
 

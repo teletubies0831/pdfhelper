@@ -1,0 +1,36 @@
+.app-motion-dialog {
+  opacity: 0;
+  transform: translateY(14px) scale(.965);
+  transform-origin: 50% 18%;
+  transition:
+    opacity 260ms cubic-bezier(.4, 0, .2, 1),
+    transform 300ms cubic-bezier(.4, 0, .2, 1);
+}
+
+.app-motion-dialog.is-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 280ms linear,
+    transform 440ms var(--motion-spring);
+}
+
+.app-motion-dialog::backdrop {
+  background: rgb(25 42 70 / 0%);
+  backdrop-filter: blur(0);
+  transition:
+    background-color 320ms cubic-bezier(.4, 0, .2, 1),
+    backdrop-filter 320ms cubic-bezier(.4, 0, .2, 1);
+}
+
+.app-motion-dialog.is-open::backdrop {
+  background: rgb(25 42 70 / 34%);
+  backdrop-filter: blur(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-motion-dialog,
+  .app-motion-dialog::backdrop {
+    transition: none;
+  }
+}

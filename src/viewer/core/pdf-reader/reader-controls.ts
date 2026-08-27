@@ -15,8 +15,8 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 
 
-import { canRedoAnnotation, canUndoAnnotation, lastReadingPosition, pdfDocument, pdfViewer } from "../../app/viewer-state";
-import { appFrame, cardTypeButtons, copyCardButton, copySummaryButton, editorModeButtons, findInput, findNextButton, findPreviousButton, focusModeButton, focusModeLabel, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, nextButton, outlineList, outlineToggleButton, pageCountElement, pageNumberInput, previousButton, quickCurrentLocationButton, quickCurrentLocationLabel, quickLastLocationButton, quickLastLocationLabel, redoAnnotationButton, saveAnnotatedPdfButton, saveCardButton, smartCopyButton, summaryScopeButtons, toggleNotesButton, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton, zoomValueElement } from "../../app/viewer-elements";
+import { canRedoAnnotation, canUndoAnnotation, hasUnsavedChanges, isSavingAnnotatedPdf, lastReadingPosition, pdfDocument, pdfViewer } from "../../app/viewer-state";
+import { appFrame, cardTypeButtons, copyCardButton, copySummaryButton, editorModeButtons, findInput, findNextButton, findPreviousButton, focusModeButton, focusModeLabel, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, nextButton, outlineList, outlineToggleButton, pageCountElement, pageNumberInput, previousButton, quickCurrentLocationButton, quickCurrentLocationLabel, quickLastLocationButton, quickLastLocationLabel, redoAnnotationButton, saveAnnotatedPdfButton, saveCardButton, saveCurrentPdfButton, smartCopyButton, summaryScopeButtons, toggleNotesButton, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton, zoomValueElement } from "../../app/viewer-elements";
 import { navigateToDestinationWithoutReturnHistory } from "../../features/assistant/public";
 import { getSelectionSurroundingText, updateSummaryMetadata, type SelectionSurroundingText } from "../../features/translation/public";
 
@@ -84,6 +84,40 @@ export function updateControls() {
   nextButton.disabled = !hasDocument || page >= pages;
   undoAnnotationButton.disabled = !hasDocument || !canUndoAnnotation.value;
   redoAnnotationButton.disabled = !hasDocument || !canRedoAnnotation.value;
+  const saveLabel = saveCurrentPdfButton.querySelector("span");
+  const saveIcon = saveCurrentPdfButton.querySelector<HTMLImageElement>(".annotation-save-icon");
+  const hasPendingSave = hasDocument && (hasUnsavedChanges.value || isSavingAnnotatedPdf.value);
+  saveCurrentPdfButton.classList.toggle(
+    "needs-save",
+    hasDocument && hasUnsavedChanges.value && !isSavingAnnotatedPdf.value,
+  );
+  saveCurrentPdfButton.classList.toggle(
+    "is-saving",
+    isSavingAnnotatedPdf.value,
+  );
+  saveCurrentPdfButton.disabled =
+    !hasDocument || !hasUnsavedChanges.value || isSavingAnnotatedPdf.value;
+  const saveIconSource = hasPendingSave
+    ? "/resources/pending-save.svg"
+    : "/resources/saved.svg";
+  if (saveIcon?.getAttribute("src") !== saveIconSource) {
+    saveIcon?.setAttribute("src", saveIconSource);
+  }
+  if (saveLabel) {
+    saveLabel.textContent = isSavingAnnotatedPdf.value
+      ? "保存中…"
+      : hasUnsavedChanges.value
+        ? "保存"
+        : "已保存";
+  }
+  saveCurrentPdfButton.title = !hasDocument
+    ? "请先打开 PDF"
+    : isSavingAnnotatedPdf.value
+      ? "正在保存当前 PDF"
+      : hasUnsavedChanges.value
+        ? "保存当前 PDF 的修改"
+        : "当前 PDF 已保存";
+  saveAnnotatedPdfButton.disabled = !hasDocument || isSavingAnnotatedPdf.value;
   updateOutlineActivePage();
 }
 

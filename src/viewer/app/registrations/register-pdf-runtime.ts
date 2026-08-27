@@ -22,12 +22,12 @@ import { activeSummaryScope, currentSummaryContext, lastSummaryPoints, lastSumma
 import { updateSummaryMetadata } from "../../features/translation/public";
 import { scheduleSummaryGeneration } from "../../services/document-agent/viewer-document-agent";
 import { updateCardSourceSnippet } from "../../features/paper-card/public";
-import { activeEditorMode, annotationEditor, canRedoAnnotation, canUndoAnnotation, eventBus, linkService, pdfDocument, pdfViewer, sourceName } from "../viewer-state";
+import { activeEditorMode, annotationEditor, canRedoAnnotation, canUndoAnnotation, eventBus, linkService, pdfDocument, pdfViewer, SELECT_TOOL_EDITOR_BACKING_MODE, sourceName } from "../viewer-state";
 import { captureInternalNavigationOrigin, goToPdfDestination } from "../../features/assistant/public";
 import { scheduleUnsavedChangesCheck } from "../../features/annotations/public";
 import { restoreReadingPositionAfterPagesInit, restoreStartupSourcePageAfterPagesInit, scheduleReadingPositionSave, setStatus } from "../../features/recent-files/public";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
-import { finishEditorModeTransition, getFreeTextSize, installHighlightGeometry, scheduleHighlightNoteIndicatorRefresh, scheduleRestoredAnnotationEditorWarmUp, setEditorMode, setFreeTextColor, setFreeTextSize, setHighlightColor } from "../../features/annotations/public";
+import { finishEditorModeTransition, getFreeTextSize, getInkThickness, installHighlightGeometry, scheduleHighlightNoteIndicatorRefresh, scheduleRestoredAnnotationEditorWarmUp, setEditorMode, setFreeTextColor, setFreeTextSize, setHighlightColor, setInkThickness } from "../../features/annotations/public";
 
 
 
@@ -96,6 +96,7 @@ export function registerPdfRuntime(): void {
         setHighlightColor(highlightColorInput.value);
         setFreeTextSize(getFreeTextSize());
         setFreeTextColor(freeTextColorInput.value);
+        setInkThickness(getInkThickness(), false);
         scheduleRestoredAnnotationEditorWarmUp();
         updateControls();
       },
@@ -103,10 +104,19 @@ export function registerPdfRuntime(): void {
   
   eventBus.on("annotationeditormodechanged", ({ mode }: { mode: number }) => {
       finishEditorModeTransition();
-      activeEditorMode.value = mode;
+      const logicalMode =
+        activeEditorMode.value === AnnotationEditorType.NONE &&
+        mode === SELECT_TOOL_EDITOR_BACKING_MODE
+          ? AnnotationEditorType.NONE
+          : mode;
+      activeEditorMode.value = logicalMode;
+      viewerElement.classList.toggle(
+        "pdf-helper-select-mode",
+        logicalMode === AnnotationEditorType.NONE,
+      );
       viewerElement.classList.toggle(
         "pdf-helper-ink-mode",
-        mode === AnnotationEditorType.INK,
+        logicalMode === AnnotationEditorType.INK,
       );
       updateControls();
     });

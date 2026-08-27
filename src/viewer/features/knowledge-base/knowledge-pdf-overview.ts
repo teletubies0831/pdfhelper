@@ -1,6 +1,10 @@
 import { pdfDocument } from "../../app/viewer-state";
 import { renderChatMarkdown } from "../../shared-ui/markdown/markdown-renderer";
 import {
+  dismissAnimatedDialog,
+  showAnimatedDialog,
+} from "../../shared-ui/dialog/dialog-motion";
+import {
   ensureSourcePdfOpen,
   openSourcePdfFromKnowledge,
 } from "../../shared-ui/navigation/source-pdf-navigation";
@@ -101,7 +105,7 @@ export function openKnowledgePdfOverview(item: KnowledgeLibraryDocument): void {
   activeOverviewDocumentId = item.documentId;
   const { dialog } = elements();
   renderSavedOverview(item);
-  if (!dialog.open) dialog.showModal();
+  showAnimatedDialog(dialog);
   if (!item.overviewMarkdown?.trim() && item.overviewStatus !== "generating") {
     void generateOverview(item);
   } else if (item.overviewStatus === "generating") {
@@ -110,7 +114,13 @@ export function openKnowledgePdfOverview(item: KnowledgeLibraryDocument): void {
 }
 
 export function registerKnowledgePdfOverviewEvents(): void {
-  const close = (): void => elements().dialog.close();
+  const close = (): void => {
+    dismissAnimatedDialog(elements().dialog);
+  };
+  elements().dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    close();
+  });
   elements().dialog.addEventListener("pointerdown", (event) => {
     if (event.target === elements().dialog) close();
   });

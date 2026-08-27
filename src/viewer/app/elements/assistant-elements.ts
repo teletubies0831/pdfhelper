@@ -123,6 +123,9 @@ export const settingsPrimaryPanels = Array.from(
 
 export const settingsPages = requiredElement<HTMLElement>("settings-pages");
 
+export const autoSaveAnnotationsInput =
+  requiredElement<HTMLInputElement>("auto-save-annotations");
+
 export const knowledgeRetrievalModeSelect =
   requiredElement<HTMLSelectElement>("knowledge-retrieval-mode");
 

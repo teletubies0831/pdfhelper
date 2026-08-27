@@ -13,14 +13,14 @@
 
 
 
-import { citationReturnButton, saveAnnotatedPdfButton, selectedSnippetElement, textStatus, toggleNotesButton, translationSourceSentenceField, translationSourceSentenceInput, viewerContainer, viewerElement } from "../viewer-elements";
+import { citationReturnButton, saveAnnotatedPdfButton, saveCurrentPdfButton, selectedSnippetElement, textStatus, toggleNotesButton, translationSourceSentenceField, translationSourceSentenceInput, viewerContainer, viewerElement } from "../viewer-elements";
 import { activeSummaryScope, cardAbortController, clearOutlineList, moreExamplesAbortController, persistCurrentAppViewState, restoreAppViewAfterRefresh, setLeftPanelCollapsed, summaryAbortController, translationAbortController, updateControls } from "../../core/pdf-reader/public";
 import { autoResizeTranslationTextarea, cancelPendingAutomaticTranslation, scheduleAiSelectedSnippetUpdate } from "../../features/translation/public";
 import { cancelPendingSummaryGeneration } from "../../services/document-agent/viewer-document-agent";
 import { cancelPendingCardGeneration } from "../../features/paper-card/public";
 import { areNoteIndicatorsHidden, hasUnsavedChanges } from "../viewer-state";
 import { loadDeepSeekConfig, returnToPreviousInternalNavigationPosition, setCurrentApplicationView } from "../../features/assistant/public";
-import { updateNoteIndicatorsVisibility } from "../../features/annotations/public";
+import { initializeAnnotationAutoSave, updateNoteIndicatorsVisibility } from "../../features/annotations/public";
 import { cancelReadingPositionSave, openRecentFileById, persistCurrentReadingPosition, restoreMostRecentPdf, scheduleReadingPositionSave } from "../../features/recent-files/public";
 import { openRemotePdf, saveAnnotatedPdf } from "../../core/pdf-reader/public";
 import { hideAnnotationActionBar, hideHighlightNote, hideSelectionContextMenu } from "../../features/annotations/public";
@@ -112,6 +112,12 @@ export function registerLifecycle(): void {
   saveAnnotatedPdfButton.addEventListener("click", () => {
       void saveAnnotatedPdf();
     });
+
+  saveCurrentPdfButton.addEventListener("click", () => {
+      void saveAnnotatedPdf();
+    });
+
+  initializeAnnotationAutoSave(saveAnnotatedPdf);
   
   toggleNotesButton.addEventListener("click", () => {
       areNoteIndicatorsHidden.value = !areNoteIndicatorsHidden.value;

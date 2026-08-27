@@ -38,10 +38,14 @@ import {
   translationModelSelect,
   visionRouteSummary,
 } from '../../app/viewer-elements';
+import {
+  showSettingsPrimaryPanel,
+  type SettingsPrimaryPanelName,
+} from './settings-primary-transition';
 
-export type SettingsTab = 'models' | 'tools' | 'memory';
+export type SettingsTab = SettingsPrimaryPanelName;
 
-let activeSettingsTab: SettingsTab = 'models';
+let activeSettingsTab: SettingsTab = 'general';
 type SettingsModelScreen = 'overview' | 'editor';
 
 let activeSettingsModelScreen: SettingsModelScreen = 'overview';
@@ -490,6 +494,8 @@ function updateSettingsFooter(): void {
 
   if (editingConnection) {
     settingsFooterNote.textContent = '连接会统一保存在当前浏览器中，保存后可分配给不同任务。';
+  } else if (activeSettingsTab === 'general') {
+    settingsFooterNote.textContent = '常规偏好仅保存在当前浏览器中。';
   } else if (activeSettingsTab === 'tools') {
     settingsFooterNote.textContent = '工具只会在回答需要时调用，执行结果会显示在对话中。';
   } else if (activeSettingsTab === 'memory') {
@@ -604,8 +610,9 @@ export async function saveSettingsRoutes(
   return catalogState;
 }
 
-export function activateSettingsTab(tab: SettingsTab): void {
+export function activateSettingsTab(tab: SettingsTab, animate = true): void {
   cancelSettingsConnectionActivity();
+  const previousTab = activeSettingsTab;
   activeSettingsTab = tab;
   activeConnectionId = null;
   addingConnection = false;
@@ -614,10 +621,13 @@ export function activateSettingsTab(tab: SettingsTab): void {
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', String(active));
   }
-  for (const panel of settingsPrimaryPanels) {
-    panel.hidden = panel.dataset.settingsPanel !== tab;
-  }
-  settingsPages.scrollTop = 0;
+  showSettingsPrimaryPanel(
+    settingsPages,
+    settingsPrimaryPanels,
+    previousTab,
+    tab,
+    animate,
+  );
   if (tab === 'models') {
     showSettingsModelOverview();
   } else {
@@ -643,6 +653,6 @@ export function resetSettingsPresentation(): void {
   deepSeekApiKeyInput.type = 'password';
   longTermMemorySearchInput.value = '';
   filterLongTermMemoryList('');
-  activateSettingsTab('models');
+  activateSettingsTab('general', false);
   updateSettingsConnectionSummaries();
 }

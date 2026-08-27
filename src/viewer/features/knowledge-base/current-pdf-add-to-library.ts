@@ -63,15 +63,22 @@ function getToolbarButton(): HTMLButtonElement | null {
   return document.getElementById("add-current-pdf-to-library") as HTMLButtonElement | null;
 }
 
-function setToolbarButtonLabel(button: HTMLButtonElement, label: string): void {
+function setToolbarButtonLabel(
+  button: HTMLButtonElement,
+  label: string,
+  showAddIcon = false,
+): void {
   button.replaceChildren();
-  const icon = document.createElement("img");
-  icon.className = "toolbar-action-icon";
-  icon.src = "/resources/add.svg";
-  icon.alt = "";
+  if (showAddIcon) {
+    const icon = document.createElement("img");
+    icon.className = "toolbar-action-icon";
+    icon.src = "/resources/add.svg";
+    icon.alt = "";
+    button.append(icon);
+  }
   const text = document.createElement("span");
   text.textContent = label;
-  button.append(icon, text);
+  button.append(text);
 }
 
 export function syncCurrentPdfLibraryButton(): void {
@@ -81,7 +88,7 @@ export function syncCurrentPdfLibraryButton(): void {
   if (!documentProxy) {
     button.disabled = true;
     button.classList.remove("is-added", "is-indexing");
-    setToolbarButtonLabel(button, "添加到知识库");
+    setToolbarButtonLabel(button, "添加到知识库", true);
     button.title = "请先打开 PDF";
     return;
   }
@@ -94,8 +101,8 @@ export function syncCurrentPdfLibraryButton(): void {
       ? "正在建立索引…"
       : member.indexStatus === "error"
         ? "↻ 重试知识库索引"
-        : "✓ 已添加到库"
-    : "添加到知识库");
+        : "已添加到库"
+    : "添加到知识库", !member);
   button.title = member
     ? member.indexStatus === "error"
       ? `已加入知识库，但索引失败：${member.indexError || "未知错误"}`

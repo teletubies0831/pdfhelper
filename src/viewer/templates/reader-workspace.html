@@ -163,22 +163,58 @@
             <section id="assistant-settings-panel" class="assistant-panel settings-panel settings-popover" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title" hidden>
               <div class="settings-heading">
                 <div>
-                  <strong id="ai-settings-title">AI 配置</strong>
-                  <p>先添加供应商，再为不同任务选择模型。</p>
+                  <strong id="ai-settings-title">设置</strong>
+                  <p>管理阅读体验、模型、工具与记忆。</p>
                 </div>
                 <div class="settings-heading-actions">
                   <button id="close-deepseek-settings" class="settings-close-button" type="button" aria-label="关闭设置">×</button>
                 </div>
               </div>
 
-              <div class="settings-primary-tabs" role="tablist" aria-label="AI 设置分类">
-                <button class="active" type="button" role="tab" aria-selected="true" data-settings-tab="models">模型与任务</button>
+              <div class="settings-primary-tabs" role="tablist" aria-label="设置分类">
+                <button class="active" type="button" role="tab" aria-selected="true" data-settings-tab="general">常规</button>
+                <button type="button" role="tab" aria-selected="false" data-settings-tab="models">模型与任务</button>
                 <button type="button" role="tab" aria-selected="false" data-settings-tab="tools">Agent 工具</button>
                 <button type="button" role="tab" aria-selected="false" data-settings-tab="memory">记忆</button>
               </div>
 
               <div id="settings-pages" class="settings-pages">
-                <div class="settings-page" data-settings-panel="models">
+                <div class="settings-page" data-settings-panel="general">
+                  <div class="settings-general-card">
+                    <div>
+                      <strong>自动保存 PDF 批注</strong>
+                      <small>修改后自动写回已获得写入权限的本地 PDF；其他来源仍使用顶部“保存”按钮。</small>
+                    </div>
+                    <label class="settings-switch" title="自动保存批注">
+                      <input id="auto-save-annotations" type="checkbox" />
+                      <span aria-hidden="true"></span>
+                    </label>
+                  </div>
+
+                  <div class="settings-general-card">
+                    <div>
+                      <strong>展示单词库</strong>
+                      <small>在知识库右侧显示独立的单词卡片库，并允许把英语学习结果保存为 Markdown 卡片。关闭后已有卡片仍会保留。</small>
+                    </div>
+                    <label class="settings-switch" title="展示单词库">
+                      <input id="show-vocabulary-library" type="checkbox" />
+                      <span aria-hidden="true"></span>
+                    </label>
+                  </div>
+
+                  <div class="settings-compression-card">
+                    <div><strong>自动压缩较早对话</strong><small>保留最近交流，减少上下文占用。</small></div>
+                    <span class="settings-toggle is-on" aria-label="自动压缩已启用"></span>
+                    <div class="settings-compact-grid">
+                      <label class="settings-field"><span>触发压缩字符数</span><input id="chat-compression-trigger-characters" type="number" min="5000" max="500000" step="1000" value="40000" inputmode="numeric" /></label>
+                      <label class="settings-field"><span>未压缩消息上限</span><input id="chat-compression-max-recent-messages" type="number" min="4" max="100" step="1" value="16" inputmode="numeric" /></label>
+                      <label class="settings-field"><span>压缩后保留消息</span><input id="chat-compression-keep-recent-messages" type="number" min="2" max="99" step="1" value="4" inputmode="numeric" /></label>
+                    </div>
+                  </div>
+                  <small class="settings-memory-hint">达到任一上限后触发压缩；保留消息数必须小于未压缩消息上限。</small>
+                </div>
+
+                <div class="settings-page" data-settings-panel="models" hidden>
                   <div id="settings-model-navigation" class="settings-model-navigation">
                   <div id="settings-model-overview" class="settings-model-screen">
                     <div class="settings-section-heading settings-connections-heading">
@@ -341,18 +377,6 @@
                 </div>
 
                 <div class="settings-page" data-settings-panel="memory" hidden>
-                  <div class="settings-compression-card">
-                    <div><strong>自动压缩较早对话</strong><small>保留最近交流，减少上下文占用。</small></div>
-                    <span class="settings-toggle is-on" aria-label="自动压缩已启用"></span>
-                    <div class="settings-compact-grid">
-                      <label class="settings-field"><span>触发压缩字符数</span><input id="chat-compression-trigger-characters" type="number" min="5000" max="500000" step="1000" value="40000" inputmode="numeric" /></label>
-                      <label class="settings-field"><span>未压缩消息上限</span><input id="chat-compression-max-recent-messages" type="number" min="4" max="100" step="1" value="16" inputmode="numeric" /></label>
-                      <label class="settings-field"><span>压缩后保留消息</span><input id="chat-compression-keep-recent-messages" type="number" min="2" max="99" step="1" value="4" inputmode="numeric" /></label>
-                    </div>
-                  </div>
-                  <small class="settings-memory-hint">达到任一上限后触发压缩；保留消息数必须小于未压缩消息上限。</small>
-
-                  <div class="settings-section-divider" role="separator"></div>
                   <div class="settings-memory-toolbar">
                     <div><strong>长期记忆</strong><span id="long-term-memory-count">0 条</span></div>
                     <div class="settings-memory-actions"><button id="refresh-long-term-memories" type="button">刷新</button><button id="add-long-term-memory" type="button">＋ 新增记忆</button></div>
@@ -423,7 +447,7 @@
                 </section>
 
                 <div id="translation-primary-actions" class="translation-primary-actions">
-                  <button class="translation-primary-save" type="button" data-translation-action="save"><svg class="translation-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-save-kb" /></svg>保存到知识库</button>
+                  <button class="translation-primary-save" type="button" data-translation-action="save"><svg class="translation-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-save-kb" /></svg>保存到单词库</button>
                   <button class="translation-primary-examples" type="button" data-translation-action="examples"><svg class="translation-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>生成更多例句</button>
                   <button class="translation-primary-copy" type="button" data-translation-action="copy"><svg class="translation-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-copy" /></svg>复制学习结果</button>
                 </div>
@@ -553,25 +577,3 @@
           </div>
         </aside>
       </div>
-
-      <dialog
-        id="clear-chat-dialog"
-        class="app-confirm-dialog clear-chat-dialog"
-        aria-labelledby="clear-chat-dialog-title"
-        aria-describedby="clear-chat-dialog-description"
-      >
-        <section class="app-confirm-dialog-card">
-          <header>
-            <div class="app-confirm-dialog-icon" aria-hidden="true">!</div>
-            <div>
-              <h2 id="clear-chat-dialog-title">清空对话</h2>
-              <p id="clear-chat-dialog-description">确定清空当前 PDF 的全部聊天记录吗？清空后无法恢复。</p>
-            </div>
-            <button id="clear-chat-dialog-close" class="app-confirm-dialog-close" type="button" aria-label="关闭">×</button>
-          </header>
-          <footer>
-            <button id="clear-chat-dialog-cancel" type="button">取消</button>
-            <button id="clear-chat-dialog-confirm" class="danger-button" type="button">清空对话</button>
-          </footer>
-        </section>
-      </dialog>

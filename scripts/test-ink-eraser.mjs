@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 
 import {
+  createInkBezierLine,
+  inkBezierLineToSvgPath,
   splitInkStrokeAtErasedSegments,
   squaredDistanceBetweenSegments,
 } from "../src/viewer/features/annotations/ink-eraser-geometry.ts";
@@ -52,6 +54,20 @@ assert.deepEqual(
   splitInkStrokeAtErasedSegments([2, 3], new Uint8Array([0])),
   [[2, 3]],
   "untouched ink dots must remain",
+);
+
+const rebuiltLine = createInkBezierLine([0, 0, 6, 0, 12, 6]);
+assert.deepEqual(
+  Array.from(rebuiltLine).map((value) =>
+    Number.isNaN(value) ? "NaN" : value,
+  ),
+  ["NaN", "NaN", "NaN", "NaN", 0, 0, 5, 0, 7, 1, 9, 3],
+  "partial strokes must use PDF.js-compatible Bezier controls",
+);
+assert.equal(
+  inkBezierLineToSvgPath(rebuiltLine),
+  "M0 0C5 0 7 1 9 3",
+  "live preview and committed strokes must share one curve path",
 );
 
 console.log("Ink eraser geometry checks passed.");

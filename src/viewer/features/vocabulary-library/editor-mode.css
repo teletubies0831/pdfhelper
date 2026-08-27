@@ -1,0 +1,303 @@
+.vocabulary-editor-title-copy {
+  min-width: 0;
+}
+
+.vocabulary-editor-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  align-self: flex-start;
+  gap: 10px;
+}
+
+.vocabulary-editor-mode-toggle {
+  min-width: 96px;
+  height: 38px;
+  flex: 0 0 auto;
+  border: 1px solid #d8e0ea;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #26354b;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 14px;
+}
+
+.vocabulary-editor-dialog.is-previewing .vocabulary-editor-mode-toggle::before {
+  content: "✎";
+  margin-right: 6px;
+  color: #2d7eea;
+}
+
+.vocabulary-editor-mode-toggle:hover,
+.vocabulary-editor-mode-toggle:focus-visible {
+  border-color: #aac7ec;
+  background: #edf5ff;
+  color: #225ca9;
+  outline: 0;
+}
+
+.vocabulary-editor-dialog.is-previewing .vocabulary-editor-header {
+  min-height: 178px;
+  align-items: flex-start;
+  border-bottom: 0;
+  padding: 30px 36px 24px 38px;
+}
+
+.vocabulary-editor-dialog.is-previewing .vocabulary-editor-eyebrow {
+  display: none;
+}
+
+.vocabulary-editor-dialog.is-previewing .vocabulary-editor-header h2 {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: #24354a;
+  font-size: clamp(32px, 4vw, 44px);
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+.vocabulary-editor-pronunciation-row {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+  color: #87919d;
+  font-size: 18px;
+}
+
+.vocabulary-editor-pronunciation-row[hidden],
+.vocabulary-editor-pronunciation-row > span[hidden],
+.vocabulary-editor-badges[hidden],
+.vocabulary-editor-meta-grid[hidden] {
+  display: none !important;
+}
+
+.vocabulary-editor-speak {
+  display: inline-grid;
+  width: 38px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #4b82d0;
+  cursor: pointer;
+  place-items: center;
+}
+
+.vocabulary-editor-speak:hover,
+.vocabulary-editor-speak:focus-visible {
+  background: #e8f1ff;
+  color: #1766d0;
+  outline: 0;
+}
+
+.vocabulary-editor-speak svg {
+  width: 20px;
+  height: 20px;
+  fill: currentcolor;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.vocabulary-editor-speak svg path + path {
+  fill: none;
+}
+
+.vocabulary-editor-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.vocabulary-editor-badges > span {
+  border-radius: 999px;
+  background: #eef4fa;
+  color: #4c6c8e;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 7px 12px;
+}
+
+.vocabulary-editor-badges > .is-part-of-speech {
+  background: #e9f5ff;
+  color: #2381c7;
+}
+
+.vocabulary-editor-dialog.is-editing .vocabulary-editor-pronunciation-row,
+.vocabulary-editor-dialog.is-editing .vocabulary-editor-badges {
+  display: none !important;
+}
+
+.vocabulary-markdown-section-heading {
+  display: flex;
+  min-height: 62px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #e7edf5;
+  background: #fff;
+  padding: 10px 24px;
+}
+
+.vocabulary-editor-dialog.is-previewing .vocabulary-markdown-section-heading {
+  display: none;
+}
+
+.vocabulary-markdown-section-heading > div {
+  min-width: 0;
+}
+
+.vocabulary-markdown-section-heading strong,
+.vocabulary-markdown-section-heading span {
+  display: block;
+}
+
+.vocabulary-markdown-section-heading strong {
+  color: #26354b;
+  font-size: 14px;
+}
+
+.vocabulary-markdown-section-heading span {
+  margin-top: 3px;
+  color: #7a879b;
+  font-size: 12px;
+}
+
+.vocabulary-markdown-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  background: #fff;
+}
+
+.vocabulary-markdown-editor,
+.vocabulary-markdown-preview-pane {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.vocabulary-markdown-editor {
+  border-right: 0;
+  background: #fff;
+  padding: 16px 24px 18px;
+}
+
+.vocabulary-markdown-editor[hidden],
+.vocabulary-markdown-preview-pane[hidden] {
+  display: none !important;
+}
+
+.vocabulary-markdown-preview-pane {
+  background: #fff;
+}
+
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0 38px 52px;
+}
+
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview h1,
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview h2,
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 24px 0 11px;
+  color: #24354a;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview h2 {
+  font-size: 17px;
+}
+
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview h2::before {
+  width: 4px;
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #3e9bea;
+  content: "";
+}
+
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview p {
+  margin: 0 0 14px;
+  color: #3c5068;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview blockquote {
+  margin: 10px 0 20px;
+  border: 0;
+  border-left: 5px solid #43a4e8;
+  border-radius: 0 10px 10px 0;
+  background: #f6f9fc;
+  color: #455b71;
+  padding: 14px 20px;
+}
+
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview blockquote p {
+  margin: 0;
+}
+
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview ul,
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview ol {
+  margin: 8px 0 20px;
+  color: #40566e;
+  padding-left: 26px;
+}
+
+.vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview li {
+  margin: 7px 0;
+  padding-left: 3px;
+}
+
+.vocabulary-markdown-workspace.is-editing {
+  background: #fff;
+}
+
+.vocabulary-markdown-workspace.is-editing .vocabulary-markdown-editor textarea {
+  min-height: 100%;
+}
+
+@media (max-width: 720px) {
+  .vocabulary-editor-dialog.is-previewing .vocabulary-editor-header {
+    min-height: 156px;
+    padding: 24px 16px 18px;
+  }
+
+  .vocabulary-editor-dialog.is-previewing .vocabulary-editor-header h2 {
+    font-size: 30px;
+  }
+
+  .vocabulary-editor-header-actions {
+    gap: 4px;
+  }
+
+  .vocabulary-editor-mode-toggle {
+    min-width: 78px;
+    padding-inline: 9px;
+  }
+
+  .vocabulary-markdown-section-heading,
+  .vocabulary-markdown-editor {
+    padding-inline: 16px;
+  }
+
+  .vocabulary-markdown-workspace.is-previewing .vocabulary-editor-preview {
+    padding: 0 18px 36px;
+  }
+}

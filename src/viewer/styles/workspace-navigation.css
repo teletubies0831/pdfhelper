@@ -1,0 +1,56 @@
+.workspace-stage {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
+  background: #f5f8fd;
+  isolation: isolate;
+}
+
+.workspace-stage > .workspace,
+.workspace-stage > .knowledge-base-page,
+.workspace-stage > .vocabulary-library-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-area: 1 / 1;
+}
+
+.workspace-stage > [hidden] {
+  display: none !important;
+}
+
+.workspace-stage.is-transitioning > .workspace,
+.workspace-stage.is-transitioning > .knowledge-base-page,
+.workspace-stage.is-transitioning > .vocabulary-library-page {
+  display: block;
+  contain: layout paint style;
+  backface-visibility: hidden;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+.workspace-stage.is-transitioning > .workspace {
+  display: grid;
+}
+
+.workspace-stage > .is-workspace-outgoing {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.workspace-stage > .is-workspace-incoming {
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-stage.is-transitioning > .workspace,
+  .workspace-stage.is-transitioning > .knowledge-base-page,
+  .workspace-stage.is-transitioning > .vocabulary-library-page {
+    will-change: auto;
+  }
+}

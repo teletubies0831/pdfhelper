@@ -3,6 +3,8 @@ export interface InkScreenPoint {
   y: number;
 }
 
+export type InkPointMapper = (point: InkScreenPoint) => InkScreenPoint;
+
 const GEOMETRY_EPSILON = 1e-7;
 
 function squaredDistance(first: InkScreenPoint, second: InkScreenPoint): number {
@@ -134,4 +136,102 @@ export function splitInkStrokeAtErasedSegments(
   }
   if (currentRun && currentRun.length >= 4) runs.push(currentRun);
   return runs;
+}
+
+/** Rebuild the same smooth line representation PDF.js derives from samples. */
+export function createInkBezierLine(
+  points: ArrayLike<number>,
+): Float32Array {
+  const length = points.length - (points.length % 2);
+  if (length < 2) return new Float32Array();
+  if (length === 2) {
+    return new Float32Array([
+      Number.NaN,
+      Number.NaN,
+      Number.NaN,
+      Number.NaN,
+      points[0]!,
+      points[1]!,
+    ]);
+  }
+  if (length === 4) {
+    return new Float32Array([
+      Number.NaN,
+      Number.NaN,
+      Number.NaN,
+      Number.NaN,
+      points[0]!,
+      points[1]!,
+      Number.NaN,
+      Number.NaN,
+      Number.NaN,
+      Number.NaN,
+      points[2]!,
+      points[3]!,
+    ]);
+  }
+
+  const line = new Float32Array(3 * (length - 2));
+  line.set([
+    Number.NaN,
+    Number.NaN,
+    Number.NaN,
+    Number.NaN,
+    points[0]!,
+    points[1]!,
+  ]);
+  let x1 = points[0]!;
+  let y1 = points[1]!;
+  let x2 = points[2]!;
+  let y2 = points[3]!;
+  for (let index = 4; index < length; index += 2) {
+    const x3 = points[index]!;
+    const y3 = points[index + 1]!;
+    line.set(
+      [
+        (x1 + 5 * x2) / 6,
+        (y1 + 5 * y2) / 6,
+        (5 * x2 + x3) / 6,
+        (5 * y2 + y3) / 6,
+        (x2 + x3) / 2,
+        (y2 + y3) / 2,
+      ],
+      (index - 2) * 3,
+    );
+    x1 = x2;
+    y1 = y2;
+    x2 = x3;
+    y2 = y3;
+  }
+  return line;
+}
+
+export function inkBezierLineToSvgPath(
+  line: ArrayLike<number>,
+  mapPoint: InkPointMapper = (point) => point,
+): string {
+  if (line.length < 6) return "";
+  const start = mapPoint({ x: Number(line[4]), y: Number(line[5]) });
+  let output = `M${start.x} ${start.y}`;
+  if (line.length === 6) return `${output}Z`;
+  if (line.length === 12 && Number.isNaN(Number(line[6]))) {
+    const end = mapPoint({ x: Number(line[10]), y: Number(line[11]) });
+    return `${output}L${end.x} ${end.y}`;
+  }
+  for (let index = 6; index < line.length; index += 6) {
+    const firstControl = mapPoint({
+      x: Number(line[index]),
+      y: Number(line[index + 1]),
+    });
+    const secondControl = mapPoint({
+      x: Number(line[index + 2]),
+      y: Number(line[index + 3]),
+    });
+    const end = mapPoint({
+      x: Number(line[index + 4]),
+      y: Number(line[index + 5]),
+    });
+    output += `C${firstControl.x} ${firstControl.y} ${secondControl.x} ${secondControl.y} ${end.x} ${end.y}`;
+  }
+  return output;
 }

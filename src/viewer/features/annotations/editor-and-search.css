@@ -9,7 +9,8 @@
 }
 
 /* Selection mode keeps the page itself transparent for text selection, while
-   existing free-text and ink annotations remain selectable and draggable. */
+   existing text/stamp/signature annotations remain selectable and draggable.
+   Completed ink is deliberately excluded and can only be changed by erasing. */
 .pdfViewer
   .annotationEditorLayer.disabled
   :is(.freeTextEditor, .stampEditor, .signatureEditor) {
@@ -21,6 +22,26 @@
   .annotationEditorLayer.disabled
   :is(.freeTextEditor, .stampEditor, .signatureEditor).selectedEditor {
   cursor: move;
+}
+
+/* PDFPal's Select tool deliberately keeps PDF.js in an enabled backing mode
+   so existing annotations keep the exact editor-layer appearance. Make the
+   layer background transparent to input (allowing native text selection),
+   then opt existing interactive annotations back in. Empty-page pointerdown
+   is also guarded in register-reader-events, so no free text can be created. */
+.pdfViewer.pdf-helper-select-mode .annotationEditorLayer {
+  cursor: auto !important;
+  pointer-events: none !important;
+}
+
+.pdfViewer.pdf-helper-select-mode
+  .annotationEditorLayer
+  :is(.freeTextEditor, .stampEditor, .signatureEditor) {
+  pointer-events: auto !important;
+}
+
+.pdfViewer.pdf-helper-select-mode .pdf-helper-note-indicator {
+  pointer-events: auto !important;
 }
 
 /* Ink is a fixed page mark in PDFPal. It can only receive pointer events while
@@ -69,6 +90,35 @@
 .pdf-helper-ink-eraser-cursor[hidden] {
   display: none;
 }
+
+.pdfViewer.pdf-helper-ink-mode:not(.pdf-helper-ink-eraser-mode),
+.pdfViewer.pdf-helper-ink-mode:not(.pdf-helper-ink-eraser-mode) .page,
+.pdfViewer.pdf-helper-ink-mode:not(.pdf-helper-ink-eraser-mode)
+  :is(.canvasWrapper, .textLayer, .annotationLayer, .annotationEditorLayer) {
+  cursor: none !important;
+}
+
+.pdf-helper-ink-cursor {
+  position: fixed;
+  z-index: 2147483645;
+  top: 0;
+  left: 0;
+  width: var(--pdf-helper-ink-cursor-diameter, 4px);
+  height: var(--pdf-helper-ink-cursor-diameter, 4px);
+  box-sizing: border-box;
+  border: 1px solid rgb(15 23 42 / 90%);
+  border-radius: 50%;
+  background: rgb(15 23 42 / 24%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 90%);
+  pointer-events: none;
+  transform: translate3d(-100px, -100px, 0);
+  will-change: width, height, transform;
+}
+
+.pdf-helper-ink-cursor[hidden] {
+  display: none;
+}
+
 
 /* PDF.js search must only paint the match background. If its transparent text
    becomes visible, it sits above the canvas glyphs and looks like a font swap. */

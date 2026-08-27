@@ -319,6 +319,7 @@ export function closeFindBar() {
 export async function saveAnnotatedPdf(): Promise<boolean> {
   if (!pdfDocument.value || isSavingAnnotatedPdf.value) return false;
   isSavingAnnotatedPdf.value = true;
+  updateControls();
 
   try {
     setStatus("正在把 PDFPal 批注嵌入 PDF…");
@@ -343,5 +344,6 @@ export async function saveAnnotatedPdf(): Promise<boolean> {
     return false;
   } finally {
     isSavingAnnotatedPdf.value = false;
+    updateControls();
   }
 }

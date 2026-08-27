@@ -1,5 +1,8 @@
 import { pdfViewer } from "../../app/viewer-state";
 import {
+  createInkBezierLine,
+  inkBezierLineToSvgPath,
+  type InkPointMapper,
   type InkScreenPoint,
   splitInkStrokeAtErasedSegments,
   squaredDistanceBetweenSegments,
@@ -17,7 +20,14 @@ interface PageTransform {
 interface InkStrokeState {
   sourcePoints: number[];
   screenPoints: InkScreenPoint[];
+  sourceLine: number[] | null;
+  screenLine: number[] | null;
   erasedSegments: Uint8Array;
+}
+
+export interface SurvivingInkPaths {
+  points: Float32Array[];
+  lines: Float32Array[];
 }
 
 export interface InkEraserEntry {
@@ -45,6 +55,9 @@ export interface InkEraserSession {
   segments: IndexedInkSegment[];
   grid: Map<string, number[]>;
   lastPoint: InkScreenPoint;
+  eraserRadiusPx: number;
+  previewDirtyEntries: Set<InkEraserEntry>;
+  previewFrameId: number | null;
 }
 
 function isRecord(value: unknown): value is Record<string, any> {
@@ -112,6 +125,31 @@ function normalizeSerializedStroke(value: unknown): number[] | null {
   return output.length >= 2 ? output : null;
 }
 
+function normalizeSerializedLine(value: unknown): number[] | null {
+  if (!Array.isArray(value) && !ArrayBuffer.isView(value)) return null;
+  const output = Array.from(value as ArrayLike<unknown>, Number);
+  if (output.length < 6 || output.length % 6 !== 0) return null;
+  return output;
+}
+
+function transformSerializedLine(
+  line: readonly number[],
+  transform: PageTransform,
+): number[] {
+  const output: number[] = [];
+  for (let index = 0; index < line.length; index += 2) {
+    const x = line[index]!;
+    const y = line[index + 1]!;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      output.push(Number.NaN, Number.NaN);
+      continue;
+    }
+    const point = transform.pdfToScreen(x, y);
+    output.push(point.x, point.y);
+  }
+  return output;
+}
+
 function getSerializedInk(editor: any): Record<string, any> | null {
   try {
     const serialized = editor?.serialize?.(true);
@@ -135,7 +173,15 @@ function getScreenStrokes(
   const serialized = getSerializedInk(editor);
   if (!serialized) return null;
   const strokes: InkStrokeState[] = [];
-  for (const rawStroke of serialized.paths.points as unknown[]) {
+  const rawLines = Array.isArray(serialized.paths.lines)
+    ? (serialized.paths.lines as unknown[])
+    : [];
+  for (
+    let strokeIndex = 0;
+    strokeIndex < serialized.paths.points.length;
+    strokeIndex += 1
+  ) {
+    const rawStroke = serialized.paths.points[strokeIndex];
     const sourcePoints = normalizeSerializedStroke(rawStroke);
     if (!sourcePoints) continue;
     const screenPoints: InkScreenPoint[] = [];
@@ -145,9 +191,14 @@ function getScreenStrokes(
       );
     }
     if (screenPoints.length === 0) continue;
+    const sourceLine = normalizeSerializedLine(rawLines[strokeIndex]);
     strokes.push({
       sourcePoints,
       screenPoints,
+      sourceLine,
+      screenLine: sourceLine
+        ? transformSerializedLine(sourceLine, transform)
+        : null,
       erasedSegments: new Uint8Array(Math.max(1, screenPoints.length - 1)),
     });
   }
@@ -194,6 +245,7 @@ export function buildInkEraserSession(
   pointerId: number,
   pageIndex: number,
   point: InkScreenPoint,
+  eraserRadiusPx = INK_ERASER_RADIUS_PX,
 ): InkEraserSession | null {
   const transform = getPageTransform(pageIndex);
   if (!uiManager || !transform || !documentValue) return null;
@@ -211,7 +263,7 @@ export function buildInkEraserSession(
       serialized: data.serialized,
       strokes: data.strokes,
       hitRadiusPx:
-        INK_ERASER_RADIUS_PX +
+        eraserRadiusPx +
         transform.pdfLengthToScreen(Number(data.serialized.thickness) || 1) / 2,
       changed: false,
     });
@@ -225,6 +277,9 @@ export function buildInkEraserSession(
     segments: [],
     grid: new Map(),
     lastPoint: point,
+    eraserRadiusPx,
+    previewDirtyEntries: new Set(),
+    previewFrameId: null,
   };
   for (const entry of entries) {
     for (const stroke of entry.strokes) {
@@ -268,10 +323,10 @@ function getCandidateSegmentIds(
   start: InkScreenPoint,
   end: InkScreenPoint,
 ): Set<number> {
-  const minX = getGridCell(Math.min(start.x, end.x) - INK_ERASER_RADIUS_PX);
-  const maxX = getGridCell(Math.max(start.x, end.x) + INK_ERASER_RADIUS_PX);
-  const minY = getGridCell(Math.min(start.y, end.y) - INK_ERASER_RADIUS_PX);
-  const maxY = getGridCell(Math.max(start.y, end.y) + INK_ERASER_RADIUS_PX);
+  const minX = getGridCell(Math.min(start.x, end.x) - session.eraserRadiusPx);
+  const maxX = getGridCell(Math.max(start.x, end.x) + session.eraserRadiusPx);
+  const minY = getGridCell(Math.min(start.y, end.y) - session.eraserRadiusPx);
+  const maxY = getGridCell(Math.max(start.y, end.y) + session.eraserRadiusPx);
   const ids = new Set<number>();
   for (let cellX = minX; cellX <= maxX; cellX += 1) {
     for (let cellY = minY; cellY <= maxY; cellY += 1) {
@@ -294,7 +349,7 @@ export function eraseInkSweep(
   session: InkEraserSession,
   start: InkScreenPoint,
   end: InkScreenPoint,
-): boolean {
+): InkEraserEntry[] {
   const hitEntries = new Set<InkEraserEntry>();
   for (const id of getCandidateSegmentIds(session, start, end)) {
     const segment = session.segments[id];
@@ -313,20 +368,65 @@ export function eraseInkSweep(
     segment.entry.changed = true;
     hitEntries.add(segment.entry);
   }
-  return hitEntries.size > 0;
+  return [...hitEntries];
 }
 
-export function getSurvivingInkStrokes(entry: InkEraserEntry): number[][] {
-  const survivingStrokes: number[][] = [];
+function hasErasedSegment(stroke: InkStrokeState): boolean {
+  return stroke.erasedSegments.some((value) => value !== 0);
+}
+
+export function getSurvivingInkPath(
+  entry: InkEraserEntry,
+  mapPoint: InkPointMapper = (point) => point,
+): string {
+  const commands: string[] = [];
   for (const stroke of entry.strokes) {
-    survivingStrokes.push(
-      ...splitInkStrokeAtErasedSegments(
-        stroke.sourcePoints,
-        stroke.erasedSegments,
-      ),
-    );
+    if (!hasErasedSegment(stroke) && stroke.screenLine) {
+      commands.push(inkBezierLineToSvgPath(stroke.screenLine, mapPoint));
+      continue;
+    }
+    const flatScreenPoints = stroke.screenPoints.flatMap((point) => [
+      point.x,
+      point.y,
+    ]);
+    for (const run of splitInkStrokeAtErasedSegments(
+      flatScreenPoints,
+      stroke.erasedSegments,
+    )) {
+      commands.push(
+        inkBezierLineToSvgPath(createInkBezierLine(run), mapPoint),
+      );
+    }
   }
-  return survivingStrokes;
+  return commands.join("");
+}
+
+export function getSurvivingInkPaths(
+  entry: InkEraserEntry,
+): SurvivingInkPaths {
+  const points: Float32Array[] = [];
+  const lines: Float32Array[] = [];
+  for (const stroke of entry.strokes) {
+    if (!hasErasedSegment(stroke)) {
+      const sourcePoints = new Float32Array(stroke.sourcePoints);
+      points.push(sourcePoints);
+      lines.push(
+        stroke.sourceLine
+          ? new Float32Array(stroke.sourceLine)
+          : createInkBezierLine(sourcePoints),
+      );
+      continue;
+    }
+    for (const run of splitInkStrokeAtErasedSegments(
+      stroke.sourcePoints,
+      stroke.erasedSegments,
+    )) {
+      const survivingPoints = new Float32Array(run);
+      points.push(survivingPoints);
+      lines.push(createInkBezierLine(survivingPoints));
+    }
+  }
+  return { points, lines };
 }
 
 export function isPointInsideSerializedInk(

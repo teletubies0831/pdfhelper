@@ -1,0 +1,70 @@
+<dialog id="vocabulary-editor-dialog" class="vocabulary-editor-dialog app-motion-dialog" aria-labelledby="vocabulary-editor-title">
+  <form id="vocabulary-editor-form" method="dialog">
+    <header class="vocabulary-editor-header">
+      <div class="vocabulary-editor-title-copy">
+        <span class="vocabulary-editor-eyebrow">MARKDOWN WORD CARD</span>
+        <h2 id="vocabulary-editor-title">新建单词卡片</h2>
+        <div id="vocabulary-editor-pronunciation-row" class="vocabulary-editor-pronunciation-row" hidden>
+          <span id="vocabulary-editor-pronunciation-display"></span>
+          <button id="vocabulary-editor-speak" class="vocabulary-editor-speak" type="button" aria-label="朗读当前单词" title="朗读单词">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M5 10v4h3l4 3V7l-4 3H5Z" />
+              <path d="M15 9.5a4 4 0 0 1 0 5M17.5 7a7 7 0 0 1 0 10" />
+            </svg>
+          </button>
+        </div>
+        <div id="vocabulary-editor-badges" class="vocabulary-editor-badges" hidden></div>
+      </div>
+      <div class="vocabulary-editor-header-actions">
+        <button id="vocabulary-editor-mode-toggle" class="vocabulary-editor-mode-toggle" type="button">编辑内容</button>
+        <button id="vocabulary-editor-close" class="vocabulary-editor-close" type="button" aria-label="关闭编辑器">×</button>
+      </div>
+    </header>
+
+    <div id="vocabulary-editor-meta-grid" class="vocabulary-editor-meta-grid">
+      <label class="vocabulary-editor-field vocabulary-editor-term-field">
+        <span>单词或短语</span>
+        <input id="vocabulary-editor-term" type="text" maxlength="160" autocomplete="off" placeholder="例如 atmosphere" required />
+      </label>
+      <label class="vocabulary-editor-field">
+        <span>音标</span>
+        <input id="vocabulary-editor-pronunciation" type="text" maxlength="120" autocomplete="off" placeholder="例如 /ˈætməsfɪə/" />
+      </label>
+      <label class="vocabulary-editor-field">
+        <span>词性</span>
+        <input id="vocabulary-editor-part-of-speech" type="text" maxlength="80" autocomplete="off" placeholder="例如 n." />
+      </label>
+      <label class="vocabulary-editor-field">
+        <span>标签</span>
+        <input id="vocabulary-editor-tags" type="text" autocomplete="off" placeholder="用逗号分隔，例如 地理, 核心词" />
+      </label>
+    </div>
+
+    <div class="vocabulary-markdown-section-heading">
+      <div>
+        <strong id="vocabulary-editor-body-mode-label">编辑卡片内容</strong>
+        <span id="vocabulary-editor-body-mode-hint">完成编辑后可切回排版结果进行确认</span>
+      </div>
+    </div>
+
+    <div id="vocabulary-markdown-workspace" class="vocabulary-markdown-workspace is-previewing">
+      <label id="vocabulary-markdown-editor" class="vocabulary-markdown-editor" hidden>
+        <span>Markdown 源码</span>
+        <textarea id="vocabulary-editor-markdown" spellcheck="false" placeholder="## 释义&#10;&#10;在这里补充这张卡片…" required></textarea>
+      </label>
+      <section id="vocabulary-markdown-preview-pane" class="vocabulary-markdown-preview-pane" aria-label="Markdown 渲染结果">
+        <article id="vocabulary-editor-preview" class="vocabulary-editor-preview chat-markdown"></article>
+      </section>
+    </div>
+
+    <footer class="vocabulary-editor-footer">
+      <div>
+        <button id="vocabulary-editor-delete" class="vocabulary-danger-button" type="button" hidden>删除卡片</button>
+      </div>
+      <div class="vocabulary-editor-actions">
+        <button id="vocabulary-editor-cancel" type="button">取消</button>
+        <button class="vocabulary-primary-button" type="submit">保存卡片</button>
+      </div>
+    </footer>
+  </form>
+</dialog>

@@ -404,7 +404,7 @@ export const APP_VIEW_SESSION_STORAGE_KEY = "pdf-helper-app-view-state-v1";
 
 
 
-export type PersistedAppView = "viewer" | "knowledge";
+export type PersistedAppView = "viewer" | "knowledge" | "vocabulary";
 
 
 
@@ -423,4 +423,8 @@ export interface PersistedAppViewState {
   knowledgeGroup: string;
   selectedKnowledgeRecordKey: string;
   knowledgeScrollTop: number;
+  vocabularySearch: string;
+  vocabularySort: string;
+  vocabularyTimeFilter: string;
+  vocabularyScrollTop: number;
 }

@@ -14,6 +14,27 @@ export const smartCopyButton = requiredElement<HTMLButtonElement>("smart-copy");
 export const saveAnnotatedPdfButton =
   requiredElement<HTMLButtonElement>("save-annotated-pdf");
 
+export const saveCurrentPdfButton =
+  requiredElement<HTMLButtonElement>("save-current-pdf");
+
+export const inkThicknessControl =
+  requiredElement<HTMLElement>("ink-thickness-control");
+
+export const inkThicknessInput =
+  requiredElement<HTMLInputElement>("ink-thickness");
+
+export const inkThicknessValue =
+  requiredElement<HTMLOutputElement>("ink-thickness-value");
+
+export const inkEraserSizeControl =
+  requiredElement<HTMLElement>("ink-eraser-size-control");
+
+export const inkEraserSizeInput =
+  requiredElement<HTMLInputElement>("ink-eraser-size");
+
+export const inkEraserSizeValue =
+  requiredElement<HTMLOutputElement>("ink-eraser-size-value");
+
 export const toggleNotesButton = requiredElement<HTMLButtonElement>("toggle-notes");
 
 export const highlightColorInput =

@@ -28,42 +28,6 @@
   color: #1f67e8;
 }
 
-.settings-pages {
-  min-height: 584px;
-  padding-top: 18px;
-}
-
-.settings-model-navigation {
-  position: relative;
-  perspective: 1400px;
-}
-
-.settings-model-navigation.is-transitioning {
-  overflow: hidden;
-}
-
-.settings-model-navigation.is-transitioning > .settings-model-screen {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  background: #fff;
-  backface-visibility: hidden;
-  will-change: transform, opacity, box-shadow;
-}
-
-.settings-page[hidden],
-#settings-model-overview[hidden],
-#settings-connection-editor[hidden] {
-  display: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .settings-model-navigation,
-  .settings-model-navigation > .settings-model-screen {
-    scroll-behavior: auto;
-  }
-}
-
 .settings-section-heading {
   display: flex;
   align-items: center;

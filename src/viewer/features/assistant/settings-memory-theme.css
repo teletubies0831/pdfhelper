@@ -2,6 +2,95 @@
   margin-top: -2px;
 }
 
+.settings-page[data-settings-panel="general"] {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-page[hidden] {
+  display: none !important;
+}
+
+.settings-general-card {
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid #dfe7f1;
+  border-radius: 13px;
+  background: #fbfcfe;
+  padding: 16px;
+}
+
+.settings-general-card strong,
+.settings-general-card small {
+  display: block;
+}
+
+.settings-general-card strong {
+  color: #26354b;
+  font-size: 16px;
+}
+
+.settings-general-card small {
+  max-width: 610px;
+  margin-top: 4px;
+  color: #718096;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.settings-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.settings-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.settings-switch span {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color var(--motion-standard) var(--motion-ease-out);
+}
+
+.settings-switch span::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(15 23 42 / 22%);
+  content: "";
+  transition: transform var(--motion-standard) var(--motion-spring);
+}
+
+.settings-switch input:checked + span {
+  background: #1f67e8;
+}
+
+.settings-switch input:checked + span::after {
+  transform: translateX(20px);
+}
+
+.settings-switch input:focus-visible + span {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgb(31 103 232 / 16%);
+}
+
 .settings-memory-write-policy span {
   border-radius: 9px;
   background: #f4f7fb;
