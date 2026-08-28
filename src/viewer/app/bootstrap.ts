@@ -6,6 +6,7 @@ import { registerReaderEvents } from './registrations/register-reader-events';
 import { registerTranslationEvents } from './registrations/register-translation-events';
 import { registerVocabularyEvents } from './registrations/register-vocabulary-events';
 import { registerLifecycle } from './registrations/register-lifecycle';
+import { initializeOnboardingTour } from '../features/onboarding-tour/public';
 
 export * from './app-ui';
 
@@ -18,4 +19,5 @@ export function bootstrapViewer(): void {
   registerTranslationEvents();
   registerVocabularyEvents();
   registerLifecycle();
+  initializeOnboardingTour();
 }

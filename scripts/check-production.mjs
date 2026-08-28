@@ -3,9 +3,12 @@ import path from 'node:path';
 
 const root = process.cwd();
 const outputDir = path.join(root, '.output', 'edge-mv3');
+const packageMetadata = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 const manifest = JSON.parse(await readFile(path.join(outputDir, 'manifest.json'), 'utf8'));
-if (manifest.version !== '1.0.0') {
-  throw new Error(`Production manifest version must be 1.0.0; received ${manifest.version ?? 'missing'}.`);
+if (manifest.version !== packageMetadata.version) {
+  throw new Error(
+    `Production manifest version must match package.json (${packageMetadata.version}); received ${manifest.version ?? 'missing'}.`,
+  );
 }
 
 await readFile(path.join(outputDir, 'privacy-policy.html'), 'utf8');

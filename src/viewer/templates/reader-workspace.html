@@ -202,6 +202,16 @@
                     </label>
                   </div>
 
+                  <div class="settings-general-card settings-tour-card">
+                    <div>
+                      <strong>使用教程</strong>
+                      <small>重新播放首次使用引导，依次了解模型配置、PDF 阅读、翻译、知识库和单词库。</small>
+                    </div>
+                    <button id="start-onboarding-tour" class="settings-outline-button settings-tour-start-button" type="button">
+                      重新开始引导
+                    </button>
+                  </div>
+
                   <div class="settings-compression-card">
                     <div><strong>自动压缩较早对话</strong><small>保留最近交流，减少上下文占用。</small></div>
                     <span class="settings-toggle is-on" aria-label="自动压缩已启用"></span>
@@ -222,7 +232,13 @@
                         <strong>供应商连接</strong>
                         <p>API Key 只保存一次，任务配置不再重复填写。</p>
                       </div>
-                      <button id="add-ai-provider" class="settings-outline-button" type="button">＋ 添加供应商</button>
+                      <div class="settings-section-actions">
+                        <button id="settings-tutorial-button" class="settings-outline-button settings-tutorial-button" type="button">
+                          <span aria-hidden="true">?</span>
+                          查看教程
+                        </button>
+                        <button id="add-ai-provider" class="settings-outline-button" type="button">＋ 添加供应商</button>
+                      </div>
                     </div>
 
                     <div id="settings-connection-grid" class="settings-connection-grid" aria-live="polite">

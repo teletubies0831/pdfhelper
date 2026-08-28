@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDFPal API Key 申请指南</title>
+    <link rel="icon" type="image/png" href="/resources/pdfpal/icon-32.png" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="tutorial-header">
+      <a class="tutorial-brand" href="#tutorial-content" aria-label="PDFPal API Key 申请指南首页">
+        <img src="/resources/pdfpal/icon-48.png" alt="" />
+        <span><strong>PDFPal</strong><small>API Key 申请指南</small></span>
+      </a>
+      <span class="tutorial-header-note">选一家模型厂商，跟着做就好</span>
+    </header>
+
+    <div class="tutorial-layout">
+      <aside class="tutorial-sidebar">
+        <p class="sidebar-label">模型厂商</p>
+        <nav id="provider-guide-navigation" aria-label="API Key 申请教程"></nav>
+        <div class="sidebar-note">
+          <span aria-hidden="true">🔐</span>
+          <p><strong>把 Key 当成密码</strong>只粘贴到 PDFPal 的供应商设置里，不要发给别人哦。</p>
+        </div>
+      </aside>
+
+      <main class="tutorial-main">
+        <article id="tutorial-content" class="markdown-body" aria-live="polite"></article>
+      </main>
+    </div>
+
+    <dialog id="tutorial-image-lightbox" class="image-lightbox" aria-label="教程图片大图预览">
+      <div class="image-lightbox-stage">
+        <button id="tutorial-image-lightbox-close" class="image-lightbox-close" type="button" aria-label="关闭大图预览">×</button>
+        <img id="tutorial-image-lightbox-image" src="" alt="" />
+        <span class="image-lightbox-tip">按 Esc 或点击图片外部关闭</span>
+      </div>
+    </dialog>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

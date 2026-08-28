@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDFPal</title>
+    <link rel="icon" type="image/png" href="/resources/pdfpal/icon-32.png" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="sidepanel-shell">
+      <header class="brand-row">
+        <img class="brand-icon" src="/resources/pdfpal/icon-48.png" alt="" />
+        <div class="brand-copy">
+          <strong>PDFPal</strong>
+          <span>AI PDF 阅读工作区</span>
+        </div>
+        <span class="brand-badge">v1.0</span>
+      </header>
+
+      <section class="hero" aria-labelledby="sidepanel-title">
+        <span class="hero-eyebrow">
+          <svg aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
+          你的智能 PDF 研究伙伴
+        </span>
+        <h1 id="sidepanel-title">不只读 PDF，<br /><em>把每次阅读变成知识。</em></h1>
+        <p>阅读、翻译、批注、AI 问答与知识整理，都在一个工作区完成。</p>
+      </section>
+
+      <section class="feature-list" aria-label="PDFPal 核心功能">
+        <article class="feature-item">
+          <span class="feature-icon blue">
+            <svg aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pdf" /></svg>
+          </span>
+          <span><strong>深度阅读</strong><small>搜索、高亮与批注</small></span>
+        </article>
+        <article class="feature-item">
+          <span class="feature-icon violet">
+            <svg aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
+          </span>
+          <span><strong>AI 理解</strong><small>翻译、解释与全文问答</small></span>
+        </article>
+        <article class="feature-item">
+          <span class="feature-icon cyan">
+            <svg aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>
+          </span>
+          <span><strong>知识沉淀</strong><small>卡片、记忆与跨文献检索</small></span>
+        </article>
+      </section>
+
+      <aside class="ai-notice">
+        <span class="notice-icon">
+          <svg aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-settings" /></svg>
+        </span>
+        <span>
+          <strong>连接模型后解锁完整 AI 功能</strong>
+          <small>API Key 仅保存在当前浏览器中</small>
+        </span>
+      </aside>
+
+      <footer class="sidepanel-footer">
+        <button id="start-button" class="start-button" type="button">
+          <span id="start-button-label">立即开始</span>
+          <span class="button-arrow" aria-hidden="true">→</span>
+        </button>
+        <p id="status" class="status" aria-live="polite">进入后可打开 PDF，并在设置中连接模型</p>
+      </footer>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

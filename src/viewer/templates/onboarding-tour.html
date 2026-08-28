@@ -1,0 +1,38 @@
+<div id="onboarding-tour" class="onboarding-tour" hidden aria-hidden="true">
+  <div class="onboarding-tour-blocker" data-tour-blocker="top"></div>
+  <div class="onboarding-tour-blocker" data-tour-blocker="left"></div>
+  <div class="onboarding-tour-blocker" data-tour-blocker="right"></div>
+  <div class="onboarding-tour-blocker" data-tour-blocker="bottom"></div>
+
+  <div id="onboarding-tour-highlight" class="onboarding-tour-highlight" aria-hidden="true"></div>
+  <div id="onboarding-tour-target-shield" class="onboarding-tour-target-shield" aria-hidden="true" hidden></div>
+
+  <section
+    id="onboarding-tour-card"
+    class="onboarding-tour-card"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="onboarding-tour-title"
+    aria-describedby="onboarding-tour-description"
+  >
+    <header class="onboarding-tour-card-header">
+      <span>PDFPal 首次使用引导</span>
+      <button id="onboarding-tour-skip" type="button">跳过引导</button>
+    </header>
+    <div class="onboarding-tour-progress" aria-hidden="true">
+      <span id="onboarding-tour-progress-bar"></span>
+    </div>
+    <div class="onboarding-tour-copy">
+      <span id="onboarding-tour-eyebrow" class="onboarding-tour-eyebrow"></span>
+      <h2 id="onboarding-tour-title"></h2>
+      <p id="onboarding-tour-description"></p>
+      <div id="onboarding-tour-note" class="onboarding-tour-note" hidden></div>
+    </div>
+    <footer class="onboarding-tour-card-footer">
+      <span id="onboarding-tour-counter"></span>
+      <button id="onboarding-tour-next" class="onboarding-tour-next" type="button" hidden>下一步</button>
+    </footer>
+  </section>
+
+  <div id="onboarding-tour-announcer" class="onboarding-tour-announcer" aria-live="polite"></div>
+</div>

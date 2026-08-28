@@ -2,6 +2,10 @@ import { browser } from "wxt/browser";
 
 import { isSelectionAction } from "../modules/selection/public";
 import { extractPdfSource } from "../infrastructure/browser/pdf-source";
+import {
+  hasSeenSidepanelFirstRun,
+  isSidepanelFirstRunSeenMessage,
+} from "../viewer-launcher/sidepanel-first-run";
 
 import {
   AI_STREAM_PORT_NAME,
@@ -25,14 +29,41 @@ import {
 } from "./ai/ai-runtime";
 import { getSafeErrorDetails } from "./ai/vision-service";
 
+async function configureActionBehavior(): Promise<void> {
+  if (!browser.sidePanel?.setPanelBehavior) return;
+  const hasSeenFirstRun = await hasSeenSidepanelFirstRun();
+  await browser.sidePanel.setPanelBehavior({
+    openPanelOnActionClick: !hasSeenFirstRun,
+  });
+}
+
+async function handleActionClick(): Promise<void> {
+  if (!browser.sidePanel?.setPanelBehavior) {
+    await openEnhancedViewer();
+    return;
+  }
+
+  if (await hasSeenSidepanelFirstRun()) {
+    await openEnhancedViewer();
+  }
+}
+
 export function bootstrapBackground(): void {
   void registerContextMenus();
 
+  void configureActionBehavior().catch(() => undefined);
+
   browser.action.onClicked.addListener(() => {
-    void openEnhancedViewer();
+    void handleActionClick().catch(() => undefined);
   });
 
   browser.runtime.onMessage.addListener((message) => {
+    if (isSidepanelFirstRunSeenMessage(message)) {
+      if (browser.sidePanel?.setPanelBehavior) {
+        void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+      }
+      return undefined;
+    }
     if (!isAiRuntimeRequest(message)) return undefined;
     return handleAiRequest(message);
   });

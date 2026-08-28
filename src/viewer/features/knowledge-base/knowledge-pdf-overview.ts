@@ -73,6 +73,8 @@ async function extractOverviewPages(): Promise<ExtractedKnowledgePage[]> {
 
 async function generateOverview(item: KnowledgeLibraryDocument): Promise<void> {
   const { content, regenerate } = elements();
+  const isActiveOverview = (): boolean =>
+    activeOverviewDocumentId === item.documentId && elements().dialog.open;
   regenerate.disabled = true;
   content.classList.add("is-loading");
   content.innerHTML = "<div class=\"knowledge-overview-placeholder\"><span></span>AI 正在判断文档类型并生成概览…</div>";
@@ -87,17 +89,20 @@ async function generateOverview(item: KnowledgeLibraryDocument): Promise<void> {
       recentEntryId: item.recentEntryId,
       pageCount: item.pageCount,
       pages,
-      onProgress: (message) => setOverviewStatus(message),
+      onProgress: (message) => {
+        if (isActiveOverview()) setOverviewStatus(message);
+      },
     });
     const updated = getKnowledgeDocument(item.documentId);
-    if (updated && activeOverviewDocumentId === item.documentId) renderSavedOverview(updated);
+    if (updated && isActiveOverview()) renderSavedOverview(updated);
   } catch (error) {
+    if (!isActiveOverview()) return;
     const message = error instanceof Error ? error.message : String(error);
     content.classList.remove("is-loading");
     content.innerHTML = "<div class=\"knowledge-overview-placeholder is-error\">PDF 概览生成失败，可以稍后重新生成。</div>";
     setOverviewStatus(message, true);
   } finally {
-    regenerate.disabled = false;
+    if (isActiveOverview()) regenerate.disabled = false;
   }
 }
 
@@ -115,7 +120,9 @@ export function openKnowledgePdfOverview(item: KnowledgeLibraryDocument): void {
 
 export function registerKnowledgePdfOverviewEvents(): void {
   const close = (): void => {
-    dismissAnimatedDialog(elements().dialog);
+    const { dialog } = elements();
+    activeOverviewDocumentId = "";
+    dismissAnimatedDialog(dialog);
   };
   elements().dialog.addEventListener("cancel", (event) => {
     event.preventDefault();

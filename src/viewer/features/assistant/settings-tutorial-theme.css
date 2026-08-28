@@ -1,0 +1,46 @@
+.settings-section-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.settings-tutorial-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #526176;
+}
+
+.settings-tutorial-button > span {
+  display: inline-grid;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #edf4ff;
+  color: #1f67e8;
+  font-size: 12px;
+  font-weight: 750;
+  place-items: center;
+}
+
+.settings-tour-start-button {
+  flex: 0 0 auto;
+  min-width: 122px;
+  font-weight: 650;
+}
+
+@media (max-width: 720px) {
+  .settings-connections-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .settings-section-actions {
+    width: 100%;
+  }
+
+  .settings-section-actions .settings-outline-button {
+    flex: 1 1 0;
+  }
+}

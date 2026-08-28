@@ -7,6 +7,7 @@ import readerOverlaysTemplate from '../templates/reader-overlays.html?raw';
 import knowledgeBaseOverlaysTemplate from '../templates/knowledge-base-overlays.html?raw';
 import vocabularyLibraryOverlaysTemplate from '../templates/vocabulary-library-overlays.html?raw';
 import overlaysTemplate from '../templates/overlays.html?raw';
+import onboardingTourTemplate from '../templates/onboarding-tour.html?raw';
 
 export function mountViewerShell(): void {
   const root = document.getElementById('viewer-app-root');
@@ -28,5 +29,6 @@ export function mountViewerShell(): void {
     knowledgeBaseOverlaysTemplate,
     vocabularyLibraryOverlaysTemplate,
     overlaysTemplate,
+    onboardingTourTemplate,
   ].join('\n');
 }

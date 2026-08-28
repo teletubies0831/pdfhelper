@@ -230,6 +230,14 @@ export const addAiProviderButton = requiredElement<HTMLButtonElement>(
   "add-ai-provider",
 );
 
+export const settingsTutorialButton = requiredElement<HTMLButtonElement>(
+  "settings-tutorial-button",
+);
+
+export const startOnboardingTourButton = requiredElement<HTMLButtonElement>(
+  "start-onboarding-tour",
+);
+
 export const secretToggleButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-toggle-secret]"),
 );

@@ -53,6 +53,8 @@ import {
   settingsConnectionDeleteButton,
   settingsConnectionGrid,
   settingsConnectionManualModelInput,
+  settingsTutorialButton,
+  startOnboardingTourButton,
   settingsPrimaryTabButtons,
 } from "../viewer-elements";
 import {
@@ -114,6 +116,8 @@ import {
 import { closeVocabularyLibraryPage } from "../../features/vocabulary-library/public";
 import { setStatus } from "../../features/recent-files/public";
 import { openSourcePdfInNewTab } from "../../shared-ui/navigation/source-pdf-navigation";
+import { openTutorialWindow } from "../../shared-ui/navigation/tutorial-navigation";
+import { startOnboardingTour } from "../../features/onboarding-tour/public";
 import type { AssistantView } from "../../core/pdf-reader/public";
 
 import {
@@ -258,6 +262,12 @@ export function registerAssistantEvents(): void {
   addAiProviderButton.addEventListener("click", () => {
     showSettingsConnectionEditor();
   });
+
+  settingsTutorialButton.addEventListener("click", () => {
+    void openTutorialWindow();
+  });
+
+  startOnboardingTourButton.addEventListener("click", startOnboardingTour);
 
   settingsConnectionDeleteButton.addEventListener("click", () => {
     if (
