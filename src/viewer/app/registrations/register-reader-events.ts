@@ -125,8 +125,13 @@ import {
 } from "../../features/annotations/public";
 
 import type { FilePickerWindow } from "../viewer-types";
+import {
+  installTextInputClipboardProtection,
+  isTextInputTarget,
+} from "../../shared-ui/text-input/clipboard-protection";
 
 export function registerReaderEvents(): void {
+  installTextInputClipboardProtection(document.body, viewerElement);
   setHighlightColor(initializeHighlightColorHistory());
   installHighlightNoteTextEditingProtection();
   installAnnotationSizePopoverDismissal();
@@ -676,6 +681,7 @@ export function registerReaderEvents(): void {
   document.addEventListener(
     "copy",
     (event) => {
+      if (isTextInputTarget(event.target)) return;
       const text = getViewerSelectionRawText();
       if (!text || !event.clipboardData) return;
 
