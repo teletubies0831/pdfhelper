@@ -1,6 +1,6 @@
 {
   "name": "pdfpal",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,9 +11,10 @@
     "test:ai-contracts": "node --experimental-strip-types --no-warnings scripts/test-ai-contracts.mjs",
     "test:agent-tools": "node --experimental-strip-types --no-warnings scripts/test-agent-tool-contracts.mjs",
     "test:semantic-retrieval": "node --experimental-strip-types --no-warnings scripts/test-semantic-retrieval.mjs",
+    "test:interaction": "node scripts/test-interaction-boundary.mjs",
     "check:architecture": "node scripts/check-architecture.mjs",
     "check:production": "node scripts/check-production.mjs",
-    "check": "pnpm typecheck && pnpm test:ink-eraser && pnpm test:ai-contracts && pnpm test:agent-tools && pnpm test:semantic-retrieval && pnpm check:architecture && pnpm build && pnpm check:production",
+    "check": "pnpm typecheck && pnpm test:ink-eraser && pnpm test:ai-contracts && pnpm test:agent-tools && pnpm test:semantic-retrieval && pnpm test:interaction && pnpm check:architecture && pnpm build && pnpm check:production",
     "build": "wxt build -b edge",
     "build:chrome": "wxt build -b chrome",
     "zip": "wxt zip -b edge",
@@ -35,6 +36,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "typescript": "^5.9.3",
     "wxt": "^0.20.15"
   },

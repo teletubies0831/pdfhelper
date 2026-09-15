@@ -125,13 +125,10 @@ import {
 } from "../../features/annotations/public";
 
 import type { FilePickerWindow } from "../viewer-types";
-import {
-  installTextInputClipboardProtection,
-  isTextInputTarget,
-} from "../../shared-ui/text-input/clipboard-protection";
+import { isTextInputTarget } from "../../shared-ui/interaction/interaction-boundary";
+import { interactionBoundary } from "../interaction-boundary";
 
 export function registerReaderEvents(): void {
-  installTextInputClipboardProtection(document.body, viewerElement);
   setHighlightColor(initializeHighlightColorHistory());
   installHighlightNoteTextEditingProtection();
   installAnnotationSizePopoverDismissal();
@@ -582,15 +579,13 @@ export function registerReaderEvents(): void {
   document.addEventListener(
     "keydown",
     (event) => {
-      const target = event.target as HTMLElement | null;
-      const isEditingText =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        Boolean(target?.isContentEditable);
+      const isEditingText = isTextInputTarget(event.target) || event.target instanceof HTMLSelectElement;
+      const ownsPdf = interactionBoundary.ownsPdfKeyboard(event);
+      if (event.defaultPrevented || event.isComposing) return;
       if (
         (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === "s" &&
-        pdfDocument.value
+        pdfDocument.value && ownsPdf && !isEditingText && !event.altKey
       ) {
         event.preventDefault();
         event.stopPropagation();
@@ -600,31 +595,31 @@ export function registerReaderEvents(): void {
       if (
         (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === "f" &&
-        pdfDocument.value
+        pdfDocument.value && ownsPdf && !isEditingText && !event.altKey
       ) {
         event.preventDefault();
         event.stopPropagation();
         openFindBar();
         return;
       }
-      if (event.key === "Escape" && !recentFilesDialog.hidden) {
+      if (event.key === "Escape" && !recentFilesDialog.hidden && interactionBoundary.ownsRegion(event, recentFilesDialog)) {
         event.preventDefault();
         hideRecentFilesDialog();
         return;
       }
-      if (event.key === "Escape" && !translationHistoryDialog.hidden) {
+      if (event.key === "Escape" && !translationHistoryDialog.hidden && interactionBoundary.ownsRegion(event, translationHistoryDialog)) {
         event.preventDefault();
         translationHistoryDialog.hidden = true;
         return;
       }
-      if (event.key === "Escape" && !findBar.hidden) {
+      if (event.key === "Escape" && ownsPdf && !findBar.hidden) {
         event.preventDefault();
         closeFindBar();
         return;
       }
       if (
         (event.ctrlKey || event.metaKey) &&
-        !isEditingText &&
+        !isEditingText && ownsPdf && !event.altKey &&
         pdfDocument.value &&
         (event.key.toLowerCase() === "z" || event.key.toLowerCase() === "y")
       ) {
@@ -635,7 +630,7 @@ export function registerReaderEvents(): void {
         else annotationEditor.value?.undo();
         return;
       }
-      if (event.key === "Escape" && isInkEraserMode()) {
+      if (event.key === "Escape" && ownsPdf && isInkEraserMode()) {
         event.preventDefault();
         setInkEraserMode(false);
         setStatus("已退出橡皮擦模式。");
@@ -644,7 +639,7 @@ export function registerReaderEvents(): void {
       if (
         event.key === "Delete" &&
         selectedAnnotationEditor.value &&
-        !isEditingText
+        !isEditingText && ownsPdf
       ) {
         event.preventDefault();
         event.stopPropagation();
@@ -681,7 +676,7 @@ export function registerReaderEvents(): void {
   document.addEventListener(
     "copy",
     (event) => {
-      if (isTextInputTarget(event.target)) return;
+      if (!interactionBoundary.ownsPdfClipboard(event)) return;
       const text = getViewerSelectionRawText();
       if (!text || !event.clipboardData) return;
 

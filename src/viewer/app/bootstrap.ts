@@ -7,10 +7,12 @@ import { registerTranslationEvents } from './registrations/register-translation-
 import { registerVocabularyEvents } from './registrations/register-vocabulary-events';
 import { registerLifecycle } from './registrations/register-lifecycle';
 import { initializeOnboardingTour } from '../features/onboarding-tour/public';
+import { interactionBoundary } from './interaction-boundary';
 
 export * from './app-ui';
 
 export function bootstrapViewer(): void {
+  interactionBoundary.install();
   registerPdfRuntime();
   registerAssistantEvents();
   registerKnowledgeEvents();

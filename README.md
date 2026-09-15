@@ -156,6 +156,10 @@ pnpm build
 pnpm check
 ```
 
+`pnpm test:interaction` 使用本机 Edge 的无界面实例和项目实际依赖的 PDF.js，验证
+聊天、知识库、单词库、弹窗与 PDF 之间的键盘及剪贴板隔离；它也包含在 `pnpm check` 中。
+如需使用本机 Chrome，可先在 PowerShell 中设置 `$env:PDFPAL_TEST_BROWSER = 'chrome'`。
+
 ## 修改代码时从哪里开始
 
 - 修改模型调用或 MCP 工具：从 `src/modules/ai/` 和 `src/viewer/features/assistant/` 开始。

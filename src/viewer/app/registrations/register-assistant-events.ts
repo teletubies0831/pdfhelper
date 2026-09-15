@@ -1,3 +1,4 @@
+import { interactionBoundary } from "../interaction-boundary";
 import {
   AI_PROVIDERS,
   type AiProviderId,
@@ -175,7 +176,7 @@ export function registerAssistantEvents(): void {
       setChatReasoningMenuOpen(false);
       chatReasoningTrigger.focus();
     }
-    if (!assistantSettingsPanel.hidden) {
+    if (!assistantSettingsPanel.hidden && interactionBoundary.ownsRegion(event, assistantSettingsPanel)) {
       cancelSettingsConnectionActivity();
       setDeepSeekSettingsOpen(false);
     }
@@ -555,7 +556,7 @@ export function registerAssistantEvents(): void {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && chatImagePreviewOverlay.value) {
+    if (event.key === "Escape" && chatImagePreviewOverlay.value && interactionBoundary.ownsRegion(event, chatImagePreviewOverlay.value)) {
       event.preventDefault();
       closeChatImagePreview();
     }
