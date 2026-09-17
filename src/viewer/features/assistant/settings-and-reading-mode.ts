@@ -1,5 +1,5 @@
 import { browser } from "wxt/browser";
-import { AI_PROVIDERS, AI_VISION_TEST_MARKER, aiConnectionCatalog, normalizeAiMaxOutputTokens, normalizeConnectionModels, type AiConfig, type AiConnectionCapability, type AiProviderId, type AiRuntimeResponse } from "../../../modules/ai/public";
+import { aiConnectionCatalog, normalizeAiMaxOutputTokens, type AiConfig, type AiRuntimeResponse } from "../../../modules/ai/public";
 
 
 import { CONVERSATION_MEMORY_CONFIG_STORAGE_KEY, normalizeConversationMemoryConfig, type ConversationMemoryConfig } from "../../../modules/memory/public";
@@ -10,7 +10,7 @@ import { CONVERSATION_MEMORY_CONFIG_STORAGE_KEY, normalizeConversationMemoryConf
 
 import { aiConfig, aiConfigLoaded, conversationMemoryConfig, navigateToPdfPageWhenVisible, setDeepSeekSettingsOpen, updateControls, visionAiConfig } from "../../core/pdf-reader/public";
 
-import { aiProviderSelect, citationReturnButton, citationReturnPosition, deepSeekApiKeyInput, deepSeekBaseUrlInput, deepSeekMaxOutputTokensInput, deepSeekThinkingSelect, saveDeepSeekSettingsButton, settingsConnectionModelsInput, testDeepSeekButton, testVisionAiButton, viewerContainer, visionSettingsStatus } from "../../app/viewer-elements";
+import { citationReturnButton, citationReturnPosition, deepSeekMaxOutputTokensInput, deepSeekThinkingSelect, testVisionAiButton, viewerContainer, visionSettingsStatus } from "../../app/viewer-elements";
 import { getPdfFingerprint } from "../annotations/public";
 import { getCurrentReadingPosition, scheduleReadingPositionSave } from "../recent-files/public";
 import { internalNavigationHistory, isOpeningDocument, isRestoringReadingPosition, isReturningFromInternalNavigation, linkService, pdfDocument, pdfViewer, sourceName, suppressInternalNavigationCapture } from "../../app/viewer-state";
@@ -18,11 +18,12 @@ import { internalNavigationHistory, isOpeningDocument, isRestoringReadingPositio
 
 
 import { populateConversationMemoryConfigForm, readConversationMemoryConfigFromForm, updateDeepSeekProviderStatus } from './memory-controller';
-import { clearSettingsStatus, loadSettingsConnectionCatalog, markSettingsConnectionModelsVerified, saveSettingsRoutes, showSettingsStatus, updateSettingsConnectionSummaries, type SettingsConnectionVerifiedModel } from './settings-navigation';
+import { clearSettingsStatus, loadSettingsConnectionCatalog, saveSettingsRoutes, showSettingsStatus, updateSettingsConnectionSummaries } from './settings-navigation';
+import { loadConnectionTestPreferences, readConnectionTestPreferences, saveConnectionTestPreferences } from './connection-test-preferences';
+import { createVisionTestImage } from './connection-test-controller';
 import { syncChatReasoningControl } from '../../app/chat-reasoning-control';
 
 
-const MODEL_VALIDATION_CONCURRENCY = 30;
 
 
 
@@ -173,6 +174,7 @@ export async function syncAiConfigsFromConnectionCatalog(): Promise<void> {
 
 
 export async function loadDeepSeekConfig(): Promise<void> {
+  await loadConnectionTestPreferences();
   await loadSettingsConnectionCatalog();
   await syncAiConfigsFromConnectionCatalog();
   const stored = await browser.storage.local.get(CONVERSATION_MEMORY_CONFIG_STORAGE_KEY);
@@ -188,6 +190,7 @@ export async function loadDeepSeekConfig(): Promise<void> {
 
 
 export async function saveDeepSeekConfig(showSuccess = true): Promise<boolean> {
+  await saveConnectionTestPreferences();
   const nextConversationMemoryConfig = readConversationMemoryConfigFromForm();
   await saveSettingsRoutes(
     deepSeekThinkingSelect.value === 'enabled' ? 'enabled' : 'disabled',
@@ -209,216 +212,7 @@ export async function saveDeepSeekConfig(showSuccess = true): Promise<boolean> {
 
 
 
-export async function testDeepSeekConnection(): Promise<boolean> {
-  const providerId = aiProviderSelect.value as AiProviderId;
-  const provider = AI_PROVIDERS.find((item) => item.id === providerId && item.available);
-  const apiKey = deepSeekApiKeyInput.value.trim();
-  const baseUrl = deepSeekBaseUrlInput.value.trim() || provider?.defaultBaseUrl || '';
-  const existingModels = normalizeConnectionModels(
-    settingsConnectionModelsInput.value.split(/[\n,，]+/),
-  );
-  if (!provider) {
-    showSettingsStatus('请先选择已支持的接口类型。', 'error');
-    return false;
-  }
-  if (!apiKey || !baseUrl) {
-    showSettingsStatus('请先填写 API Key 和 API 地址。', 'error');
-    return false;
-  }
-  const testRunId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const isCurrentTest = (): boolean => testDeepSeekButton.dataset.testRunId === testRunId;
-  testDeepSeekButton.dataset.testRunId = testRunId;
-  testDeepSeekButton.disabled = true;
-  saveDeepSeekSettingsButton.disabled = true;
-  showSettingsStatus("正在获取模型列表…", 'progress');
-
-  try {
-    console.info('[PDFPal AI 连接测试] 页面发起模型发现', {
-      providerId,
-      baseUrl,
-      hasApiKey: Boolean(apiKey),
-    });
-    let discoveredModels: string[] = [];
-    let discoveryError = '';
-    try {
-      const discoveryResponse = (await browser.runtime.sendMessage({
-        type: 'pdf-helper:ai-test',
-        mode: 'discover',
-        config: {
-          providerId,
-          apiKey,
-          baseUrl,
-          model: existingModels[0] ?? '',
-        },
-      })) as AiRuntimeResponse;
-      console.info('[PDFPal AI 连接测试] 页面收到模型列表', discoveryResponse);
-      if (!discoveryResponse?.ok) {
-        throw new Error(discoveryResponse?.error || '扩展后台没有返回模型列表。');
-      }
-      discoveredModels = discoveryResponse.models ?? [];
-    } catch (error) {
-      discoveryError = error instanceof Error ? error.message : String(error);
-      console.warn('[PDFPal AI 连接测试] 模型发现失败，将尝试手动 Model ID', {
-        providerId,
-        baseUrl,
-        error: discoveryError,
-      });
-    }
-    if (!isCurrentTest()) return false;
-
-    const candidates = normalizeConnectionModels([
-      ...discoveredModels,
-      ...existingModels,
-    ]);
-    if (candidates.length === 0) {
-      throw new Error(
-        discoveryError
-          ? '接口没有提供标准 /models 列表，请在“接口没有提供模型列表？”中手动加入 Model ID 后再测试。'
-          : '接口没有返回可验证的模型。',
-      );
-    }
-
-    const capabilities: AiConnectionCapability[] = ['text', 'vision'];
-    const validationTasks = candidates.flatMap((model) => capabilities.map((capability) => ({
-      model,
-      capability,
-    })));
-    showSettingsStatus(`正在并发验证 0/${validationTasks.length} 项能力…`, 'progress');
-    const imageDataUrl = createVisionTestImage();
-    const results: Array<{
-      model: string;
-      capability: AiConnectionCapability;
-      ok: boolean;
-      error?: string;
-    } | undefined> = new Array(validationTasks.length);
-    let nextTaskIndex = 0;
-    let completedCount = 0;
-
-    const validateNextCapability = async (): Promise<void> => {
-      while (isCurrentTest() && nextTaskIndex < validationTasks.length) {
-        const taskIndex = nextTaskIndex;
-        nextTaskIndex += 1;
-        const task = validationTasks[taskIndex];
-        if (!task) return;
-        let response: AiRuntimeResponse;
-        try {
-          response = (await browser.runtime.sendMessage({
-            type: 'pdf-helper:ai-test',
-            mode: 'validate',
-            config: {
-              providerId,
-              apiKey,
-              baseUrl,
-              model: task.model,
-              capabilities: [task.capability],
-            },
-            imageDataUrl: task.capability === 'vision' ? imageDataUrl : undefined,
-          })) as AiRuntimeResponse;
-        } catch (error) {
-          response = {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          };
-        }
-        results[taskIndex] = response?.ok
-          ? { ...task, ok: true }
-          : {
-              ...task,
-              ok: false,
-              error: response?.error || '扩展后台没有返回测试结果。',
-            };
-        completedCount += 1;
-        if (isCurrentTest()) {
-          showSettingsStatus(
-            `正在并发验证 ${completedCount}/${validationTasks.length} 项能力…`,
-            'progress',
-          );
-        }
-        console.info('[PDFPal AI 连接测试] 页面收到模型能力验证结果', {
-          model: task.model,
-          capability: task.capability,
-          response,
-          progress: `${completedCount}/${validationTasks.length}`,
-        });
-      }
-    };
-
-    const workerCount = Math.min(MODEL_VALIDATION_CONCURRENCY, validationTasks.length);
-    await Promise.all(Array.from({ length: workerCount }, () => validateNextCapability()));
-    if (!isCurrentTest()) return false;
-
-    const completedResults = results.filter(
-      (result): result is NonNullable<typeof result> => Boolean(result),
-    );
-    const verifiedModels: SettingsConnectionVerifiedModel[] = candidates.flatMap((model) => {
-      const verifiedCapabilities = capabilities.filter((capability) => completedResults.some(
-        (result) => result.model === model && result.capability === capability && result.ok,
-      ));
-      return verifiedCapabilities.length > 0
-        ? [{ model, capabilities: verifiedCapabilities }]
-        : [];
-    });
-    const failures = completedResults.filter((result) => !result.ok);
-    if (verifiedModels.length === 0) {
-      console.error('[PDFPal AI 连接测试] 所有模型均验证失败', failures);
-      throw new Error(`已实测 ${candidates.length} 个模型，但没有可调用的模型。请在 Console 查看每个模型的返回。`);
-    }
-    markSettingsConnectionModelsVerified(verifiedModels);
-    const textModelCount = verifiedModels.filter((item) => item.capabilities.includes('text')).length;
-    const visionModelCount = verifiedModels.filter((item) => item.capabilities.includes('vision')).length;
-    const unavailableModelCount = candidates.length - verifiedModels.length;
-    console.info('[PDFPal AI 连接测试] 并发验证完成', {
-      concurrency: workerCount,
-      total: candidates.length,
-      verifiedModels,
-      failures,
-    });
-    showSettingsStatus([
-      discoveryError ? '接口未提供标准模型列表，已验证手动加入的模型。' : '连接成功。',
-      `已验证 ${verifiedModels.length} 个可用模型：${textModelCount} 个支持文本，${visionModelCount} 个支持视觉。`,
-      unavailableModelCount > 0 ? `${unavailableModelCount} 个不可用模型已排除。` : '',
-    ].filter(Boolean).join(' '), 'success');
-    return true;
-  } catch (error) {
-    console.error('[PDFPal AI 连接测试] 页面测试失败', {
-      providerId,
-      baseUrl,
-      models: existingModels,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    if (isCurrentTest()) {
-      showSettingsStatus(error instanceof Error ? error.message : String(error), 'error');
-    }
-    return false;
-  } finally {
-    if (isCurrentTest()) {
-      delete testDeepSeekButton.dataset.testRunId;
-      testDeepSeekButton.disabled = false;
-      saveDeepSeekSettingsButton.disabled = false;
-    }
-  }
-}
-
-
-
-export function createVisionTestImage(): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = 480;
-  canvas.height = 180;
-  const context = canvas.getContext("2d");
-  if (!context) return "";
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.strokeStyle = "#cbd5e1";
-  context.lineWidth = 4;
-  context.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
-  context.fillStyle = "#0f172a";
-  context.font = "700 64px Arial, sans-serif";
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.fillText(AI_VISION_TEST_MARKER, canvas.width / 2, canvas.height / 2);
-  return canvas.toDataURL("image/png");
-}
+export { discoverDeepSeekModels, testDeepSeekConnection, createVisionTestImage } from './connection-test-controller';
 
 
 
@@ -436,6 +230,7 @@ export async function testVisionAiConnection(): Promise<void> {
   try {
     const response = (await browser.runtime.sendMessage({
       type: "pdf-helper:ai-vision-test",
+      testSettings: readConnectionTestPreferences(),
       imageDataUrl: createVisionTestImage(),
     })) as AiRuntimeResponse;
     if (!response?.ok)

@@ -1,7 +1,7 @@
 
 
 
-import { AI_VISION_TEST_MARKER, AI_VISION_TEST_PROMPT, DEFAULT_AI_CONFIG, normalizeAiBaseUrl, normalizeAiMaxOutputTokens, type AiConfig, type AiRuntimeRequest, type AiRuntimeResponse } from "../../modules/ai/public";
+import { AI_VISION_TEST_MARKER, AI_VISION_TEST_PROMPT, CONNECTION_TEST_PROMPT, DEFAULT_AI_CONFIG, normalizeConnectionTestSettings, normalizeAiBaseUrl, normalizeAiMaxOutputTokens, type AiConfig, type AiRuntimeRequest, type AiRuntimeResponse } from "../../modules/ai/public";
 import { isResolvedReadingMode, type ResolvedReadingMode } from "../../modules/reading-mode/public";
 import { getProviderError, requestVisionCompletion } from './vision-service';
 
@@ -53,6 +53,8 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
             || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZsgAAAABJRU5ErkJggg=='
           : message.imageDataUrl,
         message.type === 'pdf-helper:ai-vision' ? message.context : undefined,
+        message.type === 'pdf-helper:ai-vision-test'
+          ? normalizeConnectionTestSettings(message.testSettings).maxOutputTokens : undefined,
       );
       if (message.type === 'pdf-helper:ai-vision-test') {
         assertVisionTestMarker(result.content);
@@ -110,12 +112,15 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
       const capabilities: Array<'text' | 'vision'> = message.config.capabilities?.length
         ? Array.from(new Set(message.config.capabilities))
         : ['text'];
+      const testSettings = normalizeConnectionTestSettings(message.testSettings);
+      let content = '';
       if (capabilities.includes('text')) {
-        await adapter.chat(
+        const result = await adapter.chat(
           config,
-          [{ role: 'user', content: '这是连接测试，请只回复“OK”。' }],
-          16,
+          [{ role: 'user', content: CONNECTION_TEST_PROMPT }],
+          testSettings.maxOutputTokens,
         );
+        content = result.content;
       }
       if (capabilities.includes('vision')) {
         const visionResult = await requestVisionCompletion(
@@ -130,10 +135,12 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
           message.imageDataUrl
             || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZsgAAAABJRU5ErkJggg==',
           undefined,
+          testSettings.maxOutputTokens,
         );
         assertVisionTestMarker(visionResult.content);
+        content = visionResult.content;
       }
-      const response: AiRuntimeResponse = { ok: true, models: [config.model], model: config.model };
+      const response: AiRuntimeResponse = { ok: true, content, models: [config.model], model: config.model };
       console.info('[PDFPal AI 连接测试] 后台返回页面', response);
       return response;
     }
@@ -229,5 +236,3 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
     };
   }
 }
-
-

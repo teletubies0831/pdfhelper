@@ -106,6 +106,7 @@ export const saveDeepSeekSettingsButton = requiredElement<HTMLButtonElement>(
 );
 
 export const testDeepSeekButton = requiredElement<HTMLButtonElement>("test-deepseek");
+export const testSelectedModelsButton = requiredElement<HTMLButtonElement>("test-selected-models");
 
 export const visionSettingsStatus = requiredElement<HTMLElement>(
   "vision-settings-status",
@@ -204,6 +205,14 @@ export const settingsConnectionModelCount = requiredElement<HTMLElement>(
 
 export const settingsConnectionModelResults = requiredElement<HTMLElement>(
   "settings-connection-model-results",
+);
+
+export const settingsAvailableModelCount = requiredElement<HTMLElement>(
+  "settings-available-model-count",
+);
+
+export const settingsAvailableModelResults = requiredElement<HTMLElement>(
+  "settings-available-model-results",
 );
 
 export const settingsConnectionManualModelInput = requiredElement<HTMLInputElement>(

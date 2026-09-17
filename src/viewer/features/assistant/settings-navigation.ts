@@ -8,6 +8,8 @@ import {
   type AiProviderId,
   type AiTaskRouteId,
 } from '../../../modules/ai/public';
+import { clearConnectionTestResults } from './connection-test-preferences';
+import { addAvailableModel, clearAvailableModels, hasSelectedAvailableModels } from './connection-model-selection';
 import {
   aiProviderSelect,
   deepSeekApiKeyInput,
@@ -34,6 +36,7 @@ import {
   settingsPrimaryPanels,
   settingsPrimaryTabButtons,
   testDeepSeekButton,
+  testSelectedModelsButton,
   testVisionAiButton,
   translationModelSelect,
   visionRouteSummary,
@@ -106,7 +109,9 @@ export function showSettingsStatus(message: string, kind: SettingsStatusKind): v
 
 export function cancelSettingsConnectionActivity(): void {
   delete testDeepSeekButton.dataset.testRunId;
+  delete testSelectedModelsButton.dataset.testRunId;
   testDeepSeekButton.disabled = false;
+  testSelectedModelsButton.disabled = !hasSelectedAvailableModels();
   saveDeepSeekSettingsButton.disabled = false;
   clearSettingsStatus();
 }
@@ -263,7 +268,8 @@ export interface SettingsConnectionVerifiedModel {
 function renderConnectionModelResults(): void {
   const models = readDraftModels();
   settingsConnectionModelResults.replaceChildren();
-  settingsConnectionModelCount.textContent = `${models.length} 个`;
+  const verifiedCount = models.filter((model) => verifiedConnectionModelCapabilities[model]?.length).length;
+  settingsConnectionModelCount.textContent = `${verifiedCount} 个`;
   if (models.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'settings-model-results-empty';
@@ -301,14 +307,29 @@ function renderConnectionModelResults(): void {
 }
 
 export function queueSettingsConnectionModelForValidation(modelValue: string): boolean {
-  const model = modelValue.trim();
-  if (!model) return false;
-  const models = readDraftModels();
-  if (!models.includes(model)) models.push(model);
-  settingsConnectionModelsInput.value = models.join('\n');
+  cancelSettingsConnectionActivity();
+  clearConnectionTestResults();
+  return addAvailableModel(modelValue, readSettingsConnectionVerifiedModels());
+}
+
+export function readSettingsConnectionVerifiedModels(): SettingsConnectionVerifiedModel[] {
+  return readDraftModels().flatMap((model) => {
+    const capabilities = verifiedConnectionModelCapabilities[model] ?? [];
+    return capabilities.length ? [{ model, capabilities: [...capabilities] }] : [];
+  });
+}
+
+export function resetSettingsConnectionVerification(): void {
   verifiedConnectionDraft = null;
+  verifiedConnectionModelCapabilities = {};
   renderConnectionModelResults();
-  return true;
+}
+
+export function invalidateSettingsConnectionTest(): void {
+  cancelSettingsConnectionActivity();
+  clearConnectionTestResults();
+  clearAvailableModels();
+  resetSettingsConnectionVerification();
 }
 
 export function markSettingsConnectionModelsVerified(
@@ -471,6 +492,8 @@ export function updateSettingsConnectionSummaries(): void {
 }
 
 function clearConnectionEditor(): void {
+  clearConnectionTestResults();
+  clearAvailableModels();
   activeConnectionId = null;
   verifiedConnectionDraft = null;
   verifiedConnectionModelCapabilities = {};
@@ -489,6 +512,7 @@ function clearConnectionEditor(): void {
 function updateSettingsFooter(): void {
   const editingConnection = activeSettingsTab === 'models' && (addingConnection || activeConnectionId);
   testDeepSeekButton.hidden = !editingConnection;
+  testSelectedModelsButton.hidden = !editingConnection;
   testVisionAiButton.hidden = true;
   saveDeepSeekSettingsButton.textContent = editingConnection ? '保存连接' : '保存配置';
 

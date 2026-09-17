@@ -18,8 +18,10 @@ export function getProviderErrorMessage(payload: unknown, fallback: string): str
   const nestedError = record.error;
   if (typeof nestedError === 'string' && nestedError.trim()) return nestedError.trim();
   if (nestedError && typeof nestedError === 'object') {
-    const nestedMessage = (nestedError as { message?: unknown }).message;
-    if (typeof nestedMessage === 'string' && nestedMessage.trim()) return nestedMessage.trim();
+    const nested = nestedError as { message?: unknown; type?: unknown; code?: unknown };
+    const code = typeof nested.code === 'string' ? nested.code : nested.type;
+    const prefix = typeof code === 'string' && code.trim() ? `${code.trim()}: ` : '';
+    if (typeof nested.message === 'string' && nested.message.trim()) return prefix + nested.message.trim();
   }
   if (typeof record.message === 'string' && record.message.trim()) {
     const code = typeof record.code === 'string' && record.code.trim() ? record.code.trim() : '';

@@ -1,5 +1,6 @@
 import { normalizeAiBaseUrl, type AiConfig, type AiNativeToolCall, type AiStreamCompletionInfo } from '../contracts';
 import { AiProviderRequestError, getProviderErrorMessage } from './provider-error';
+import { getMoonshotReasoningPayload } from './moonshot-reasoning';
 import type { AiProviderAdapter, ProviderChatResult, ProviderMessage, ProviderStreamDelta } from './provider';
 
 const PROVIDER_REQUEST_TIMEOUT_MS = 120_000;
@@ -36,7 +37,7 @@ async function fetchProviderJson(
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(getProviderErrorMessage(payload, `AI 请求失败：HTTP ${response.status}`));
+      throw new Error(`HTTP ${response.status}：${getProviderErrorMessage(payload, 'AI 请求失败')}`);
     }
     return payload;
   } catch (error) {
@@ -129,6 +130,8 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
     }
 
     const enabled = config.reasoning === 'enabled';
+    const moonshot = getMoonshotReasoningPayload(config.baseUrl, config.model, enabled);
+    if (moonshot) return moonshot;
     if (isMiniMaxM3Model(config.model)) {
       return { thinking: { type: enabled ? 'adaptive' : 'disabled' } };
     }
@@ -168,11 +171,17 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
         max_tokens: maxOutputTokens,
       }),
     }) as {
-      choices?: Array<{ message?: { content?: unknown } }>;
+      choices?: Array<{ finish_reason?: string; message?: { content?: unknown; reasoning_content?: unknown } }>;
       model?: unknown;
     };
     const content = payload.choices?.[0]?.message?.content;
     if (typeof content !== 'string' || !content.trim()) {
+      if (payload.choices?.[0]?.finish_reason === 'length') {
+        throw new Error('模型已达到输出 Token 上限，但尚未生成正文。连接测试可在“设置 → 常规”提高测试输出上限后重试。');
+      }
+      if (payload.choices?.[0]?.message?.reasoning_content) {
+        throw new Error('模型只返回了思考过程，没有返回正文；可提高输出 Token 上限后重试。');
+      }
       throw new Error('AI 模型没有返回有效回答。');
     }
     return {

@@ -1,4 +1,6 @@
 export * from './contracts';
+export * from './domain/connection-test-settings';
+export * from './providers/moonshot-reasoning';
 export * from './mcp/agent-tool-catalog';
 export * from './mcp/agent-tool-server';
 export * from './providers/provider';

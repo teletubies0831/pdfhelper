@@ -1,4 +1,6 @@
 import {
+  getMoonshotReasoningPayload,
+  getProviderErrorMessage,
   type AiDocumentContext,
   type AiStreamCompletionInfo,
   type AiStreamErrorInfo,
@@ -7,13 +9,7 @@ import {
 } from "../../modules/ai/public";
 
 export function getProviderError(payload: unknown, fallback: string): string {
-  if (!payload || typeof payload !== "object") return fallback;
-  const error = (payload as { error?: unknown }).error;
-  if (!error || typeof error !== "object") return fallback;
-  const message = (error as { message?: unknown }).message;
-  return typeof message === "string" && message.trim()
-    ? message.trim()
-    : fallback;
+  return getProviderErrorMessage(payload, fallback);
 }
 
 export type ProviderMessage = {
@@ -80,6 +76,7 @@ export async function requestVisionCompletion(
   prompt: string,
   imageDataUrl: string,
   context?: AiDocumentContext,
+  testMaxOutputTokens?: number,
 ): Promise<ProviderChatResult> {
   if (
     config.mode !== "separate" ||
@@ -91,6 +88,7 @@ export async function requestVisionCompletion(
   }
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
+    signal: AbortSignal.timeout(120_000),
     headers: {
       Authorization: `Bearer ${config.apiKey}`,
       "Content-Type": "application/json",
@@ -122,16 +120,22 @@ export async function requestVisionCompletion(
         },
       ],
       stream: false,
-      max_tokens: 1600,
+      max_tokens: testMaxOutputTokens ?? 1600,
+      ...(testMaxOutputTokens ? getMoonshotReasoningPayload(config.baseUrl, config.model, false) : {}),
     }),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(
-      getProviderError(payload, `视觉模型请求失败：HTTP ${response.status}`),
+      `HTTP ${response.status}：${getProviderError(payload, '视觉模型请求失败')}`,
     );
   }
   const content = getVisionContent(payload);
-  if (!content) throw new Error("视觉模型没有返回有效内容。");
+  if (!content) {
+    if (payload?.choices?.[0]?.finish_reason === 'length') {
+      throw new Error('视觉模型已达到输出 Token 上限，尚未生成正文；可在“设置 → 常规”提高测试输出上限后重试。');
+    }
+    throw new Error("视觉模型没有返回有效内容。");
+  }
   return { content, model: config.model };
 }

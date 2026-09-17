@@ -135,6 +135,7 @@ export const AI_VISION_TEST_PROMPT = '请读取图片中央的验证码，只返
 export interface AiTestRequest {
   type: 'pdf-helper:ai-test';
   mode?: 'discover' | 'validate';
+  testSettings?: { maxOutputTokens: number; concurrency: number };
   config?: Pick<AiConfig, 'providerId' | 'apiKey' | 'baseUrl' | 'model'> & {
     capabilities?: Array<'text' | 'vision'>;
   };
@@ -182,6 +183,7 @@ export interface AiVisionRequest {
 export interface AiVisionTestRequest {
   type: 'pdf-helper:ai-vision-test';
   imageDataUrl?: string;
+  testSettings?: { maxOutputTokens: number; concurrency: number };
 }
 
 export interface AiStreamStartMessage {

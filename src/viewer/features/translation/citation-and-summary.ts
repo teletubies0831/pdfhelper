@@ -16,7 +16,8 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 
 import { mergeSelectionRects } from "../../shared-ui/geometry/merge-selection-rects";
-import { citationReturnButton, citationReturnPosition, outlineList, summaryPositionElement, summaryRangeElement, summaryResultElement, summarySourceElement, viewerElement } from "../../app/viewer-elements";
+import { centerClientRegionsInScrollContainer } from "../../shared-ui/navigation/center-scroll-region";
+import { citationReturnButton, citationReturnPosition, outlineList, summaryPositionElement, summaryRangeElement, summaryResultElement, summarySourceElement, viewerContainer, viewerElement } from "../../app/viewer-elements";
 import { activeSummaryScope, lastSummaryPoints, navigateToPdfPageWhenVisible, normalizeCopiedText } from "../../core/pdf-reader/public";
 import { createPdfCitationPattern } from "../../shared-ui/markdown/markdown-renderer";
 
@@ -560,13 +561,26 @@ export async function jumpToPdfCitations(
   const firstLocatedCitation = locatedCitations[0];
   if (!firstLocatedCitation) return;
 
-  const target = firstLocatedCitation.range.startContainer.parentElement;
-  target?.scrollIntoView({ block: "center", inline: "nearest" });
-  await new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
+  const ranges = locatedCitations.map(({ range }) => range);
+  const centerCitationRegion = (): void => {
+    centerClientRegionsInScrollContainer(
+      viewerContainer,
+      ranges.flatMap((range) => Array.from(range.getClientRects())),
+    );
+  };
+  centerCitationRegion();
+  // PDF.js can finish a pending page-layout update after the text layer first
+  // becomes available. Recalculate from live rectangles after two frames so
+  // that the complete citation region, rather than its first text span, stays
+  // centered in the final viewport.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      centerCitationRegion();
+      resolve();
+    });
+  }));
   highlightCitationRanges(
     textLayer,
-    locatedCitations.map(({ range }) => range),
+    ranges,
   );
 }

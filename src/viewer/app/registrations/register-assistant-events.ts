@@ -33,6 +33,7 @@ import {
   clearChatDialogConfirmButton,
   closeDeepSeekSettingsButton,
   deepSeekBaseUrlInput,
+  deepSeekApiKeyInput,
   deepSeekThinkingSelect,
   focusModeButton,
   knowledgeEmbeddingModelSelect,
@@ -42,6 +43,7 @@ import {
   saveDeepSeekSettingsButton,
   settingsModalBackdrop,
   testDeepSeekButton,
+  testSelectedModelsButton,
   testVisionAiButton,
 } from "../viewer-elements";
 import {
@@ -80,6 +82,7 @@ import {
   closeChatImagePreview,
   createLongTermMemory,
   deleteLongTermMemory,
+  discoverDeepSeekModels,
   editLongTermMemory,
   filterLongTermMemoryList,
   getDocumentChatId,
@@ -87,6 +90,7 @@ import {
   initializeKnowledgeRetrievalSettings,
   isEditingSettingsConnection,
   isSettingsConnectionDraftVerified,
+  invalidateSettingsConnectionTest,
   openChatImagePreview,
   queueChatConversationPersistence,
   queueSettingsConnectionModelForValidation,
@@ -297,6 +301,7 @@ export function registerAssistantEvents(): void {
   }
 
   aiProviderSelect.addEventListener("change", () => {
+    invalidateSettingsConnectionTest();
     const providerId = aiProviderSelect.value as AiProviderId;
     const provider = AI_PROVIDERS.find((item) => item.id === providerId);
     if (provider && !provider.available) {
@@ -308,6 +313,9 @@ export function registerAssistantEvents(): void {
       deepSeekBaseUrlInput.value = provider.defaultBaseUrl;
     }
   });
+
+  deepSeekApiKeyInput.addEventListener('input', invalidateSettingsConnectionTest);
+  deepSeekBaseUrlInput.addEventListener('input', invalidateSettingsConnectionTest);
 
   closeDeepSeekSettingsButton.addEventListener("click", () => {
     cancelSettingsConnectionActivity();
@@ -323,8 +331,8 @@ export function registerAssistantEvents(): void {
   saveDeepSeekSettingsButton.addEventListener("click", async () => {
     if (isEditingSettingsConnection()) {
       if (!isSettingsConnectionDraftVerified()) {
-        const tested = await testDeepSeekConnection();
-        if (!tested) return;
+        showSettingsStatus('请先获取模型列表，勾选需要的模型并完成测试。', 'error');
+        return;
       }
       const saved = await saveSettingsConnection();
       if (saved) await syncAiConfigsFromConnectionCatalog();
@@ -340,6 +348,10 @@ export function registerAssistantEvents(): void {
   });
 
   testDeepSeekButton.addEventListener("click", () => {
+    void discoverDeepSeekModels();
+  });
+
+  testSelectedModelsButton.addEventListener("click", () => {
     void testDeepSeekConnection();
   });
 
@@ -347,7 +359,7 @@ export function registerAssistantEvents(): void {
     const model = settingsConnectionManualModelInput.value.trim();
     if (!queueSettingsConnectionModelForValidation(model)) return;
     settingsConnectionManualModelInput.value = "";
-    showSettingsStatus(`已加入 ${model}，请点击“测试并获取模型”。`, "info");
+    showSettingsStatus(`已加入并选中 ${model}，请点击“测试选中模型”。`, "info");
   };
 
   settingsConnectionAddManualModelButton.addEventListener(

@@ -213,6 +213,15 @@
                   </div>
 
                   <div class="settings-compression-card">
+                    <div><strong>AI 连接测试</strong><small>用简短问答验证文本能力，显示模型的实际回答；视觉能力单独验证。</small></div>
+                    <div class="settings-compact-grid">
+                      <label class="settings-field"><span>测试最大输出 Token</span><input id="connection-test-max-output-tokens" type="number" min="256" max="65536" step="256" value="8192" /></label>
+                      <label class="settings-field"><span>同时测试的请求数</span><select id="connection-test-concurrency"><option value="1">1（推荐，减少限流）</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+                    </div>
+                    <small class="settings-memory-hint">输出上限包含思考和正文，不代表每次都会用满。测试会按供应商规则计费；点击“保存配置”保存偏好。</small>
+                  </div>
+
+                  <div class="settings-compression-card">
                     <div><strong>自动压缩较早对话</strong><small>保留最近交流，减少上下文占用。</small></div>
                     <span class="settings-toggle is-on" aria-label="自动压缩已启用"></span>
                     <div class="settings-compact-grid">
@@ -360,22 +369,35 @@
                         <div class="settings-model-discovery-heading">
                           <div>
                             <strong id="settings-connection-model-heading">已验证模型</strong>
-                            <small>测试连接后自动获取，并分别验证文本与视觉能力。</small>
+                            <small>只有实际测试通过的模型才会保存在这里。</small>
                           </div>
                           <span id="settings-connection-model-count">0 个</span>
                         </div>
                         <div id="settings-connection-model-results" class="settings-model-results" aria-live="polite">
                           <div class="settings-model-results-empty">尚未测试连接</div>
                         </div>
+                      </section>
+                      <section class="settings-model-discovery" aria-labelledby="settings-available-model-heading">
+                        <div class="settings-model-discovery-heading">
+                          <div>
+                            <strong id="settings-available-model-heading">可测试模型</strong>
+                            <small>先获取模型列表，再勾选本次需要测试的模型。</small>
+                          </div>
+                          <span id="settings-available-model-count">0 个已选</span>
+                        </div>
+                        <div id="settings-available-model-results" class="settings-model-results" aria-live="polite">
+                          <div class="settings-model-results-empty">请先点击“获取模型列表”</div>
+                        </div>
                         <details class="settings-manual-model-fallback">
                           <summary>接口没有提供模型列表？</summary>
-                          <p>少数兼容接口不支持 /models，可手动加入 Model ID，再点击“测试并获取模型”。</p>
+                          <p>少数兼容接口不支持 /models，可手动加入 Model ID，再勾选测试。</p>
                           <div>
                             <input id="settings-connection-manual-model" type="text" autocomplete="off" spellcheck="false" placeholder="输入 Model ID" />
                             <button id="settings-connection-add-manual-model" type="button">加入待测试</button>
                           </div>
                         </details>
                       </section>
+                      <section id="connection-test-results" class="settings-model-discovery" aria-label="本次测试详情" hidden></section>
                       <button id="settings-connection-delete" class="settings-danger-button" type="button" hidden>删除这个连接</button>
                     </div>
                   </div>
@@ -409,7 +431,8 @@
               <div class="settings-footer">
                 <small id="settings-footer-note">密钥默认隐藏；连接测试位于编辑连接中。</small>
                 <div class="settings-footer-actions">
-                  <button id="test-deepseek" type="button" hidden>测试并获取模型</button>
+                  <button id="test-deepseek" type="button" hidden>获取模型列表</button>
+                  <button id="test-selected-models" type="button" hidden disabled>测试选中模型</button>
                   <button id="test-vision-ai" type="button" hidden>测试连接</button>
                   <button id="save-deepseek-settings" class="primary-button" type="button">保存配置</button>
                 </div>
