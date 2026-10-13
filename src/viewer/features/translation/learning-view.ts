@@ -20,6 +20,7 @@ import { applyTranslationEditButton, selectedSnippetElement, selectedSnippetMath
 import { currentEnglishLearningResult, currentEnglishLearningSourceSentence, normalizeCopiedText } from "../../core/pdf-reader/public";
 import { parseAiJson, renderChatMarkdown } from "../../shared-ui/markdown/markdown-renderer";
 import { prepareKnowledgeEditorMarkdown } from "../knowledge-base/public";
+import { placeTranslationActionsBeforeResult } from "./translation-action-layout";
 
 
 
@@ -212,14 +213,6 @@ export function renderLearningRichText(
 
 function getTranslationPrimaryActions(): HTMLElement | null {
   return document.querySelector<HTMLElement>("#translation-primary-actions");
-}
-
-function placeTranslationActionsBeforeResult(): void {
-  const actions = getTranslationPrimaryActions();
-  const resultSection = document.querySelector<HTMLElement>(
-    "#translation-result-section",
-  );
-  if (actions && resultSection) resultSection.before(actions);
 }
 
 

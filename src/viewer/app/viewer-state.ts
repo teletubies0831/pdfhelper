@@ -129,6 +129,10 @@ export const restoredHelperNotesBySignature = new Map<string, string>();
 
 export const restoredHelperNotesByStorageKey = new Map<string, string>();
 
+export const restoredHighlightTextBySignature = new Map<string, string>();
+
+export const restoredHighlightTextByStorageKey = new Map<string, string>();
+
 export let lastPointerDown: { value: {
   x: number;
   y: number;

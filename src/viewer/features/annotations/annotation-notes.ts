@@ -1,11 +1,11 @@
-import { AnnotationEditorType } from "pdfjs-dist";
-import { annotationActionBar, annotationTypeLabel, contextCleanCopyButton, contextColors, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteHighlightNoteButton, freeTextSizeControl, highlightColorInput, highlightContextActions, highlightNotePopover, highlightNoteQuote, highlightNoteText, highlightNoteTitle, selectionContextMenu, viewerElement } from "../../app/viewer-elements";
-import { annotationEditor, contextHighlightEditor, contextSelectionRanges, contextSelectionText, nativeAnnotationNotes, openHighlightNoteEditor, pdfDocument, restoredHelperNotesBySignature, SELECT_TOOL_EDITOR_BACKING_MODE, selectedAnnotationEditor, selectedHighlightEditor } from "../../app/viewer-state";
+import { annotationActionBar, annotationTypeLabel, contextCleanCopyButton, contextColors, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteHighlightNoteButton, freeTextSizeControl, highlightContextActions, highlightNotePopover, highlightNoteQuote, highlightNoteText, highlightNoteTitle, selectionContextMenu, viewerElement } from "../../app/viewer-elements";
+import { annotationEditor, contextHighlightEditor, contextSelectionText, nativeAnnotationNotes, openHighlightNoteEditor, pdfDocument, selectedAnnotationEditor, selectedHighlightEditor } from "../../app/viewer-state";
 import { setStatus } from "../recent-files/public";
 import { forgetHelperNote, getAnnotationGeometrySignature, getEditorSerializedValue, getEditorStorageKeys, getRememberedHelperNote, isFreeTextEditor, isHighlightEditor, isInkEditor, isRecord, isStoredHighlightValue, markUnsavedChanges, normalizeStorageKey, rememberHelperNote } from "./annotation-persistence";
-import { getViewerSelectionRawText } from "../../core/pdf-reader/public";
-import { findAnnotationEditor, findHighlightNoteAnchor, setHighlightColor, syncFreeTextControls } from './annotation-editor';
-import { setEditorMode } from './annotation-tool-mode';
+import { findAnnotationEditor, findHighlightNoteAnchor, syncFreeTextControls } from './annotation-editor';
+import { getHighlightEditorText, getStoredHighlightText, setHighlightEditorText } from "./annotation-highlight-content";
+import { getRememberedHighlightText } from "./annotation-highlight-index";
+import { extractCommentText, getAnnotationNoteFromValue } from "./annotation-comment-content";
 
 export function clearDomSelection() {
   window.getSelection()?.removeAllRanges();
@@ -33,48 +33,44 @@ export function findHighlightEditor(target: EventTarget | null): any | null {
 
 
 export function getHighlightText(editor: any): string {
-  return editor?.div?.getAttribute("aria-label")?.trim() || "";
+  const directText = getHighlightEditorText(editor);
+  if (directText) return directText;
+
+  const signature = getAnnotationGeometrySignature(
+    getEditorSerializedValue(editor),
+  );
+  const rememberedText = getRememberedHighlightText(
+    getEditorStorageKeys(editor),
+    signature,
+  );
+  return rememberedText
+    ? setHighlightEditorText(editor, rememberedText)
+    : "";
+}
+
+
+
+export function getStoredOrLiveHighlightText(
+  key: string,
+  value: Record<string, unknown>,
+): string {
+  const storedText = getStoredHighlightText(value);
+  if (storedText) return storedText;
+
+  const liveEditor = findLiveEditorForSerializedEntry(key, value);
+  return liveEditor ? getHighlightText(liveEditor) : "";
 }
 
 
 
 export function getEditorAnnotationId(editor: any): string {
   return (
-    (typeof editor?.id === "string" && editor.id) ||
-    (typeof editor?.uid === "string" && editor.uid) ||
     (typeof editor?.annotationElementId === "string" &&
       editor.annotationElementId) ||
     (typeof editor?._initialData?.annotationElementId === "string" &&
       editor._initialData.annotationElementId) ||
-    (typeof editor?._initialData?.id === "string" && editor._initialData.id) ||
-    ""
-  );
-}
-
-
-
-export function extractCommentText(value: any): string {
-  if (!value) return "";
-  if (typeof value === "string") return value.trim();
-  if (typeof value.text === "string") return value.text.trim();
-  if (typeof value.contents === "string") return value.contents.trim();
-  if (typeof value.str === "string") return value.str.trim();
-  if (typeof value.richText?.str === "string") return value.richText.str.trim();
-  if (typeof value.contentsObj?.str === "string")
-    return value.contentsObj.str.trim();
-  return "";
-}
-
-
-
-export function getAnnotationNoteFromValue(value: unknown): string {
-  if (!isRecord(value)) return "";
-  return (
-    extractCommentText(value.pdfHelperNote) ||
-    extractCommentText(value.comment) ||
-    extractCommentText(value.popup) ||
-    extractCommentText(value.contentsObj) ||
-    extractCommentText(value.richText) ||
+    (typeof editor?._initialData?.id === "string" &&
+      !/^pdfjs_internal_editor_/.test(editor._initialData.id) && editor._initialData.id) ||
     ""
   );
 }
@@ -94,12 +90,12 @@ export function findLiveEditorForSerializedEntry(
   for (const editor of annotationEditor.value.getEditors(pageIndex)) {
     if (isStoredHighlightValue(value) && !isHighlightEditor(editor)) continue;
 
-    if (getEditorStorageKeys(editor).includes(normalizedKey)) return editor;
-
     const editorSignature = getAnnotationGeometrySignature(
       getEditorSerializedValue(editor),
     );
     if (signature && editorSignature === signature) return editor;
+    if (signature && editorSignature) continue;
+    if (getEditorStorageKeys(editor).includes(normalizedKey)) return editor;
   }
 
   return null;
@@ -111,6 +107,8 @@ export function getStoredOrLiveAnnotationNote(
   key: string,
   value: Record<string, unknown>,
 ): string {
+  if (typeof value.pdfHelperNote === "string") return value.pdfHelperNote.trim();
+  if (isRecord(value.comment) && value.comment.deleted === true) return "";
   const storedNote = getAnnotationNoteFromValue(value);
   if (storedNote) return storedNote;
 
@@ -123,6 +121,12 @@ export function getStoredOrLiveAnnotationNote(
 
 
 export function getHighlightNote(editor: any): string {
+  if (typeof editor?.pdfHelperNote === "string") return editor.pdfHelperNote.trim();
+  if (typeof editor?._pdfHelperNote === "string") return editor._pdfHelperNote.trim();
+  if (editor?.comment?.deleted === true) return "";
+  if (typeof editor?._initialData?.pdfHelperNote === "string" && !extractCommentText(editor?.comment)) {
+    return editor._initialData.pdfHelperNote.trim();
+  }
   const annotationId = getEditorAnnotationId(editor);
   const geometrySignature = getAnnotationGeometrySignature(
     getEditorSerializedValue(editor),
@@ -139,9 +143,6 @@ export function getHighlightNote(editor: any): string {
     extractCommentText(editor?.data?.pdfHelperNote) ||
     extractCommentText(editor?.data?.contentsObj) ||
     getRememberedHelperNote(storageKeys, geometrySignature) ||
-    (geometrySignature
-      ? restoredHelperNotesBySignature.get(geometrySignature)?.trim()
-      : "") ||
     (annotationId ? nativeAnnotationNotes.get(annotationId)?.trim() : "") ||
     "";
 
@@ -468,16 +469,18 @@ export function toggleHighlightNote(editor: any) {
 
 
 export function saveHighlightNote() {
-  if (!selectedHighlightEditor.value) return;
+  // Selection can change while the popover is open. Save to its owner.
+  const editor = openHighlightNoteEditor.value;
+  if (!editor || highlightNotePopover.hidden) return;
   const text = highlightNoteText.value.trim();
-  selectedHighlightEditor.value.comment = text || null;
-  selectedHighlightEditor.value.pdfHelperNote = text || "";
-  selectedHighlightEditor.value._pdfHelperNote = text || "";
-  const annotationId = getEditorAnnotationId(selectedHighlightEditor.value);
+  editor.comment = text || null;
+  editor.pdfHelperNote = text;
+  editor._pdfHelperNote = text;
+  const annotationId = getEditorAnnotationId(editor);
   const signature = getAnnotationGeometrySignature(
-    getEditorSerializedValue(selectedHighlightEditor.value),
+    getEditorSerializedValue(editor),
   );
-  const storageKeys = getEditorStorageKeys(selectedHighlightEditor.value);
+  const storageKeys = getEditorStorageKeys(editor);
   if (annotationId) {
     if (text) {
       nativeAnnotationNotes.set(annotationId, text);
@@ -496,8 +499,8 @@ export function saveHighlightNote() {
     if (text) rememberHelperNote(undefined, signature, text);
     else forgetHelperNote(undefined, signature);
   }
-  selectedHighlightEditor.value.addToAnnotationStorage?.();
-  updateHighlightNoteIndicator(selectedHighlightEditor.value);
+  editor.addToAnnotationStorage?.();
+  updateHighlightNoteIndicator(editor);
   markUnsavedChanges();
   setStatus(text ? "高亮笔记已保存。" : "高亮笔记已删除。");
   hideHighlightNote();
@@ -531,35 +534,6 @@ export function deleteSelectedAnnotation() {
 
 export function deleteSelectedHighlight() {
   deleteSelectedAnnotation();
-}
-
-
-
-export function saveContextSelection() {
-  const selection = window.getSelection();
-  contextSelectionRanges.value = [];
-  contextSelectionText.value = "";
-  if (
-    !selection ||
-    selection.isCollapsed ||
-    !viewerElement.contains(selection.anchorNode)
-  )
-    return;
-
-  contextSelectionText.value = getViewerSelectionRawText();
-  for (let index = 0; index < selection.rangeCount; index += 1) {
-    contextSelectionRanges.value.push(selection.getRangeAt(index).cloneRange());
-  }
-}
-
-
-
-export function restoreContextSelection() {
-  const selection = window.getSelection();
-  if (!selection || contextSelectionRanges.value.length === 0) return false;
-  selection.removeAllRanges();
-  for (const range of contextSelectionRanges.value) selection.addRange(range);
-  return true;
 }
 
 
@@ -600,77 +574,3 @@ export function showSelectionContextMenuAt(
 }
 
 
-
-export async function createQuickHighlight(color: string): Promise<any | null> {
-  if (!annotationEditor.value || !restoreContextSelection()) return null;
-  const selection = window.getSelection();
-  if (!selection || selection.isCollapsed) return null;
-
-  const anchorNode = selection.anchorNode;
-  const anchorElement =
-    anchorNode?.nodeType === Node.TEXT_NODE
-      ? anchorNode.parentElement
-      : (anchorNode as Element | null);
-  const textLayer = anchorElement?.closest<HTMLElement>(".textLayer");
-  const pageElement = textLayer?.closest<HTMLElement>(".pdfViewer .page");
-  const pageNumber = Number(pageElement?.dataset.pageNumber);
-  if (!textLayer || !Number.isInteger(pageNumber) || pageNumber < 1)
-    return null;
-
-  const pageIndex = pageNumber - 1;
-  const editorsBefore = new Set(annotationEditor.value.getEditors(pageIndex));
-  annotationEditor.value.unselectAll();
-  selectedAnnotationEditor.value = null;
-  selectedHighlightEditor.value = null;
-  hideAnnotationActionBar();
-  hideSelectionContextMenu();
-
-  try {
-    await annotationEditor.value.updateMode(
-      AnnotationEditorType.HIGHLIGHT,
-      null,
-      true,
-    );
-    if (!restoreContextSelection())
-      throw new Error("文字选区已经失效，请重新选择。");
-    setHighlightColor(color);
-    annotationEditor.value.highlightSelection("context_menu");
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error), true);
-  } finally {
-    await annotationEditor.value.updateMode(
-      SELECT_TOOL_EDITOR_BACKING_MODE,
-      null,
-      true,
-    );
-    setEditorMode(AnnotationEditorType.NONE);
-    clearDomSelection();
-  }
-
-  const createdEditor = [...annotationEditor.value.getEditors(pageIndex)].find(
-    (editor) => !editorsBefore.has(editor) && isHighlightEditor(editor),
-  );
-
-  if (!createdEditor) {
-    setStatus("快速高亮创建失败，请重新选择文字后再试。", true);
-    return null;
-  }
-
-  setStatus("高亮已创建，当前仍为选择模式。");
-  markUnsavedChanges();
-  return createdEditor;
-}
-
-
-
-export async function highlightCurrentSelectionFromToolbar() {
-  saveContextSelection();
-
-  if (!contextSelectionText.value.trim()) {
-    setEditorMode(AnnotationEditorType.NONE);
-    setStatus("请先用鼠标选中文字，再点击“高亮”。", true);
-    return;
-  }
-
-  await createQuickHighlight(highlightColorInput.value);
-}

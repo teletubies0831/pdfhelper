@@ -101,6 +101,7 @@ import {
   highlightCurrentSelectionFromToolbar,
   initializeHighlightColorHistory,
   installHighlightNoteTextEditingProtection,
+  installHighlightNotePointerHover,
   isEditableOrControl,
   isInkMode,
   isInkEraserMode,
@@ -153,6 +154,8 @@ export function registerReaderEvents(): void {
     pointerHighlightCache.set(event, highlight);
     return highlight;
   };
+
+  installHighlightNotePointerHover();
 
   recentFilesButton.addEventListener("click", () => {
     showRecentFilesDialog();
@@ -275,12 +278,12 @@ export function registerReaderEvents(): void {
       if (button.dataset.editorMode === "highlight") saveContextSelection();
     });
 
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
       setInkEraserMode(false);
       const mode = button.dataset.editorMode;
       if (mode === "select") setEditorMode(AnnotationEditorType.NONE);
       if (mode === "highlight") {
-        void highlightCurrentSelectionFromToolbar();
+        void highlightCurrentSelectionFromToolbar(event.detail > 0);
         return;
       }
       if (mode === "ink") {

@@ -88,14 +88,14 @@
   <button id="add-current-pdf-to-library" class="toolbar-pill toolbar-nav-button knowledge-add-current" type="button" disabled><span>添加到知识库</span></button>
   <button id="save-current-pdf" class="toolbar-pill toolbar-nav-button annotation-save-current" type="button" title="当前 PDF 已保存" disabled><img class="toolbar-action-icon annotation-save-icon" src="/resources/saved.svg" alt="" /><span>已保存</span></button>
 
-  <div class="toolbar-group ai-tools expanded-toolbar-group" aria-label="AI 工具">
-    <button id="ai-panel-toggle" class="toolbar-pill toolbar-nav-button ai-entry active" type="button">
+  <nav class="toolbar-group ai-tools expanded-toolbar-group workspace-tabs" aria-label="工作区">
+    <button id="ai-panel-toggle" class="toolbar-pill toolbar-nav-button ai-entry active" type="button" aria-current="page">
       <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pdf" /></svg>
       PDF 阅读
     </button>
     <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>知识库</button>
     <button id="vocabulary-library-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-vocabulary" /></svg>单词库</button>
-  </div>
+  </nav>
 
   <button id="assistant-panel-toggle" class="toolbar-pill toolbar-nav-button assistant-entry active" type="button" title="显示或隐藏右侧 AI 助手">
     <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>

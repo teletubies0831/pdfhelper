@@ -26,9 +26,13 @@ const contracts = evaluate(await compile('src/modules/ai/contracts.ts'));
 const preferences = evaluate(await compile('src/modules/ai/domain/connection-test-settings.ts'));
 const moonshot = evaluate(await compile('src/modules/ai/providers/moonshot-reasoning.ts'));
 const errors = evaluate(await compile('src/modules/ai/providers/provider-error.ts'));
+const rateLimit = evaluate(await compile('src/modules/ai/providers/provider-rate-limit.ts'), { '../contracts': contracts, './provider-error': errors });
+let rateLimitTime = 0;
+const requestWithRateLimit = rateLimit.createRateLimitedRequester({ now: () => rateLimitTime, wait: async ms => { rateLimitTime += ms; } });
 const ai = { ...contracts, ...preferences, ...moonshot, ...errors };
 const { DeepSeekProviderAdapter } = evaluate(await compile('src/modules/ai/providers/deepseek-provider.ts'), {
   '../contracts': contracts, './provider-error': errors, './moonshot-reasoning': moonshot,
+  './provider-rate-limit': { ...rateLimit, requestWithRateLimit },
 });
 const vision = evaluate(await compile('src/background/ai/vision-service.ts'), { '../../modules/ai/public': ai });
 const adapter = new DeepSeekProviderAdapter('openai-compatible');

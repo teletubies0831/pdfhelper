@@ -8,6 +8,14 @@
   padding: 10px;
 }
 
+.vocabulary-pagination {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+}
+
 .vocabulary-library-page[hidden] {
   display: none;
 }

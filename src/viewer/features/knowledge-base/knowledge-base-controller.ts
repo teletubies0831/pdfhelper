@@ -260,7 +260,7 @@ function renderCorpusDocuments(
         </select></label>
       </div>
       <div class="knowledge-pdf-actions">
-        <button type="button" class="knowledge-ai-intro-button" data-introduce-document="${escapeCorpusHtml(item.documentId)}" ${item.overviewStatus === "generating" ? "disabled" : ""}>${overviewButtonText}</button>
+        <button type="button" class="knowledge-ai-intro-button" data-introduce-document="${escapeCorpusHtml(item.documentId)}">${overviewButtonText}</button>
         <button type="button" class="danger-button" data-remove-document="${escapeCorpusHtml(item.documentId)}">移出知识库</button>
       </div>
     </article>`;

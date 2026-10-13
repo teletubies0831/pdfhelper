@@ -1,5 +1,6 @@
 import type { AiConfig } from "../../modules/ai/public";
 import type { AiProviderAdapter } from "./provider-runtime";
+import { requestOverviewCompletion } from "./overview-completion";
 
 interface OpenAlexWork {
   id?: unknown;
@@ -62,11 +63,14 @@ function mapWork(value: OpenAlexWork): RelatedWork | null {
   };
 }
 
-async function searchOpenAlex(title: string): Promise<RelatedWork[]> {
+async function searchOpenAlex(title: string, signal: AbortSignal): Promise<RelatedWork[]> {
   const url = new URL("https://api.openalex.org/works");
   url.searchParams.set("search", title);
   url.searchParams.set("per-page", "10");
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+  });
   if (!response.ok) throw new Error(`OpenAlex 检索失败：HTTP ${response.status}`);
   const payload = await response.json() as { results?: OpenAlexWork[] };
   const currentTitle = normalizeTitle(title);
@@ -103,9 +107,11 @@ export async function appendRelatedLiterature(
   ].join("\n");
 
   try {
-    const works = await searchOpenAlex(metadata.title);
+    // Optional enrichment must not hold an already completed overview indefinitely.
+    const signal = AbortSignal.timeout(30_000);
+    const works = await searchOpenAlex(metadata.title, signal);
     if (!works.length) return `${overviewMarkdown.trim()}\n\n${unavailableSection}`;
-    const result = await adapter.chat(config, [{
+    const result = await requestOverviewCompletion(adapter, config, [{
       role: "system",
       content: [
         "你负责为一篇论文的 PDF 概览补充相关论文。",
@@ -124,7 +130,7 @@ export async function appendRelatedLiterature(
         "OpenAlex 候选论文：",
         JSON.stringify(works),
       ].join("\n\n"),
-    }], 1_300);
+    }], signal);
     const section = result.content.trim();
     if (!/^##\s+相关论文/m.test(section)) {
       return `${overviewMarkdown.trim()}\n\n${unavailableSection}`;

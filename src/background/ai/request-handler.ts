@@ -9,6 +9,7 @@ import { getAiConfig, getVisionAiConfig } from './ai-config-repository';
 import { getProviderAdapter } from "./provider-runtime";
 import { buildConversation } from "./conversation-builder";
 import { generateDocumentOverview } from "./document-overview-service";
+import type { AiDocumentOverviewProgress } from "../../modules/ai/public";
 
 function assertVisionTestMarker(content: string): void {
   const normalizedContent = content.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -39,7 +40,7 @@ export function parseReadingModeDetection(content: string): {
   return { readingMode: match, rationale: cleaned.slice(0, 180) };
 }
 
-export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRuntimeResponse> {
+export async function handleAiRequest(message: AiRuntimeRequest, onOverviewProgress?: (progress: AiDocumentOverviewProgress) => Promise<void>): Promise<AiRuntimeResponse> {
   try {
     if (message.type === 'pdf-helper:ai-vision' || message.type === 'pdf-helper:ai-vision-test') {
       const visionConfig = await getVisionAiConfig();
@@ -182,7 +183,7 @@ export async function handleAiRequest(message: AiRuntimeRequest): Promise<AiRunt
     }
 
     if (message.type === 'pdf-helper:ai-generate-document-overview') {
-      const result = await generateDocumentOverview(adapter, config, message);
+      const result = await generateDocumentOverview(adapter, config, message, onOverviewProgress);
       return { ok: true, ...result };
     }
 

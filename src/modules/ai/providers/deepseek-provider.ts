@@ -1,11 +1,20 @@
 import { normalizeAiBaseUrl, type AiConfig, type AiNativeToolCall, type AiStreamCompletionInfo } from '../contracts';
 import { AiProviderRequestError, getProviderErrorMessage } from './provider-error';
 import { getMoonshotReasoningPayload } from './moonshot-reasoning';
+import { providerHttpError, requestWithRateLimit } from './provider-rate-limit';
 import type { AiProviderAdapter, ProviderChatResult, ProviderMessage, ProviderStreamDelta } from './provider';
 
 const PROVIDER_REQUEST_TIMEOUT_MS = 120_000;
 
 async function fetchProviderJson(
+  path: string,
+  config: AiConfig,
+  init?: RequestInit,
+): Promise<unknown> {
+  return requestWithRateLimit(config, init?.signal ?? undefined, () => fetchProviderJsonAttempt(path, config, init));
+}
+
+async function fetchProviderJsonAttempt(
   path: string,
   config: AiConfig,
   init?: RequestInit,
@@ -37,7 +46,7 @@ async function fetchProviderJson(
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}：${getProviderErrorMessage(payload, 'AI 请求失败')}`);
+      throw providerHttpError(response, payload);
     }
     return payload;
   } catch (error) {
@@ -160,9 +169,11 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
     config: AiConfig,
     messages: ProviderMessage[],
     maxOutputTokens: number,
+    signal?: AbortSignal,
   ): Promise<ProviderChatResult> {
     const payload = await fetchProviderJson('/chat/completions', config, {
       method: 'POST',
+      signal,
       body: JSON.stringify({
         model: config.model,
         messages,
@@ -175,18 +186,25 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
       model?: unknown;
     };
     const content = payload.choices?.[0]?.message?.content;
+    const finishReason = payload.choices?.[0]?.finish_reason;
+    const reasoning = payload.choices?.[0]?.message?.reasoning_content;
     if (typeof content !== 'string' || !content.trim()) {
-      if (payload.choices?.[0]?.finish_reason === 'length') {
-        throw new Error('模型已达到输出 Token 上限，但尚未生成正文。连接测试可在“设置 → 常规”提高测试输出上限后重试。');
-      }
-      if (payload.choices?.[0]?.message?.reasoning_content) {
-        throw new Error('模型只返回了思考过程，没有返回正文；可提高输出 Token 上限后重试。');
-      }
-      throw new Error('AI 模型没有返回有效回答。');
+      const message = finishReason === 'length'
+        ? '模型已达到输出 Token 上限，但尚未生成正文。请提高本次任务的输出额度，或使用支持关闭思考的模型。'
+        : reasoning ? '模型只返回了思考过程，没有返回正文。' : 'AI 模型没有返回有效回答。';
+      throw new AiProviderRequestError(message, {
+        name: 'EmptyModelResponseError', finishReason, contentLength: 0,
+        reasoningLength: typeof reasoning === 'string' ? reasoning.length : 0,
+      });
     }
     return {
       content: content.trim(),
       model: typeof payload.model === 'string' ? payload.model : config.model,
+      completion: {
+        finishReason, contentLength: content.length,
+        reasoningLength: typeof reasoning === 'string' ? reasoning.length : 0,
+        receivedDoneMarker: true, eventCount: 1,
+      },
     };
   }
 
@@ -206,7 +224,8 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
     const providerMessages = prepareProviderMessages(baseUrl, messages);
     let response: Response;
     try {
-      response = await fetch(`${baseUrl}/chat/completions`, {
+      response = await requestWithRateLimit(config, signal, async () => {
+        const attemptResponse = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${config.apiKey}`,
@@ -225,9 +244,16 @@ export class DeepSeekProviderAdapter implements AiProviderAdapter {
           max_tokens: maxOutputTokens,
         }),
         signal,
+        });
+        if (attemptResponse.status === 429) {
+          const payload = await attemptResponse.json().catch(() => null);
+          throw providerHttpError(attemptResponse, payload);
+        }
+        return attemptResponse;
       });
     } catch (error) {
       if (signal.aborted) throw error;
+      if (error instanceof AiProviderRequestError) throw error;
       throw new AiProviderRequestError(
         `无法连接 AI 供应商：${error instanceof Error ? error.message : String(error)}`,
         {

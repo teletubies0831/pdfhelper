@@ -28,6 +28,7 @@ import {
   streamAiResponse,
 } from "./ai/ai-runtime";
 import { getSafeErrorDetails } from "./ai/vision-service";
+import { withAiRequestLifetime } from "./ai/request-lifetime";
 
 async function configureActionBehavior(): Promise<void> {
   if (!browser.sidePanel?.setPanelBehavior) return;
@@ -65,7 +66,12 @@ export function bootstrapBackground(): void {
       return undefined;
     }
     if (!isAiRuntimeRequest(message)) return undefined;
-    return handleAiRequest(message);
+    return withAiRequestLifetime(() => handleAiRequest(message, async (progress) => {
+      if (message.type !== 'pdf-helper:ai-generate-document-overview') return;
+      await browser.runtime.sendMessage({
+        type: 'pdf-helper:ai-document-overview-progress', requestId: message.requestId, ...progress,
+      }).catch(() => undefined);
+    }));
   });
 
   browser.runtime.onConnect.addListener((port) => {
@@ -124,7 +130,7 @@ export function bootstrapBackground(): void {
       pendingToolResults = undefined;
       activeRequest = new AbortController();
       const { signal } = activeRequest;
-      void streamAiResponse(message, port, signal, waitForToolResults).catch(
+      void withAiRequestLifetime(() => streamAiResponse(message, port, signal, waitForToolResults)).catch(
         (error) => {
           if (signal.aborted) return;
           const details = getSafeErrorDetails(error);

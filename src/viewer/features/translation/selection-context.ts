@@ -18,6 +18,7 @@
 
 import { generateMoreExamplesButton, selectedSnippetElement, translationLearningTitleElement, translationResultElement } from "../../app/viewer-elements";
 import { normalizeCopiedText } from "../../core/pdf-reader/public";
+import { replaceTranslationResultText } from "./translation-action-layout";
 
 
 
@@ -33,7 +34,7 @@ import { normalizeCopiedText } from "../../core/pdf-reader/public";
 
 
 export function setTranslationState(message: string, isError = false): void {
-  translationResultElement.textContent = message;
+  replaceTranslationResultText(translationResultElement, message);
   translationResultElement.classList.toggle("error", isError);
 }
 

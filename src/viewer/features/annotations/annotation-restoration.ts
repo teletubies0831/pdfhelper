@@ -6,9 +6,11 @@ import { extractCommentText, getAnnotationNoteFromValue } from "./annotations";
 
 import { fromJsonSafeAnnotationValue } from "./embedded-helper-payload";
 import { getAnnotationGeometrySignature, isRecord, isStoredHighlightValue, normalizeStorageKey, sanitizeAnnotationStorageValue } from "./annotation-value-codec";
-import { getRememberedHelperNote, rememberHelperNote } from "./annotation-note-index";
+import { forgetHelperNote, getRememberedHelperNote, rememberHelperNote } from "./annotation-note-index";
 import { readEmbeddedHelperPayload } from "./embedded-helper-payload";
 import type { EmbeddedHelperAnnotations } from "./annotation-value-codec";
+import { getStoredHighlightText } from "./annotation-highlight-content";
+import { rememberHighlightText } from "./annotation-highlight-index";
 
 export function restoreHelperNoteIndexes(notes: unknown) {
   if (!Array.isArray(notes)) return;
@@ -51,8 +53,15 @@ export function restoreEmbeddedHelperPayload(
 
     const normalizedKey = normalizeStorageKey(String(key));
     const signature = getAnnotationGeometrySignature(value);
-    const note =
-      getAnnotationNoteFromValue(value) ||
+    const highlightText = getStoredHighlightText(value);
+    if (highlightText) {
+      rememberHighlightText(normalizedKey, signature, highlightText);
+    }
+    const hasExplicitNote = typeof value.pdfHelperNote === "string" ||
+      (isRecord(value.comment) && value.comment.deleted === true);
+    const note = hasExplicitNote
+      ? getAnnotationNoteFromValue(value)
+      : getAnnotationNoteFromValue(value) ||
       getRememberedHelperNote(
         [normalizedKey, `pdf-helper-${normalizedKey}`],
         signature,
@@ -64,6 +73,10 @@ export function restoreEmbeddedHelperPayload(
       }
 
       rememberHelperNote(normalizedKey, signature, note);
+    } else if (hasExplicitNote) {
+      forgetHelperNote(normalizedKey, signature);
+      value.pdfHelperNote = "";
+      if (isStoredHighlightValue(value)) value.comment = null;
     }
 
     const restoredValue = sanitizeAnnotationStorageValue(value);

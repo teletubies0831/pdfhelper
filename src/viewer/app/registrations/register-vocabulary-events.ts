@@ -84,6 +84,7 @@ export function registerVocabularyEvents(): void {
 
   vocabularyCardGridElement.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
+    if ((event.target as HTMLElement).closest("a, button, input, textarea, select")) return;
     const cardElement = (event.target as HTMLElement).closest<HTMLElement>(
       "[data-open-vocabulary-card]",
     );

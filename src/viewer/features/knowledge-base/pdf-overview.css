@@ -9,7 +9,17 @@
   box-shadow: 0 28px 90px rgb(15 35 68 / 28%);
   color: #243248;
 }
-.knowledge-overview-shell { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100%; }
+.knowledge-overview-shell { display: flex; flex-direction: column; height: 100%; }
+.knowledge-overview-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.knowledge-overview-body > .knowledge-overview-content { flex: 1; }
+.knowledge-overview-shell [hidden] { display: none !important; }
+.knowledge-overview-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 20px 28px; }
+.knowledge-overview-editor label { color: #30486e; font-size: 14px; font-weight: 600; }
+.knowledge-overview-editor textarea { flex: 1; min-height: 160px; width: 100%; box-sizing: border-box; padding: 16px; resize: none; border: 1px solid #b9cff2; border-radius: 10px; background: #fff; color: #243650; font: 14px/1.8 ui-monospace, monospace; }
+.knowledge-overview-editor textarea:focus { outline: 2px solid #3975d5; outline-offset: 2px; }
+.knowledge-overview-editor p { margin: 0; font-size: 12px; color: #75849a; }
+.knowledge-overview-shell > header, .knowledge-overview-shell > footer { flex-shrink: 0; }
+.knowledge-overview-shell > footer { flex-wrap: wrap; }
 .knowledge-overview-shell > header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; padding: 22px 28px 18px; border-bottom: 1px solid #e8edf5; }
 .knowledge-overview-shell > header span { color: #3975d5; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
 .knowledge-overview-shell > header h2 { margin: 3px 0 0; color: #15233d; font-size: 24px; }

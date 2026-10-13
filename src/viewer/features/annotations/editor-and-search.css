@@ -34,6 +34,22 @@
   pointer-events: none !important;
 }
 
+/* PDF.js opts a highlight's `.internal` surface back into pointer handling.
+   In Select mode that surface sits above the text layer and can break a drag
+   selection that starts on, or crosses, an existing highlight. Keep the
+   visual editor mounted, but let pointer input reach the text layer. Existing
+   highlights and their note marker remain clickable through the viewer's
+   coordinate hit-testing. */
+.pdfViewer.pdf-helper-select-mode
+  .annotationEditorLayer
+  .highlightEditor,
+.pdfViewer.pdf-helper-select-mode
+  .annotationEditorLayer
+  .highlightEditor
+  .internal {
+  pointer-events: none !important;
+}
+
 .pdfViewer.pdf-helper-select-mode
   .annotationEditorLayer
   :is(.freeTextEditor, .stampEditor, .signatureEditor) {
@@ -41,7 +57,7 @@
 }
 
 .pdfViewer.pdf-helper-select-mode .pdf-helper-note-indicator {
-  pointer-events: auto !important;
+  pointer-events: none !important;
 }
 
 /* Ink is a fixed page mark in PDFPal. It can only receive pointer events while
@@ -314,6 +330,7 @@
 }
 
 .pdf-helper-note-indicator:hover .pdf-helper-note-preview,
+.pdf-helper-note-indicator.is-coordinate-hovered .pdf-helper-note-preview,
 .pdf-helper-note-indicator:focus-visible .pdf-helper-note-preview {
   opacity: 1;
   transform: translateY(0);

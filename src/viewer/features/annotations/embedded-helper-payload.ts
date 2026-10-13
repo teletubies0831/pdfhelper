@@ -2,7 +2,7 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 import { annotationEditor, pdfDocument, sourceName } from "../../app/viewer-state";
 
-import { getHighlightNote, getStoredOrLiveAnnotationNote } from "./annotations";
+import { getHighlightNote, getStoredOrLiveAnnotationNote, getStoredOrLiveHighlightText } from "./annotations";
 
 import { getAnnotationGeometrySignature, getEditorSerializedValue, getEditorStorageKeys, getPdfFingerprint, isHighlightEditor, isRecord, isStoredHighlightValue, normalizeStorageKey, sanitizeAnnotationStorageValue, PDF_HELPER_ATTACHMENT_NAME, type EmbeddedHelperAnnotations, type EmbeddedHelperNote } from "./annotation-value-codec";
 
@@ -94,6 +94,13 @@ export function getSerializableAnnotationEntries(): Array<[string, unknown]> {
       const note = getStoredOrLiveAnnotationNote(normalizedKey, value);
       const output = { ...value };
 
+      if (isStoredHighlightValue(output)) {
+        const highlightText = getStoredOrLiveHighlightText(normalizedKey, value);
+        if (highlightText) output.pdfHelperHighlightText = highlightText;
+        output.pdfHelperNote = note;
+        output.comment = note || null;
+      }
+
       if (note) {
         output.pdfHelperNote = note;
         if (isStoredHighlightValue(output)) {
@@ -132,7 +139,7 @@ export function getSerializableHelperNotes(): EmbeddedHelperNote[] {
   const map = serializable?.map;
   if (map instanceof Map) {
     for (const [key, value] of map.entries()) {
-      if (!isRecord(value)) continue;
+      if (!isRecord(value) || value.deleted === true) continue;
       const note = getStoredOrLiveAnnotationNote(String(key), value);
       addNote(String(key), getAnnotationGeometrySignature(value), note);
     }

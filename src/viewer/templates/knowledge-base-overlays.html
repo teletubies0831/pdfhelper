@@ -29,7 +29,7 @@
   <div class="knowledge-overview-shell">
     <header>
       <div>
-        <span>AI 生成并保存</span>
+        <span>AI 生成 · 支持编辑</span>
         <h2 id="knowledge-overview-title">PDF 概览</h2>
         <p id="knowledge-overview-document-name"></p>
       </div>
@@ -39,9 +39,20 @@
       </div>
     </header>
     <div id="knowledge-overview-status" class="knowledge-overview-status" hidden></div>
-    <article id="knowledge-overview-content" class="knowledge-overview-content"></article>
+    <div class="knowledge-overview-body">
+      <article id="knowledge-overview-content" class="knowledge-overview-content"></article>
+      <div id="knowledge-overview-editor" class="knowledge-overview-editor" hidden>
+        <label for="knowledge-overview-markdown">编辑概览内容（Markdown）</label>
+        <textarea id="knowledge-overview-markdown" spellcheck="false" placeholder="在这里补充或修改 PDF 概览…"></textarea>
+        <p>支持标题、列表和表格。预览确认后点击“保存修改”。</p>
+      </div>
+    </div>
     <footer>
       <button id="knowledge-overview-regenerate" type="button">重新生成</button>
+      <button id="knowledge-overview-edit" type="button">编辑内容</button>
+      <button id="knowledge-overview-preview" type="button" hidden>预览排版</button>
+      <button id="knowledge-overview-cancel-edit" type="button" hidden>取消编辑</button>
+      <button id="knowledge-overview-save" class="primary-button" type="button" hidden>保存修改</button>
       <button id="knowledge-overview-done" class="primary-button" type="button">完成</button>
     </footer>
   </div>

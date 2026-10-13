@@ -157,6 +157,12 @@ export interface AiGenerateDocumentOverviewRequest {
   text: string;
 }
 
+export interface AiDocumentOverviewProgress {
+  content: string;
+  message: string;
+  complete: boolean;
+}
+
 export interface AiCompressConversationRequest {
   type: 'pdf-helper:ai-compress-conversation';
   previousSummary?: string;

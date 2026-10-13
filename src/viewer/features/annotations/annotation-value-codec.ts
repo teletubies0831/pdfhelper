@@ -204,6 +204,9 @@ export function getAnnotationGeometrySignature(value: unknown): string {
     ? getNumberArraySignature(value.outlines.points)
     : "";
 
+  // A page/type pair alone identifies every empty editor on that page.
+  if (!rect && !quadPoints && !outlines) return "";
+
   return [value.pageIndex, annotationType, rect, quadPoints, outlines].join(
     "|",
   );

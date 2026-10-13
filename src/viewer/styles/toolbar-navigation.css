@@ -1,0 +1,74 @@
+/* Keep navigation targets stable, including when browser zoom reduces width. */
+.app-frame > .toolbar {
+  height: auto;
+  min-height: 62px;
+  flex-wrap: wrap;
+}
+
+.app-frame.focus-mode > .toolbar {
+  min-height: 0;
+}
+
+.toolbar .annotation-tools {
+  min-width: 0;
+  height: 50px;
+  min-height: 50px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.toolbar .workspace-tabs {
+  height: 48px;
+  min-height: 48px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0;
+}
+
+.toolbar .workspace-tabs .toolbar-nav-button {
+  position: relative;
+  height: 48px;
+  min-height: 48px;
+  min-width: 88px;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 0 14px;
+  touch-action: manipulation;
+  transform: none;
+  transition: background-color 140ms, color 140ms, border-color 140ms;
+}
+
+.toolbar .workspace-tabs .toolbar-nav-button > * {
+  pointer-events: none;
+}
+
+.toolbar .workspace-tabs .toolbar-nav-button:hover {
+  border-color: #d8e5f8;
+  background: #eaf2ff;
+}
+
+.toolbar .workspace-tabs .toolbar-nav-button:active {
+  background: #dceaff;
+}
+
+.toolbar .workspace-tabs .toolbar-nav-button:focus-visible {
+  outline: 2px solid var(--reader-blue);
+  outline-offset: -3px;
+}
+
+@media (max-width: 1700px) {
+  .toolbar .annotation-tools {
+    order: 1;
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .toolbar .workspace-tabs .toolbar-nav-button {
+    min-width: 80px;
+    padding-inline: 8px;
+  }
+}

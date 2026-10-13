@@ -18,6 +18,14 @@ export function setCurrentApplicationView(
     "active",
     view === "vocabulary",
   );
+  for (const [button, candidate] of [
+    [aiPanelToggleButton, "viewer"],
+    [knowledgeBaseEntryButton, "knowledge"],
+    [vocabularyLibraryEntryButton, "vocabulary"],
+  ] as const) {
+    if (candidate === view) button?.setAttribute("aria-current", "page");
+    else button?.removeAttribute("aria-current");
+  }
   if (outlineToggleButton instanceof HTMLButtonElement) {
     outlineToggleButton.disabled = !isViewer;
     outlineToggleButton.setAttribute("aria-disabled", String(!isViewer));
@@ -27,7 +35,6 @@ export function setCurrentApplicationView(
 }
 
 export function updateModeNavigation(): void {
-  knowledgeBaseEntryButton.textContent = "知识库";
   knowledgeBaseEntryButton.disabled = false;
   if (getActiveWorkspaceView() === "knowledge") renderKnowledgeBase();
 }

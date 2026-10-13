@@ -19,6 +19,7 @@ export interface AiProviderAdapter {
     config: AiConfig,
     messages: ProviderMessage[],
     maxOutputTokens: number,
+    signal?: AbortSignal,
   ): Promise<ProviderChatResult>;
   stream(
     config: AiConfig,

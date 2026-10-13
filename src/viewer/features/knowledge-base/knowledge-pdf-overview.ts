@@ -11,9 +11,53 @@ import {
 import type { KnowledgeLibraryDocument } from "./knowledge-corpus-repository";
 import { getKnowledgeDocument } from "./knowledge-corpus-repository";
 import { closeKnowledgeBasePage } from "./knowledge-base-controller";
-import { generateAndSaveKnowledgeOverview, getDocumentOverviewPageNumbers, type ExtractedKnowledgePage } from "./knowledge-overview-background-task";
+import { saveDocumentOverview, getDocumentOverviewMarkdown } from "../../../modules/knowledge/public";
+import { generateAndSaveKnowledgeOverview, getDocumentOverviewPageNumbers, isKnowledgeOverviewActive, type ExtractedKnowledgePage } from "./knowledge-overview-background-task";
 
 let activeOverviewDocumentId = "";
+const preparingOverviews = new Set<string>();
+const editDrafts = new Map<string, string>();
+let editing = false;
+let previewingDraft = false;
+
+function editorInput(): HTMLTextAreaElement {
+  return document.getElementById('knowledge-overview-markdown') as HTMLTextAreaElement;
+}
+
+function syncEditorMode(): void {
+  document.getElementById('knowledge-overview-editor')!.hidden = !editing || previewingDraft;
+  elements().content.hidden = editing && !previewingDraft;
+  for (const id of ['edit', 'regenerate', 'done']) document.getElementById(`knowledge-overview-${id}`)!.hidden = editing;
+  for (const id of ['preview', 'cancel-edit', 'save']) document.getElementById(`knowledge-overview-${id}`)!.hidden = !editing;
+  document.getElementById('knowledge-overview-preview')!.textContent = previewingDraft ? '继续编辑' : '预览排版';
+  if (editing && previewingDraft) renderChatMarkdown(elements().content, editorInput().value, false);
+}
+
+function beginEditing(): void {
+  const item = getKnowledgeDocument(activeOverviewDocumentId);
+  if (!item) return;
+  editorInput().value = editDrafts.get(item.documentId) ?? getDocumentOverviewMarkdown(item);
+  editing = true;
+  previewingDraft = false;
+  syncEditorMode();
+  setOverviewStatus('修改尚未保存。后台生成结果不会覆盖正在编辑的内容。');
+  editorInput().focus();
+}
+
+function saveEditing(): void {
+  if (!editing || !activeOverviewDocumentId) return;
+  try {
+    saveDocumentOverview(activeOverviewDocumentId, editorInput().value);
+    editDrafts.delete(activeOverviewDocumentId);
+    editing = false;
+    previewingDraft = false;
+    syncEditorMode();
+    renderSavedOverview(getKnowledgeDocument(activeOverviewDocumentId)!);
+    setOverviewStatus('修改已保存。');
+  } catch (error) {
+    setOverviewStatus(error instanceof Error ? error.message : String(error), true);
+  }
+}
 
 function elements(): {
   dialog: HTMLDialogElement;
@@ -41,18 +85,36 @@ function setOverviewStatus(message = "", isError = false): void {
 }
 
 function renderSavedOverview(item: KnowledgeLibraryDocument): void {
+  if (editing) return;
   const { title, documentName, content, regenerate } = elements();
   title.textContent = "PDF 概览";
   documentName.textContent = item.documentName;
   content.classList.remove("is-loading");
   content.replaceChildren();
-  if (item.overviewMarkdown?.trim()) {
-    renderChatMarkdown(content, item.overviewMarkdown, false);
-    setOverviewStatus();
+  const markdown = getDocumentOverviewMarkdown(item);
+  if (markdown?.trim()) {
+    renderChatMarkdown(content, markdown, false);
   } else {
-    content.innerHTML = "<div class=\"knowledge-overview-placeholder\">正在读取并概括这份 PDF…</div>";
+    const placeholder = document.createElement("div");
+    placeholder.className = "knowledge-overview-placeholder";
+    placeholder.textContent = item.overviewStatus === "error"
+      ? "PDF 概览生成失败，请查看下方原因后重新生成。"
+      : item.overviewStatus === "generating"
+        ? "PDF 概览尚未完成。"
+        : "尚未生成 PDF 概览。";
+    content.append(placeholder);
   }
-  regenerate.disabled = item.overviewStatus === "generating";
+  const active = isKnowledgeOverviewActive(item.documentId) || preparingOverviews.has(item.documentId);
+  regenerate.disabled = active;
+  if (item.overviewStatus === "error") {
+    setOverviewStatus(`${markdown ? '已保留上次概览。' : ''}${item.overviewError || "概览生成失败，请重新生成。"}`, true);
+  } else if (active) {
+    setOverviewStatus(item.overviewProgress || "PDF 概览正在后台生成；遇到供应商限流会自动等待重试，长文可能需要几分钟。完成后会自动显示，你可以关闭此窗口继续阅读。");
+  } else if (item.overviewStatus === "generating") {
+    setOverviewStatus("当前页面未检测到运行中的概览任务。如果刷新过页面或任务已中断，请点击“重新生成”。");
+  } else {
+    setOverviewStatus();
+  }
 }
 
 async function extractOverviewPages(): Promise<ExtractedKnowledgePage[]> {
@@ -72,12 +134,16 @@ async function extractOverviewPages(): Promise<ExtractedKnowledgePage[]> {
 }
 
 async function generateOverview(item: KnowledgeLibraryDocument): Promise<void> {
+  if (preparingOverviews.has(item.documentId) || isKnowledgeOverviewActive(item.documentId)) return;
+  preparingOverviews.add(item.documentId);
   const { content, regenerate } = elements();
   const isActiveOverview = (): boolean =>
-    activeOverviewDocumentId === item.documentId && elements().dialog.open;
+    activeOverviewDocumentId === item.documentId && elements().dialog.open && !editing;
   regenerate.disabled = true;
-  content.classList.add("is-loading");
-  content.innerHTML = "<div class=\"knowledge-overview-placeholder\"><span></span>AI 正在判断文档类型并生成概览…</div>";
+  if (!getDocumentOverviewMarkdown(item)) {
+    content.classList.add("is-loading");
+    content.innerHTML = "<div class=\"knowledge-overview-placeholder\"><span></span>AI 正在判断文档类型并生成概览…</div>";
+  }
   setOverviewStatus("正在后台处理；你可以关闭窗口继续阅读，完成后结果会保存在知识库中。");
   try {
     const opened = await ensureSourcePdfOpen(item.documentName, item.recentEntryId);
@@ -98,29 +164,43 @@ async function generateOverview(item: KnowledgeLibraryDocument): Promise<void> {
   } catch (error) {
     if (!isActiveOverview()) return;
     const message = error instanceof Error ? error.message : String(error);
-    content.classList.remove("is-loading");
-    content.innerHTML = "<div class=\"knowledge-overview-placeholder is-error\">PDF 概览生成失败，可以稍后重新生成。</div>";
+    const saved = getKnowledgeDocument(item.documentId);
+    if (saved?.overviewRequestId?.startsWith('manual:')) { renderSavedOverview(saved); return; }
+    if (saved && getDocumentOverviewMarkdown(saved).trim()) renderSavedOverview(saved);
+    else {
+      content.classList.remove("is-loading");
+      content.innerHTML = "<div class=\"knowledge-overview-placeholder is-error\">PDF 概览生成失败，可以稍后重新生成。</div>";
+    }
     setOverviewStatus(message, true);
   } finally {
-    if (isActiveOverview()) regenerate.disabled = false;
+    preparingOverviews.delete(item.documentId);
+    if (isActiveOverview()) regenerate.disabled = isKnowledgeOverviewActive(item.documentId);
   }
 }
 
 export function openKnowledgePdfOverview(item: KnowledgeLibraryDocument): void {
+  if (editing && activeOverviewDocumentId) editDrafts.set(activeOverviewDocumentId, editorInput().value);
+  editing = false;
+  previewingDraft = false;
   activeOverviewDocumentId = item.documentId;
+  syncEditorMode();
   const { dialog } = elements();
   renderSavedOverview(item);
   showAnimatedDialog(dialog);
-  if (!item.overviewMarkdown?.trim() && item.overviewStatus !== "generating") {
+  if (editDrafts.has(item.documentId)) { beginEditing(); return; }
+  if (!item.overviewMarkdown?.trim() &&
+      (!item.overviewStatus || item.overviewStatus === "pending")) {
     void generateOverview(item);
-  } else if (item.overviewStatus === "generating") {
-    setOverviewStatus("PDF 概览正在后台生成，完成后会自动保存。");
   }
 }
 
 export function registerKnowledgePdfOverviewEvents(): void {
   const close = (): void => {
     const { dialog } = elements();
+    if (editing) editDrafts.set(activeOverviewDocumentId, editorInput().value);
+    editing = false;
+    previewingDraft = false;
+    syncEditorMode();
     activeOverviewDocumentId = "";
     dismissAnimatedDialog(dialog);
   };
@@ -133,6 +213,26 @@ export function registerKnowledgePdfOverviewEvents(): void {
   });
   document.getElementById("knowledge-overview-close")?.addEventListener("click", close);
   document.getElementById("knowledge-overview-done")?.addEventListener("click", close);
+  document.getElementById('knowledge-overview-edit')?.addEventListener('click', beginEditing);
+  document.getElementById('knowledge-overview-preview')?.addEventListener('click', () => {
+    previewingDraft = !previewingDraft;
+    syncEditorMode();
+  });
+  document.getElementById('knowledge-overview-save')?.addEventListener('click', saveEditing);
+  document.getElementById('knowledge-overview-cancel-edit')?.addEventListener('click', () => {
+    editDrafts.delete(activeOverviewDocumentId);
+    editing = false;
+    previewingDraft = false;
+    syncEditorMode();
+    const item = getKnowledgeDocument(activeOverviewDocumentId);
+    if (item) renderSavedOverview(item);
+  });
+  editorInput().addEventListener('input', () => {
+    if (editing) setOverviewStatus('修改尚未保存。预览确认后点击“保存修改”。');
+  });
+  editorInput().addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); saveEditing(); }
+  });
   document.getElementById("knowledge-overview-regenerate")?.addEventListener("click", () => {
     const item = getKnowledgeDocument(activeOverviewDocumentId);
     if (item) void generateOverview(item);
@@ -151,6 +251,6 @@ export function registerKnowledgePdfOverviewEvents(): void {
     const { dialog } = elements();
     if (!dialog.open || !activeOverviewDocumentId) return;
     const item = getKnowledgeDocument(activeOverviewDocumentId);
-    if (item?.overviewMarkdown && item.overviewStatus === "ready") renderSavedOverview(item);
+    if (item) renderSavedOverview(item);
   });
 }

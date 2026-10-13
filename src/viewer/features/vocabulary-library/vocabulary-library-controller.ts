@@ -80,6 +80,13 @@ let cardsLoaded = false;
 let vocabularyLibraryNeedsRender = true;
 let vocabularyOpenToken = 0;
 let editingCardId: string | null = null;
+const CARDS_PER_PAGE = 60;
+let vocabularyRenderToken = 0;
+let vocabularyLoadToken = 0;
+let vocabularyLoadPromise: Promise<void> | null = null;
+const cardDateFormatter = new Intl.DateTimeFormat("zh-CN", {
+  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+});
 
 export type VocabularyEditorBodyMode = "preview" | "edit";
 export const vocabularyEditorBodyMode: { value: VocabularyEditorBodyMode } = {
@@ -89,12 +96,7 @@ export const vocabularyEditorBodyMode: { value: VocabularyEditorBodyMode } = {
 function formatCardDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "未知时间";
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return cardDateFormatter.format(date);
 }
 
 function parseTags(value: string): string[] {
@@ -266,21 +268,44 @@ function createCardElement(card: VocabularyCard): HTMLElement {
 }
 
 export async function loadVocabularyCards(force = false): Promise<void> {
+  if (vocabularyLoadPromise && !force) return vocabularyLoadPromise;
   if (cardsLoaded && !force) return;
-  cards = await readVocabularyCards();
-  cardsLoaded = true;
+  const token = ++vocabularyLoadToken;
+  const pending = readVocabularyCards().then((loaded) => {
+    if (token !== vocabularyLoadToken) return;
+    cards = loaded;
+    cardsLoaded = true;
+  });
+  vocabularyLoadPromise = pending;
+  try {
+    await pending;
+  } finally {
+    if (vocabularyLoadPromise === pending) vocabularyLoadPromise = null;
+  }
 }
 
 export async function renderVocabularyLibrary(forceReload = false): Promise<void> {
+  const token = ++vocabularyRenderToken;
+  vocabularyLibraryNeedsRender = true;
   vocabularyLibraryStatusElement.textContent = cardsLoaded
     ? ""
     : "正在读取单词卡片…";
   await loadVocabularyCards(forceReload);
+  if (token !== vocabularyRenderToken) return;
   const filtered = getFilteredCards();
   vocabularyTotalCountElement.textContent = `${cards.length} 张卡片`;
-  vocabularyLibraryStatusElement.textContent = filtered.length === cards.length
-    ? ""
-    : `当前显示 ${filtered.length} / ${cards.length} 张卡片`;
+  renderVocabularyPage(filtered, 0, token);
+  vocabularyLibraryNeedsRender = false;
+  persistCurrentAppViewState();
+}
+
+function renderVocabularyPage(filtered: VocabularyCard[], page: number, token: number): void {
+  if (token !== vocabularyRenderToken) return;
+  const start = page * CARDS_PER_PAGE;
+  const end = Math.min(start + CARDS_PER_PAGE, filtered.length);
+  vocabularyLibraryStatusElement.textContent = filtered.length > CARDS_PER_PAGE
+    ? `显示第 ${start + 1}–${end} 张，共 ${filtered.length} 张匹配卡片`
+    : filtered.length === cards.length ? "" : `当前显示 ${filtered.length} / ${cards.length} 张卡片`;
   vocabularyCardGridElement.replaceChildren();
   if (filtered.length === 0) {
     vocabularyCardGridElement.append(createEmptyState(
@@ -288,10 +313,25 @@ export async function renderVocabularyLibrary(forceReload = false): Promise<void
         vocabularyTimeFilterSelect.value !== "all",
     ));
   } else {
-    vocabularyCardGridElement.append(...filtered.map(createCardElement));
+    vocabularyCardGridElement.append(...filtered.slice(start, end).map(createCardElement));
   }
-  vocabularyLibraryNeedsRender = false;
-  persistCurrentAppViewState();
+  if (filtered.length <= CARDS_PER_PAGE) return;
+  const navigation = document.createElement("nav");
+  navigation.className = "vocabulary-pagination";
+  navigation.setAttribute("aria-label", "单词卡片分页");
+  for (const [label, target] of [["上一页", page - 1], ["下一页", page + 1]] as const) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.disabled = target < 0 || target * CARDS_PER_PAGE >= filtered.length;
+    button.addEventListener("click", () => {
+      renderVocabularyPage(filtered, target, token);
+      vocabularyLibraryMainElement.scrollTop = 0;
+      persistCurrentAppViewState();
+    });
+    navigation.append(button);
+  }
+  vocabularyCardGridElement.append(navigation);
 }
 
 function renderEditorPreview(): void {

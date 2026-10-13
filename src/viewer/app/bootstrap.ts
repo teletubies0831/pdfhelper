@@ -8,6 +8,7 @@ import { registerVocabularyEvents } from './registrations/register-vocabulary-ev
 import { registerLifecycle } from './registrations/register-lifecycle';
 import { initializeOnboardingTour } from '../features/onboarding-tour/public';
 import { interactionBoundary } from './interaction-boundary';
+import { initializeResponsiveWorkspace } from './responsive-workspace';
 
 export * from './app-ui';
 
@@ -21,5 +22,6 @@ export function bootstrapViewer(): void {
   registerTranslationEvents();
   registerVocabularyEvents();
   registerLifecycle();
+  initializeResponsiveWorkspace();
   initializeOnboardingTour();
 }

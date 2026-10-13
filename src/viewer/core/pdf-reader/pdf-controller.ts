@@ -26,6 +26,8 @@ import {
   pdfViewer,
   pendingReadingPosition,
   restoredAnnotationWarmUpPending,
+  restoredHighlightTextBySignature,
+  restoredHighlightTextByStorageKey,
   restoredHelperNotesBySignature,
   restoredHelperNotesByStorageKey,
   sourceName,
@@ -162,6 +164,8 @@ export async function openPdf(
     canUndoAnnotation.value = false;
     canRedoAnnotation.value = false;
     nativeAnnotationNotes.clear();
+    restoredHighlightTextBySignature.clear();
+    restoredHighlightTextByStorageKey.clear();
     restoredHelperNotesBySignature.clear();
     restoredHelperNotesByStorageKey.clear();
     restoredAnnotationWarmUpPending.value = false;
