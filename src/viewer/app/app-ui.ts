@@ -16,10 +16,12 @@
 
 
 import { aiTabButtons, aiTabPanels, translationLearningHintElement } from "./viewer-elements";
-import { currentEnglishLearningResult, currentEnglishLearningSourceSentence, getViewerSelectionText, persistCurrentAppViewState, selectedTextForAi } from "../core/pdf-reader/public";
+import { getViewerSelectionText } from "../core/pdf-reader/public";
 import { scheduleAutomaticTranslation, setMoreExamplesButtonVisible, setTranslationLearningTitle, setTranslationSelectionEditor, setTranslationState, updateSummaryMetadata } from "../features/translation/public";
-import { scheduleSummaryGeneration } from "../services/document-agent/viewer-document-agent";
+import { scheduleSummaryGeneration } from "../features/translation/public";
 import { scheduleCardGeneration, updateCardSourceSnippet } from "../features/paper-card/public";
+import { currentEnglishLearningResult, currentEnglishLearningSourceSentence, persistCurrentAppViewState, selectedTextForAi } from ".//public";
+
 
 
 

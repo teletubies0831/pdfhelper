@@ -1,8 +1,4 @@
-import {
-  currentEnglishLearningResult,
-  persistCurrentAppViewState,
-  selectedTextPageNumber,
-} from "../../core/pdf-reader/public";
+
 import {
   vocabularyCardGridElement,
   vocabularyEditorDeleteButton,
@@ -59,6 +55,8 @@ import {
   updateVocabularyCard,
   type VocabularyCard,
 } from "./vocabulary-repository";
+import { currentEnglishLearningResult, persistCurrentAppViewState, selectedTextPageNumber } from "../../app/public";
+
 
 const NEW_CARD_MARKDOWN = [
   "## 释义",

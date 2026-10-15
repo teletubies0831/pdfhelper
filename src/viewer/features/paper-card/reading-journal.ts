@@ -15,7 +15,7 @@
 
 
 
-import { resolvedReadingMode } from "../../core/pdf-reader/public";
+
 import { currentRecentEntryId, pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
 import { getCurrentChapterContext, jumpToPdfCitations } from "../translation/public";
 import { getDisplayFileName, navigateToPdfPageWhenVisible } from "../../core/pdf-reader/public";
@@ -23,10 +23,14 @@ import {
   preserveReadingPositionForSourceNavigation,
   setStatus,
 } from "../recent-files/public";
-import { getDocumentChatId } from "../assistant/public";
-import { getKnowledgeExcerpt, normalizeKnowledgeTags, readReadingJournalEntries, refreshKnowledgeBaseIfOpen, writeReadingJournalEntries } from "../knowledge-base/public";
-import type { SavedReadingJournalEntry } from "../../core/pdf-reader/public";
+import { getDocumentChatId } from "../../app/document-identity";
+import { getKnowledgeExcerpt, normalizeKnowledgeTags } from "../../app/knowledge-excerpt";
+import { readReadingJournalEntries, writeReadingJournalEntries } from "./reading-journal-storage";
+import { notifyKnowledgeRefresh } from "../../app/knowledge-refresh";
+
 import { ensureSourcePdfOpen } from "../../shared-ui/navigation/source-pdf-navigation";
+import { resolvedReadingMode, SavedReadingJournalEntry } from "../../app/public";
+
 
 
 
@@ -77,7 +81,7 @@ export function saveReadingJournalEntry(input: {
     entry,
     ...readReadingJournalEntries().filter((item) => item.id !== entry.id),
   ]);
-  refreshKnowledgeBaseIfOpen();
+  notifyKnowledgeRefresh();
   return entry;
 }
 

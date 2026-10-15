@@ -1,7 +1,6 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 
-import type { LongTermMemory } from "../../../modules/memory/public";
-import { memoryTools } from "../../../../entrypoints/viewer/memory-store";
+import { memoryTools, type LongTermMemory } from "../../../modules/memory/public";
 import { getDocumentChatId } from "./chat-session";
 
 export async function loadLongTermMemoryContext(

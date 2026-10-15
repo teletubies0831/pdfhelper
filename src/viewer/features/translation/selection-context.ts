@@ -108,11 +108,10 @@ export interface EnglishWordSelection {
   wasExpanded: boolean;
 }
 
-export interface SelectionSurroundingText {
-  before: string;
-  selected: string;
-  after: string;
-}
+// Selection geometry type moved to the PDF core (reader-controls), which is
+// the canonical owner of text-layer selection utilities.
+import type { SelectionSurroundingText } from "../../core/pdf-reader/public";
+export type { SelectionSurroundingText };
 
 interface TextLayerTextSnapshot {
   childElementCount: number;

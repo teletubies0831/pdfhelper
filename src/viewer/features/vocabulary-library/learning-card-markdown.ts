@@ -1,4 +1,5 @@
-import type { EnglishLearningResult } from "../../core/pdf-reader/public";
+import { EnglishLearningResult } from "../../app/public";
+
 
 function markdownList(items: string[], fallback: string): string {
   return items.length ? items.map((item) => `- ${item}`).join("\n") : fallback;

@@ -6,6 +6,7 @@ import { marked } from "marked";
 
 import { browser } from "wxt/browser";
 import { type AiConfig, type AiConversationMessage, type AiRuntimeResponse, type AiStreamStartMessage } from "../../../modules/ai/public";
+import { aiConfig, resolvedReadingMode, setDeepSeekSettingsOpen } from "../../app/public";
 
 
 
@@ -15,9 +16,10 @@ import { type AiConfig, type AiConversationMessage, type AiRuntimeResponse, type
 
 
 
-import { aiConfig, resolvedReadingMode, setDeepSeekSettingsOpen } from '../../core/pdf-reader/public';
+
+
 import { chatMessagesElement, deepSeekSettingsStatus } from '../../app/viewer-elements';
-import { normalizeCitationMatchText } from '../../features/translation/public';
+import { normalizeCitationMatchText } from './citation-text';
 
 
 const DEFAULT_AI_CONTENT_TIMEOUT_MS = 120_000;

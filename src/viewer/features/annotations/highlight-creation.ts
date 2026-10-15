@@ -10,7 +10,7 @@ import {
   selectedHighlightEditor,
 } from "../../app/viewer-state";
 import { getViewerSelectionRawText } from "../../core/pdf-reader/public";
-import { setStatus } from "../recent-files/public";
+import { setStatus } from "../../app/status-bar";
 import {
   getAnnotationGeometrySignature,
   getEditorSerializedValue,

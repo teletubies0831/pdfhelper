@@ -15,10 +15,10 @@
 
 
 
-import { recentFilesDialog, recentFilesList, statusText, viewerContainer } from "../../app/viewer-elements";
+import { recentFilesDialog, recentFilesList, viewerContainer } from "../../app/viewer-elements";
 import { currentRecentEntryId, isOpeningDocument, isRestoringReadingPosition, lastReadingPosition, pdfDocument, pdfViewer, pendingReadingPosition, readingPositionSaveHandle } from "../../app/viewer-state";
 import { navigateToPdfPageWhenVisible, updateControls } from "../../core/pdf-reader/public";
-import { getDisplayFileName, openPdf, openRemotePdf } from "../../core/pdf-reader/public";
+import { getDisplayFileName } from "../../core/pdf-reader/public";
 
 import type { FileHandleLike } from "../../app/viewer-types";
 import { confirmDiscardUnsavedChanges } from '../annotations/public';
@@ -58,10 +58,10 @@ async function writeCurrentEntryReadingPosition(
 
 
 
-export function setStatus(message: string, isError = false) {
-  statusText.textContent = message;
-  statusText.classList.toggle("error", isError);
-}
+// The status bar is app-level shared UI; recent-files re-exports it for the
+// consumers that historically imported it from this feature.
+import { setStatus } from "../../app/status-bar";
+export { setStatus };
 
 
 
@@ -365,32 +365,30 @@ export async function requestFileReadPermission(
 
 
 
+// Opening a recent entry requires the document-open orchestration (app layer).
+// It is injected by the registration layer so recent-files never imports the
+// app assembly.
+export type RecentEntryOpenHandler = (
+  entry: RecentPdfEntry,
+  requestPermission: boolean,
+) => Promise<void>;
+
+let recentEntryOpenHandler: RecentEntryOpenHandler | null = null;
+
+export function setRecentEntryOpenHandler(
+  handler: typeof recentEntryOpenHandler,
+): void {
+  recentEntryOpenHandler = handler;
+}
+
 export async function openRecentFile(entry: RecentPdfEntry) {
   if (pdfDocument.value && !confirmDiscardUnsavedChanges()) return;
   hideRecentFilesDialog();
 
   try {
-    if (entry.kind === "local") {
-      if (!entry.fileHandle)
-        throw new Error("这条最近记录没有可用的文件句柄，请重新打开一次 PDF。");
-      const hasPermission = await requestFileReadPermission(entry.fileHandle);
-      if (!hasPermission) throw new Error("没有获得读取该 PDF 的权限。");
-      const file = await entry.fileHandle.getFile();
-      await openPdf(
-        await file.arrayBuffer(),
-        file.name,
-        entry.fileHandle,
-        false,
-      );
-      return;
-    }
-
-    if (entry.kind === "remote" && entry.url) {
-      await openRemotePdf(entry.url);
-      return;
-    }
-
-    throw new Error("最近记录无效。");
+    if (!recentEntryOpenHandler)
+      throw new Error("最近文件打开流程尚未初始化。");
+    await recentEntryOpenHandler(entry, true);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
   }
@@ -422,10 +420,10 @@ export async function restoreMostRecentPdf(): Promise<boolean> {
 
   try {
     const [entry] = await readRecentFiles();
-    if (!entry) return false;
+    if (!entry || !recentEntryOpenHandler) return false;
 
     if (entry.kind === "remote" && entry.url) {
-      await openRemotePdf(entry.url);
+      await recentEntryOpenHandler(entry, false);
       return pdfDocument.value !== null;
     }
 
@@ -437,8 +435,7 @@ export async function restoreMostRecentPdf(): Promise<boolean> {
       return false;
     }
 
-    const file = await entry.fileHandle.getFile();
-    await openPdf(await file.arrayBuffer(), file.name, entry.fileHandle, false);
+    await recentEntryOpenHandler(entry, false);
     return pdfDocument.value !== null;
   } catch (error) {
     console.warn("PDFPal failed to restore the most recent PDF.", error);

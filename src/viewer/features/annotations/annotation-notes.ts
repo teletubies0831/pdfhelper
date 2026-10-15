@@ -1,6 +1,6 @@
 import { annotationActionBar, annotationTypeLabel, contextCleanCopyButton, contextColors, contextCopyButton, contextDeleteHighlightButton, contextNoteButton, deleteHighlightNoteButton, freeTextSizeControl, highlightContextActions, highlightNotePopover, highlightNoteQuote, highlightNoteText, highlightNoteTitle, selectionContextMenu, viewerElement } from "../../app/viewer-elements";
 import { annotationEditor, contextHighlightEditor, contextSelectionText, nativeAnnotationNotes, openHighlightNoteEditor, pdfDocument, selectedAnnotationEditor, selectedHighlightEditor } from "../../app/viewer-state";
-import { setStatus } from "../recent-files/public";
+import { setStatus } from "../../app/status-bar";
 import { forgetHelperNote, getAnnotationGeometrySignature, getEditorSerializedValue, getEditorStorageKeys, getRememberedHelperNote, isFreeTextEditor, isHighlightEditor, isInkEditor, isRecord, isStoredHighlightValue, markUnsavedChanges, normalizeStorageKey, rememberHelperNote } from "./annotation-persistence";
 import { findAnnotationEditor, findHighlightNoteAnchor, syncFreeTextControls } from './annotation-editor';
 import { getHighlightEditorText, getStoredHighlightText, setHighlightEditorText } from "./annotation-highlight-content";

@@ -55,3 +55,15 @@ export type FilePickerWindow = Window & {
     }>;
   }) => Promise<FileHandleLike[]>;
 };
+
+export type ReadingPosition = {
+  pageNumber: number;
+  scrollTop: number;
+  scrollLeft: number;
+  scale: number;
+  updatedAt: number;
+};
+
+export type InternalNavigationEntry = ReadingPosition & {
+  documentKey: string;
+};

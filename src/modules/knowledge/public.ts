@@ -27,7 +27,7 @@ export const knowledgeLibrary = new KnowledgeLibrary(
   new BrowserStorageKnowledgeRepository(),
 );
 
-const semanticKnowledgeRetriever = new SemanticKnowledgeRetriever(
+export const semanticKnowledgeRetriever = new SemanticKnowledgeRetriever(
   new HuggingFaceEmbeddingProvider(),
   new IndexedDbKnowledgeVectorRepository(),
 );

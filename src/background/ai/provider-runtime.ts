@@ -3,36 +3,23 @@ import {
   DeepSeekProviderAdapter,
 } from "../../modules/ai/public";
 
-import { normalizeAiBaseUrl, type AiConfig } from "../../modules/ai/public";
+import {
+  normalizeAiBaseUrl,
+  type AiConfig,
+  type AiProviderAdapter,
+  type ProviderChatResult,
+  type ProviderMessage,
+  type ProviderStreamDelta,
+} from "../../modules/ai/public";
 
-import { getProviderError } from "./vision-service";
-import type {
+export type {
+  AiProviderAdapter,
   ProviderChatResult,
   ProviderMessage,
   ProviderStreamDelta,
-} from "./vision-service";
+};
 
-export interface AiProviderAdapter {
-  readonly id: AiConfig["providerId"];
-  test(config: AiConfig): Promise<string[]>;
-  chat(
-    config: AiConfig,
-    messages: ProviderMessage[],
-    maxOutputTokens: number,
-    signal?: AbortSignal,
-  ): Promise<ProviderChatResult>;
-  stream(
-    config: AiConfig,
-    messages: ProviderMessage[],
-    maxOutputTokens: number,
-    signal: AbortSignal,
-    onDelta: (delta: ProviderStreamDelta) => void,
-    options?: {
-      toolChoice?: "auto" | "none" | "required";
-      tools?: Array<Record<string, unknown>>;
-    },
-  ): Promise<ProviderChatResult>;
-}
+import { getProviderError } from "./vision-service";
 
 export async function fetchProviderJson(
   path: string,

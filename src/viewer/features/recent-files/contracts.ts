@@ -15,14 +15,7 @@ export type RecentPdfEntry = {
   url?: string;
 };
 
-export type ReadingPosition = {
-  pageNumber: number;
-  scrollTop: number;
-  scrollLeft: number;
-  scale: number;
-  updatedAt: number;
-};
-
-export type InternalNavigationEntry = ReadingPosition & {
-  documentKey: string;
-};
+// Reading-position types live in app/viewer-types so app-level state
+// (viewer-state) can use them without importing the recent-files feature.
+export type { ReadingPosition, InternalNavigationEntry } from "../../app/viewer-types";
+import type { ReadingPosition } from "../../app/viewer-types";

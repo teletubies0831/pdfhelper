@@ -6,13 +6,12 @@ import {
   type AiRuntimeResponse,
   type AiStreamStartMessage,
 } from "../../../modules/ai/public";
-import {
-  pendingChatImages,
-  visionAiConfig,
-} from "../../core/pdf-reader/public";
+
 import { chatImageInput } from "../../app/viewer-elements";
 
 import { renderPendingChatImages } from "./chat-view";
+import { pendingChatImages, visionAiConfig } from "../../app/public";
+
 
 export function clearPendingChatImages(): void {
   pendingChatImages.value = [];

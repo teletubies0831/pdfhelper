@@ -1,4 +1,4 @@
-import { knowledgeEditorTargetKey } from "../../core/pdf-reader/public";
+
 
 import { knowledgeEditorBodyInput, knowledgeEditorBodyModeLabel, knowledgeEditorCategoryInput, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorEditPane, knowledgeEditorForm, knowledgeEditorHeading, knowledgeEditorModeToggleButton, knowledgeEditorPreviewElement, knowledgeEditorPreviewPane, knowledgeEditorSource, knowledgeEditorSourceDocument, knowledgeEditorSourcePosition, knowledgeEditorSourceQuote, knowledgeEditorTagsInput, knowledgeEditorTitleInput } from "../../app/viewer-elements";
 import { renderChatMarkdown } from "../../shared-ui/markdown/markdown-renderer";
@@ -6,14 +6,18 @@ import { pdfViewer, sourceName } from "../../app/viewer-state";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 
 
-import type { KnowledgeItem } from "../../core/pdf-reader/public";
+
 import { knowledgeEditorBodyMode, knowledgeEditorPreviewTimer } from './knowledge-base-controller';
 import type { KnowledgeEditorBodyMode } from './knowledge-base-controller';
 import { normalizeKnowledgeCategory } from './knowledge-repository';
 import { getKnowledgeSourceQuote } from "./knowledge-domain";
 
 
-import { prepareKnowledgeEditorMarkdown } from "./knowledge-markdown-normalizer";
+import { prepareKnowledgeEditorMarkdown } from "../../shared-ui/markdown/knowledge-markdown";
+import { knowledgeEditorTargetKey } from "../../app/public";
+import { KnowledgeItem } from "../../app/public";
+
+
 
 export function renderKnowledgeEditorPreview(): void {
   window.clearTimeout(knowledgeEditorPreviewTimer.value);

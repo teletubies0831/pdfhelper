@@ -66,10 +66,10 @@ async function indexKnowledgeDocument(input: IndexKnowledgeMessage): Promise<voi
     await putDocumentAgentRecord(record);
 
     if (input.retrievalMode !== "keyword" && chunks.length) {
+      // Reuse the module's composition root instead of re-wiring the
+      // embedding provider and vector repository here.
       const {
-        HuggingFaceEmbeddingProvider,
-        IndexedDbKnowledgeVectorRepository,
-        SemanticKnowledgeRetriever,
+        semanticKnowledgeRetriever,
         resolveEmbeddingModel,
       } = await import("../../../modules/knowledge/public");
       type SemanticKnowledgeDocument = import("../../../modules/knowledge/public").SemanticKnowledgeDocument;
@@ -86,11 +86,7 @@ async function indexKnowledgeDocument(input: IndexKnowledgeMessage): Promise<voi
         tags: ["PDF 全文", chunk.heading?.trim() || ""].filter(Boolean),
         updatedAt,
       }));
-      const retriever = new SemanticKnowledgeRetriever(
-        new HuggingFaceEmbeddingProvider(),
-        new IndexedDbKnowledgeVectorRepository(),
-      );
-      await retriever.retrieve(
+      await semanticKnowledgeRetriever.retrieve(
         sources,
         "PDF 全文语义索引",
         resolveEmbeddingModel(input.modelId),
@@ -107,7 +103,7 @@ async function indexKnowledgeDocument(input: IndexKnowledgeMessage): Promise<voi
           ),
         },
       );
-      await retriever.unloadModel();
+      await semanticKnowledgeRetriever.unloadModel();
     }
 
     self.postMessage({ type: "done", chunkCount: chunks.length });

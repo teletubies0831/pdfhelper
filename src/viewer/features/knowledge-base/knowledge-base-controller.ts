@@ -14,7 +14,7 @@
 
 
 
-import { persistCurrentAppViewState, resolvedReadingMode, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
+
 
 
 import { aiPanelToggleButton, knowledgeBaseEntryButton, knowledgeBasePageElement, knowledgeDocumentCountElement, knowledgeGroupSelect, knowledgeListElement, knowledgePageSubtitleElement, knowledgePageTitleElement, knowledgeSearchInput, knowledgeSortSelect, knowledgeTotalCountElement } from "../../app/viewer-elements";
@@ -22,12 +22,12 @@ import {
   getActiveWorkspaceView,
   transitionWorkspaceView,
 } from "../../app/workspace-navigation";
-import { setCurrentApplicationView } from "../assistant/public";
+import { setCurrentApplicationView } from "../../app/application-navigation";
 
 
 
 
-import type { KnowledgeItem, SavedKnowledgeNote } from "../../core/pdf-reader/public";
+
 import { collectKnowledgeItems, getKnowledgeRecordKey, normalizeKnowledgeCategory, readSavedKnowledgeNotes, writeSavedKnowledgeNotes } from './knowledge-repository';
 import {
   createKnowledgeFolder,
@@ -39,6 +39,10 @@ import {
 } from "./knowledge-corpus-repository";
 import { syncCurrentPdfLibraryButton } from "./current-pdf-add-to-library";
 import { openKnowledgePdfOverview, registerKnowledgePdfOverviewEvents } from "./knowledge-pdf-overview";
+import { persistCurrentAppViewState, resolvedReadingMode, selectedKnowledgeRecordKey, SavedKnowledgeNote } from "../../app/public";
+import { KnowledgeItem } from "../../app/public";
+
+
 
 
 

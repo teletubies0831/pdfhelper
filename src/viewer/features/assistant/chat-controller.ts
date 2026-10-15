@@ -2,17 +2,7 @@ import { isVisionAiConfigured, type AiEvidenceSource } from "../../../modules/ai
 
 import { getAgentToolByProtocolName } from "../../../modules/ai/public";
 
-import {
-  aiConfig,
-  chatHistory,
-  chatRequestPending,
-  pendingChatImages,
-  resolvedReadingMode,
-  selectedTextForAi,
-  selectedTextPageNumber,
-  setDeepSeekSettingsOpen,
-  visionAiConfig,
-} from "../../core/pdf-reader/public";
+
 import { updateChatActivity } from "../../shared-ui/markdown/markdown-renderer";
 import {
   chatImageButton,
@@ -45,6 +35,8 @@ import {
 } from "./chat-session";
 import { loadLongTermMemoryContext } from "./memory-controller";
 import { mergeEvidenceSources, readKnowledgeEvidenceSources } from "./tool-evidence";
+import { aiConfig, chatHistory, chatRequestPending, pendingChatImages, resolvedReadingMode, selectedTextForAi, selectedTextPageNumber, setDeepSeekSettingsOpen, visionAiConfig } from "../../app/public";
+
 
 export async function sendChatMessage(): Promise<void> {
   const content = chatInput.value.trim();

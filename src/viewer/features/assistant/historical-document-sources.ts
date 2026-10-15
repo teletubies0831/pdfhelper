@@ -6,7 +6,7 @@ import {
   mapHistoricalDocumentSemanticSources,
   type HistoricalDocumentSemanticSource,
 } from "../../services/document-agent/historical-document-source-mapper";
-import { listKnowledgeDocuments } from "../knowledge-base/public";
+import { listKnowledgeDocuments } from "../../../modules/knowledge/public";
 
 export async function listHistoricalDocumentSemanticSources(): Promise<
   HistoricalDocumentSemanticSource[]

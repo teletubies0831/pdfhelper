@@ -2,9 +2,11 @@
 
 import { normalizeConversationMemoryConfig, type ConversationMemoryConfig } from "../../../modules/memory/public";
 
-import { aiConfig } from "../../core/pdf-reader/public";
+
 
 import { chatCompressionKeepRecentMessagesInput, chatCompressionMaxRecentMessagesInput, chatCompressionTriggerCharactersInput, chatProviderStatus, deepSeekModelSelect } from "../../app/viewer-elements";
+import { aiConfig } from "../../app/public";
+
 
 
 

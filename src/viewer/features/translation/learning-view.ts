@@ -17,17 +17,19 @@
 
 
 import { applyTranslationEditButton, selectedSnippetElement, selectedSnippetMathPreview, selectedSnippetModeToggleButton, selectedSnippetShell, translationLearningHintElement, translationResultElement, translationSourceSentenceField, translationSourceSentenceInput, translationSourceSentenceMathPreview, translationSourceSentenceTranslation } from "../../app/viewer-elements";
-import { currentEnglishLearningResult, currentEnglishLearningSourceSentence, normalizeCopiedText } from "../../core/pdf-reader/public";
+import { normalizeCopiedText } from "../../core/pdf-reader/public";
 import { parseAiJson, renderChatMarkdown } from "../../shared-ui/markdown/markdown-renderer";
-import { prepareKnowledgeEditorMarkdown } from "../knowledge-base/public";
+import { prepareKnowledgeEditorMarkdown } from "../../shared-ui/markdown/knowledge-markdown";
 import { placeTranslationActionsBeforeResult } from "./translation-action-layout";
+import { currentEnglishLearningResult, currentEnglishLearningSourceSentence, SentenceKeyword, SentenceLearningResult, VocabularyExample, VocabularyLearningResult, VocabularySense, VocabularyWordForm } from "../../app/public";
 
 
 
 
 
 
-import type { SentenceKeyword, SentenceLearningResult, VocabularyExample, VocabularyLearningResult, VocabularySense, VocabularyWordForm } from "../../core/pdf-reader/public";
+
+
 import { autoResizeTranslationTextarea, createLearningElement, getSelectedEnglishWord, normalizeLearningInlineText, readLearningArray, readLearningString, setMoreExamplesButtonVisible, setTranslationLearningTitle } from './selection-context';
 
 

@@ -16,7 +16,7 @@
 
 
 import { KNOWLEDGE_ITEM_META_STORAGE_KEY, KNOWLEDGE_NOTES_STORAGE_KEY, READING_JOURNAL_STORAGE_KEY } from "../../core/pdf-reader/public";
-import { readSavedSummaryNotes } from "../../services/document-agent/viewer-document-agent";
+import { readSavedSummaryNotes } from "../translation/public";
 import { formatGeneratedCardText, formatPaperOverviewMarkdown, getCardTypeLabel, readSavedPaperCards, readSavedPaperOverviews } from "../paper-card/public";
 
 
@@ -25,7 +25,11 @@ import { formatGeneratedCardText, formatPaperOverviewMarkdown, getCardTypeLabel,
 
 
 
-import type { KnowledgeItem, KnowledgeItemMetaStore, KnowledgeSource, SavedKnowledgeNote, SavedReadingJournalEntry } from "../../core/pdf-reader/public";
+import type { KnowledgeSource } from "../../core/pdf-reader/public";
+import { KnowledgeItemMetaStore, SavedKnowledgeNote, SavedReadingJournalEntry } from "../../app/public";
+import { KnowledgeItem } from "../../app/public";
+
+
 import { knowledgeLibrary, type KnowledgeRecord } from '../../../modules/knowledge/public';
 import { isResolvedReadingMode, type ResolvedReadingMode } from '../../../modules/reading-mode/public';
 
@@ -55,23 +59,6 @@ export function writeSavedKnowledgeNotes(notes: SavedKnowledgeNote[]): void {
 
 
 
-export function readReadingJournalEntries(): SavedReadingJournalEntry[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(READING_JOURNAL_STORAGE_KEY) || "[]");
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
-  }
-}
-
-
-
-export function writeReadingJournalEntries(entries: SavedReadingJournalEntry[]): void {
-  localStorage.setItem(READING_JOURNAL_STORAGE_KEY, JSON.stringify(entries));
-}
-
-
-
 export function readKnowledgeItemMetaStore(): KnowledgeItemMetaStore {
   try {
     const value = JSON.parse(
@@ -91,19 +78,14 @@ export function writeKnowledgeItemMetaStore(store: KnowledgeItemMetaStore): void
   localStorage.setItem(KNOWLEDGE_ITEM_META_STORAGE_KEY, JSON.stringify(store));
 }
 
+// Journal storage is owned by the paper-card feature now; re-exported here for
+// knowledge-base callers that historically imported it from this file.
+import { readReadingJournalEntries, writeReadingJournalEntries } from "../paper-card/public";
+export { readReadingJournalEntries, writeReadingJournalEntries };
 
-
-export function normalizeKnowledgeTags(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return Array.from(
-    new Set(
-      value
-        .filter((item): item is string => typeof item === "string")
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  ).slice(0, 12);
-}
+// Tag normalization moved to the app assembly layer (app/knowledge-excerpt).
+import { normalizeKnowledgeTags } from "../../app/knowledge-excerpt";
+export { normalizeKnowledgeTags };
 
 
 

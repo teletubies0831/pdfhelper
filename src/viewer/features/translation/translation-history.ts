@@ -17,16 +17,18 @@ import { browser } from "wxt/browser";
 
 
 import { clearTranslationHistoryButton, openTranslationHistoryButton, translationHistoryCountElement, translationHistoryDialog, translationHistoryDialogCount, translationHistoryDialogList, translationHistorySearchInput } from "../../app/viewer-elements";
-import { TRANSLATION_HISTORY_STORAGE_KEY, currentEnglishLearningResult, currentEnglishLearningSourceText, lastTranslatedText, selectedTextForAi, selectedTextPageNumber, translationHistoryDocumentKey, translationHistoryEntries } from "../../core/pdf-reader/public";
+
 
 
 import { pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
-import { getDocumentChatId } from "../assistant/public";
+import { getDocumentChatId } from "../../app/document-identity";
 import { setStatus } from "../recent-files/public";
+import { TRANSLATION_HISTORY_STORAGE_KEY, currentEnglishLearningResult, currentEnglishLearningSourceText, lastTranslatedText, selectedTextForAi, selectedTextPageNumber, translationHistoryDocumentKey, translationHistoryEntries, EnglishLearningResult, TranslationHistoryEntry, TranslationHistoryStore } from "../../app/public";
 
 
 
-import type { EnglishLearningResult, TranslationHistoryEntry, TranslationHistoryStore } from "../../core/pdf-reader/public";
+
+
 import { renderSentenceLearningResult, renderVocabularyLearningResult, setTranslationSelectionEditor } from './learning-view';
 import { createLearningElement } from './selection-context';
 

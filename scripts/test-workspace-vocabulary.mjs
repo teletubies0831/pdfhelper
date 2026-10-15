@@ -40,7 +40,8 @@ before(async () => {
     window.holdReads = false;
     const dependencies = {
       '../../app/viewer-elements': elements, '../../app/viewer-state': {}, '../../app/workspace-navigation': navigation,
-      '../../core/pdf-reader/public': { persistCurrentAppViewState() {} },
+      '../../app/public': { currentEnglishLearningResult: { value: null }, persistCurrentAppViewState() {}, selectedTextPageNumber: { value: 0 } },
+      '../../core/pdf-reader/public': {},
       '../assistant/public': { setCurrentApplicationView() {} }, '../recent-files/public': { setStatus() {} },
       '../../shared-ui/markdown/markdown-renderer': {}, '../../shared-ui/dialog/dialog-motion': {},
       './learning-card-markdown': {}, './vocabulary-preference': { isVocabularyLibraryEnabled: () => true },

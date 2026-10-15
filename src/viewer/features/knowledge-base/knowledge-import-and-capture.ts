@@ -1,6 +1,8 @@
-import { selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
+
 import { knowledgeImportInput } from "../../app/viewer-elements";
-import type { SavedKnowledgeNote } from "../../core/pdf-reader/public";
+import { selectedKnowledgeRecordKey, SavedKnowledgeNote } from "../../app/public";
+
+
 import { renderKnowledgeBase } from './knowledge-base-controller';
 
 import { getKnowledgeRecordKey, normalizeKnowledgeTags, readSavedKnowledgeNotes, writeSavedKnowledgeNotes } from './knowledge-repository';

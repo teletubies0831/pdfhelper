@@ -30,6 +30,7 @@ function setup() {
   };
   const codec = load('annotation-value-codec', {
     'pdfjs-dist': { AnnotationEditorType: { HIGHLIGHT: 9 } }, '../../app/viewer-state': state,
+    '../../app/document-identity': { getPdfFingerprint() { return ''; } },
   });
   const index = load('annotation-note-index', {
     '../../app/viewer-state': state, './annotation-value-codec': codec,
@@ -38,7 +39,7 @@ function setup() {
   const elements = { highlightNoteText: { value: '' }, highlightNotePopover: { hidden: false } };
   const notes = load('annotation-notes', {
     '../../app/viewer-state': state, '../../app/viewer-elements': elements,
-    '../recent-files/public': { setStatus() {} },
+    '../../app/status-bar': { setStatus() {} },
     './annotation-persistence': { ...codec, ...index, markUnsavedChanges() {} },
     './annotation-editor': {}, './annotation-highlight-content': {},
     './annotation-highlight-index': {}, './annotation-comment-content': content,
@@ -132,7 +133,7 @@ test('creating a note snapshots editors after mode restoration', async () => {
       'pdfjs-dist': { AnnotationEditorType: { HIGHLIGHT: 9, NONE: 0 } },
       '../../app/viewer-elements': {},
       '../../app/viewer-state': { annotationEditor: { value: manager }, contextSelectionRanges: { value: [{}] }, contextSelectionText: { value: 'new selection' }, selectedAnnotationEditor: {}, selectedHighlightEditor: {} },
-      '../../core/pdf-reader/public': {}, '../recent-files/public': { setStatus() {} },
+      '../../core/pdf-reader/public': {}, '../../app/status-bar': { setStatus() {} },
       './annotation-persistence': { getAnnotationGeometrySignature: () => '', getEditorSerializedValue: () => null, getEditorStorageKeys: () => [], isHighlightEditor: e => e.editorType === 9, markUnsavedChanges() {} },
       './annotation-editor': { setHighlightColor() {} },
       './annotation-highlight-content': { setHighlightEditorText: (editor, text) => editor.text = text },

@@ -11,8 +11,10 @@ import {
   type AiStreamToolResult,
 } from "../../modules/ai/public";
 
-import { AiProviderRequestError } from "./vision-service";
-import type { ProviderMessage } from "./vision-service";
+import {
+  AiProviderRequestError,
+  type ProviderMessage,
+} from "../../modules/ai/public";
 import { getAiConfig } from "./ai-config-repository";
 
 import { getProviderAdapter } from "./provider-runtime";

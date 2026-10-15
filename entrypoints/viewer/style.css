@@ -1,4 +1,5 @@
 @import url("../../src/viewer/styles/application.css");
+@import url("../../src/viewer/styles/document-tabs.css");
 @import url("../../src/viewer/features/annotations/styles.css");
 @import url("../../src/viewer/features/knowledge-base/library-foundation.css");
 @import url("../../src/viewer/styles/components.css");
