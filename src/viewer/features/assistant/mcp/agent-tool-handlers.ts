@@ -1,17 +1,17 @@
 import type {
   AiStreamStartMessage,
 } from "../../../../modules/ai/public";
-import type { MemoryToolCall } from "../../../../modules/memory/public";
+import { executeMemoryTool, type MemoryToolCall } from "../../../../modules/memory/public";
 import {
   knowledgeLibrary,
   knowledgeRetrievalService,
 } from "../../../../modules/knowledge/public";
-import { executeMemoryTool } from "../../../../../entrypoints/viewer/memory-store";
-import { resolvedReadingMode } from "../../../core/pdf-reader/public";
+
 import {
   saveReadingJournalEntry,
 } from "../../paper-card/public";
-import { listKnowledgeDocuments, readReadingJournalEntries } from "../../knowledge-base/public";
+import { listKnowledgeDocuments } from "../../../../modules/knowledge/public";
+import { readReadingJournalEntries } from "../../paper-card/public";
 
 import {
   enrichPaperLibraryData,
@@ -26,6 +26,8 @@ import {
 } from "../document-scope-filter";
 import { executeViewerDocumentTool } from "../../../services/document-agent/viewer-document-agent";
 import { isExplicitMemoryForgetRequest } from "../memory-forget-service";
+import { resolvedReadingMode } from "../../../app/public";
+
 
 export interface AgentToolHandlerResult {
   ok: boolean;

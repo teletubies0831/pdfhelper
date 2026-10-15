@@ -17,15 +17,18 @@
 
 
 import { generateMoreExamplesButton, translationLearningHintElement } from "../../app/viewer-elements";
-import { AUTO_TRANSLATE_DELAY_MS, activeAssistantView, activeSummaryScope, aiConfig, aiSelectionUpdateFrame, autoTranslateTimer, cardAbortController, currentCardContext, currentEnglishLearningResult, currentEnglishLearningSourceSentence, currentEnglishLearningSourceText, currentGeneratedCard, currentSummaryContext, getViewerSelectionText, lastCardRequestKey, lastSummaryPoints, lastSummaryRequestKey, lastTranslatedText, lastViewerSelectionText, moreExamplesAbortController, selectedTextForAi, selectedTextPageNumber, translationAbortController } from "../../core/pdf-reader/public";
+import { AUTO_TRANSLATE_DELAY_MS, getViewerSelectionText } from "../../core/pdf-reader/public";
 import { parseAiJson, requestAiContent } from "../../shared-ui/markdown/markdown-renderer";
 
 import { pdfViewer, sourceName } from "../../app/viewer-state";
 
 import { setStatus } from "../recent-files/public";
-import { scheduleSummaryGeneration } from "../../services/document-agent/viewer-document-agent";
-import { scheduleCardGeneration, updateCardSourceSnippet } from "../paper-card/public";
+import { scheduleSummaryGeneration } from "./summary-generation";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
+import { activeAssistantView, aiConfig, aiSelectionUpdateFrame, autoTranslateTimer, cardAbortController, currentCardContext, currentEnglishLearningResult, currentEnglishLearningSourceSentence, currentEnglishLearningSourceText, currentGeneratedCard, currentSummaryContext, lastCardRequestKey, lastSummaryPoints, lastSummaryRequestKey, lastTranslatedText, moreExamplesAbortController, selectedTextForAi, selectedTextPageNumber, translationAbortController } from "../../app/public";
+import { activeSummaryScope, lastViewerSelectionText } from "../../app/public";
+
+
 
 import { getEnglishWordSelection, getSelectedEnglishWord, getSelectionSentenceContext, getSelectionSurroundingText, getTranslationScopeFromSelection, normalizeLearningInlineText, setMoreExamplesButtonVisible, setTranslationLearningTitle, setTranslationState } from './selection-context';
 import { parseSentenceLearningResult, parseVocabularyLearningResult, readVocabularyExamples, renderSentenceLearningResult, renderVocabularyLearningResult, setTranslationSelectionEditor } from './learning-view';
@@ -123,8 +126,18 @@ export function updateAiSelectedSnippet(): void {
   currentCardContext.value = null;
   currentGeneratedCard.value = null;
   cardAbortController.value?.abort();
-  updateCardSourceSnippet();
-  if (activeAssistantView.value === "cards") scheduleCardGeneration();
+  // Card panel refresh is paper-card behavior; the registration layer injects
+  // it so the translation feature does not import paper-card.
+  cardSourceRefreshHandler?.();
+}
+
+// Paper-card choreography injected by the registration layer.
+let cardSourceRefreshHandler: (() => void) | null = null;
+
+export function setCardSourceRefreshHandler(
+  handler: typeof cardSourceRefreshHandler,
+): void {
+  cardSourceRefreshHandler = handler;
 }
 
 

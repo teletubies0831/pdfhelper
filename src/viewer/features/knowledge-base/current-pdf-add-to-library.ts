@@ -2,7 +2,7 @@ import { knowledgeRetrievalService } from "../../../modules/knowledge/public";
 import { getDocument } from "pdfjs-dist";
 import { currentRecentEntryId, pdfDocument, sourceName, sourcePdfBytes } from "../../app/viewer-state";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
-import { getDocumentChatId } from "../assistant/public";
+import { getDocumentChatId } from "../../app/document-identity";
 import {
   addKnowledgeDocument,
   getKnowledgeDocument,

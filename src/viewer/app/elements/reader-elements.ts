@@ -1,5 +1,13 @@
 import { requiredElement } from "./required-element";
 
+export const documentTabsBar = requiredElement<HTMLElement>("document-tabs");
+
+export const documentTabsList = requiredElement<HTMLElement>("document-tabs-list");
+
+export const documentTabsNewButton = requiredElement<HTMLButtonElement>(
+  "document-tabs-new",
+);
+
 export const openFileButton = requiredElement<HTMLElement>("open-file");
 
 export const fileInput = requiredElement<HTMLInputElement>("file-input");

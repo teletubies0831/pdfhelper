@@ -25,7 +25,7 @@ before(async () => {
   await page.setContent(`<!doctype html><div class="app-frame">${await template('toolbar')}${stage}</div>${overlays}`);
   await page.addStyleTag({ content: await read('node_modules/pdfjs-dist/web/pdf_viewer.css') });
   await page.addStyleTag({ content: await css(new URL('entrypoints/viewer/style.css', root)) });
-  const sources = await Promise.all(['app/workspace-navigation.ts', 'features/assistant/application-navigation.ts'].map(async path =>
+  const sources = await Promise.all(['app/workspace-navigation.ts', 'app/application-navigation.ts'].map(async path =>
     ts.transpileModule(await read(`src/viewer/${path}`), { compilerOptions: {
       target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS,
     } }).outputText));
@@ -42,7 +42,7 @@ before(async () => {
     new Function('require', 'exports', workspaceCode)(() => elements, workspace);
     window.presentation = {};
     new Function('require', 'exports', presentationCode)(name => name.endsWith('viewer-elements') ? elements :
-      name.endsWith('workspace-navigation') ? workspace : { renderKnowledgeBase() {} }, presentation);
+      name.endsWith('workspace-navigation') ? workspace : name.endsWith('application-navigation') ? presentation : { renderKnowledgeBase() {} }, presentation);
     window.clicks = [];
     for (const [id, view] of [['ai-panel-toggle', 'viewer'], ['knowledge-base-entry', 'knowledge'], ['vocabulary-library-entry', 'vocabulary']]) {
       get(id).addEventListener('click', event => {

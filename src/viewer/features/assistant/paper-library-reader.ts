@@ -1,7 +1,7 @@
 import { getDocument, type PDFDocumentProxy } from "pdfjs-dist";
 
-import type { PaperLibraryRecord } from "../../../modules/memory/public";
-import { executeMemoryTool } from "../../../../entrypoints/viewer/memory-store";
+import { executeMemoryTool, type PaperLibraryRecord } from "../../../modules/memory/public";
+import { extractPdfPageRawText } from "../../../infrastructure/browser/pdf-text-extraction";
 import { pdfDocument } from "../../app/viewer-state";
 import { isRecord } from "../annotations/public";
 import { readRecentFiles } from "../recent-files/public";
@@ -9,29 +9,57 @@ import {
   readSavedPaperCards,
   readSavedPaperOverviews,
 } from "../paper-card/public";
+import type { SavedPaperCard, SavedPaperOverview } from "../../app/public";
 
 import { getDocumentChatId } from "./chat-session";
 
-export function getPaperLibraryCardContext(
-  record: PaperLibraryRecord,
-): Record<string, unknown> {
-  const overviews = readSavedPaperOverviews().filter(
+// Paper identity is modeled in three places (recent-files entries, saved
+// cards/overviews, and the memory paper library). Until those converge on one
+// domain model, all cross-model matching goes through these two helpers so the
+// identity rules live in exactly one place.
+function normalizeDocumentTitle(value: string): string {
+  return value.trim().replace(/\.pdf$/i, "");
+}
+
+function documentTitleMatches(
+  candidate: string | undefined,
+  recordTitle: string,
+): boolean {
+  return (
+    Boolean(candidate) &&
+    normalizeDocumentTitle(candidate!) === normalizeDocumentTitle(recordTitle)
+  );
+}
+
+function findOverviewMatches(record: PaperLibraryRecord): SavedPaperOverview[] {
+  return readSavedPaperOverviews().filter(
     (card) =>
       card.documentId === record.documentId ||
       card.documentName === record.sourceName ||
       card.documentName === record.title ||
-      card.documentName.replace(/\.pdf$/i, "") ===
-        record.title.replace(/\.pdf$/i, ""),
+      documentTitleMatches(card.documentName, record.title),
   );
-  const overviewIds = new Set(overviews.map((card) => card.id));
-  const readingCards = readSavedPaperCards().filter(
+}
+
+function findReadingCardMatches(
+  record: PaperLibraryRecord,
+  overviewIds: Set<string>,
+): SavedPaperCard[] {
+  return readSavedPaperCards().filter(
     (card) =>
       card.documentId === record.documentId ||
       (card.paperOverviewId ? overviewIds.has(card.paperOverviewId) : false) ||
       card.documentName === record.sourceName ||
-      card.documentName.replace(/\.pdf$/i, "") ===
-        record.title.replace(/\.pdf$/i, ""),
+      documentTitleMatches(card.documentName, record.title),
   );
+}
+
+export function getPaperLibraryCardContext(
+  record: PaperLibraryRecord,
+): Record<string, unknown> {
+  const overviews = findOverviewMatches(record);
+  const overviewIds = new Set(overviews.map((card) => card.id));
+  const readingCards = findReadingCardMatches(record, overviewIds);
   return {
     source: {
       kind: record.sourceKind,
@@ -109,14 +137,7 @@ async function extractPaperPageText(
   documentProxy: PDFDocumentProxy,
   pageNumber: number,
 ): Promise<string> {
-  const page = await documentProxy.getPage(pageNumber);
-  const content = await page.getTextContent();
-  return content.items
-    .map((item) =>
-      "str" in item && typeof item.str === "string" ? item.str : "",
-    )
-    .filter(Boolean)
-    .join(" ")
+  return (await extractPdfPageRawText(documentProxy, pageNumber))
     .replace(/\s+/g, " ")
     .trim();
 }

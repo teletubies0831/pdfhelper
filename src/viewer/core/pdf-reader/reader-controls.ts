@@ -15,10 +15,32 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 
 
 
-import { canRedoAnnotation, canUndoAnnotation, hasUnsavedChanges, isSavingAnnotatedPdf, lastReadingPosition, pdfDocument, pdfViewer } from "../../app/viewer-state";
+import { canRedoAnnotation, canUndoAnnotation, hasUnsavedChanges, isSavingAnnotatedPdf, lastReadingPosition, navigateToDestinationWithoutReturnHistory, pdfDocument, pdfViewer } from "../../app/viewer-state";
 import { appFrame, cardTypeButtons, copyCardButton, copySummaryButton, editorModeButtons, findInput, findNextButton, findPreviousButton, focusModeButton, focusModeLabel, freeTextColorInput, freeTextSizeDownButton, freeTextSizeInput, freeTextSizeUpButton, nextButton, outlineList, outlineToggleButton, pageCountElement, pageNumberInput, previousButton, quickCurrentLocationButton, quickCurrentLocationLabel, quickLastLocationButton, quickLastLocationLabel, redoAnnotationButton, saveAnnotatedPdfButton, saveCardButton, saveCurrentPdfButton, smartCopyButton, summaryScopeButtons, toggleNotesButton, undoAnnotationButton, viewerElement, zoomInButton, zoomOutButton, zoomValueElement } from "../../app/viewer-elements";
-import { navigateToDestinationWithoutReturnHistory } from "../../features/assistant/public";
-import { getSelectionSurroundingText, updateSummaryMetadata, type SelectionSurroundingText } from "../../features/translation/public";
+
+export interface SelectionSurroundingText {
+  before: string;
+  selected: string;
+  after: string;
+}
+
+// Feature-owned providers, injected by the registration layer so the PDF core
+// never imports feature code.
+let selectionSurroundingTextProvider: (() => SelectionSurroundingText) | null = null;
+
+export function setSelectionSurroundingTextProvider(
+  provider: typeof selectionSurroundingTextProvider,
+): void {
+  selectionSurroundingTextProvider = provider;
+}
+
+let summaryMetadataRefreshHandler: (() => void) | null = null;
+
+export function setSummaryMetadataRefreshHandler(
+  handler: typeof summaryMetadataRefreshHandler,
+): void {
+  summaryMetadataRefreshHandler = handler;
+}
 
 
 
@@ -294,7 +316,7 @@ export async function renderOutlineItems(
           if (!pageNumber || pdfDocument.value !== documentProxy) return;
           button.dataset.outlinePage = String(pageNumber);
           updateOutlineActivePage();
-          updateSummaryMetadata();
+          summaryMetadataRefreshHandler?.();
         },
       );
     }
@@ -322,7 +344,7 @@ export async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
     if (outline && outline.length > 0) {
       await renderOutlineItems(documentProxy, outline);
       updateOutlineActivePage();
-      updateSummaryMetadata();
+      summaryMetadataRefreshHandler?.();
       return;
     }
   } catch (error) {
@@ -343,7 +365,7 @@ export async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
     });
   }
   updateOutlineActivePage();
-  updateSummaryMetadata();
+  summaryMetadataRefreshHandler?.();
 }
 
 
@@ -387,7 +409,11 @@ export function getViewerSelectionRawText(
   ) {
     return "";
   }
-  const reconstructed = (surroundingText ?? getSelectionSurroundingText()).selected;
+  const reconstructed = (
+    surroundingText
+    ?? selectionSurroundingTextProvider?.()
+    ?? { before: "", selected: "", after: "" }
+  ).selected;
   return trimSelectionBoundaryWhitespace(reconstructed || selection.toString());
 }
 

@@ -15,11 +15,13 @@ import { type AiEvidenceSource, type AiImageAttachment } from "../../../modules/
 
 
 
-import { chatImagePreviewOverlay, getDisplayFileName, pendingChatImages } from "../../core/pdf-reader/public";
+import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { renderChatMarkdown } from "../../shared-ui/markdown/markdown-renderer";
 import { chatAttachmentsElement, chatInput, chatMessagesElement } from "../../app/viewer-elements";
 import { setStatus } from "../recent-files/public";
 import { openSourcePdfInNewTab } from "../../shared-ui/navigation/source-pdf-navigation";
+import { chatImagePreviewOverlay, pendingChatImages } from "../../app/public";
+
 
 
 

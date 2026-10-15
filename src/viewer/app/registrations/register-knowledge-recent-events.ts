@@ -1,14 +1,4 @@
-import {
-  activeKnowledgeCategory,
-  activeKnowledgeFilter,
-  activeKnowledgeFocus,
-  activeKnowledgePriority,
-  activeKnowledgeReadingStatus,
-  activeKnowledgeTag,
-  activeKnowledgeVenue,
-  activeKnowledgeYear,
-  selectedKnowledgeRecordKey,
-} from "../../core/pdf-reader/public";
+
 import {
   knowledgePriorityFilterSelect,
   knowledgeReadingStatusFilterSelect,
@@ -21,6 +11,10 @@ import {
   renderKnowledgeBase,
   resetKnowledgeOriginFilter,
 } from "../../features/knowledge-base/public";
+import { activeKnowledgeCategory, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, selectedKnowledgeRecordKey } from "../public";
+import { activeKnowledgeFilter, activeKnowledgeFocus } from "../public";
+
+
 
 function getLatestKnowledgeRecordKey(): string {
   return [...collectKnowledgeItems()]

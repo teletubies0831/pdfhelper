@@ -15,20 +15,32 @@
 
 
 
-import { cardTypeButtons, knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeDeleteItemButton, knowledgeDetailCloseButton, knowledgeEditItemButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeEditorOpenSourceButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeMainElement, knowledgeNewNoteButton, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgeOpenSourceButton, knowledgePriorityFilterSelect, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeSearchInput, knowledgeSortSelect, knowledgeVenueFilterSelect, knowledgeYearFilterSelect, summaryScopeButtons } from "../viewer-elements";
-import { activeKnowledgeCategory, activeKnowledgeFocus, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, knowledgeEditorTargetKey, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
-
-import { setActiveSummaryScope } from "../../services/document-agent/viewer-document-agent";
-import { setActiveCardType } from "../../features/paper-card/public";
+import { knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeDeleteItemButton, knowledgeDetailCloseButton, knowledgeEditItemButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeEditorOpenSourceButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeMainElement, knowledgeNewNoteButton, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgeOpenSourceButton, knowledgePriorityFilterSelect, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeSearchInput, knowledgeSortSelect, knowledgeVenueFilterSelect, knowledgeYearFilterSelect } from "../viewer-elements";
 
 
-import { addCurrentPdfToLibrary, closeKnowledgeBasePage, closeKnowledgeEditor, collectKnowledgeItems, deleteKnowledgeItem, deleteSelectedKnowledgeItem, getSelectedKnowledgeItem, importKnowledgeNotes, knowledgeEditorBodyMode, normalizeKnowledgeCategory, openKnowledgeBasePage, openKnowledgeEditor, openSelectedKnowledgeSource, registerKnowledgeCorpusEvents, renderKnowledgeBase, renderKnowledgeDetail, saveKnowledgeEditor, scheduleKnowledgeEditorPreview, setKnowledgeEditorBodyMode, resetKnowledgeOriginFilter, setKnowledgeFilter, setKnowledgeOrigin, setKnowledgeOriginContent, setKnowledgePageStatus } from "../../features/knowledge-base/public";
-import type { CardType, KnowledgeFilter, KnowledgeFocus, SummaryScope } from "../../core/pdf-reader/public";
+import { addCurrentPdfToLibrary, closeKnowledgeBasePage, closeKnowledgeEditor, collectKnowledgeItems, deleteKnowledgeItem, deleteSelectedKnowledgeItem, getSelectedKnowledgeItem, importKnowledgeNotes, knowledgeEditorBodyMode, normalizeKnowledgeCategory, openKnowledgeBasePage, openKnowledgeEditor, openSelectedKnowledgeSource, refreshKnowledgeBaseIfOpen, registerKnowledgeCorpusEvents, renderKnowledgeBase, renderKnowledgeDetail, saveKnowledgeEditor, scheduleKnowledgeEditorPreview, setKnowledgeEditorBodyMode, resetKnowledgeOriginFilter, setKnowledgeFilter, setKnowledgeOrigin, setKnowledgeOriginContent, setKnowledgePageStatus } from "../../features/knowledge-base/public";
+import type { KnowledgeFilter, KnowledgeFocus } from "../../core/pdf-reader/public";
 import type { KnowledgeOriginContentFilter, KnowledgeOriginFilter } from "../../features/knowledge-base/public";
+import { activeKnowledgeCategory, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, knowledgeEditorTargetKey, selectedKnowledgeRecordKey } from "../public";
+import { activeKnowledgeFocus } from "../public";
+
+
 
 import { scheduleAppViewStateSave } from '../app-ui';
+import {
+  setKnowledgeRenderHandler,
+} from "../application-navigation";
+import { setKnowledgeRefreshHandler } from "../knowledge-refresh";
 
 export function registerKnowledgeEvents(): void {
+  // App-level navigation/refresh hooks point at the knowledge-base feature.
+  // The refresh hook always re-syncs the knowledge module from legacy sources
+  // so agent retrieval sees fresh data even while the knowledge page is closed.
+  setKnowledgeRenderHandler(renderKnowledgeBase);
+  setKnowledgeRefreshHandler(() => {
+    collectKnowledgeItems();
+    refreshKnowledgeBaseIfOpen();
+  });
   registerKnowledgeCorpusEvents();
   knowledgeBaseEntryButton.addEventListener("click", openKnowledgeBasePage);
   
@@ -224,17 +236,4 @@ export function registerKnowledgeEvents(): void {
       saveKnowledgeEditor();
     });
   
-  for (const button of summaryScopeButtons) {
-      button.addEventListener("click", () => {
-        const scope = button.dataset.summaryScope as SummaryScope | undefined;
-        if (scope) setActiveSummaryScope(scope);
-      });
-    }
-  
-  for (const button of cardTypeButtons) {
-      button.addEventListener("click", () => {
-        const cardType = button.dataset.cardType as CardType | undefined;
-        if (cardType) setActiveCardType(cardType);
-      });
-    }
 }

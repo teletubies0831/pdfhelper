@@ -14,21 +14,27 @@
 
 
 import { citationReturnButton, saveAnnotatedPdfButton, saveCurrentPdfButton, selectedSnippetElement, textStatus, toggleNotesButton, translationSourceSentenceField, translationSourceSentenceInput, viewerContainer, viewerElement } from "../viewer-elements";
-import { activeSummaryScope, cardAbortController, clearOutlineList, moreExamplesAbortController, persistCurrentAppViewState, restoreAppViewAfterRefresh, setLeftPanelCollapsed, summaryAbortController, translationAbortController, updateControls } from "../../core/pdf-reader/public";
+import { clearOutlineList, setLeftPanelCollapsed, updateControls } from "../../core/pdf-reader/public";
 import { autoResizeTranslationTextarea, cancelPendingAutomaticTranslation, scheduleAiSelectedSnippetUpdate } from "../../features/translation/public";
-import { cancelPendingSummaryGeneration } from "../../services/document-agent/viewer-document-agent";
+import { cancelPendingSummaryGeneration } from "../../features/translation/public";
 import { cancelPendingCardGeneration } from "../../features/paper-card/public";
 import { areNoteIndicatorsHidden, hasUnsavedChanges } from "../viewer-state";
 import { loadDeepSeekConfig, returnToPreviousInternalNavigationPosition, setCurrentApplicationView } from "../../features/assistant/public";
 import { initializeAnnotationAutoSave, updateNoteIndicatorsVisibility } from "../../features/annotations/public";
 import { cancelReadingPositionSave, openRecentFileById, persistCurrentReadingPosition, restoreMostRecentPdf, scheduleReadingPositionSave } from "../../features/recent-files/public";
-import { openRemotePdf, saveAnnotatedPdf } from "../../core/pdf-reader/public";
+import { openRemotePdf } from "../document-open";
+import { saveAnnotatedPdf } from "../document-save";
 import { hideAnnotationActionBar, hideHighlightNote, hideSelectionContextMenu } from "../../features/annotations/public";
 
 
 
 import { requestedRecentEntryId, requestedSourcePage, source } from '../app-ui';
 import { installReusableSelects } from "../../shared-ui/select/custom-select";
+import { cardAbortController, moreExamplesAbortController, persistCurrentAppViewState, summaryAbortController, translationAbortController } from "../public";
+import { restoreAppViewAfterRefresh } from "../app-view-restore";
+import { activeSummaryScope } from "../public";
+
+
 
 export function registerLifecycle(): void {
   installReusableSelects();

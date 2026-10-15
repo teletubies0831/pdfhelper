@@ -1,4 +1,5 @@
-import type { PaperCardFormData } from "../../core/pdf-reader/public";
+import { PaperCardFormData } from "../../app/public";
+
 
 export function normalizePaperVenueYearDisplay(
   value: string,

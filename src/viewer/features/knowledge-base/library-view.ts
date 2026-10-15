@@ -15,7 +15,7 @@
 
 
 
-import { activeKnowledgeCategory, activeKnowledgeFilter, activeKnowledgeFocus, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, selectedKnowledgeRecordKey } from "../../core/pdf-reader/public";
+
 
 import { knowledgeBasePageElement, knowledgeCountAllElement, knowledgeCountOriginGeneralElement, knowledgeCountOriginGeneralNoteElement, knowledgeCountOriginGeneralReadingCardElement, knowledgeCountOriginNovelElement, knowledgeCountOriginNovelNoteElement, knowledgeCountOriginNovelReadingCardElement, knowledgeCountOriginPaperElement, knowledgeCountOriginPaperNoteElement, knowledgeCountOriginPaperReadingCardElement, knowledgeDetailBodyElement, knowledgeDetailContentElement, knowledgeDetailCreatedElement, knowledgeDetailDocumentElement, knowledgeDetailEmptyElement, knowledgeDetailPositionElement, knowledgeDetailTagsElement, knowledgeDetailTimeElement, knowledgeDetailTitleElement, knowledgeDetailTypeElement, knowledgeDetailUpdatedElement, knowledgeEditItemButton, knowledgeFocusButtons, knowledgeFocusCountCitableElement, knowledgeFocusCountDeepElement, knowledgeFocusCountFinishedElement, knowledgeFocusCountMethodsElement, knowledgeFocusCountRelatedElement, knowledgeFocusCountReplicateElement, knowledgeFocusCountTodoElement, knowledgeListElement, knowledgeOpenSourceButton, knowledgePageTitleElement, knowledgePriorityFilterSelect, knowledgeReadingStatusFilterSelect, knowledgeRecentSummaryElement, knowledgeRelatedSummaryElement, knowledgeSearchInput, knowledgeSortSelect, knowledgeTagListElement, knowledgeVenueFilterSelect, knowledgeYearFilterSelect } from "../../app/viewer-elements";
 
@@ -24,404 +24,48 @@ import { knowledgeBasePageElement, knowledgeCountAllElement, knowledgeCountOrigi
 
 
 
-import type { KnowledgeFocus, KnowledgeItem } from "../../core/pdf-reader/public";
-import { activeKnowledgeOrigin, activeKnowledgeOriginContent, deriveKnowledgePriority, deriveKnowledgeReadingStatus, extractKnowledgeVenue, extractKnowledgeYear, formatKnowledgeDate, formatKnowledgeRelativeDate, getKnowledgeBaseDocumentName, getKnowledgeExcerptForDashboard, getKnowledgeKindIcon, getKnowledgeKindLabel, getKnowledgeOriginContentType, matchesKnowledgeFocus, syncKnowledgeOriginButtons, type KnowledgeOriginContentFilter, type KnowledgeOriginFilter } from './knowledge-domain';
+import type { KnowledgeFocus } from "../../core/pdf-reader/public";
+import { activeKnowledgeOrigin, activeKnowledgeOriginContent, extractKnowledgeVenue, extractKnowledgeYear, formatKnowledgeDate, formatKnowledgeRelativeDate, getKnowledgeBaseDocumentName, getKnowledgeKindIcon, getKnowledgeKindLabel, getKnowledgeOriginContentType, syncKnowledgeOriginButtons, type KnowledgeOriginContentFilter, type KnowledgeOriginFilter } from './knowledge-domain';
 import { renderKnowledgeBase } from './knowledge-base-controller';
 import { deleteKnowledgeItem, openKnowledgeEditor } from './editor-controller';
 import { getPaperLibraryCardMetadata } from "./paper-library-card-metadata";
+import { activeKnowledgeCategory, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, selectedKnowledgeRecordKey } from "../../app/public";
+import { activeKnowledgeFilter, activeKnowledgeFocus, KnowledgeItem } from "../../app/public";
 
 
 
 
-export function syncKnowledgeFocusCounts(items: KnowledgeItem[]): void {
-  if (knowledgeFocusCountTodoElement)
-    knowledgeFocusCountTodoElement.textContent = String(
-      items.filter((item) => matchesKnowledgeFocus(item, "todo")).length,
-    );
-  if (knowledgeFocusCountDeepElement)
-    knowledgeFocusCountDeepElement.textContent = String(
-      items.filter((item) => matchesKnowledgeFocus(item, "deep")).length,
-    );
-  if (knowledgeFocusCountFinishedElement)
-    knowledgeFocusCountFinishedElement.textContent = String(
-      items.filter((item) => matchesKnowledgeFocus(item, "finished")).length,
-    );
-  if (knowledgeFocusCountCitableElement)
-    knowledgeFocusCountCitableElement.textContent = String(
-      items.filter((item) => matchesKnowledgeFocus(item, "citable")).length,
-    );
-  if (knowledgeFocusCountReplicateElement)
-    knowledgeFocusCountReplicateElement.textContent = String(
-      items.filter((item) => matchesKnowledgeFocus(item, "replicate")).length,
-    );
-  if (knowledgeFocusCountRelatedElement)
-    knowledgeFocusCountRelatedElement.textContent = String(
-      items.filter((item) => matchesKnowledgeFocus(item, "related")).length,
-    );
-  if (knowledgeFocusCountMethodsElement)
-    knowledgeFocusCountMethodsElement.textContent = String(
-      items.filter((item) => matchesKnowledgeFocus(item, "methods")).length,
-    );
-  for (const button of knowledgeFocusButtons) {
-    const focus = button.dataset.knowledgeFocus as KnowledgeFocus | undefined;
-    button.classList.toggle("active", focus === activeKnowledgeFocus.value);
-  }
-}
 
 
 
-export function populateKnowledgeDashboardFilters(items: KnowledgeItem[]): void {
-  const syncSelect = (
-    select: HTMLSelectElement | null,
-    current: string,
-    fallbackLabel: string,
-    values: string[],
-  ): void => {
-    if (!select) return;
-    const previous = current;
-    select.innerHTML = "";
-    const allOption = document.createElement("option");
-    allOption.value = "all";
-    allOption.textContent = fallbackLabel;
-    select.append(allOption);
-    for (const value of values) {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = value;
-      select.append(option);
-    }
-    if (values.includes(previous)) select.value = previous;
-    else select.value = "all";
-  };
-
-  const years = Array.from(
-    new Set(
-      items
-        .map(extractKnowledgeYear)
-        .filter((value) => value && value !== "未标注"),
-    ),
-  ).sort((a, b) => Number(b) - Number(a));
-  const venues = Array.from(
-    new Set(items.map(extractKnowledgeVenue).filter(Boolean)),
-  ).sort((a, b) => a.localeCompare(b, "zh-CN"));
-  const statuses = ["待读", "精读中", "已读完", "略读完成"];
-  const priorities = ["高优先级", "中优先级", "常规"];
-
-  syncSelect(knowledgeYearFilterSelect, activeKnowledgeYear.value, "年份", years);
-  syncSelect(
-    knowledgeVenueFilterSelect,
-    activeKnowledgeVenue.value,
-    "会议/期刊",
-    venues,
-  );
-  syncSelect(
-    knowledgeReadingStatusFilterSelect,
-    activeKnowledgeReadingStatus.value,
-    "阅读状态",
-    statuses,
-  );
-  syncSelect(
-    knowledgePriorityFilterSelect,
-    activeKnowledgePriority.value,
-    "优先级",
-    priorities,
-  );
-
-  activeKnowledgeYear.value = knowledgeYearFilterSelect?.value || "all";
-  activeKnowledgeVenue.value = knowledgeVenueFilterSelect?.value || "all";
-  activeKnowledgeReadingStatus.value =
-    knowledgeReadingStatusFilterSelect?.value || "all";
-  activeKnowledgePriority.value = knowledgePriorityFilterSelect?.value || "all";
-}
 
 
 
-export function getFilteredKnowledgeItems(items: KnowledgeItem[]): KnowledgeItem[] {
-  const query = knowledgeSearchInput.value.trim().toLocaleLowerCase("zh-CN");
-  const filtered = items.filter((item) => {
-    if (
-      activeKnowledgeOrigin.value !== "all" &&
-      item.originMode !== activeKnowledgeOrigin.value
-    )
-      return false;
-    if (
-      activeKnowledgeOriginContent.value !== "all" &&
-      getKnowledgeOriginContentType(item) !== activeKnowledgeOriginContent.value
-    )
-      return false;
-    if (activeKnowledgeFilter.value !== "all" && item.kind !== activeKnowledgeFilter.value)
-      return false;
-    if (activeKnowledgeTag.value && !item.tags.includes(activeKnowledgeTag.value))
-      return false;
-    if (!matchesKnowledgeFocus(item, activeKnowledgeFocus.value)) return false;
-    if (
-      activeKnowledgeYear.value !== "all" &&
-      extractKnowledgeYear(item) !== activeKnowledgeYear.value
-    )
-      return false;
-    if (
-      activeKnowledgeVenue.value !== "all" &&
-      extractKnowledgeVenue(item) !== activeKnowledgeVenue.value
-    )
-      return false;
-    if (
-      activeKnowledgeReadingStatus.value !== "all" &&
-      deriveKnowledgeReadingStatus(item) !== activeKnowledgeReadingStatus.value
-    )
-      return false;
-    if (
-      activeKnowledgePriority.value !== "all" &&
-      deriveKnowledgePriority(item) !== activeKnowledgePriority.value
-    )
-      return false;
-    if (!query) return true;
-    const haystack = [
-      item.title,
-      item.content,
-      item.documentName,
-      item.positionLabel,
-      item.category,
-      extractKnowledgeVenue(item),
-      extractKnowledgeYear(item),
-      ...item.tags,
-    ]
-      .join("\n")
-      .toLocaleLowerCase("zh-CN");
-    return haystack.includes(query);
-  });
-
-  const sort = knowledgeSortSelect.value;
-  filtered.sort((left, right) => {
-    if (sort === "oldest")
-      return (
-        new Date(left.updatedAt).getTime() - new Date(right.updatedAt).getTime()
-      );
-    if (sort === "title") return left.title.localeCompare(right.title, "zh-CN");
-    return (
-      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
-    );
-  });
-  return filtered;
-}
 
 
 
-export function renderKnowledgeSidebar(items: KnowledgeItem[]): void {
-  const countOrigin = (
-    origin: Exclude<KnowledgeOriginFilter, "all">,
-    content: KnowledgeOriginContentFilter = "all",
-  ): number =>
-    items.filter(
-      (item) =>
-        item.originMode === origin &&
-        (content === "all" || getKnowledgeOriginContentType(item) === content),
-    ).length;
-
-  knowledgeCountAllElement.textContent = String(items.length);
-
-  knowledgeCountOriginNovelElement.textContent = String(countOrigin("novel"));
-  knowledgeCountOriginNovelReadingCardElement.textContent = String(
-    countOrigin("novel", "reading-card"),
-  );
-  knowledgeCountOriginNovelNoteElement.textContent = String(
-    countOrigin("novel", "note"),
-  );
-
-  knowledgeCountOriginPaperElement.textContent = String(countOrigin("paper"));
-  knowledgeCountOriginPaperReadingCardElement.textContent = String(
-    countOrigin("paper", "reading-card"),
-  );
-  knowledgeCountOriginPaperNoteElement.textContent = String(
-    countOrigin("paper", "note"),
-  );
-
-  knowledgeCountOriginGeneralElement.textContent = String(countOrigin("general"));
-  knowledgeCountOriginGeneralReadingCardElement.textContent = String(
-    countOrigin("general", "reading-card"),
-  );
-  knowledgeCountOriginGeneralNoteElement.textContent = String(
-    countOrigin("general", "note"),
-  );
-
-  syncKnowledgeOriginButtons();
-
-  const tagCounts = new Map<string, number>();
-  for (const item of items) {
-    for (const tag of item.tags)
-      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-  }
-  const tagButtons = Array.from(tagCounts.entries())
-    .sort((left, right) => right[1] - left[1])
-    .slice(0, 12)
-    .map(([tag, count]) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.classList.toggle("active", activeKnowledgeTag.value === tag);
-      button.textContent = `# ${tag} ${count}`;
-      button.addEventListener("click", () => {
-        activeKnowledgeTag.value = activeKnowledgeTag.value === tag ? "" : tag;
-        activeKnowledgeCategory.value = "all";
-        renderKnowledgeBase();
-      });
-      return button;
-    });
-  knowledgeTagListElement.replaceChildren(...tagButtons);
-
-  const latest = [...items].sort(
-    (left, right) =>
-      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
-  )[0];
-  knowledgeRecentSummaryElement.textContent = latest
-    ? `${formatKnowledgeRelativeDate(latest.updatedAt)} · ${latest.title}`
-    : "还没有保存内容";
-}
 
 
 
-export function openKnowledgeItemFromLibrary(item: KnowledgeItem): void {
-  selectedKnowledgeRecordKey.value = item.recordKey;
-  openKnowledgeEditor(item);
-}
 
 
 
-export function createKnowledgeItemCard(item: KnowledgeItem): HTMLElement {
-  const card = document.createElement("article");
-  card.className = `knowledge-item-card knowledge-simple-card kind-${item.kind}`;
-  card.dataset.recordKey = item.recordKey;
-  card.tabIndex = 0;
-  card.setAttribute("role", "button");
-  card.setAttribute(
-    "aria-label",
-    `查看知识内容：${item.title}`,
-  );
-
-  const cardHeader = document.createElement("div");
-  cardHeader.className = "knowledge-simple-card-header";
-
-  const title = document.createElement("h3");
-  title.className = "knowledge-card-title";
-  title.textContent = item.title;
-
-  const deleteButton = document.createElement("button");
-  deleteButton.type = "button";
-  deleteButton.className = "knowledge-card-delete-button";
-  deleteButton.textContent = "删除";
-  deleteButton.title = `删除“${item.title}”`;
-  deleteButton.setAttribute("aria-label", `删除“${item.title}”`);
-  deleteButton.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    deleteKnowledgeItem(item);
-  });
-  const paperMetadata = getPaperLibraryCardMetadata(item);
-  if (paperMetadata) {
-    card.classList.add("paper-library-card");
-  } else {
-    card.classList.add("knowledge-note-card");
-  }
-
-  const subtitle = document.createElement("div");
-  subtitle.className = "knowledge-card-subtitle";
-  if (paperMetadata) {
-    subtitle.textContent = paperMetadata.venueYear;
-  } else {
-    const category = item.category.trim();
-    subtitle.textContent = category || getKnowledgeKindLabel(item.kind);
-  }
-
-  const fileLine = document.createElement("div");
-  fileLine.className = "knowledge-card-file";
-  const fileIcon = document.createElement("span");
-  fileIcon.className = "knowledge-card-file-icon";
-  fileIcon.setAttribute("aria-hidden", "true");
-  fileIcon.textContent = "▧";
-  const fileName = document.createElement("span");
-  fileName.textContent = getKnowledgeBaseDocumentName(item.documentName);
-  fileLine.append(fileIcon, fileName);
-
-  const excerpt = document.createElement("p");
-  excerpt.className = "knowledge-card-excerpt";
-
-  if (paperMetadata) {
-    excerpt.textContent = paperMetadata.authors || "作者信息未记录";
-    cardHeader.append(title, deleteButton);
-    card.append(cardHeader, subtitle, fileLine, excerpt);
-  } else {
-    const rawExcerpt = getKnowledgeExcerptForDashboard(item);
-    excerpt.textContent = rawExcerpt.replace(/^原文\s*/u, "").trim();
-    excerpt.classList.add("knowledge-note-excerpt-text");
-
-    const metaRow = document.createElement("div");
-    metaRow.className = "knowledge-note-meta-row";
-    metaRow.append(subtitle, deleteButton);
-
-    const excerptPanel = document.createElement("div");
-    excerptPanel.className = "knowledge-note-excerpt-panel";
-
-    const excerptLabel = document.createElement("div");
-    excerptLabel.className = "knowledge-note-excerpt-label";
-    excerptLabel.textContent = "原文摘录";
-
-    excerptPanel.append(excerptLabel, excerpt);
-    card.append(metaRow, excerptPanel, fileLine);
-  }
-
-  const openItem = (): void => openKnowledgeItemFromLibrary(item);
-  card.addEventListener("click", openItem);
-  card.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      openItem();
-    }
-  });
-
-  return card;
-}
 
 
 
-export function createKnowledgeGroup(
-  items: KnowledgeItem[],
-  title: string,
-): HTMLElement {
-  const section = document.createElement("section");
-  section.className = "knowledge-group";
-  const heading = document.createElement("h2");
-  heading.textContent = `${title} (${items.length})`;
-  const grid = document.createElement("div");
-  grid.className = "knowledge-group-grid";
-  grid.append(...items.map(createKnowledgeItemCard));
-  section.append(heading, grid);
-  return section;
-}
 
 
 
-export function renderKnowledgeList(items: KnowledgeItem[]): void {
-  if (!items.length) {
-    const empty = document.createElement("div");
-    empty.className = "knowledge-list-empty";
-    empty.innerHTML =
-      "<span>⌕</span><strong>没有找到匹配内容</strong><p>可以调整搜索条件，或新建一条笔记。</p>";
-    knowledgeListElement.replaceChildren(empty);
-    selectedKnowledgeRecordKey.value = "";
-    renderKnowledgeDetail([], undefined);
-    return;
-  }
 
-  if (!items.some((item) => item.recordKey === selectedKnowledgeRecordKey.value)) {
-    selectedKnowledgeRecordKey.value = items[0]?.recordKey || "";
-  }
 
-  // 始终使用两列平铺卡片，避免分组后宽度和高度不一致。
-  knowledgeListElement.replaceChildren(...items.map(createKnowledgeItemCard));
 
-  renderKnowledgeDetail(
-    items,
-    items.find((item) => item.recordKey === selectedKnowledgeRecordKey.value),
-  );
-}
+
+
+
+
+
+
+
 
 
 

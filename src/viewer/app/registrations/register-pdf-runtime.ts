@@ -18,9 +18,9 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 
 
 import { findCount, freeTextColorInput, highlightColorInput, knowledgeMainElement, summaryPanelElement, viewerElement } from "../viewer-elements";
-import { activeSummaryScope, currentSummaryContext, lastSummaryPoints, lastSummaryRequestKey, selectedTextForAi, updateControls } from "../../core/pdf-reader/public";
+import { updateControls } from "../../core/pdf-reader/public";
 import { updateSummaryMetadata } from "../../features/translation/public";
-import { scheduleSummaryGeneration } from "../../services/document-agent/viewer-document-agent";
+import { scheduleSummaryGeneration } from "../../features/translation/public";
 import { updateCardSourceSnippet } from "../../features/paper-card/public";
 import { activeEditorMode, annotationEditor, canRedoAnnotation, canUndoAnnotation, eventBus, linkService, pdfDocument, pdfViewer, SELECT_TOOL_EDITOR_BACKING_MODE, sourceName } from "../viewer-state";
 import { captureInternalNavigationOrigin, goToPdfDestination } from "../../features/assistant/public";
@@ -28,6 +28,10 @@ import { scheduleUnsavedChangesCheck } from "../../features/annotations/public";
 import { restoreReadingPositionAfterPagesInit, restoreStartupSourcePageAfterPagesInit, scheduleReadingPositionSave, setStatus } from "../../features/recent-files/public";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { finishEditorModeTransition, getFreeTextSize, getInkThickness, installHighlightGeometry, scheduleHighlightNoteIndicatorRefresh, scheduleRestoredAnnotationEditorWarmUp, setEditorMode, setFreeTextColor, setFreeTextSize, setHighlightColor, setInkThickness } from "../../features/annotations/public";
+import { currentSummaryContext, lastSummaryPoints, lastSummaryRequestKey, selectedTextForAi } from "../public";
+import { activeSummaryScope } from "../public";
+
+
 
 
 

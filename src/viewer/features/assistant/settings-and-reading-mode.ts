@@ -8,12 +8,14 @@ import { CONVERSATION_MEMORY_CONFIG_STORAGE_KEY, normalizeConversationMemoryConf
 
 
 
-import { aiConfig, aiConfigLoaded, conversationMemoryConfig, navigateToPdfPageWhenVisible, setDeepSeekSettingsOpen, updateControls, visionAiConfig } from "../../core/pdf-reader/public";
+import { navigateToPdfPageWhenVisible, updateControls } from "../../core/pdf-reader/public";
 
 import { citationReturnButton, citationReturnPosition, deepSeekMaxOutputTokensInput, deepSeekThinkingSelect, testVisionAiButton, viewerContainer, visionSettingsStatus } from "../../app/viewer-elements";
-import { getPdfFingerprint } from "../annotations/public";
+import { getPdfFingerprint } from "../../app/document-identity";
 import { getCurrentReadingPosition, scheduleReadingPositionSave } from "../recent-files/public";
 import { internalNavigationHistory, isOpeningDocument, isRestoringReadingPosition, isReturningFromInternalNavigation, linkService, pdfDocument, pdfViewer, sourceName, suppressInternalNavigationCapture } from "../../app/viewer-state";
+import { aiConfig, aiConfigLoaded, conversationMemoryConfig, setDeepSeekSettingsOpen, visionAiConfig } from "../../app/public";
+
 
 
 
@@ -84,19 +86,6 @@ export function captureInternalNavigationOrigin() {
   internalNavigationHistory.push({ ...position, documentKey });
   if (internalNavigationHistory.length > 20) internalNavigationHistory.shift();
   updateCitationReturnButton();
-}
-
-
-
-export function navigateToDestinationWithoutReturnHistory(destination: unknown) {
-  suppressInternalNavigationCapture.value = true;
-  try {
-    return linkService.goToDestination(destination as any);
-  } finally {
-    // The navigation-aware wrapper captures synchronously before PDF.js starts
-    // resolving an asynchronous named destination.
-    suppressInternalNavigationCapture.value = false;
-  }
 }
 
 

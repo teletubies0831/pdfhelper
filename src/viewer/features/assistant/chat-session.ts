@@ -10,12 +10,12 @@ import { AI_STREAM_PORT_NAME, type AiConversationMessage, type AiRuntimeResponse
 import { createDocumentAgentId } from "../../../modules/document-agent/public";
 
 
-import { getLatestDocumentSession, isDocumentAgentStorageAvailable, putDocumentSession } from "../../../../entrypoints/viewer/document-agent-store";
+import { getLatestDocumentSession, isDocumentAgentStorageAvailable, putDocumentSession } from "../../../modules/document-agent/public";
 
 
 
 
-import { chatConversationSummary, chatHistory, chatPersistenceQueue, chatSummarizedMessageCount, conversationMemoryConfig, resolvedReadingMode } from "../../core/pdf-reader/public";
+
 import { createPdfCitationPattern, updateChatActivity } from "../../shared-ui/markdown/markdown-renderer";
 import { chatMessagesElement } from "../../app/viewer-elements";
 import { getPdfFingerprint } from "../annotations/public";
@@ -24,6 +24,8 @@ import { pdfDocument, sourceName } from "../../app/viewer-state";
 
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { validatePdfCitations } from "../translation/public";
+import { chatConversationSummary, chatHistory, chatPersistenceQueue, chatSummarizedMessageCount, conversationMemoryConfig, resolvedReadingMode } from "../../app/public";
+
 
 import { clearPendingChatImages } from './chat-image-service';
 import { appendChatMessage } from './chat-view';
@@ -192,13 +194,10 @@ export function resetChatConversation(): void {
 
 
 
-export function getDocumentChatId(documentProxy: PDFDocumentProxy): string {
-  return createDocumentAgentId(
-    getPdfFingerprint(documentProxy),
-    sourceName.value,
-    documentProxy.numPages,
-  );
-}
+// Document identity moved to the app assembly layer (app/document-identity);
+// re-exported here because assistant code historically used this file.
+import { getDocumentChatId } from "../../app/document-identity";
+export { getDocumentChatId };
 
 
 

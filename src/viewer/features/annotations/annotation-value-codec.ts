@@ -40,15 +40,9 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function getPdfFingerprint(
-  documentProxy: PDFDocumentProxy | null = pdfDocument.value,
-): string {
-  return (
-    documentProxy?.fingerprints?.find((fingerprint): fingerprint is string =>
-      Boolean(fingerprint),
-    ) || ""
-  );
-}
+// Fingerprint helpers moved to the app assembly layer (app/document-identity);
+// re-exported here because annotation payload code historically used this file.
+export { getPdfFingerprint } from "../../app/document-identity";
 
 export function normalizeStorageKey(key: string): string {
   return key.replace(/^(pdf-helper-)+/, "");

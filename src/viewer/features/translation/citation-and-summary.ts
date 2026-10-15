@@ -1,5 +1,7 @@
 import { type PDFDocumentProxy } from "pdfjs-dist";
 
+import { extractPdfPageRawText } from "../../../infrastructure/browser/pdf-text-extraction";
+
 
 
 
@@ -18,7 +20,7 @@ import { type PDFDocumentProxy } from "pdfjs-dist";
 import { mergeSelectionRects } from "../../shared-ui/geometry/merge-selection-rects";
 import { centerClientRegionsInScrollContainer } from "../../shared-ui/navigation/center-scroll-region";
 import { citationReturnButton, citationReturnPosition, outlineList, summaryPositionElement, summaryRangeElement, summaryResultElement, summarySourceElement, viewerContainer, viewerElement } from "../../app/viewer-elements";
-import { activeSummaryScope, lastSummaryPoints, navigateToPdfPageWhenVisible, normalizeCopiedText } from "../../core/pdf-reader/public";
+import { navigateToPdfPageWhenVisible, normalizeCopiedText } from "../../core/pdf-reader/public";
 import { createPdfCitationPattern } from "../../shared-ui/markdown/markdown-renderer";
 
 import { pdfDocument, pdfViewer } from "../../app/viewer-state";
@@ -27,8 +29,12 @@ import { pdfDocument, pdfViewer } from "../../app/viewer-state";
 
 
 
-import type { SummaryContext, SummaryScope } from "../../core/pdf-reader/public";
+import type { SummaryScope } from "../../core/pdf-reader/public";
 import { preserveReadingPositionForSourceNavigation } from "../recent-files/public";
+import { lastSummaryPoints, SummaryContext } from "../../app/public";
+import { activeSummaryScope } from "../../app/public";
+
+
 
 
 
@@ -162,38 +168,16 @@ export async function extractPageText(
   documentProxy: PDFDocumentProxy,
   pageNumber: number,
 ): Promise<string> {
-  const page = await documentProxy.getPage(pageNumber);
-  const textContent = await page.getTextContent();
-  const rawText = textContent.items
-    .map((item) => {
-      if (!("str" in item) || typeof item.str !== "string") return "";
-      return `${item.str}${"hasEOL" in item && item.hasEOL ? "\n" : " "}`;
-    })
-    .join("");
-
+  const rawText = await extractPdfPageRawText(documentProxy, pageNumber);
   return normalizeCopiedText(rawText);
 }
 
 
 
-export function normalizeCitationMatchText(value: string): string {
-  return value
-    .replace(
-      /\\(?:mathbb|mathbf|mathrm|mathit|text|operatorname)\s*\{([^{}]*)\}/g,
-      "$1",
-    )
-    .replace(/\\(?:left|right)\b/g, "")
-    .replace(/\\times\b/g, "×")
-    .replace(/\\in\b/g, "∈")
-    .replace(/\\lambda\b/g, "λ")
-    .replace(/\\sigma\b/g, "σ")
-    .replace(/[$\\{}_^]/g, "")
-    .normalize("NFKC")
-    .toLocaleLowerCase()
-    .replace(/\u00ad/g, "")
-    .replace(/[–—−]/g, "-")
-    .replace(/\s+/g, "");
-}
+// Citation text normalization moved to shared-ui/markdown (used by the
+// markdown renderer for citation tokens too).
+import { normalizeCitationMatchText } from "../../shared-ui/markdown/citation-text";
+export { normalizeCitationMatchText };
 
 
 

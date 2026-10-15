@@ -1,9 +1,13 @@
-import type { KnowledgeItem, SavedPaperOverview } from "../../core/pdf-reader/public";
+
 import {
   normalizePaperVenueYearDisplay,
   readSavedPaperCards,
   readSavedPaperOverviews,
 } from "../paper-card/public";
+import { SavedPaperOverview } from "../../app/public";
+import { KnowledgeItem } from "../../app/public";
+
+
 
 export interface PaperLibraryCardMetadata {
   venueYear: string;

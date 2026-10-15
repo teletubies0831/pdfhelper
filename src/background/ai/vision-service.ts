@@ -2,55 +2,15 @@ import {
   getMoonshotReasoningPayload,
   getProviderErrorMessage,
   type AiDocumentContext,
+  type AiNativeToolCall,
   type AiStreamCompletionInfo,
   type AiStreamErrorInfo,
-  type AiNativeToolCall,
+  type ProviderChatResult,
   type VisionAiConfig,
 } from "../../modules/ai/public";
 
 export function getProviderError(payload: unknown, fallback: string): string {
   return getProviderErrorMessage(payload, fallback);
-}
-
-export type ProviderMessage = {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string;
-  tool_call_id?: string;
-  tool_calls?: Array<{
-    id: string;
-    type: "function";
-    function: { name: string; arguments: string };
-  }>;
-};
-
-export interface ProviderChatResult {
-  content: string;
-  model: string;
-  reasoningContent?: string;
-  toolCalls?: AiNativeToolCall[];
-  completion?: AiStreamCompletionInfo;
-}
-
-export interface ProviderStreamDelta {
-  content?: string;
-  reasoningContent?: string;
-}
-
-export class AiProviderRequestError extends Error {
-  constructor(
-    message: string,
-    readonly details: AiStreamErrorInfo,
-  ) {
-    super(message);
-    this.name = "AiProviderRequestError";
-  }
-}
-
-export function getSafeErrorDetails(error: unknown): AiStreamErrorInfo {
-  if (error instanceof AiProviderRequestError) return error.details;
-  return {
-    name: error instanceof Error ? error.name : "UnknownError",
-  };
 }
 
 export function getVisionContent(payload: unknown): string {

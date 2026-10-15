@@ -1,6 +1,5 @@
-import { getSafeProviderErrorDetails, type AiConfig } from "../../modules/ai/public";
+import { getSafeProviderErrorDetails, type AiConfig, type ProviderMessage } from "../../modules/ai/public";
 import type { AiProviderAdapter } from "./provider-runtime";
-import type { ProviderMessage } from "./vision-service";
 
 /** Overview budgets include reasoning tokens on models that cannot turn thinking off. */
 export async function requestOverviewCompletion(

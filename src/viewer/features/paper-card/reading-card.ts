@@ -15,16 +15,18 @@
 
 
 
-import { MAX_CARD_SOURCE_LENGTH, SAVED_CARDS_STORAGE_KEY, SAVED_PAPER_OVERVIEWS_STORAGE_KEY, activeAssistantView, activeCardType, cardAbortController, cardGenerationTimer, currentCardContext, currentGeneratedCard, getViewerSelectionText, lastCardRequestKey, selectedTextForAi, selectedTextPageNumber } from "../../core/pdf-reader/public";
+import { MAX_CARD_SOURCE_LENGTH, SAVED_CARDS_STORAGE_KEY, SAVED_PAPER_OVERVIEWS_STORAGE_KEY, getViewerSelectionText } from "../../core/pdf-reader/public";
 import { cardExplanationElement, cardGeneratedContentElement, cardGenerationStatusElement, cardKeyPointsElement, cardPurposeElement, cardSourceLocationElement, cardSourceSnippetElement, cardTitleElement, cardTypeButtons, cardUnderstandingElement, cardsPanelElement } from "../../app/viewer-elements";
 import { currentFileHandle, currentRecentEntryId, pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
 import { getCurrentChapterContext } from "../translation/public";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { parseAiJson, requestAiContent } from "../../shared-ui/markdown/markdown-renderer";
 import { setStatus } from "../recent-files/public";
-import { getDocumentChatId } from "../assistant/public";
-import { refreshKnowledgeBaseIfOpen } from "../knowledge-base/public";
-import type { CardContext, CardType, GeneratedCardContent, SavedPaperCard, SavedPaperOverview } from "../../core/pdf-reader/public";
+import { getDocumentChatId } from "../../app/document-identity";
+import { notifyKnowledgeRefresh } from "../../app/knowledge-refresh";
+import type { CardType } from "../../core/pdf-reader/public";
+import { activeAssistantView, activeCardType, cardAbortController, cardGenerationTimer, currentCardContext, currentGeneratedCard, lastCardRequestKey, selectedTextForAi, selectedTextPageNumber, CardContext, GeneratedCardContent, SavedPaperCard, SavedPaperOverview } from "../../app/public";
+
 import { readSavedPaperOverviews } from './paper-overview-repository';
 import { readJsonValue, writeJsonValue } from '../../../infrastructure/storage/browser-json-repository';
 
@@ -391,7 +393,7 @@ export function saveCurrentPaperCard(): void {
   };
   const cards = [card, ...readSavedPaperCards()].slice(0, 100);
   writeJsonValue(SAVED_CARDS_STORAGE_KEY, cards);
-  refreshKnowledgeBaseIfOpen();
+  notifyKnowledgeRefresh();
   setStatus(`已保存“${card.title}”，并关联到论文阅读卡片。`);
 }
 

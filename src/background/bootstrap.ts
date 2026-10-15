@@ -27,7 +27,7 @@ import {
   postAiStreamMessage,
   streamAiResponse,
 } from "./ai/ai-runtime";
-import { getSafeErrorDetails } from "./ai/vision-service";
+import { getSafeProviderErrorDetails as getSafeErrorDetails } from "../modules/ai/public";
 import { withAiRequestLifetime } from "./ai/request-lifetime";
 
 async function configureActionBehavior(): Promise<void> {

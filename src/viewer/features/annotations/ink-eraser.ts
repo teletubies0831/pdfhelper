@@ -15,7 +15,7 @@ import {
   pdfDocument,
   selectedAnnotationEditor,
 } from "../../app/viewer-state";
-import { setStatus } from "../recent-files/public";
+import { setStatus } from "../../app/status-bar";
 import { type InkScreenPoint } from "./ink-eraser-geometry";
 import {
   clearInkEraserPreview,

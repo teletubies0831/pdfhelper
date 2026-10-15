@@ -4,7 +4,7 @@ import {
 } from "../../modules/ai/public";
 import { getReadingModeStrategy } from "../../modules/reading-mode/public";
 
-import type { ProviderMessage } from "./vision-service";
+import type { ProviderMessage } from "../../modules/ai/public";
 
 export function buildSystemContent(context?: AiDocumentContext): string {
   const readingMode = context?.readingMode ?? "general";

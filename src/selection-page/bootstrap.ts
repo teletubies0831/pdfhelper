@@ -5,6 +5,7 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
 import { ACTION_LABELS, SELECTION_STORAGE_KEY, isSelectionAction, type SelectionAction, type SelectionRequest } from '../modules/selection/public';
 import { extractPdfSource } from '../infrastructure/browser/pdf-source';
+import { extractPdfPageRawText } from '../infrastructure/browser/pdf-text-extraction';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -103,11 +104,7 @@ async function analyzePdf(data: ArrayBuffer, sourceName: string) {
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       setReaderState('loading', `正在提取第 ${pageNumber} / ${pdf.numPages} 页文字…`);
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .join(' ')
+      const pageText = (await extractPdfPageRawText(pdf, pageNumber))
         .replace(/\s+/g, ' ')
         .trim();
 

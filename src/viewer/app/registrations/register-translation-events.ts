@@ -15,17 +15,42 @@
 
 
 
-import { applyTranslationEditButton, clearTranslationHistoryButton, closeTranslationHistoryButton, copyCardButton, copySummaryButton, copyTranslationButton, generateMoreExamplesButton, openTranslationHistoryButton, saveCardButton, selectedSnippetElement, selectedSnippetMathPreview, selectedSnippetModeToggleButton, translationHistoryDialog, translationHistorySearchInput, translationSourceSentenceInput, translationSourceSentenceMathPreview, translationSourceSentenceTranslation } from "../viewer-elements";
-import { currentCardContext, currentEnglishLearningResult, currentEnglishLearningSourceSentence, currentGeneratedCard, lastSummaryPoints, lastTranslatedText, moreExamplesAbortController, normalizeCopiedText, selectedTextForAi, selectedTextPageNumber, translationAbortController } from "../../core/pdf-reader/public";
-import { autoResizeTranslationTextarea, cancelPendingAutomaticTranslation, clearCurrentTranslationHistory, ensureTranslationHistoryLoaded, generateMoreVocabularyExamples, getEnglishLearningPlainText, getSelectedEnglishWord, markTranslationEditorChanged, normalizeLearningInlineText, renderLearningRichText, renderTranslationHistoryDialog, renderTranslationMathPreview, selectedSnippetDisplayMode, setSelectedSnippetDisplayMode, setTranslationSelectionEditor, setTranslationState, translateSelectedText } from "../../features/translation/public";
-import { formatGeneratedCardText, saveCurrentPaperCard } from "../../features/paper-card/public";
+import { applyTranslationEditButton, cardTypeButtons, clearTranslationHistoryButton, closeTranslationHistoryButton, copyCardButton, copySummaryButton, copyTranslationButton, generateMoreExamplesButton, openTranslationHistoryButton, saveCardButton, selectedSnippetElement, selectedSnippetMathPreview, selectedSnippetModeToggleButton, summaryScopeButtons, translationHistoryDialog, translationHistorySearchInput, translationSourceSentenceInput, translationSourceSentenceMathPreview, translationSourceSentenceTranslation } from "../viewer-elements";
+import { normalizeCopiedText } from "../../core/pdf-reader/public";
+import { autoResizeTranslationTextarea, cancelPendingAutomaticTranslation, clearCurrentTranslationHistory, ensureTranslationHistoryLoaded, generateMoreVocabularyExamples, getEnglishLearningPlainText, getSelectedEnglishWord, markTranslationEditorChanged, normalizeLearningInlineText, renderLearningRichText, renderTranslationHistoryDialog, renderTranslationMathPreview, selectedSnippetDisplayMode, setActiveSummaryScope, setSelectedSnippetDisplayMode, setTranslationSelectionEditor, setTranslationState, translateSelectedText } from "../../features/translation/public";
+import { formatGeneratedCardText, saveCurrentPaperCard, setActiveCardType } from "../../features/paper-card/public";
 import { saveCurrentTranslationToVocabulary } from "../../features/vocabulary-library/public";
 import { pdfViewer } from "../viewer-state";
+import type { CardType, SummaryScope } from "../../core/pdf-reader/public";
 
 import { setStatus } from "../../features/recent-files/public";
+import { currentCardContext, currentEnglishLearningResult, currentEnglishLearningSourceSentence, currentGeneratedCard, lastSummaryPoints, lastTranslatedText, moreExamplesAbortController, selectedTextForAi, selectedTextPageNumber, translationAbortController } from "../public";
+import {
+  setSelectionSurroundingTextProvider,
+  setSummaryMetadataRefreshHandler,
+} from "../../core/pdf-reader/public";
+import {
+  getSelectionSurroundingText,
+  setCardSourceRefreshHandler,
+  updateSummaryMetadata,
+} from "../../features/translation/public";
+import {
+  scheduleCardGeneration,
+  updateCardSourceSnippet,
+} from "../../features/paper-card/public";
+import { activeAssistantView } from "../public";
+
 
 
 export function registerTranslationEvents(): void {
+  // PDF core is feature-agnostic; the feature behaviors it triggers on
+  // navigation/selection are injected here, in the assembly layer.
+  setSelectionSurroundingTextProvider(getSelectionSurroundingText);
+  setSummaryMetadataRefreshHandler(updateSummaryMetadata);
+  setCardSourceRefreshHandler(() => {
+    updateCardSourceSnippet();
+    if (activeAssistantView.value === "cards") scheduleCardGeneration();
+  });
   document
     .querySelector<HTMLButtonElement>("#translation-inline-history")
     ?.addEventListener("click", () => openTranslationHistoryButton.click());
@@ -191,4 +216,21 @@ export function registerTranslationEvents(): void {
     });
   
   saveCardButton.addEventListener("click", saveCurrentPaperCard);
+
+  // Summary/card scope buttons live in the reader panels but belong to the
+  // summary/card domains; their bindings are registered here, next to the
+  // other summary/card actions.
+  for (const button of summaryScopeButtons) {
+    button.addEventListener("click", () => {
+      const scope = button.dataset.summaryScope as SummaryScope | undefined;
+      if (scope) setActiveSummaryScope(scope);
+    });
+  }
+
+  for (const button of cardTypeButtons) {
+    button.addEventListener("click", () => {
+      const cardType = button.dataset.cardType as CardType | undefined;
+      if (cardType) setActiveCardType(cardType);
+    });
+  }
 }

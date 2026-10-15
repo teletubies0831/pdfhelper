@@ -12,7 +12,7 @@ import {
   getDocumentChunks,
   putDocumentAgentRecord,
   replaceDocumentChunks,
-} from "../../../../entrypoints/viewer/document-agent-store";
+} from "../adapters/indexed-db/document-agent-repository";
 import {
   attachChunkHeadings,
   parseProfile,

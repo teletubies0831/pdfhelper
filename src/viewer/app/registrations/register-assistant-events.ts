@@ -60,18 +60,7 @@ import {
   startOnboardingTourButton,
   settingsPrimaryTabButtons,
 } from "../viewer-elements";
-import {
-  aiConfig,
-  aiConfigLoaded,
-  chatHistory,
-  chatImagePreviewOverlay,
-  chatRequestPending,
-  setAssistantView,
-  setDeepSeekSettingsOpen,
-  setFocusMode,
-  setLeftPanelCollapsed,
-  showSettingsSavedFeedback,
-} from "../../core/pdf-reader/public";
+import { setFocusMode, setLeftPanelCollapsed } from "../../core/pdf-reader/public";
 import { jumpToPdfCitations } from "../../features/translation/public";
 
 import { pdfDocument } from "../viewer-state";
@@ -99,6 +88,7 @@ import {
   removeActiveSettingsConnection,
   renderAgentToolCatalog,
   resetChatConversation,
+  resetSettingsPresentation,
   saveDeepSeekConfig,
   saveSettingsConnection,
   saveSettingsRoutes,
@@ -113,17 +103,19 @@ import {
   toggleSettingsSecret,
 } from "../../features/assistant/public";
 
-import {
-  closeKnowledgeBasePage,
-  getKnowledgeDocument,
-  listKnowledgeDocuments,
-} from "../../features/knowledge-base/public";
+import { closeKnowledgeBasePage, getKnowledgeDocument, listKnowledgeDocuments } from "../../features/knowledge-base/public";
 import { closeVocabularyLibraryPage } from "../../features/vocabulary-library/public";
 import { setStatus } from "../../features/recent-files/public";
 import { openSourcePdfInNewTab } from "../../shared-ui/navigation/source-pdf-navigation";
 import { openTutorialWindow } from "../../shared-ui/navigation/tutorial-navigation";
 import { startOnboardingTour } from "../../features/onboarding-tour/public";
-import type { AssistantView } from "../../core/pdf-reader/public";
+import {
+  cancelPendingAutomaticTranslation,
+  cancelPendingSummaryGeneration,
+} from "../../features/translation/public";
+import { cancelPendingCardGeneration } from "../../features/paper-card/public";
+import { setAssistantChoreography } from "../assistant-state";
+
 
 import {
   toolbarMenus,
@@ -137,8 +129,20 @@ import {
   syncChatReasoningControl,
 } from "../chat-reasoning-control";
 import { getActiveWorkspaceView } from "../workspace-navigation";
+import { aiConfig, aiConfigLoaded, chatHistory, chatImagePreviewOverlay, chatRequestPending, setAssistantView, setDeepSeekSettingsOpen, showSettingsSavedFeedback, AssistantView } from "../public";
+
 
 export function registerAssistantEvents(): void {
+  // Assistant-domain state (app/assistant-state) stays free of feature
+  // imports; the feature choreography is injected here, in the assembly layer.
+  setAssistantChoreography({
+    cancelTranslation: cancelPendingAutomaticTranslation,
+    cancelSummary: cancelPendingSummaryGeneration,
+    cancelCard: cancelPendingCardGeneration,
+    activateTab: activateAiTab,
+    resetSettingsPresentation,
+    refreshLongTermMemory: refreshLongTermMemoryList,
+  });
   renderAgentToolCatalog();
   syncChatReasoningControl();
   initializeKnowledgeRetrievalSettings();

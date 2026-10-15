@@ -16,8 +16,7 @@ import { type DocumentAgentRecord, type DocumentChunk } from "../../modules/docu
 
 
 import { viewerContainer, viewerElement } from './viewer-elements';
-import type { FileHandleLike } from './viewer-types';
-import type { InternalNavigationEntry, ReadingPosition } from '../features/recent-files/public';
+import type { FileHandleLike, InternalNavigationEntry, ReadingPosition } from './viewer-types';
 
 
 
@@ -106,6 +105,20 @@ export let suppressInternalNavigationCapture = { value: false };
 export let isReturningFromInternalNavigation = { value: false };
 
 export const internalNavigationHistory: InternalNavigationEntry[] = [];
+
+// PDF destination navigation that must not create an internal-navigation
+// history entry (outline jumps). Lives with the linkService singleton that
+// performs the navigation.
+export function navigateToDestinationWithoutReturnHistory(destination: unknown) {
+  suppressInternalNavigationCapture.value = true;
+  try {
+    return linkService.goToDestination(destination as any);
+  } finally {
+    // The navigation-aware wrapper captures synchronously before PDF.js starts
+    // resolving an asynchronous named destination.
+    suppressInternalNavigationCapture.value = false;
+  }
+}
 
 export let areNoteIndicatorsHidden = { value: false };
 

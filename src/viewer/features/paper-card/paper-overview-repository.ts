@@ -1,6 +1,8 @@
-import type { SavedPaperOverview } from "../../core/pdf-reader/public";
+
 import { SAVED_PAPER_OVERVIEWS_STORAGE_KEY } from "../../core/pdf-reader/public";
 import { readJsonValue, writeJsonValue } from "../../../infrastructure/storage/browser-json-repository";
+import { SavedPaperOverview } from "../../app/public";
+
 
 export function readSavedPaperOverviews(): SavedPaperOverview[] {
   const value = readJsonValue<unknown>(SAVED_PAPER_OVERVIEWS_STORAGE_KEY, []);

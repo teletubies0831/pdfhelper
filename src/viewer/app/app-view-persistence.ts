@@ -1,35 +1,27 @@
-
-
-
-
-
-
-
-import { DEFAULT_AI_CONFIG, DEFAULT_VISION_AI_CONFIG, type AiConfig, type AiConversationMessage, type AiImageAttachment, type VisionAiConfig } from "../../modules/ai/public";
-import { type ReadingModePreference, type ResolvedReadingMode } from "../../modules/reading-mode/public";
-
-
-import { DEFAULT_CONVERSATION_MEMORY_CONFIG, type ConversationMemoryConfig } from "../../modules/memory/public";
-
-
-
-
-
-
-import { aiSettingsButton, appFrame, assistantChatPanel, assistantSettingsPanel, assistantToolsRuntime, assistantViewButtons, chatInput, knowledgeGroupSelect, knowledgeMainElement, knowledgeSearchInput, knowledgeSortSelect, settingsModalBackdrop, vocabularyLibraryMainElement, vocabularySearchInput, vocabularySortSelect, vocabularyTimeFilterSelect } from "./viewer-elements";
-import { refreshLongTermMemoryList, resetSettingsPresentation } from "../features/assistant/public";
-import { cancelPendingAutomaticTranslation } from "../features/translation/public";
-import { openKnowledgeBasePage } from "../features/knowledge-base/public";
-import { applyPersistedVocabularyState, isVocabularyLibraryEnabled, openVocabularyLibraryPage } from "../features/vocabulary-library/public";
-import { cancelPendingCardGeneration } from "../features/paper-card/public";
-import { cancelPendingSummaryGeneration } from "../services/document-agent/viewer-document-agent";
-import { activateAiTab } from "./bootstrap";
+import {
+  knowledgeGroupSelect,
+  knowledgeMainElement,
+  knowledgeSearchInput,
+  knowledgeSortSelect,
+  vocabularyLibraryMainElement,
+  vocabularySearchInput,
+  vocabularySortSelect,
+  vocabularyTimeFilterSelect,
+} from "./viewer-elements";
 import { getActiveWorkspaceView } from "./workspace-navigation";
-import { APP_VIEW_SESSION_STORAGE_KEY, activeKnowledgeCategory, activeKnowledgeFilter, activeKnowledgeFocus, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear } from './feature-models';
+import {
+  APP_VIEW_SESSION_STORAGE_KEY,
+  activeKnowledgeCategory,
+  activeKnowledgeFilter,
+  activeKnowledgeFocus,
+  activeKnowledgePriority,
+  activeKnowledgeReadingStatus,
+  activeKnowledgeTag,
+  activeKnowledgeVenue,
+  activeKnowledgeYear,
+  selectedKnowledgeRecordKey,
+} from './feature-models';
 import type { PersistedAppView, PersistedAppViewState } from './feature-models';
-
-
-
 
 export function readPersistedAppViewState(): PersistedAppViewState | null {
   try {
@@ -113,13 +105,9 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
   }
 }
 
-
-
 function getCurrentPersistedAppView(): PersistedAppView {
   return getActiveWorkspaceView();
 }
-
-
 
 export function persistCurrentAppViewState(): void {
   const state: PersistedAppViewState = {
@@ -150,8 +138,6 @@ export function persistCurrentAppViewState(): void {
   }
 }
 
-
-
 export function applyPersistedKnowledgeState(state: PersistedAppViewState): void {
   activeKnowledgeFilter.value = "all";
   activeKnowledgeCategory.value = "all";
@@ -166,188 +152,4 @@ export function applyPersistedKnowledgeState(state: PersistedAppViewState): void
   knowledgeSearchInput.value = state.knowledgeSearch;
   knowledgeSortSelect.value = state.knowledgeSort;
   knowledgeGroupSelect.value = "none";
-}
-
-
-
-export function restoreAppViewAfterRefresh(): void {
-  const state = readPersistedAppViewState();
-  if (!state || state.view === "viewer") return;
-
-  if (state.view === "vocabulary") {
-    if (!isVocabularyLibraryEnabled()) return;
-    applyPersistedVocabularyState({
-      search: state.vocabularySearch,
-      sort: state.vocabularySort,
-      timeFilter: state.vocabularyTimeFilter,
-    });
-    openVocabularyLibraryPage();
-    requestAnimationFrame(() => {
-      vocabularyLibraryMainElement.scrollTop = Math.max(
-        0,
-        state.vocabularyScrollTop,
-      );
-    });
-    return;
-  }
-
-  applyPersistedKnowledgeState(state);
-  openKnowledgeBasePage();
-  requestAnimationFrame(() => {
-    if (knowledgeMainElement) {
-      knowledgeMainElement.scrollTop = Math.max(0, state.knowledgeScrollTop);
-    }
-  });
-}
-
-
-
-export let selectedKnowledgeRecordKey = { value: "" };
-
-
-export let knowledgeEditorTargetKey: { value: string | null } = { value: null };
-
-
-export let aiConfig: { value: AiConfig } = { value: { ...DEFAULT_AI_CONFIG } };
-
-
-export let conversationMemoryConfig: { value: ConversationMemoryConfig } = { value: {
-  ...DEFAULT_CONVERSATION_MEMORY_CONFIG,
-} };
-
-
-export let aiConfigLoaded = { value: false };
-
-
-export let visionAiConfig: { value: VisionAiConfig } = { value: { ...DEFAULT_VISION_AI_CONFIG } };
-
-
-export let chatHistory: { value: AiConversationMessage[] } = { value: [] };
-
-
-export let chatConversationSummary = { value: "" };
-
-
-export let chatSummarizedMessageCount = { value: 0 };
-
-
-export let chatRequestPending = { value: false };
-
-
-export let chatPersistenceQueue: { value: Promise<void> } = { value: Promise.resolve() };
-
-
-export let pendingChatImages: { value: AiImageAttachment[] } = { value: [] };
-
-
-export let chatImagePreviewOverlay: { value: HTMLElement | null } = { value: null };
-
-
-export let readingModePreference: { value: ReadingModePreference } = { value: "auto" };
-
-
-export let resolvedReadingMode: { value: ResolvedReadingMode } = { value: "general" };
-
-
-export let readingModeDetectionPending = { value: false };
-
-
-export let readingModeDocumentKey = { value: "" };
-
-
-export let readingModeRationale = { value: "" };
-
-
-export let readingModeError = { value: "" };
-
-
-export type AssistantView = "chat" | "translate" | "summary" | "cards";
-
-
-export let activeAssistantView: { value: AssistantView } = { value: "chat" };
-
-
-
-export function setAssistantView(view: AssistantView): void {
-  activeAssistantView.value = view;
-  const showChat = view === "chat";
-  for (const button of assistantViewButtons) {
-    const isActive = button.dataset.assistantView === view;
-    button.classList.toggle("active", isActive);
-    button.setAttribute("aria-selected", String(isActive));
-  }
-
-  assistantChatPanel.hidden = !showChat;
-  assistantToolsRuntime.classList.toggle("active", !showChat);
-  assistantToolsRuntime.setAttribute("aria-hidden", String(showChat));
-
-  if (view !== "translate") cancelPendingAutomaticTranslation();
-  if (view !== "summary") cancelPendingSummaryGeneration();
-  if (view !== "cards") cancelPendingCardGeneration();
-
-  if (showChat) {
-    window.setTimeout(() => chatInput.focus(), 0);
-  } else {
-    activateAiTab(view);
-  }
-}
-
-
-
-export let settingsCloseAnimationTimer: number | undefined;
-
-
-
-export function showSettingsSavedFeedback(): void {
-  aiSettingsButton.classList.remove("saved");
-  aiSettingsButton.setAttribute("aria-label", "打开设置");
-}
-
-
-
-export function setDeepSeekSettingsOpen(open: boolean): void {
-  if (assistantSettingsPanel.parentElement !== document.body) {
-    document.body.append(assistantSettingsPanel);
-  }
-
-  if (settingsCloseAnimationTimer !== undefined) {
-    window.clearTimeout(settingsCloseAnimationTimer);
-    settingsCloseAnimationTimer = undefined;
-  }
-
-  if (open) {
-    assistantSettingsPanel.hidden = false;
-    settingsModalBackdrop.hidden = false;
-    settingsModalBackdrop.setAttribute("aria-hidden", "false");
-    if (appFrame) appFrame.inert = true;
-    document.body.classList.add("settings-modal-open");
-    aiSettingsButton.classList.add("active");
-    aiSettingsButton.setAttribute("aria-expanded", "true");
-    resetSettingsPresentation();
-
-    // Commit the resting state before entering so both opacity and transform
-    // interpolate. This is one small layout read, not a per-frame layout cost.
-    assistantSettingsPanel.classList.remove("is-open");
-    settingsModalBackdrop.classList.remove("is-open");
-    void assistantSettingsPanel.offsetWidth;
-    assistantSettingsPanel.classList.add("is-open");
-    settingsModalBackdrop.classList.add("is-open");
-
-    void refreshLongTermMemoryList();
-  } else {
-    assistantSettingsPanel.classList.remove("is-open");
-    settingsModalBackdrop.classList.remove("is-open");
-    settingsModalBackdrop.setAttribute("aria-hidden", "true");
-    if (appFrame) appFrame.inert = false;
-    document.body.classList.remove("settings-modal-open");
-    aiSettingsButton.classList.remove("active");
-    aiSettingsButton.setAttribute("aria-expanded", "false");
-
-    settingsCloseAnimationTimer = window.setTimeout(() => {
-      assistantSettingsPanel.hidden = true;
-      settingsModalBackdrop.hidden = true;
-      settingsCloseAnimationTimer = undefined;
-    }, 340);
-    aiSettingsButton.focus({ preventScroll: true });
-  }
 }
