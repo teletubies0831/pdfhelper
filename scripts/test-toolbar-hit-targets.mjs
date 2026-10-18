@@ -14,13 +14,13 @@ async function css(url) {
   return output;
 }
 let browser, page;
-const ids = ['ai-panel-toggle', 'knowledge-base-entry', 'vocabulary-library-entry'];
+const ids = ['ai-panel-toggle', 'knowledge-base-entry', 'knowledge-graph-entry', 'vocabulary-library-entry'];
 before(async () => {
   browser = await chromium.launch({ channel: process.env.PDFPAL_TEST_BROWSER || 'msedge', headless: true });
   page = await browser.newPage();
   const template = name => read(`src/viewer/templates/${name}.html`);
   const stage = (await template('workspace-stage')).replace('<!-- workspace-views -->',
-    (await Promise.all(['reader-workspace', 'knowledge-base', 'vocabulary-library'].map(template))).join('\n'));
+    (await Promise.all(['reader-workspace', 'knowledge-base', 'knowledge-graph', 'vocabulary-library'].map(template))).join('\n'));
   const overlays = (await Promise.all(['reader-overlays', 'knowledge-base-overlays', 'vocabulary-library-overlays', 'overlays', 'onboarding-tour'].map(template))).join('\n');
   await page.setContent(`<!doctype html><div class="app-frame">${await template('toolbar')}${stage}</div>${overlays}`);
   await page.addStyleTag({ content: await read('node_modules/pdfjs-dist/web/pdf_viewer.css') });
@@ -33,10 +33,15 @@ before(async () => {
     const get = id => document.getElementById(id);
     const elements = {
       workspaceStageElement: get('workspace-stage'), readerWorkspaceElement: get('reader-workspace'),
-      knowledgeBasePageElement: get('knowledge-base-page'), vocabularyLibraryPageElement: get('vocabulary-library-page'),
+      knowledgeBasePageElement: get('knowledge-base-page'), knowledgeGraphPageElement: get('knowledge-graph-page'),
+      vocabularyLibraryPageElement: get('vocabulary-library-page'),
       aiPanelToggleButton: get('ai-panel-toggle'), knowledgeBaseEntryButton: get('knowledge-base-entry'),
+      knowledgeGraphEntryButton: get('knowledge-graph-entry'),
       vocabularyLibraryEntryButton: get('vocabulary-library-entry'), outlineToggleButton: get('outline-toggle'),
       assistantPanelToggleButton: get('assistant-panel-toggle'),
+      // The view switch also hides the annotation row outside the reader; this stub
+      // mirrors the module's element dependencies and must gain one whenever it does.
+      annotationToolsBar: get('annotation-tools-bar'),
     };
     window.workspace = {};
     new Function('require', 'exports', workspaceCode)(() => elements, workspace);
@@ -44,7 +49,7 @@ before(async () => {
     new Function('require', 'exports', presentationCode)(name => name.endsWith('viewer-elements') ? elements :
       name.endsWith('workspace-navigation') ? workspace : name.endsWith('application-navigation') ? presentation : { renderKnowledgeBase() {} }, presentation);
     window.clicks = [];
-    for (const [id, view] of [['ai-panel-toggle', 'viewer'], ['knowledge-base-entry', 'knowledge'], ['vocabulary-library-entry', 'vocabulary']]) {
+    for (const [id, view] of [['ai-panel-toggle', 'viewer'], ['knowledge-base-entry', 'knowledge'], ['knowledge-graph-entry', 'graph'], ['vocabulary-library-entry', 'vocabulary']]) {
       get(id).addEventListener('click', event => {
         clicks.push({ id, target: event.target.id });
         presentation.setCurrentApplicationView(view);
@@ -70,8 +75,12 @@ for (const width of [2521, 1920, 1701, 1700, 1536, 1280, 1024, 800, 640]) {
     assert.deepEqual(misses, []);
     // Native pointer input, including padding, without force-click or DOM click().
     for (const id of ids) {
-      const rect = await page.locator(`#${id}`).boundingBox();
       for (const [fx, fy] of [[0.12, 0.5], [0.5, 0.12], [0.5, 0.5], [0.5, 0.88], [0.88, 0.5]]) {
+        // The box is re-measured for every click: switching views changes the toolbar
+        // height (the annotation row only exists in the reader), so a single
+        // measurement would send later clicks to where the button used to be and fail
+        // as a miss rather than as the geometry problem it is meant to catch.
+        const rect = await page.locator(`#${id}`).boundingBox();
         const before = await page.evaluate(() => clicks.length);
         await page.mouse.click(rect.x + rect.width * fx, rect.y + rect.height * fy);
         const last = await page.evaluate(() => ({ count: clicks.length, last: clicks.at(-1) }));

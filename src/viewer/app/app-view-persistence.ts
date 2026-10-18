@@ -19,6 +19,16 @@ import {
   activeKnowledgeTag,
   activeKnowledgeVenue,
   activeKnowledgeYear,
+  graphFocusHops,
+  graphFocusMode,
+  graphMinConfidence,
+  graphSearchQuery,
+  graphSelectedNodeId,
+  graphShowEntities,
+  graphShowOriginAi,
+  graphShowOriginRule,
+  graphShowOriginUser,
+  graphShowPapers,
   selectedKnowledgeRecordKey,
 } from './feature-models';
 import type { PersistedAppView, PersistedAppViewState } from './feature-models';
@@ -31,6 +41,7 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
     if (
       value.view !== "viewer" &&
       value.view !== "knowledge" &&
+      value.view !== "graph" &&
       value.view !== "vocabulary"
     ) {
       return null;
@@ -99,6 +110,20 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
       vocabularyScrollTop: Number.isFinite(value.vocabularyScrollTop)
         ? Number(value.vocabularyScrollTop)
         : 0,
+      graphFocusMode: value.graphFocusMode === "current" ? "current" : "all",
+      graphFocusHops: Number.isFinite(value.graphFocusHops)
+        ? Math.min(3, Math.max(1, Math.round(Number(value.graphFocusHops))))
+        : 1,
+      graphMinConfidence: Number.isFinite(value.graphMinConfidence)
+        ? Math.min(1, Math.max(0, Number(value.graphMinConfidence)))
+        : 0,
+      graphSearch: typeof value.graphSearch === "string" ? value.graphSearch : "",
+      graphShowPapers: value.graphShowPapers !== false,
+      graphShowEntities: value.graphShowEntities !== false,
+      graphSelectedNodeId:
+        typeof value.graphSelectedNodeId === "string"
+          ? value.graphSelectedNodeId
+          : "",
     };
   } catch {
     return null;
@@ -129,6 +154,13 @@ export function persistCurrentAppViewState(): void {
     vocabularySort: vocabularySortSelect.value,
     vocabularyTimeFilter: vocabularyTimeFilterSelect.value,
     vocabularyScrollTop: vocabularyLibraryMainElement.scrollTop,
+    graphFocusMode: graphFocusMode.value,
+    graphFocusHops: graphFocusHops.value,
+    graphMinConfidence: graphMinConfidence.value,
+    graphSearch: graphSearchQuery.value,
+    graphShowPapers: graphShowPapers.value,
+    graphShowEntities: graphShowEntities.value,
+    graphSelectedNodeId: graphSelectedNodeId.value,
   };
 
   try {
@@ -152,4 +184,24 @@ export function applyPersistedKnowledgeState(state: PersistedAppViewState): void
   knowledgeSearchInput.value = state.knowledgeSearch;
   knowledgeSortSelect.value = state.knowledgeSort;
   knowledgeGroupSelect.value = "none";
+}
+
+/**
+ * Restores the graph page's filters and selection.
+ *
+ * `graphSelectedEdgeId` is intentionally not persisted: an edge id is only
+ * meaningful against the snapshot that produced it, and the graph can be
+ * re-synced between sessions.
+ */
+export function applyPersistedGraphState(state: PersistedAppViewState): void {
+  graphFocusMode.value = state.graphFocusMode;
+  graphFocusHops.value = state.graphFocusHops;
+  graphMinConfidence.value = state.graphMinConfidence;
+  graphSearchQuery.value = state.graphSearch;
+  graphShowPapers.value = state.graphShowPapers;
+  graphShowEntities.value = state.graphShowEntities;
+  graphSelectedNodeId.value = state.graphSelectedNodeId;
+  graphShowOriginAi.value = true;
+  graphShowOriginRule.value = true;
+  graphShowOriginUser.value = true;
 }

@@ -290,3 +290,75 @@ export const aiTabButtons = Array.from(
 export const aiTabPanels = Array.from(
   document.querySelectorAll<HTMLElement>("[data-ai-panel]"),
 );
+
+export const translationPreferenceCount = requiredElement<HTMLElement>(
+  "translation-preference-count",
+);
+
+export const translationPreferenceList = requiredElement<HTMLElement>(
+  "translation-preference-list",
+);
+
+export const translationPreferenceStatus = requiredElement<HTMLElement>(
+  "translation-preference-status",
+);
+
+export const addTranslationPreferenceButton = requiredElement<HTMLButtonElement>(
+  "add-translation-preference",
+);
+
+export const suggestTranslationPreferencesButton = requiredElement<HTMLButtonElement>(
+  "suggest-translation-preferences",
+);
+
+export const translationPreferenceDialog = requiredElement<HTMLDialogElement>(
+  "translation-preference-dialog",
+);
+
+export const translationPreferenceForm = requiredElement<HTMLFormElement>(
+  "translation-preference-form",
+);
+
+export const translationPreferenceTermInput = requiredElement<HTMLInputElement>(
+  "translation-preference-term",
+);
+
+export const translationPreferenceKindSelect = requiredElement<HTMLSelectElement>(
+  "translation-preference-kind",
+);
+
+export const translationPreferenceContextualFields = requiredElement<HTMLElement>(
+  "translation-preference-contextual-fields",
+);
+
+export const translationPreferenceDefaultInput = requiredElement<HTMLInputElement>(
+  "translation-preference-default",
+);
+
+export const translationPreferenceContextTermsInput = requiredElement<HTMLInputElement>(
+  "translation-preference-context-terms",
+);
+
+export const translationPreferenceContextTranslationInput = requiredElement<HTMLInputElement>(
+  "translation-preference-context-translation",
+);
+
+export const translationPreferenceCancelButton = requiredElement<HTMLButtonElement>(
+  "translation-preference-cancel",
+);
+
+export const translationPreferenceSuggestionsDialog = requiredElement<HTMLDialogElement>(
+  "translation-preference-suggestions-dialog",
+);
+
+export const translationPreferenceSuggestionsList = requiredElement<HTMLElement>(
+  "translation-preference-suggestions",
+);
+
+export const translationPreferenceSuggestionsCancelButton = requiredElement<HTMLButtonElement>(
+  "translation-preference-suggestions-cancel",
+);
+
+export const translationPreferenceSuggestionsSaveButton = requiredElement<HTMLButtonElement>(
+  "translation-preference-suggestions-save",
+);

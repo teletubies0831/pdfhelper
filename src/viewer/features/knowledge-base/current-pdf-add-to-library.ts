@@ -1,7 +1,7 @@
 import { knowledgeRetrievalService } from "../../../modules/knowledge/public";
 import { getDocument } from "pdfjs-dist";
 import { currentRecentEntryId, pdfDocument, sourceName, sourcePdfBytes } from "../../app/viewer-state";
-import { getDisplayFileName } from "../../core/pdf-reader/public";
+import { getDisplayFileName, buildPdfAssetOptions } from "../../core/pdf-reader/public";
 import { getDocumentChatId } from "../../app/document-identity";
 import {
   addKnowledgeDocument,
@@ -163,7 +163,12 @@ async function startBackgroundKnowledgeIndex(input: {
   showBackgroundIndexNotice(documentId, "已转入后台，正在提取 PDF 全文…");
   let backgroundPdf: Awaited<ReturnType<typeof getDocument>["promise"]> | null = null;
   try {
-    backgroundPdf = await getDocument({ data: input.pdfBytes }).promise;
+    // Same decoder/CMap assets as the reader: this pass extracts the full text that
+    // gets indexed, so a missing CMap here silently indexes garbage for CJK papers.
+    backgroundPdf = await getDocument({
+      data: input.pdfBytes,
+      ...buildPdfAssetOptions(),
+    }).promise;
     const pages: Array<{ pageNumber: number; text: string }> = [];
     for (let pageNumber = 1; pageNumber <= backgroundPdf.numPages; pageNumber += 1) {
       showBackgroundIndexNotice(

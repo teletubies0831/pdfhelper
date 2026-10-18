@@ -45,9 +45,9 @@
       </div>
     </div>
   </div>
-  <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" />
+  <input id="file-input" class="file-input" type="file" accept="application/pdf,.pdf" multiple />
 
-  <div class="toolbar-group annotation-tools expanded-toolbar-group" aria-label="批注工具">
+  <div id="annotation-tools-bar" class="toolbar-group annotation-tools expanded-toolbar-group" aria-label="批注工具">
     <button class="toolbar-nav-button" type="button" data-editor-mode="select" title="选择文字或已有批注">
       <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pointer" /></svg>
       选择
@@ -94,6 +94,7 @@
       PDF 阅读
     </button>
     <button id="knowledge-base-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>知识库</button>
+    <button id="knowledge-graph-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-knowledge" /></svg>知识图谱</button>
     <button id="vocabulary-library-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-vocabulary" /></svg>单词库</button>
   </nav>
 

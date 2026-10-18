@@ -1,0 +1,688 @@
+/* Knowledge graph candidate confirmation dialog. */
+
+.knowledge-graph-review-dialog {
+  width: min(880px, calc(100vw - 48px));
+  max-height: min(80vh, 760px);
+  padding: 0;
+  border: 1px solid #dce5f1;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgb(28 54 92 / 22%);
+}
+
+.knowledge-graph-review-dialog[open] {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+}
+
+.knowledge-graph-review-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #eef2f8;
+}
+
+/* The shared `.app-confirm-dialog header` is a three-column grid (42px icon, text,
+   32px close) because the generic confirm dialog carries an icon. These dialog headers
+   have no icon, so the title landed in the 42px "icon" column — and because CJK text
+   may break between any two characters, it wrapped one character per line while the
+   summary beside it collapsed to a single-character column. Re-assert the row layout
+   these dialogs are built for. Scoped with `.app-confirm-dialog` so it outranks the
+   shared rule instead of relying on import order. */
+.app-confirm-dialog .knowledge-graph-review-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.app-confirm-dialog .knowledge-graph-review-header > div {
+  /* Grow into the free space and allow wrapping; without `min-width: 0` a flex item
+     refuses to shrink below its content and would push the close button out instead. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.knowledge-graph-review-header h2 {
+  margin: 0 0 4px;
+  color: #16233d;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.knowledge-graph-review-summary {
+  margin: 0;
+  color: #6b7f9e;
+  font-size: 12px;
+}
+
+.knowledge-graph-review-header .knowledge-graph-action {
+  margin-left: auto;
+  flex: none;
+}
+
+.knowledge-graph-review-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #eef2f8;
+  background: #fbfdff;
+}
+
+.knowledge-graph-review-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.knowledge-graph-review-hint {
+  margin: 0;
+  padding: 10px 18px;
+  border-bottom: 1px solid #eef2f8;
+  background: #f7faff;
+  color: #5c7290;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.knowledge-graph-review-groups {
+  min-height: 0;
+  padding: 12px 18px 18px;
+  overflow-y: auto;
+}
+
+.knowledge-graph-review-group + .knowledge-graph-review-group {
+  margin-top: 18px;
+}
+
+.knowledge-graph-review-group-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.knowledge-graph-review-group-heading h3 {
+  margin: 0;
+  color: #6b7f9e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.knowledge-graph-review-group-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.knowledge-graph-review-group-actions .knowledge-graph-action {
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+.knowledge-graph-review-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-graph-review-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 9px 11px;
+  border: 1px solid #eef2f8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.knowledge-graph-review-row:hover {
+  border-color: #cbd8ea;
+  background: #fbfdff;
+}
+
+/* A hand-corrected row is visibly distinct: the user changed what the model
+   proposed, and that difference is worth seeing at a glance. */
+.knowledge-graph-review-row[data-dirty] {
+  border-color: #8fb4ff;
+  background: #f7faff;
+}
+
+.knowledge-graph-review-row input[type="checkbox"] {
+  margin-top: 5px;
+  accent-color: #1f67e8;
+}
+
+.knowledge-graph-review-row-body {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.knowledge-graph-review-name {
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #16233d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.knowledge-graph-review-name:hover,
+.knowledge-graph-review-name:focus-visible {
+  border-color: #d9e2ef;
+  background: #fff;
+  outline: 0;
+}
+
+.knowledge-graph-review-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #8598b3;
+  font-size: 11px;
+}
+
+/* The source is a document title now, so it can be long: keep one line and let the
+   full text live in the tooltip instead of pushing the row's controls around. */
+.knowledge-graph-review-source {
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The type picker.
+ *
+ * `custom-select.ts` wraps every `<select>` in a `.ui-select` div and copies the select's class
+ * names onto that wrapper (the native element is left as `.ui-select-native` and hidden). The
+ * visible control is therefore `.ui-select-trigger`, which already draws its own border and
+ * caret. Styling `.knowledge-graph-review-type` as if it were the native control put a frame on
+ * the *wrapper* as well — a box drawn around a box, which is exactly what the user kept seeing
+ * even after the native chrome had been suppressed. So: the wrapper only sets the size, and the
+ * trigger — the thing on screen — carries the compact look. The `select.` branch keeps the
+ * pre-enhancement state (and any select the enhancer skips) correct. */
+select.knowledge-graph-review-type {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 24px;
+  /* Right padding leaves room for the caret glyph. */
+  padding: 0 22px 0 8px;
+  border: 1px solid #d9e2ef;
+  border-radius: 6px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235c7290' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 7px center;
+  color: #34445c;
+  font-size: 11px;
+}
+
+/* The wrapper: no frame of its own, no background, no padding — one box on screen, not two. */
+.knowledge-graph-review-type.ui-select {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* The element actually on screen. Shrunk to fit the row's 11px metadata line instead of the
+   app-wide 34px control height. */
+.knowledge-graph-review-type.ui-select .ui-select-trigger {
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: #34445c;
+  font-size: 11px;
+}
+
+.knowledge-graph-review-confidence {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The paper's other names for this entity, under the name it will be stored as. */
+.knowledge-graph-review-aliases {
+  margin-top: 2px;
+  color: #8598b3;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* A suggested synonym: an annotation plus the one action that acts on it. Renaming the row is the
+   action, because two spellings of one entity merge by having the same name — there is no private
+   merge path in the dialog. */
+.knowledge-graph-review-synonym {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  color: #5c7290;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.knowledge-graph-review-synonym.is-pending {
+  color: #8598b3;
+  font-style: italic;
+}
+
+.knowledge-graph-review-synonym.is-error {
+  color: #c0392b;
+}
+
+.knowledge-graph-review-synonym .knowledge-graph-review-synonym-apply {
+  padding: 2px 9px;
+  font-size: 11px;
+}
+
+/* The Chinese gloss under a candidate name. Deliberately quieter than the name: it is a reading
+   aid for a decision the user makes about the English term, not a second thing to review. */
+.knowledge-graph-review-translation {
+  margin-top: 3px;
+  color: #5c7290;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-graph-review-translation.is-pending {
+  color: #8598b3;
+  font-style: italic;
+}
+
+.knowledge-graph-review-translation.is-error {
+  color: #c0392b;
+}
+
+.knowledge-graph-review-quote {
+  margin: 0;
+  padding: 5px 8px;
+  border-left: 3px solid #d6e3fa;
+  background: #f7faff;
+  color: #5c7290;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-graph-review-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.knowledge-graph-review-row-actions .knowledge-graph-action {
+  padding: 3px 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.knowledge-graph-review-empty {
+  margin: 12px 0;
+  color: #8598b3;
+  font-size: 13px;
+  text-align: center;
+}
+
+.knowledge-graph-review-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid #eef2f8;
+  background: #fbfdff;
+}
+
+.knowledge-graph-review-selection {
+  color: #5c7290;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.knowledge-graph-review-footer-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.knowledge-graph-action-primary {
+  border-color: #1f67e8;
+  background: #1f67e8;
+  color: #fff;
+}
+
+.knowledge-graph-action-primary:hover {
+  border-color: #1458d4;
+  background: #1458d4;
+}
+
+.knowledge-graph-action-primary:disabled {
+  border-color: #cbd8ea;
+  background: #cbd8ea;
+  color: #fff;
+}
+
+/* Extraction progress readout in the page header. */
+.knowledge-graph-extract-progress {
+  max-width: 260px;
+  overflow: hidden;
+  color: #5c7290;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-graph-extract-progress.error {
+  color: #c0392b;
+}
+
+/* --------------------------------------------------------------------------
+   Merge dialog
+   -------------------------------------------------------------------------- */
+
+.knowledge-graph-merge-dialog {
+  width: min(760px, calc(100vw - 48px));
+}
+
+.knowledge-graph-merge-dialog[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.knowledge-graph-merge-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.knowledge-graph-merge-from {
+  color: #8598b3;
+  text-decoration: line-through;
+}
+
+.knowledge-graph-merge-arrow {
+  color: #8fb4ff;
+}
+
+.knowledge-graph-merge-to {
+  color: #16233d;
+  font-weight: 650;
+}
+
+/* A row below the auto-select threshold: shown, but visibly marked as the user's
+   call rather than the system's recommendation. */
+.knowledge-graph-merge-tentative {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fff4e5;
+  color: #b26a00;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.knowledge-graph-review-row[data-tentative] {
+  border-color: #f0d9b5;
+}
+
+/* --------------------------------------------------------------------------
+   Quality statistics dialog
+   -------------------------------------------------------------------------- */
+
+.knowledge-graph-metrics-dialog {
+  width: min(720px, calc(100vw - 48px));
+}
+
+.knowledge-graph-metrics-dialog[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.knowledge-graph-metrics-body {
+  min-height: 0;
+  padding: 12px 18px 18px;
+  overflow-y: auto;
+}
+
+.knowledge-graph-metrics-section + .knowledge-graph-metrics-section {
+  margin-top: 16px;
+}
+
+.knowledge-graph-metrics-section-title {
+  margin: 0 0 8px;
+  color: #6b7f9e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.knowledge-graph-metrics-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-graph-metrics-row {
+  padding: 8px 11px;
+  border: 1px solid #eef2f8;
+  border-radius: 10px;
+  background: #fff;
+  color: #2b3a52;
+  font-size: 12px;
+  line-height: 1.65;
+  /* The numbers are the point, so percentages line up between rows. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Advice is visually separated from measurements: one is a fact, the other is an
+   opinion the user is free to ignore, and they should not read as the same kind
+   of statement. */
+.knowledge-graph-metrics-advice .knowledge-graph-metrics-row {
+  border-color: #d6e3fa;
+  background: #f7faff;
+  color: #34445c;
+}
+
+/* --------------------------------------------------------------------------
+   Paper list dialog
+
+   Read-only: the rows carry no control at all, so they are a single column. It used to be
+   two, with an action button in the second — that button is gone because the graph projects
+   the knowledge base and deleting belongs there.
+   -------------------------------------------------------------------------- */
+
+.knowledge-graph-papers-dialog {
+  width: min(720px, calc(100vw - 48px));
+}
+
+.knowledge-graph-papers-dialog .knowledge-graph-review-hint b {
+  color: #34445c;
+  font-weight: 650;
+}
+
+.knowledge-graph-papers-row {
+  display: block;
+}
+
+.knowledge-graph-papers-text {
+  color: #16233d;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------------------
+   Conflict resolution dialog
+   -------------------------------------------------------------------------- */
+
+.knowledge-graph-conflict-dialog {
+  width: min(820px, calc(100vw - 48px));
+}
+
+.knowledge-graph-conflict-dialog[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.knowledge-graph-conflict-explanation {
+  margin: 0 0 8px;
+  color: #6b7f9e;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.knowledge-graph-conflict-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.knowledge-graph-conflict-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 9px 11px;
+  border: 1px solid #eef2f8;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.knowledge-graph-conflict-row input[type="radio"] {
+  margin-top: 4px;
+  accent-color: #1f67e8;
+}
+
+/* The verdict that is about to be deleted is visibly different from the one that
+   survives: that difference is the entire decision being made here. */
+.knowledge-graph-conflict-row[data-keeps] {
+  border-color: #8fb4ff;
+  background: #f7faff;
+}
+
+.knowledge-graph-conflict-row[data-retires] {
+  border-color: #f0d9b5;
+  background: #fffdf8;
+}
+
+.knowledge-graph-conflict-row[data-retires] .knowledge-graph-conflict-type {
+  color: #8598b3;
+  text-decoration: line-through;
+}
+
+.knowledge-graph-conflict-verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.knowledge-graph-conflict-type {
+  color: #16233d;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.knowledge-graph-conflict-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.knowledge-graph-conflict-badge-keep {
+  background: #e6f0ff;
+  color: #1f67e8;
+}
+
+.knowledge-graph-conflict-badge-drop {
+  background: #fff4e5;
+  color: #b26a00;
+}
+
+.knowledge-graph-conflict-recommended {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #eef2f8;
+  color: #5c7290;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+/* A failed write leaves the dialog open, so the reason has to be visible in it. */
+.knowledge-graph-review-selection.error {
+  color: #c0392b;
+}
+
+/* --------------------------------------------------------------------------
+   Relation judgement review dialog
+   -------------------------------------------------------------------------- */
+
+.knowledge-graph-relation-dialog {
+  width: min(860px, calc(100vw - 48px));
+}
+
+.knowledge-graph-relation-dialog[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.knowledge-graph-relation-hint {
+  color: #5c7290;
+  font-size: 12px;
+}
+
+.knowledge-graph-relation-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  color: #16233d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.knowledge-graph-relation-verdict {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e6f0ff;
+  color: #1f67e8;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+/* A negative verdict is not a weaker relationship — it is a different kind of
+   record, so it is coloured as a note rather than as a claim. */
+.knowledge-graph-relation-verdict-none {
+  background: #eef2f8;
+  color: #5c7290;
+}
+
+.knowledge-graph-review-row[data-negative] {
+  border-color: #e4eaf4;
+  background: #fbfdff;
+}
+
+.knowledge-graph-relation-none-note {
+  margin: 0;
+  color: #8598b3;
+  font-size: 11px;
+  line-height: 1.6;
+}
+

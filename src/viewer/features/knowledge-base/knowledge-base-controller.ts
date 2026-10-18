@@ -341,7 +341,15 @@ export function registerKnowledgeCorpusEvents(): void {
     const remove = target.closest<HTMLButtonElement>("[data-remove-document]");
     if (remove?.dataset.removeDocument) {
       if (!window.confirm("将这份 PDF 移出知识库吗？它将不再参与跨文献检索。")) return;
-      removeKnowledgeDocument(remove.dataset.removeDocument);
+      const removedDocumentId = remove.dataset.removeDocument;
+      removeKnowledgeDocument(removedDocumentId);
+      // Also drop it from the knowledge graph. Left behind, its entities, edges
+      // and extraction jobs would outlive the document: the graph would claim
+      // relationships to a paper the user removed, and a later re-add would
+      // silently skip extraction because a stale `done` job was still recorded.
+      void import("./graph-removal-bridge")
+        .then((bridge) => bridge.removeDocumentFromGraph(removedDocumentId))
+        .catch(() => undefined);
       syncCurrentPdfLibraryButton();
       renderKnowledgeBase();
       return;

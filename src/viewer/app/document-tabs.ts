@@ -53,7 +53,7 @@ import {
   documentTabLabel,
   findDocumentTab,
   findDocumentTabByFingerprint,
-  neighborTabAfterRemoval,
+  planTabClose,
   type DocumentTab,
 } from "./document-tabs-model";
 import { documentTabsBar, documentTabsList, textStatus } from "./viewer-elements";
@@ -299,6 +299,11 @@ export async function activateDocumentTab(
 /**
  * Closes a tab. The active tab prompts about unsaved annotations; background
  * tabs can never carry unsaved changes (switching away resolves them first).
+ *
+ * Closing a background tab removes it and re-renders — and deliberately does **not**
+ * activate anything: the reader keeps showing the document it was showing. Activating
+ * the neighbour there made a background close silently switch the visible PDF, which
+ * reads as "the × button does something else than close".
  */
 export async function closeDocumentTab(tabId: string): Promise<void> {
   const target = findDocumentTab(tabs, tabId);
@@ -307,20 +312,25 @@ export async function closeDocumentTab(tabId: string): Promise<void> {
   if (isActive && pdfDocument.value && !confirmDiscardUnsavedChanges()) return;
   if (isActive) snapshotActiveTab();
 
-  const neighbor = neighborTabAfterRemoval(tabs, tabId);
-  const index = tabs.findIndex((tab) => tab.id === tabId);
-  if (index >= 0) tabs.splice(index, 1);
-  if (tabId === activeTabId) activeTabId = null;
+  const plan = planTabClose(tabs, tabId, activeTabId);
+  tabs.splice(0, tabs.length, ...plan.remainingTabs);
+  if (plan.closedActiveTab) activeTabId = null;
 
   documentKnowledgeCache.delete(target.documentId);
   documentKnowledgeTasks.delete(target.documentId);
   await destroyPdfDocument(target.documentProxy);
 
-  if (neighbor) {
-    await activateDocumentTab(neighbor.id, { skipUnsavedConfirm: true });
-  } else {
-    await clearDocumentWorkspace();
+  if (plan.nextActiveTabId) {
+    await activateDocumentTab(plan.nextActiveTabId, { skipUnsavedConfirm: true });
+    return;
   }
+  if (plan.shouldClearWorkspace) {
+    await clearDocumentWorkspace();
+    return;
+  }
+  // Background close: nothing else to tear down, just show the shorter strip.
+  renderDocumentTabs();
+  updateControls();
 }
 
 async function clearDocumentWorkspace(): Promise<void> {
@@ -385,6 +395,16 @@ function createTabElement(tab: DocumentTab): HTMLElement {
     void closeDocumentTab(tab.id);
   });
 
+  // Middle-click closes, matching every tabbed browser. Without it the only way to
+  // close a tab is the small × — which is the interaction users reported as
+  // "I can't close the earlier document".
+  wrap.addEventListener("auxclick", (event) => {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void closeDocumentTab(tab.id);
+  });
+
   wrap.append(activate, close);
   return wrap;
 }
@@ -392,4 +412,12 @@ function createTabElement(tab: DocumentTab): HTMLElement {
 export function renderDocumentTabs(): void {
   documentTabsList.replaceChildren(...tabs.map(createTabElement));
   documentTabsBar.hidden = tabs.length === 0;
+  // With a full strip of tabs the active one can be scrolled out of view; keep the
+  // document being read reachable without hunting along the strip.
+  const activeTab = tabs.find((tab) => tab.id === activeTabId);
+  if (!activeTab) return;
+  const element = documentTabsList.querySelector<HTMLElement>(
+    `[data-tab-id="${activeTab.id}"]`,
+  );
+  element?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }

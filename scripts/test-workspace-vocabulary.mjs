@@ -11,6 +11,7 @@ before(async () => {
   await page.setContent(`<!doctype html><div class="app-frame">
     <header class="toolbar"><button id="viewer">PDF 阅读</button><button id="knowledge">知识库</button><button id="vocabulary">单词库</button></header>
     <div class="workspace-stage" id="stage"><div id="reader" class="workspace">PDF</div><section id="kb" class="knowledge-base-page" hidden>知识库</section>
+      <section id="graph" class="knowledge-graph-page" hidden><div class="knowledge-graph-shell"></div></section>
       <section id="vocab" class="vocabulary-library-page" hidden><div class="vocabulary-library-shell">
         <input id="search"><select id="sort"><option value="newest">newest</option></select><select id="time"><option value="all">all</option></select>
         <span id="status"></span><span id="count"></span><main id="main" class="vocabulary-library-main"><div id="grid" class="vocabulary-card-grid"></div></main>
@@ -25,7 +26,7 @@ before(async () => {
   await page.evaluate(([navigationCode, controllerCode]) => {
     const get = id => document.getElementById(id);
     const elements = {
-      workspaceStageElement: get('stage'), readerWorkspaceElement: get('reader'), knowledgeBasePageElement: get('kb'), vocabularyLibraryPageElement: get('vocab'),
+      workspaceStageElement: get('stage'), readerWorkspaceElement: get('reader'), knowledgeBasePageElement: get('kb'), knowledgeGraphPageElement: get('graph'), vocabularyLibraryPageElement: get('vocab'),
       vocabularyCardGridElement: get('grid'), vocabularyLibraryMainElement: get('main'), vocabularyLibraryStatusElement: get('status'), vocabularyTotalCountElement: get('count'),
       vocabularySearchInput: get('search'), vocabularySortSelect: get('sort'), vocabularyTimeFilterSelect: get('time'), vocabularyLibraryEntryButton: get('vocabulary'),
     };
@@ -83,7 +84,7 @@ test('real toolbar pointer clicks during interrupted transitions settle on the l
   }
   await page.waitForFunction(() => !document.getElementById('stage').classList.contains('is-transitioning'));
   assert.deepEqual(await page.evaluate(() => [...document.getElementById('stage').children].map(e => [e.id, e.hidden, e.inert])), [
-    ['reader', false, false], ['kb', true, true], ['vocab', true, true],
+    ['reader', false, false], ['kb', true, true], ['graph', true, true], ['vocab', true, true],
   ]);
 });
 

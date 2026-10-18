@@ -273,6 +273,17 @@ Client/Server 都在 Viewer 进程内（`InMemoryTransport`），无端口/子�
 
 IndexedDB `longTermMemories`（5 类别 × 3 范围）+ `paperLibrary`；`library.recordOpen` 在每次 openPdf 调用；`memory.search` AND 匹配 + 过滤 + recency 衰减；对话过长按 `ConversationMemoryConfig` 压缩。
 
+### 7.6 翻译偏好（长期记忆内的术语规则）
+
+翻译偏好作为 `preference` 类别、`translation-preference:` 前缀键的记忆条目存储（与长期记忆同一库、同一管理界面）：
+
+- **规则模型**（`modules/memory/translation-preferences.ts`，纯函数）：`keep`（术语保留英文原文，如 Transformer/token）与 `contextual`（场景化译法，如 field：电路/电磁场景 → "电路"，默认 "领域"）；含 `translationPreferenceKey`（小写归一）、`serialize/parse`（版本化 JSON，非法内容返回 null）、`pickContextTranslation`（确定性场景解析）、`formatTranslationPreferencesPrompt`（翻译提示词块）。
+- **消费**：`features/translation/translation-preferences-context.ts` 从记忆读取规则 → 注入 `translateSelectedText` 的单词/句子两种提示词（"翻译偏好（必须严格遵守）…"）。命中翻译历史缓存的结果不重新应用新偏好（§11-⑭）。
+- **两种来源**：
+  - 用户手动：设置 → 长期记忆 → 「翻译偏好」区，对话框表单添加（术语 + 保留原文 / 默认译法 + 场景关键词 + 场景译法），可删除。
+  - AI 总结：设置区「AI 总结建议」按钮取当前 PDF 页文本，让模型输出建议规则（JSON），在勾选对话框中确认后写入记忆。
+- **UI**：设置记忆页独立区块（`#translation-preference-*`），两个 `<dialog>`（添加表单 / 建议勾选）；通用记忆列表过滤掉翻译偏好条目（各自分区展示）。
+
 ---
 
 ## 8. 质量保障
@@ -295,6 +306,7 @@ typecheck（tsc strict + noUncheckedIndexedAccess）
 | 模块契约 | test-ai-contracts / test-agent-tools / test-semantic-retrieval / test-ink-eraser | Base URL 规范化、MCP 工具目录、语义检索、橡皮擦几何 |
 | | **test-state-cell（新增）** | StateCell 订阅/退订/兼容语义 |
 | | **test-document-tabs（新增）** | 标签列表纯模型：去重、关闭后邻居选择、标签名格式化 |
+| | **test-translation-preferences（新增）** | 翻译偏好规则：序列化往返、非法内容、场景解析、提示词格式化 |
 | UI 行为 | test-translation-actions / test-highlight-content / test-annotation-notes | 布局与内容隔离（白名单加载器，已适配新 app 模块） |
 | 真实浏览器 | test-interaction / test-citation-navigation / test-highlight-selection / test-workspace-vocabulary / test-toolbar-targets / test-responsive-workspace / test-connection-testing / test-document-overview / test-provider-rate-limit | 无头 Edge + 真实 PDF.js：键盘/剪贴板隔离、引用定位、性能边界、连接测试 |
 
@@ -349,6 +361,7 @@ typecheck（tsc strict + noUncheckedIndexedAccess）
 11. **same-feature 内部文件环**：annotations feature 内部 15 个文件存在同组环（检查豁免）；如需严格化可内部拆分。
 12. **AI 配置遗留常量**：`AI_CONFIG_STORAGE_KEY`/`VISION_AI_CONFIG_STORAGE_KEY`/`LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY` 仍被引用，连接表迁移后可逐步收口。
 13. **文档标签页（会话级）**：标签在页面刷新后不恢复，且暂无 Ctrl+Tab / 中键关闭等浏览器习惯快捷键；标签顺序、每标签缩放/内部导航历史（internalNavigationHistory）目前切换时重置。标签模型有纯逻辑契约测试，但"打开→切换→关闭"的浏览器级自动化测试尚未覆盖。
+14. **翻译偏好的缓存边界**：新增/修改翻译偏好不会使已命中的翻译历史缓存失效（新句子不受影响）；每条术语当前仅支持一个场景行 + 默认译法（多场景需后续扩展 JSON 编辑）。
 
 ---
 
@@ -362,7 +375,7 @@ typecheck（tsc strict + noUncheckedIndexedAccess）
 | `entrypoints/selection-page/` | 选区处理页 | `src/selection-page/bootstrap.ts` |
 | `entrypoints/tutorial/` | 配置教程 | `src/tutorial/bootstrap.ts` |
 | `src/background/` | 消息路由 + AI 网络请求 | `bootstrap.ts` |
-| `src/modules/*` | 6 个业务模块 | 各自 `public.ts` |
+| `src/modules/*` | 6 个业务模块（memory 含**翻译偏好**规则模型） | 各自 `public.ts` |
 | `src/infrastructure/` | IndexedDB/Storage/PDF 文本抽取 | — |
 | `src/viewer/core/pdf-reader/` | **PDF 原语层**（不依赖 features） | `public.ts` |
 | `src/viewer/app/` | 装配：模板注入、elements、registrations、编排器（document-open/save、**document-tabs**）、状态、hooks | `bootstrap.ts`、`public.ts`（状态门面） |

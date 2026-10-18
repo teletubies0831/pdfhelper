@@ -9,4 +9,5 @@ export * from './models/summary-models';
 export * from './models/card-models';
 export * from './models/knowledge-models';
 export * from './models/learning-models';
+export * from './models/graph-models';
 export * from './models/app-view-models';

@@ -2,6 +2,7 @@ export * from '../text-selection/public';
 export * from './annotation-editor';
 export * from './annotation-highlight-content';
 export * from './annotation-highlight-index';
+export * from './annotation-highlight-list';
 export * from './highlight-creation';
 export * from './annotation-comment-content';
 export * from './annotation-notes';

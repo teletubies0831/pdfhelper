@@ -1,4 +1,5 @@
 import {
+  applyPersistedGraphState,
   applyPersistedKnowledgeState,
   readPersistedAppViewState,
 } from "./app-view-persistence";
@@ -8,6 +9,7 @@ import {
   openVocabularyLibraryPage,
 } from "../features/vocabulary-library/public";
 import { openKnowledgeBasePage } from "../features/knowledge-base/public";
+import { openKnowledgeGraphPage } from "../features/knowledge-graph/public";
 import {
   knowledgeMainElement,
   vocabularyLibraryMainElement,
@@ -21,6 +23,12 @@ import {
 export function restoreAppViewAfterRefresh(): void {
   const state = readPersistedAppViewState();
   if (!state || state.view === "viewer") return;
+
+  if (state.view === "graph") {
+    applyPersistedGraphState(state);
+    openKnowledgeGraphPage();
+    return;
+  }
 
   if (state.view === "vocabulary") {
     if (!isVocabularyLibraryEnabled()) return;

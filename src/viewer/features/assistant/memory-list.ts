@@ -1,6 +1,10 @@
 
 
-import { memoryTools, type LongTermMemory } from "../../../modules/memory/public";
+import {
+  isTranslationPreferenceMemory,
+  memoryTools,
+  type LongTermMemory,
+} from "../../../modules/memory/public";
 
 import { longTermMemoryCount, longTermMemoryList, refreshLongTermMemoriesButton } from "../../app/viewer-elements";
 
@@ -70,7 +74,10 @@ export async function deleteLongTermMemory(memoryId: string): Promise<void> {
 export async function refreshLongTermMemoryList(): Promise<void> {
   refreshLongTermMemoriesButton.disabled = true;
   try {
-    const memories = await memoryTools.list({ limit: 100 });
+    const allMemories = await memoryTools.list({ limit: 100 });
+    // Translation preferences have their own settings section; keep the
+    // general memory list focused on free-form memories.
+    const memories = allMemories.filter((memory) => !isTranslationPreferenceMemory(memory));
     renderedMemories = new Map(memories.map((memory) => [memory.id, memory]));
     longTermMemoryCount.textContent = `${memories.length} 条`;
     longTermMemoryList.replaceChildren();

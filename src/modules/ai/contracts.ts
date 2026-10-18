@@ -4,6 +4,14 @@ export const AI_CONFIG_STORAGE_KEY = 'pdf-helper-ai-config-v1';
 export const VISION_AI_CONFIG_STORAGE_KEY = 'pdf-helper-vision-ai-config-v1';
 export const LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY = 'pdf-helper-deepseek-config-v1';
 export const AI_STREAM_PORT_NAME = 'pdf-helper:ai-stream-v1';
+/**
+ * Dedicated stream port for one-line entity explanations.
+ *
+ * Separate from `AI_STREAM_PORT_NAME` because the chat stream carries a conversation, agent tools and
+ * tool rounds; a gloss is one sentence with no tools, and reusing the chat pipeline would send a chat
+ * system prompt plus a tool schema just to ask for a few characters of meaning.
+ */
+export const AI_EXPLANATION_STREAM_PORT_NAME = 'pdf-helper:ai-explain-stream-v1';
 
 export type AiProviderId = 'deepseek' | 'openai-compatible' | 'anthropic' | 'gemini';
 export type AiReasoningMode = 'disabled' | 'enabled';
@@ -163,6 +171,97 @@ export interface AiDocumentOverviewProgress {
   complete: boolean;
 }
 
+/** One chunk of a paper, as handed to the entity extractor. */
+export interface AiEntityExtractionChunk {
+  chunkId: string;
+  heading?: string;
+  startPage: number;
+  endPage: number;
+  text: string;
+}
+
+/**
+ * Knowledge-graph candidate entity extraction for one paper.
+ *
+ * Sent as a single request carrying every chunk, rather than one request per
+ * chunk: the service worker is the caller and it can be torn down between
+ * messages, so fewer round trips means fewer orphaned jobs. The response is plain
+ * text (there is no provider JSON mode) that the caller parses defensively.
+ */
+export interface AiExtractEntitiesRequest {
+  type: 'pdf-helper:ai-extract-entities';
+  requestId: string;
+  paperId: string;
+  paperTitle: string;
+  documentName: string;
+  /**
+   * The paper's abstract, when one is known.
+   *
+   * Sent ahead of the chunks because each call only sees three of them: without it the model reads
+   * a background paragraph in the Introduction as if it were the paper's own contribution. The
+   * abstract is the cheapest available statement of what the paper actually does.
+   */
+  abstract?: string;
+  chunks: AiEntityExtractionChunk[];
+  /** Hard cap on candidates kept per response; the main token-cost lever. */
+  maxCandidatesPerChunk: number;
+  /** Injected for testability; defaults to the built-in extraction prompt. */
+  promptOverride?: string;
+}
+
+/** One paper pair to judge, with the context the model needs. */
+export interface AiRelationCandidate {
+  /** Deterministic key; echoed back by the model so answers can be matched. */
+  pairKey: string;
+  leftTitle: string;
+  rightTitle: string;
+  leftSummary: string;
+  rightSummary: string;
+  sharedEntities: string[];
+  recallReasons: string[];
+}
+
+/**
+ * Knowledge-graph paper-to-paper relationship judgement.
+ *
+ * The candidate list is already bounded by the caller's recall funnel, so this
+ * request is small by construction — the token ceiling was decided before the
+ * message was built, not here.
+ */
+export interface AiJudgeRelationsRequest {
+  type: 'pdf-helper:ai-judge-relations';
+  requestId: string;
+  pairs: AiRelationCandidate[];
+  /** Injected for testability; defaults to the built-in judgement prompt. */
+  promptOverride?: string;
+}
+
+/** One entity the model is asked to explain, with the context it may ground the answer in. */
+export interface AiEntityExplainItem {
+  name: string;
+  type: string;
+  aliases?: string[];
+  paperTitle: string;
+  /** Abstract lead, when one is known: the cheapest statement of what the paper does. */
+  abstract?: string;
+  /** Verbatim sentences where the entity appears, already stored on the entity as evidence. */
+  quotes: string[];
+}
+
+/**
+ * Short per-entity glosses for entities the user just confirmed into the graph.
+ *
+ * Sent as one request for the whole confirmation rather than one per entity: the answers are a few
+ * dozen characters each, and a round trip per name would cost more than the content.
+ */
+export interface AiExplainEntitiesRequest {
+  type: 'pdf-helper:ai-explain-entities';
+  requestId: string;
+  items: AiEntityExplainItem[];
+  /** Injected for testability; defaults to the built-in explanation prompt. */
+  promptOverride?: string;
+}
+
 export interface AiCompressConversationRequest {
   type: 'pdf-helper:ai-compress-conversation';
   previousSummary?: string;
@@ -205,14 +304,31 @@ export interface AiStreamStartMessage {
   }>;
 }
 
+/** Client to background: explain exactly one entity, streaming the sentence back. */
+export interface AiExplanationStreamStartMessage {
+  type: 'start';
+  requestId: string;
+  item: AiEntityExplainItem;
+}
+
+/**
+ * Background to client for the explanation stream.
+ *
+ * Deliberately the same four shapes as the chat stream (`started`/`delta`/`done`/`error`) so the
+ * viewer client reads the same way, minus tool calls, which a gloss never produces.
+ */
+export type AiExplanationStreamServerMessage =
+  | { type: 'started'; requestId: string; model: string }
+  | { type: 'delta'; requestId: string; content: string }
+  | { type: 'done'; requestId: string; model: string }
+  | { type: 'error'; requestId: string; error: string };
+
 export interface AiStreamToolResult {
   toolCallId: string;
   name: string;
   ok: boolean;
   content: string;
-}
-
-export interface AiStreamToolResultsMessage {
+}export interface AiStreamToolResultsMessage {
   type: 'tool-results';
   requestId: string;
   results: AiStreamToolResult[];
@@ -267,6 +383,9 @@ export type AiRuntimeRequest =
   | AiTestRequest
   | AiDetectReadingModeRequest
   | AiGenerateDocumentOverviewRequest
+  | AiExtractEntitiesRequest
+  | AiJudgeRelationsRequest
+  | AiExplainEntitiesRequest
   | AiCompressConversationRequest
   | AiVisionRequest
   | AiVisionTestRequest;
@@ -280,6 +399,24 @@ export interface AiRuntimeResponse {
   rationale?: string;
   toolCalls?: AiNativeToolCall[];
   error?: string;
+  /**
+   * Present on `pdf-helper:ai-extract-entities` responses. Extraction runs in
+   * batches, and a partially successful run is useful: the caller parses the
+   * concatenated content and records which batches still need a retry.
+   */
+  entityExtraction?: {
+    batchCount: number;
+    failedBatches: Array<{ chunkIds: string[]; error: string }>;
+    promptVersion: string;
+  };
+  /**
+   * Present on `pdf-helper:ai-judge-relations` responses: how many provider calls
+   * ran and which pairs failed, so a partial run is reported as partial.
+   */
+  relationJudgement?: {
+    batchCount: number;
+    failedBatches: Array<{ pairKeys: string[]; error: string }>;
+  };
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -342,6 +479,9 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
     || type === 'pdf-helper:ai-test'
     || type === 'pdf-helper:ai-detect-reading-mode'
     || type === 'pdf-helper:ai-generate-document-overview'
+    || type === 'pdf-helper:ai-extract-entities'
+    || type === 'pdf-helper:ai-judge-relations'
+    || type === 'pdf-helper:ai-explain-entities'
     || type === 'pdf-helper:ai-compress-conversation'
     || type === 'pdf-helper:ai-vision'
     || type === 'pdf-helper:ai-vision-test';

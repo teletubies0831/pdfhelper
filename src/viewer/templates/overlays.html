@@ -245,3 +245,95 @@ $$"
     </form>
 
     <div id="settings-modal-backdrop" class="settings-modal-backdrop" hidden aria-hidden="true"></div>
+
+    <dialog
+      id="app-error-dialog"
+      class="app-confirm-dialog app-error-dialog"
+      aria-labelledby="app-error-dialog-title"
+    >
+      <section class="app-confirm-dialog-card">
+        <header>
+          <div class="app-confirm-dialog-icon" aria-hidden="true">!</div>
+          <div>
+            <h2 id="app-error-dialog-title">出错了</h2>
+            <p id="app-error-dialog-summary"></p>
+          </div>
+          <button id="app-error-dialog-close" class="app-confirm-dialog-close" type="button" aria-label="关闭">×</button>
+        </header>
+        <div id="app-error-dialog-message" class="app-error-dialog-message" role="document" tabindex="0"></div>
+        <footer>
+          <button id="app-error-dialog-copy" type="button">复制错误信息</button>
+          <button id="app-error-dialog-dismiss" type="button" class="primary-button">知道了</button>
+        </footer>
+      </section>
+    </dialog>
+
+    <dialog
+      id="translation-preference-dialog"
+      class="app-confirm-dialog translation-preference-dialog"
+      aria-labelledby="translation-preference-dialog-title"
+    >
+      <section class="app-confirm-dialog-card">
+        <header>
+          <div class="app-confirm-dialog-icon" aria-hidden="true">译</div>
+          <div>
+            <h2 id="translation-preference-dialog-title">添加翻译偏好</h2>
+            <p>术语可以在译文中保留英文原文，或按场景指定不同译法。</p>
+          </div>
+          <button id="translation-preference-cancel" class="app-confirm-dialog-close" type="button" aria-label="关闭">×</button>
+        </header>
+        <form id="translation-preference-form">
+          <label class="settings-field">
+            <span>术语（英文原文）</span>
+            <input id="translation-preference-term" type="text" autocomplete="off" spellcheck="false" placeholder="例如 Transformer、field" required />
+          </label>
+          <label class="settings-field">
+            <span>规则类型</span>
+            <select id="translation-preference-kind">
+              <option value="keep">译文保留英文原文，不翻译</option>
+              <option value="contextual">按场景指定译法</option>
+            </select>
+          </label>
+          <div id="translation-preference-contextual-fields" class="translation-preference-contextual" hidden>
+            <label class="settings-field">
+              <span>默认译法（其他场景）</span>
+              <input id="translation-preference-default" type="text" autocomplete="off" spellcheck="false" placeholder="例如 领域" />
+            </label>
+            <label class="settings-field">
+              <span>场景关键词（逗号分隔，中英文皆可）</span>
+              <input id="translation-preference-context-terms" type="text" autocomplete="off" spellcheck="false" placeholder="例如 电路、电磁、electric、circuit" />
+            </label>
+            <label class="settings-field">
+              <span>该场景下的译法</span>
+              <input id="translation-preference-context-translation" type="text" autocomplete="off" spellcheck="false" placeholder="例如 电路" />
+            </label>
+          </div>
+        </form>
+        <footer>
+          <button type="button" data-close-dialog="translation-preference-dialog">取消</button>
+          <button id="translation-preference-save" type="submit" form="translation-preference-form" class="primary-button">保存</button>
+        </footer>
+      </section>
+    </dialog>
+
+    <dialog
+      id="translation-preference-suggestions-dialog"
+      class="app-confirm-dialog translation-preference-dialog"
+      aria-labelledby="translation-preference-suggestions-title"
+    >
+      <section class="app-confirm-dialog-card">
+        <header>
+          <div class="app-confirm-dialog-icon" aria-hidden="true">AI</div>
+          <div>
+            <h2 id="translation-preference-suggestions-title">AI 翻译偏好建议</h2>
+            <p>勾选要保存到长期记忆的术语规则。</p>
+          </div>
+          <button id="translation-preference-suggestions-cancel" class="app-confirm-dialog-close" type="button" aria-label="关闭">×</button>
+        </header>
+        <div id="translation-preference-suggestions" class="translation-preference-suggestions"></div>
+        <footer>
+          <button type="button" data-close-dialog="translation-preference-suggestions-dialog">取消</button>
+          <button id="translation-preference-suggestions-save" type="button" class="primary-button">保存选中</button>
+        </footer>
+      </section>
+    </dialog>

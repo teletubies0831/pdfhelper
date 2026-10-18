@@ -33,6 +33,7 @@ import {
   viewerContainer,
 } from "../../app/viewer-elements";
 import type { FileHandleLike } from "../../app/viewer-types";
+import { buildPdfAssetOptions } from "./pdf-asset-options";
 
 /**
  * Installs an already-parsed document into the viewer-state runtime and resets
@@ -85,10 +86,9 @@ export async function parsePdfIntoViewer(
     // out of the production console; loading failures still reject the task
     // and are surfaced by the caller's catch path.
     verbosity: VerbosityLevel.ERRORS,
-    standardFontDataUrl: new URL(
-      "pdfjs-standard-fonts/",
-      window.location.href,
-    ).href,
+    // Decoder and CMap assets. Omitting them does not fail the load: it silently
+    // produces blank scanned pages and broken CJK text. See pdf-asset-options.ts.
+    ...buildPdfAssetOptions(),
     useSystemFonts: true,
     useWorkerFetch: false,
   });

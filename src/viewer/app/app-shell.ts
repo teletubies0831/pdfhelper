@@ -1,10 +1,12 @@
 import toolbarTemplate from '../templates/toolbar.html?raw';
 import workspaceStageTemplate from '../templates/workspace-stage.html?raw';
 import knowledgeBaseTemplate from '../templates/knowledge-base.html?raw';
+import knowledgeGraphTemplate from '../templates/knowledge-graph.html?raw';
 import vocabularyLibraryTemplate from '../templates/vocabulary-library.html?raw';
 import readerWorkspaceTemplate from '../templates/reader-workspace.html?raw';
 import readerOverlaysTemplate from '../templates/reader-overlays.html?raw';
 import knowledgeBaseOverlaysTemplate from '../templates/knowledge-base-overlays.html?raw';
+import knowledgeGraphOverlaysTemplate from '../templates/knowledge-graph-overlays.html?raw';
 import vocabularyLibraryOverlaysTemplate from '../templates/vocabulary-library-overlays.html?raw';
 import overlaysTemplate from '../templates/overlays.html?raw';
 import onboardingTourTemplate from '../templates/onboarding-tour.html?raw';
@@ -17,6 +19,7 @@ export function mountViewerShell(): void {
     [
       readerWorkspaceTemplate,
       knowledgeBaseTemplate,
+      knowledgeGraphTemplate,
       vocabularyLibraryTemplate,
     ].join('\n'),
   );
@@ -27,6 +30,7 @@ export function mountViewerShell(): void {
     '</div>',
     readerOverlaysTemplate,
     knowledgeBaseOverlaysTemplate,
+    knowledgeGraphOverlaysTemplate,
     vocabularyLibraryOverlaysTemplate,
     overlaysTemplate,
     onboardingTourTemplate,

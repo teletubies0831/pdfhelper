@@ -104,6 +104,7 @@ import {
 } from "../../features/assistant/public";
 
 import { closeKnowledgeBasePage, getKnowledgeDocument, listKnowledgeDocuments } from "../../features/knowledge-base/public";
+import { closeKnowledgeGraphPage } from "../../features/knowledge-graph/public";
 import { closeVocabularyLibraryPage } from "../../features/vocabulary-library/public";
 import { setStatus } from "../../features/recent-files/public";
 import { openSourcePdfInNewTab } from "../../shared-ui/navigation/source-pdf-navigation";
@@ -115,6 +116,10 @@ import {
 } from "../../features/translation/public";
 import { cancelPendingCardGeneration } from "../../features/paper-card/public";
 import { setAssistantChoreography } from "../assistant-state";
+import {
+  refreshTranslationPreferenceList,
+  registerTranslationPreferencePanelEvents,
+} from "../../features/assistant/public";
 
 
 import {
@@ -141,8 +146,12 @@ export function registerAssistantEvents(): void {
     cancelCard: cancelPendingCardGeneration,
     activateTab: activateAiTab,
     resetSettingsPresentation,
-    refreshLongTermMemory: refreshLongTermMemoryList,
+    refreshLongTermMemory: () => {
+      void refreshLongTermMemoryList();
+      void refreshTranslationPreferenceList();
+    },
   });
+  registerTranslationPreferencePanelEvents();
   renderAgentToolCatalog();
   syncChatReasoningControl();
   initializeKnowledgeRetrievalSettings();
@@ -196,10 +205,18 @@ export function registerAssistantEvents(): void {
     );
   });
 
+  // "PDF 阅读" is the way back to the reader from every other workspace, so it has to close
+  // whichever page is open. The knowledge graph was missing here: clicking it only switched the
+  // application view, which reveals the reader's toolbars while the graph page stays on screen —
+  // buttons appearing over a page that never went away.
   aiPanelToggleButton?.addEventListener("click", () => {
     const activeWorkspace = getActiveWorkspaceView();
     if (activeWorkspace === "knowledge") {
       closeKnowledgeBasePage();
+      return;
+    }
+    if (activeWorkspace === "graph") {
+      closeKnowledgeGraphPage();
       return;
     }
     if (activeWorkspace === "vocabulary") {
@@ -212,6 +229,7 @@ export function registerAssistantEvents(): void {
   assistantPanelToggleButton.addEventListener("click", () => {
     const activeWorkspace = getActiveWorkspaceView();
     if (activeWorkspace === "knowledge") closeKnowledgeBasePage();
+    if (activeWorkspace === "graph") closeKnowledgeGraphPage();
     if (activeWorkspace === "vocabulary") closeVocabularyLibraryPage();
     const willOpen =
       appFrame?.classList.contains("right-panel-collapsed") ?? false;

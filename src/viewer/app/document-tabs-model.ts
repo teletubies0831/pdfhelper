@@ -65,3 +65,59 @@ export function neighborTabAfterRemoval(
 export function documentTabLabel(tab: DocumentTab): string {
   return tab.name.replace(/\.pdf$/i, "");
 }
+
+export interface TabClosePlan {
+  /** Tabs that remain open after the close. */
+  remainingTabs: DocumentTab[];
+  /**
+   * Tab that should become active, or null when nothing should change.
+   *
+   * Null for a background close on purpose: closing a tab you are not looking at
+   * must not change what you are reading. Only closing the *active* tab hands the
+   * reader a neighbour.
+   */
+  nextActiveTabId: string | null;
+  /** True when the closed tab was the active one. */
+  closedActiveTab: boolean;
+  /** True when no tabs remain, so the workspace has to be emptied. */
+  shouldClearWorkspace: boolean;
+}
+
+/**
+ * Plans a tab close without touching runtime state.
+ *
+ * Split out because the "which document is active afterwards" rule is easy to get
+ * wrong in a way that only shows up as the reader jumping to another PDF: the
+ * original implementation activated the neighbour unconditionally, so clicking × on
+ * a background tab silently switched the visible document.
+ */
+export function planTabClose(
+  tabs: readonly DocumentTab[],
+  closingTabId: string,
+  activeTabId: string | null,
+): TabClosePlan {
+  const index = tabs.findIndex((tab) => tab.id === closingTabId);
+  if (index < 0) {
+    return {
+      remainingTabs: [...tabs],
+      nextActiveTabId: null,
+      closedActiveTab: false,
+      shouldClearWorkspace: false,
+    };
+  }
+
+  const remainingTabs = tabs.filter((tab) => tab.id !== closingTabId);
+  const closedActiveTab = closingTabId === activeTabId;
+  if (!closedActiveTab) {
+    return { remainingTabs, nextActiveTabId: null, closedActiveTab, shouldClearWorkspace: false };
+  }
+
+  // Same neighbour rule as a browser: the tab that took the slot, else the previous.
+  const next = remainingTabs[index] ?? remainingTabs[index - 1] ?? null;
+  return {
+    remainingTabs,
+    nextActiveTabId: next?.id ?? null,
+    closedActiveTab,
+    shouldClearWorkspace: remainingTabs.length === 0,
+  };
+}

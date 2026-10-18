@@ -1,0 +1,125 @@
+<section id="knowledge-graph-page" class="knowledge-graph-page" hidden aria-label="知识图谱页面">
+  <div class="knowledge-graph-shell">
+    <header class="knowledge-graph-header">
+      <button id="knowledge-graph-back" class="knowledge-graph-back-button" type="button">← 返回 PDF</button>
+      <h1 class="knowledge-graph-title">知识图谱</h1>
+      <div id="knowledge-graph-status" class="knowledge-graph-status" role="status" aria-live="polite"></div>
+      <div class="knowledge-graph-header-actions">
+        <button id="knowledge-graph-extract" class="knowledge-graph-action" type="button" title="对当前打开的文献全文抽取候选实体">抽取候选实体</button>
+        <button id="knowledge-graph-batch" class="knowledge-graph-action" type="button" title="对图谱里的全部文献逐篇抽取（正文未变化的会跳过，不消耗 Token）">批量抽取</button>
+        <span id="knowledge-graph-extract-progress" class="knowledge-graph-extract-progress" role="status" aria-live="polite"></span>
+        <button id="knowledge-graph-pending" class="knowledge-graph-action" type="button" title="确认待入图的候选实体">
+          待确认 <span id="knowledge-graph-pending-count">0</span>
+        </button>
+        <button id="knowledge-graph-merge" class="knowledge-graph-action" type="button" title="合并同义实体">合并同义实体</button>
+        <button id="knowledge-graph-relation" class="knowledge-graph-action" type="button" title="按需判断文献之间的关系：先免费召回，只对最相关的几对调用模型；已判断过的会跳过">分析关系</button>
+        <button id="knowledge-graph-metrics" class="knowledge-graph-action" type="button" title="查看图谱质量统计：候选采纳率、实体复用率、证据覆盖率与改进建议">统计</button>
+        <button id="knowledge-graph-conflicts" class="knowledge-graph-action" type="button" title="同一对文献存在互相矛盾的结论时，在这里决定保留哪一条">
+          冲突 <span id="knowledge-graph-conflicts-count">0</span>
+        </button>
+        <button id="knowledge-graph-papers" class="knowledge-graph-action" type="button" title="查看图谱中的文献，并移除不想放进图谱的文献（不会删除 PDF 或阅读记录）">文献</button>
+        <button id="knowledge-graph-export" class="knowledge-graph-action" type="button" title="把整张图谱导出为 JSON 文件（纯本地，不需要 API Key）">导出</button>
+        <button id="knowledge-graph-import" class="knowledge-graph-action" type="button" title="从 JSON 文件恢复或合并图谱">导入</button>
+        <button id="knowledge-graph-refresh" class="knowledge-graph-action" type="button" title="重新同步文献库与关键词层">重新同步</button>
+        <button id="knowledge-graph-fit" class="knowledge-graph-action" type="button" title="缩放到全部节点">适应画布</button>
+        <button id="knowledge-graph-zoom-out" class="knowledge-graph-action knowledge-graph-icon-action" type="button" aria-label="缩小">−</button>
+        <button id="knowledge-graph-zoom-in" class="knowledge-graph-action knowledge-graph-icon-action" type="button" aria-label="放大">＋</button>
+      </div>
+    </header>
+
+    <div class="knowledge-graph-body">
+      <aside class="knowledge-graph-sidebar" aria-label="图谱过滤">
+        <div class="knowledge-graph-section">
+          <h2 class="knowledge-graph-section-title">节点类型</h2>
+          <label class="knowledge-graph-check">
+            <input id="knowledge-graph-filter-paper" type="checkbox" checked />
+            <span>文献（Paper）</span>
+          </label>
+          <label class="knowledge-graph-check">
+            <input id="knowledge-graph-filter-entity" type="checkbox" checked />
+            <span>知识实体（Entity）</span>
+          </label>
+          <label class="knowledge-graph-check">
+            <input id="knowledge-graph-filter-personal" type="checkbox" checked />
+            <span>我的标注（笔记/高亮/文件夹/标签）</span>
+          </label>
+        </div>
+
+        <div class="knowledge-graph-section">
+          <h2 class="knowledge-graph-section-title">边来源</h2>
+          <label class="knowledge-graph-check">
+            <input id="knowledge-graph-filter-origin-ai" type="checkbox" checked />
+            <span><i class="knowledge-graph-swatch knowledge-graph-swatch-ai" aria-hidden="true"></i>AI 判断</span>
+          </label>
+          <label class="knowledge-graph-check">
+            <input id="knowledge-graph-filter-origin-rule" type="checkbox" checked />
+            <span><i class="knowledge-graph-swatch knowledge-graph-swatch-rule" aria-hidden="true"></i>规则推导</span>
+          </label>
+          <label class="knowledge-graph-check">
+            <input id="knowledge-graph-filter-origin-user" type="checkbox" checked />
+            <span><i class="knowledge-graph-swatch knowledge-graph-swatch-user" aria-hidden="true"></i>用户标注</span>
+          </label>
+        </div>
+
+        <div class="knowledge-graph-section">
+          <h2 class="knowledge-graph-section-title">置信度下限</h2>
+          <div class="knowledge-graph-range-row">
+            <input id="knowledge-graph-filter-confidence" type="range" min="0" max="1" step="0.05" value="0" aria-label="置信度下限" />
+            <output id="knowledge-graph-filter-confidence-value" for="knowledge-graph-filter-confidence">0.00</output>
+          </div>
+        </div>
+
+        <div class="knowledge-graph-section">
+          <h2 class="knowledge-graph-section-title">聚焦</h2>
+          <div class="knowledge-graph-focus-row">
+            <button id="knowledge-graph-focus-all" class="knowledge-graph-action is-active" type="button">全局图谱</button>
+            <button id="knowledge-graph-focus-current" class="knowledge-graph-action" type="button" title="当前打开的 PDF 及其邻居">当前论文</button>
+          </div>
+          <label class="knowledge-graph-range-row">
+            <span class="knowledge-graph-range-label">跳数</span>
+            <input id="knowledge-graph-focus-hops" type="range" min="1" max="3" step="1" value="1" aria-label="聚焦跳数" />
+            <output id="knowledge-graph-focus-hops-value" for="knowledge-graph-focus-hops">1</output>
+          </label>
+        </div>
+
+        <div class="knowledge-graph-section">
+          <h2 class="knowledge-graph-section-title">图例</h2>
+          <ul class="knowledge-graph-legend">
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-node-paper" aria-hidden="true"></i>文献</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-entity knowledge-graph-swatch-entity-method" aria-hidden="true"></i>Method 方法</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-entity knowledge-graph-swatch-entity-task" aria-hidden="true"></i>Task 任务</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-entity knowledge-graph-swatch-entity-dataset" aria-hidden="true"></i>Dataset 数据集</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-entity knowledge-graph-swatch-entity-metric" aria-hidden="true"></i>Metric 指标</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-entity knowledge-graph-swatch-entity-concept" aria-hidden="true"></i>Concept 概念</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-entity knowledge-graph-swatch-entity-claim" aria-hidden="true"></i>Claim 主张</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-ai" aria-hidden="true"></i>实线 = AI 判断</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-rule" aria-hidden="true"></i>虚线 = 规则推导</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-user" aria-hidden="true"></i>点线 = 用户标注</li>
+            <li><i class="knowledge-graph-swatch knowledge-graph-swatch-bridge" aria-hidden="true"></i>灰虚线 = 共享 2+ 实体</li>
+          </ul>
+        </div>
+      </aside>
+
+      <div class="knowledge-graph-stage">
+        <div class="knowledge-graph-stage-toolbar">
+          <input id="knowledge-graph-search" class="knowledge-graph-search" type="search" placeholder="搜索文献标题或实体名称" aria-label="搜索图谱节点" />
+          <span id="knowledge-graph-counts" class="knowledge-graph-counts"></span>
+        </div>
+        <div class="knowledge-graph-canvas-wrap">
+          <canvas id="knowledge-graph-canvas" class="knowledge-graph-canvas" aria-label="知识图谱画布"></canvas>
+          <div id="knowledge-graph-empty" class="knowledge-graph-empty" hidden>
+            <p class="knowledge-graph-empty-title">图谱还没有内容</p>
+            <p id="knowledge-graph-empty-hint" class="knowledge-graph-empty-hint"></p>
+          </div>
+        </div>
+      </div>
+
+      <aside id="knowledge-graph-inspector" class="knowledge-graph-inspector" aria-label="节点与边的详情">
+        <div id="knowledge-graph-inspector-empty" class="knowledge-graph-inspector-empty">
+          <p>在画布上点击文献节点、实体节点或连线，这里会显示它的属性、来源与原文证据。</p>
+        </div>
+        <div id="knowledge-graph-inspector-body" class="knowledge-graph-inspector-body" hidden></div>
+      </aside>
+    </div>
+  </div>
+</section>
