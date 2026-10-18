@@ -430,6 +430,16 @@
                   <label class="settings-memory-search"><span aria-hidden="true">⌕</span><input id="long-term-memory-search" type="search" placeholder="搜索长期记忆" /></label>
                   <div id="long-term-memory-list" class="settings-memory-list" aria-live="polite"><div class="settings-memory-empty">暂无长期记忆</div></div>
                   <div class="settings-memory-write-policy"><strong>AI 建议写入记忆</strong><span>先征求确认</span></div>
+
+                  <div class="settings-translation-preferences">
+                    <div class="settings-memory-toolbar">
+                      <div><strong>翻译偏好</strong><span id="translation-preference-count">0 条</span></div>
+                      <div class="settings-memory-actions"><button id="suggest-translation-preferences" type="button">AI 总结建议</button><button id="add-translation-preference" type="button">＋ 添加规则</button></div>
+                    </div>
+                    <p class="settings-section-copy">术语在译文中保留英文原文，或按场景指定译法（如 field：电路场景译“电路”，其他场景译“领域”）。翻译时自动生效。</p>
+                    <div id="translation-preference-status" class="settings-status" aria-live="polite"></div>
+                    <div id="translation-preference-list" class="settings-memory-list" aria-live="polite"></div>
+                  </div>
                 </div>
               </div>
 

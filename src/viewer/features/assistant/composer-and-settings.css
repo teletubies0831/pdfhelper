@@ -519,7 +519,13 @@
   padding: 22px;
 }
 
-.app-confirm-dialog header {
+/* Only the dialog's *own* header is a three-column grid (icon, text, close). Nested headers —
+   the knowledge graph's group headings, for instance — are section titles and must keep their
+   own layout: this rule used to match them too and, being one class plus one element, outranked
+   their single-class `display: flex`, dropping a CJK heading into the 42px icon column where it
+   wrapped one character per line. */
+.app-confirm-dialog > header,
+.app-confirm-dialog-card > header {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) 32px;
   gap: 12px;
@@ -543,7 +549,8 @@
   font-size: 18px;
 }
 
-.app-confirm-dialog header p {
+.app-confirm-dialog > header p,
+.app-confirm-dialog-card > header p {
   margin: 6px 0 0;
   color: #667085;
   font-size: 13px;

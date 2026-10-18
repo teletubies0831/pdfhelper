@@ -1,0 +1,675 @@
+import {
+  buildSharedEntityBridges,
+  collectJudgedPairKeys,
+  isRenderableEdge,
+} from '../../../modules/knowledge-graph/public';
+import {
+  buildSubgraph,
+  condenseGraph,
+  describeCondensation,
+  knowledgeGraphRepository,
+  openKnowledgeGraph,
+  pruneRemovedGraphPapers,
+  readGraphSnapshot,
+  runBatchExtraction,
+  runEntityExtraction,
+  selectBatchTargets,
+  summarizeBatchResult,
+  type ExtractionProgress,
+  type GraphEdge,
+  type GraphEntity,
+  type GraphPaper,
+  type GraphSnapshot,
+  type GraphUserNode,
+  type SubgraphRequest,
+} from '../../../modules/knowledge-graph/public';
+import {
+  graphFocusHops,
+  graphFocusMode,
+  graphMinConfidence,
+  graphSearchQuery,
+  graphSelectedEdgeId,
+  graphSelectedNodeId,
+  graphShowEntities,
+  graphShowOriginAi,
+  graphShowOriginRule,
+  graphShowOriginUser,
+  graphShowPapers,
+} from '../../app/public';
+import { getDocumentChunks } from '../../../modules/document-agent/public';
+import { getPdfFingerprint } from '../../app/document-identity';
+import {
+  knowledgeGraphCanvasElement,
+  knowledgeGraphCountsElement,
+  knowledgeGraphEmptyElement,
+  knowledgeGraphEmptyHintElement,
+  knowledgeGraphEntryButton,
+  knowledgeGraphBatchButton,
+  knowledgeGraphExtractButton,
+  knowledgeGraphExtractProgressElement,
+  knowledgeGraphFilterConfidenceInput,
+  knowledgeGraphFilterConfidenceValue,
+  knowledgeGraphFilterEntityInput,
+  knowledgeGraphFilterOriginAiInput,
+  knowledgeGraphFilterOriginRuleInput,
+  knowledgeGraphFilterOriginUserInput,
+  knowledgeGraphFilterPaperInput,
+  knowledgeGraphFocusAllButton,
+  knowledgeGraphFocusCurrentButton,
+  knowledgeGraphFocusHopsInput,
+  knowledgeGraphFocusHopsValue,
+  knowledgeGraphInspectorElement,
+  knowledgeGraphMergeButton,
+  knowledgeGraphPendingButton,
+  knowledgeGraphPendingCountElement,
+  knowledgeGraphSearchInput,
+  knowledgeGraphStatusElement,
+  aiPanelToggleButton,
+} from '../../app/viewer-elements';
+import { setCurrentApplicationView } from '../../app/application-navigation';
+import { persistCurrentAppViewState } from '../../app/app-view-persistence';
+import { setStatus } from '../../app/status-bar';
+import { showAppError } from '../../app/error-dialog';
+import { getActiveWorkspaceView, transitionWorkspaceView } from '../../app/workspace-navigation';
+import {
+  buildRenderModel,
+  GraphCanvasRenderer,
+  type RenderEdge,
+  type RenderNode,
+} from './graph-canvas-renderer';
+import {
+  clearInspector,
+  renderEdgeInspector,
+  renderEntityInspector,
+  renderPaperInspector,
+  type InspectorActions,
+} from './graph-inspector';
+import { resolveGraphTheme } from './graph-theme';
+import {
+  boundsOfPoints,
+  createViewport,
+  fitViewport,
+} from './graph-viewport';
+import { createGraphViewportController } from './graph-viewport-controller';
+import { createGraphLayoutRunner } from './graph-layout-runner';
+import { registerGraphCanvasInteraction } from './graph-canvas-interaction';
+import { describeGraphView, type GraphViewReport } from './graph-view-report';
+import {
+  collectMatchedNodeIds,
+  filterVisibleEdges,
+  filterVisibleNodes,
+  type GraphFilterState,
+} from './graph-view-filters';
+import { openGraphSourcePdf } from './graph-source-navigation';
+import { createGraphExtractionPorts } from './graph-extraction-repository';
+import { configureGraphActions } from './graph-entity-actions';
+import {
+  configureExplanationActions,
+  currentExplanationProgress,
+} from './graph-explanation-actions';
+import { readPersonalGraph } from './graph-personal-repository';
+import {
+  buildPersonalProvider as buildGraphPersonalProvider,
+  type PersonalGraphProvider,
+} from './graph-personal-provider';
+import { collectKnowledgeItems } from '../knowledge-base/public';
+import {
+  refreshConflictCount,
+  refreshExtractionAvailability,
+  refreshPendingCount,
+  rejudgePaperRelation,
+  setExtractionProgress,
+} from './graph-entity-actions';
+import { regenerateEntityExplanation } from './graph-explanation-actions';
+import {
+  openEntityReviewDialog,
+  refreshEntityReviewIfOpen,
+} from './entity-review-dialog';
+import { openEntityMergeDialog } from './entity-merge-dialog';
+
+/** Above this node count the layout gets a cheap preview pass instead of settling. */
+const LAYOUT_NODE_BUDGET = 320;
+
+/**
+ * Above this node count, degree-1 leaves are folded before rendering.
+ *
+ * Higher than `LAYOUT_NODE_BUDGET`: condensation is a visible structural change, so
+ * it happens only once the graph is genuinely too big to read, whereas the layout
+ * budget is an internal performance knob.
+ */
+const CONDENSE_THRESHOLD = 240;
+
+/** Set by `redraw` so the counts line can report what was folded. */
+let condensationNote = '';
+
+let renderer: GraphCanvasRenderer | null = null;
+/**
+ * Pan/zoom state and the "fit once after layout" rule.
+ *
+ * See `graph-viewport-controller.ts`: fitting on every reload snapped the canvas back
+ * to the origin, which forced the user to drag it back after every action.
+ */
+const viewportController = createGraphViewportController({
+  initial: createViewport(),
+  measure: () => ({
+    width: knowledgeGraphCanvasElement.clientWidth || 900,
+    height: knowledgeGraphCanvasElement.clientHeight || 600,
+  }),
+  apply: (next) => {
+    renderer?.setViewport(next);
+    renderer?.render();
+  },
+});
+let snapshot: GraphSnapshot = { papers: [], entities: [], userNodes: [], edges: [] };
+let visibleEdgeIds = new Set<string>();
+let openToken = 0;
+let loaded = false;
+let loading: Promise<void> | null = null;
+
+/** Layout pass + viewport framing; see `graph-layout-runner.ts` for why it is its own file. */
+const layoutRunner = createGraphLayoutRunner({
+  getRenderer: () => renderer,
+  viewport: () => viewportController,
+  canvasSize: () => ({
+    width: Math.max(320, knowledgeGraphCanvasElement.clientWidth || 900),
+    height: Math.max(240, knowledgeGraphCanvasElement.clientHeight || 600),
+  }),
+  previewNodeBudget: LAYOUT_NODE_BUDGET,
+});
+
+function setPageStatus(message: string, isError = false): void {
+  knowledgeGraphStatusElement.textContent = message;
+  knowledgeGraphStatusElement.classList.toggle('error', isError);
+  // The page header is a single short line; a failure reason needs the readable
+  // dialog, otherwise the part that matters is ellipsised away.
+  if (isError) showAppError(message, { title: '知识图谱出错' });
+}
+
+/** The open document's graph id, or undefined when nothing matching is stored. */
+function currentPaperId(): string | undefined {
+  const fingerprint = getPdfFingerprint();
+  if (!fingerprint) return undefined;
+  return snapshot.papers.find((paper) => paper.fingerprint === fingerprint)?.paperId;
+}
+
+function currentSubgraphRequest(): SubgraphRequest {
+  const paperId = graphFocusMode.value === 'current' ? currentPaperId() : undefined;
+  return {
+    focusId: paperId,
+    focusKind: paperId ? 'paper' : undefined,
+    hops: graphFocusHops.value,
+    minConfidence: graphMinConfidence.value,
+    maxNodes: LAYOUT_NODE_BUDGET,
+  };
+}
+
+/** The current filter state, in the shape `graph-view-filters.ts` takes. */
+function currentFilterState(): GraphFilterState {
+  return {
+    showPapers: graphShowPapers.value,
+    showEntities: graphShowEntities.value,
+    showOriginAi: graphShowOriginAi.value,
+    showOriginRule: graphShowOriginRule.value,
+    showOriginUser: graphShowOriginUser.value,
+    searchQuery: graphSearchQuery.value,
+    // The same floor the slider sets, applied to nodes as well as edges: the control is labelled
+    // 置信度下限, and it used to only cull edges — so moving it barely changed the picture.
+    minConfidence: graphMinConfidence.value,
+  };
+}
+
+/**
+ * Rebuilds the visible subgraph from the current filters and hands it to the
+ * renderer. Single funnel for canvas, counts and selection bookkeeping so they
+ * cannot disagree about what is on screen.
+ */
+function redraw(): void {
+  if (!renderer) return;
+
+  // Condense *before* the subgraph, not after: truncation cuts whatever ordering
+  // happens to reach the cap, so running it first can hide papers behind keyword
+  // noise. Folding degree-1 leaves first keeps every paper and every real hub, and
+  // usually brings the graph under the cap so truncation never triggers at all.
+  const condensed = condenseGraph(
+    snapshot.papers,
+    snapshot.entities,
+    snapshot.edges,
+    { threshold: CONDENSE_THRESHOLD },
+  );
+  condensationNote = describeCondensation(condensed);
+
+  // Papers that share several confirmed entities get a direct line. Derived per redraw from the
+  // current entities — never stored — and skipped for pairs that already carry a judged conclusion.
+  const bridges = buildSharedEntityBridges(
+    condensed.papers,
+    condensed.entities,
+    condensed.edges,
+    { judgedPairKeys: collectJudgedPairKeys(condensed.edges) },
+  );
+  const renderEdges = [
+    ...condensed.edges,
+    ...bridges.map((bridge) => bridge.edge),
+  ];
+
+  const subgraph = buildSubgraph(
+    currentSubgraphRequest(),
+    condensed.papers,
+    condensed.entities,
+    renderEdges,
+    snapshot.userNodes,
+  );
+  const nodes = filterVisibleNodes(subgraph.papers, subgraph.entities, currentFilterState());
+  // Personal nodes share the "user" origin toggle with user edges: one switch for
+  // "show me my own material" rather than two that can contradict each other.
+  const userNodes = graphShowOriginUser.value ? subgraph.userNodes : [];
+  const visibleIds = new Set([
+    ...nodes.papers.map((paper) => paper.paperId),
+    ...nodes.entities.map((entity) => entity.entityId),
+    ...userNodes.map((node) => node.id),
+  ]);
+  const edges = filterVisibleEdges(subgraph.edges, currentFilterState()).filter(
+    (edge) => visibleIds.has(edge.source) && visibleIds.has(edge.target),
+  );
+
+  renderer.setModel(buildRenderModel(
+    nodes.papers,
+    nodes.entities,
+    edges,
+    userNodes,
+  ));
+  visibleEdgeIds = new Set(edges.map((edge) => edge.edgeId));
+
+  scheduleLayout();
+
+  renderer.setState({
+    hoveredNodeId: null,
+    selectedNodeId: graphSelectedNodeId.value || null,
+    selectedEdgeId: graphSelectedEdgeId.value || null,
+    matchedNodeIds: collectMatchedNodeIds(snapshot.papers, snapshot.entities, graphSearchQuery.value),
+    dimmedNodeIds: new Set(
+      [...snapshot.papers.map((paper) => paper.paperId),
+        ...snapshot.entities.map((entity) => entity.entityId)]
+        .filter((id) => !visibleIds.has(id)),
+    ),
+  });
+
+  const connectedIds = new Set<string>();
+  // Bridges count as connections: a pair linked only by shared entities is drawn as linked, and the
+  // counts must not call it 未连接 while the canvas draws a line.
+  for (const edge of renderEdges) {
+    // A negative verdict is a cache entry, not a relationship, so it never connects anything.
+    if (!isRenderableEdge(edge)) continue;
+    connectedIds.add(edge.source);
+    connectedIds.add(edge.target);
+  }
+  const allNodeIds = [
+    ...condensed.papers.map((paper) => paper.paperId),
+    ...condensed.entities.map((entity) => entity.entityId),
+  ];
+  const unconnectedNodes = allNodeIds.filter((id) => !connectedIds.has(id)).length;
+  const hiddenByFilters = Math.max(
+    0,
+    allNodeIds.length - unconnectedNodes - visibleIds.size,
+  );
+  const report = describeGraphView({
+    visiblePapers: nodes.papers.length,
+    visibleEntities: nodes.entities.length,
+    visibleUserNodes: userNodes.length,
+    visibleEdges: edges.length,
+    unconnectedNodes,
+    hiddenByFilters,
+    truncated: subgraph.truncated,
+    condensationNote,
+    totalPapers: snapshot.papers.length,
+    totalEntities: snapshot.entities.length,
+    totalEdges: renderEdges.filter(isRenderableEdge).length,
+    // Negatives are counted separately: they are the reason an empty canvas is empty
+    // even though the pairs *have* been judged.
+    unrelatedPairCount: renderEdges.filter((edge) => !isRenderableEdge(edge)).length,
+  });
+  knowledgeGraphCountsElement.textContent = report.countsText;
+  updateEmptyState(report);
+}
+
+/**
+ * Shows or hides the empty-canvas explanation.
+ *
+ * The wording for each situation is decided in `graph-view-report.ts`, where it is
+ * testable: the hint used to blame the filters for every empty canvas.
+ */
+function updateEmptyState(report: GraphViewReport): void {
+  knowledgeGraphEmptyElement.hidden = !report.empty;
+  if (report.empty) knowledgeGraphEmptyHintElement.textContent = report.emptyHint;
+}
+
+/**
+ * Layout and framing live in `graph-layout-runner.ts`: they run on their own clock (an animation
+ * frame, then one fit), which is a different reason to change than the page's state funnel.
+ */
+function scheduleLayout(): void {
+  layoutRunner.schedule();
+}
+
+export function zoomKnowledgeGraph(factor: number, anchorX?: number, anchorY?: number): void {
+  layoutRunner.zoom(factor, anchorX, anchorY);
+}
+
+export function fitKnowledgeGraph(): void {
+  layoutRunner.fit();
+}
+
+function buildInspectorActions(): InspectorActions {
+  return {
+    openPaperSource(paper, pageNumber, quote) {
+      void openGraphSourcePdf(paper, pageNumber, quote).then((opened) => {
+        if (!opened) {
+          setPageStatus('未找到该论文对应的本地文件，可能已被移动或删除。', true);
+        }
+      });
+    },
+    rejudgeRelation(leftPaperId, rightPaperId) {
+      // The pass re-reads the snapshot itself, so the canvas is refreshed only once
+      // the new conclusion has actually been written.
+      void rejudgePaperRelation(leftPaperId, rightPaperId);
+    },
+    explainEntity(entityName) {
+      // Also re-reads and re-renders when the answer lands, so the panel updates in place.
+      void regenerateEntityExplanation(entityName);
+    },
+    focusNode(nodeId, kind) {
+      graphSelectedNodeId.value = nodeId;
+      graphSelectedEdgeId.value = '';
+      // Focusing a paper switches the page to the "current paper" lens; focusing
+      // a hub entity keeps the whole graph but rings and inspects that entity,
+      // because an entity focus has no single paper to centre on.
+      graphFocusMode.value = kind === 'paper' ? 'current' : 'all';
+      syncFilterControls();
+      redraw();
+      redrawInspector();
+    },
+  };
+}
+
+function redrawInspector(): void {
+  if (!renderer) return;
+  const actions = buildInspectorActions();
+  const edgeId = graphSelectedEdgeId.value;
+  if (edgeId && visibleEdgeIds.has(edgeId)) {
+    const item = renderer.getModel().edges.find(
+      (candidate) => candidate.edge.edgeId === edgeId,
+    );
+    if (item) {
+      renderEdgeInspector(item.edge, snapshot, actions);
+      return;
+    }
+  }
+  const nodeId = graphSelectedNodeId.value;
+  const node = nodeId ? renderer.getModel().nodeById.get(nodeId) : undefined;
+  if (node) {
+    if (node.kind === 'paper' && node.paper) {
+      renderPaperInspector(node.paper, snapshot, actions);
+    } else if (node.entity) {
+      renderEntityInspector(node.entity, snapshot, actions, currentExplanationProgress());
+    }
+    return;
+  }
+  clearInspector();
+}
+
+function syncFilterControls(): void {
+  knowledgeGraphFilterPaperInput.checked = graphShowPapers.value;
+  knowledgeGraphFilterEntityInput.checked = graphShowEntities.value;
+  knowledgeGraphFilterOriginAiInput.checked = graphShowOriginAi.value;
+  knowledgeGraphFilterOriginRuleInput.checked = graphShowOriginRule.value;
+  knowledgeGraphFilterOriginUserInput.checked = graphShowOriginUser.value;
+  knowledgeGraphFilterConfidenceInput.value = String(graphMinConfidence.value);
+  knowledgeGraphFilterConfidenceValue.value = graphMinConfidence.value.toFixed(2);
+  knowledgeGraphSearchInput.value = graphSearchQuery.value;
+  knowledgeGraphFocusHopsInput.value = String(graphFocusHops.value);
+  knowledgeGraphFocusHopsValue.value = String(graphFocusHops.value);
+  knowledgeGraphFocusAllButton.classList.toggle('is-active', graphFocusMode.value === 'all');
+  knowledgeGraphFocusCurrentButton.classList.toggle(
+    'is-active',
+    graphFocusMode.value === 'current',
+  );
+}
+
+/**
+ * The personal layer, assembled in its own file.
+ *
+ * Re-exported under the page's own name so the load path reads as one sequence;
+ * what it does (capture the open document's highlights, join document names to
+ * papers, read the stored copy) is a different reason to change than rendering.
+ */
+function buildPersonalProvider(): PersonalGraphProvider {
+  return buildGraphPersonalProvider();
+}
+
+function ensureRenderer(): GraphCanvasRenderer {
+  if (!renderer) {
+    renderer = new GraphCanvasRenderer(
+      knowledgeGraphCanvasElement,
+      resolveGraphTheme(),
+      viewportController.get(),
+    );
+  }
+  renderer.syncSize();
+  return renderer;
+}
+
+/** Re-filters and redraws without touching the database. */
+export function rerenderKnowledgeGraph(): void {
+  ensureRenderer();
+  // Controls and canvas are two views of the same state, so they are re-synced
+  // together — without this the "全局图谱 / 当前论文" buttons kept the highlight of the
+  // previously selected one while the canvas already showed the new lens.
+  syncFilterControls();
+  redraw();
+  redrawInspector();
+}
+
+async function loadAndRender(force: boolean): Promise<void> {
+  if (loading) return loading;
+  loading = (async () => {
+    setPageStatus(force ? '正在重新同步文献库…' : '正在读取图谱…');
+    try {
+      if (force) {
+        const overview = await openKnowledgeGraph(buildPersonalProvider());
+        snapshot = overview.snapshot;
+        setPageStatus(
+          `已同步：写入 ${overview.refresh.papersWritten} 篇文献`
+          + `，关键词边 +${overview.refresh.keywordEdgesWritten}`
+          + `，共 ${overview.snapshot.papers.length} 篇`,
+        );
+      } else {
+        // A plain load must not show papers the knowledge base no longer has: the stored
+        // projection used to be trusted as-is, so emptying the knowledge base left the graph
+        // reporting papers that no longer exist anywhere. This runs on **every** entry to the
+        // page, not just on 重新同步 — a document removed (or added) in the knowledge base while
+        // this page was hidden would otherwise stay wrong until the user re-synced by hand.
+        const pruned = await pruneRemovedGraphPapers();
+        snapshot = await readGraphSnapshot(buildPersonalProvider());
+        setPageStatus(
+          pruned.length
+            ? `已载入 ${snapshot.papers.length} 篇文献（清理了 ${pruned.length} 篇不在知识库中的记录）`
+            : `已载入 ${snapshot.papers.length} 篇文献`,
+        );
+      }
+      loaded = true;
+    } catch (error) {
+      snapshot = { papers: [], entities: [], userNodes: [], edges: [] };
+      loaded = true;
+      setPageStatus(error instanceof Error ? error.message : String(error), true);
+    }
+    // A graph that emptied out has to be fitted again when it fills up, otherwise the
+    // first graph after a clean-up inherits a view that was fitted to nothing.
+    if (!snapshot.papers.length && !snapshot.entities.length) viewportController.invalidate();
+    syncFilterControls();
+    redraw();
+    redrawInspector();
+    // Deliberately *not* fitting here: see `fitOnceAfterLayout`. A reload triggered by
+    // an action (statistics, conflicts, a finished extraction) must leave the user
+    // where they were instead of snapping the canvas back to the origin.
+    renderer?.render();
+    // Availability depends on the projection (which resolves the paper id) and on
+    // the chunk store, so it is evaluated after the snapshot settles.
+    void refreshExtractionAvailability();
+    void refreshPendingCount();
+    // Conflicts are read from the store rather than derived from the rendered
+    // snapshot, so the badge counts what is actually stored.
+    void refreshConflictCount();
+  })().finally(() => {
+    loading = null;
+  });
+  return loading;
+}
+
+/**
+ * Shows the graph page.
+ *
+ * Every entry runs a **full projection**, not just a re-read. The cheaper plain load was wrong in
+ * both directions: it could only remove papers, so a document added to the knowledge base never
+ * appeared until the user pressed 重新同步 — which is what made the extract buttons sit there
+ * disabled after adding a PDF. The projection is incremental (`shouldWriteProjection`), so an
+ * unchanged knowledge base still writes nothing.
+ */
+export function renderKnowledgeGraph(): void {
+  ensureRenderer();
+  void loadAndRender(true);
+}
+
+/**
+ * What a click on the canvas means: one selection, one funnel.
+ *
+ * A click that hits nothing clears both selections; `redrawInspector` then empties the
+ * inspector, so the four click outcomes stay one code path.
+ */
+function applyCanvasSelection(nodeId: string | null, edgeId: string | null): void {
+  graphSelectedNodeId.value = nodeId ?? '';
+  graphSelectedEdgeId.value = edgeId ?? '';
+  redraw();
+  redrawInspector();
+}
+
+/** Pan, zoom and click hit-testing for the graph canvas. */
+export function registerKnowledgeGraphCanvasEvents(): void {
+  registerGraphCanvasInteraction(knowledgeGraphCanvasElement, {
+    getRenderer: () => renderer,
+    viewport: viewportController,
+    zoom: zoomKnowledgeGraph,
+    select: applyCanvasSelection,
+  });
+}
+
+export function openKnowledgeGraphPage(): void {
+  const token = ++openToken;
+  knowledgeGraphEntryButton.classList.add('active');
+  aiPanelToggleButton?.classList.remove('active');
+  setCurrentApplicationView('graph');
+  void transitionWorkspaceView('graph').then(() => {
+    if (token !== openToken || getActiveWorkspaceView() !== 'graph') return;
+    requestAnimationFrame(() => {
+      if (token !== openToken || getActiveWorkspaceView() !== 'graph') return;
+      ensureRenderer();
+      knowledgeGraphCanvasElement.style.cursor = 'grab';
+      setStatus('知识图谱：点击节点或连线查看详情与原文证据。');
+      renderKnowledgeGraph();
+      // Pending counts are read from the store, not the rendered snapshot, so the
+      // badge is right even when no candidates are confirmed yet.
+      void refreshPendingCount();
+      void refreshConflictCount();
+    });
+  });
+}
+
+export function closeKnowledgeGraphPage(): void {
+  if (getActiveWorkspaceView() !== 'graph') return;
+  openToken += 1;
+  knowledgeGraphEntryButton.classList.remove('active');
+  aiPanelToggleButton?.classList.add('active');
+  setCurrentApplicationView('viewer');
+  void transitionWorkspaceView('viewer');
+  persistCurrentAppViewState();
+}
+
+export function refreshKnowledgeGraphIfOpen(): void {
+  if (getActiveWorkspaceView() === 'graph') void loadAndRender(true);
+}
+
+export function resyncKnowledgeGraph(): Promise<void> {
+  return loadAndRender(true);
+}
+
+export function isKnowledgeGraphLoaded(): boolean {
+  return loaded;
+}
+
+/** Inspect panel container; also used by the responsive layout check. */
+export function isKnowledgeGraphInspectorVisible(): boolean {
+  return !knowledgeGraphInspectorElement.hidden;
+}
+
+/**
+ * Wires the entity actions (extraction, confirmation, merge) to this controller.
+ *
+ * The actions live in `graph-entity-actions.ts` because they are a different
+ * reason to change than rendering; they receive the parts of the controller they
+ * need instead of importing it, which keeps the module graph acyclic.
+ */
+function installGraphActions(): void {
+  configureGraphActions({
+    currentPaperId,
+    listPapers: () => snapshot.papers.map((paper) => ({
+      paperId: paper.paperId,
+      title: paper.title,
+    })),
+    // Recall needs folder, venue, year and abstract, so it takes the full
+    // records rather than the id/title projection used for display.
+    getPapers: () => snapshot.papers,
+    getEntityNames: () => new Map(
+      snapshot.entities.map((entity) => [entity.entityId, entity.name]),
+    ),
+    // The statistics report counts user-origin edges too, so it takes the same
+    // personal-layer snapshot the canvas renders.
+    getMetricsSource: () => ({
+      papers: snapshot.papers,
+      entities: snapshot.entities,
+      edges: snapshot.edges,
+    }),
+    // Edges per paper: the paper list says "no relations yet" with this, which is why a
+    // document can be in the graph and still have no node on the canvas.
+    getRelationCounts: () => {
+      const counts = new Map<string, number>();
+      for (const edge of snapshot.edges) {
+        if (edge.sourceKind === 'paper') {
+          counts.set(edge.source, (counts.get(edge.source) ?? 0) + 1);
+        }
+        if (edge.targetKind === 'paper') {
+          counts.set(edge.target, (counts.get(edge.target) ?? 0) + 1);
+        }
+      }
+      return counts;
+    },
+    reload: () => loadAndRender(false),
+    ensureReady: () => {
+      ensureRenderer();
+    },
+  });
+  // The explanation actions keep their own context: one live stream, a button that must be disabled
+  // while it runs, and failures that stay visible next to that button.
+  configureExplanationActions({
+    getPapers: () => snapshot.papers,
+    reload: () => loadAndRender(false),
+    refreshInspector: () => redrawInspector(),
+    setProgress: ({ message, done }) => setExtractionProgress({
+      phase: done ? 'done' : 'extracting',
+      message,
+      completedBatches: 0,
+      totalBatches: 0,
+    }),
+  });
+}
+
+export { installGraphActions };
+
+export { knowledgeGraphEntryButton };

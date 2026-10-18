@@ -1,5 +1,6 @@
 import { getDocument, type PDFDocumentProxy } from "pdfjs-dist";
 
+import { buildPdfAssetOptions } from "../../core/pdf-reader/public";
 import { executeMemoryTool, type PaperLibraryRecord } from "../../../modules/memory/public";
 import { extractPdfPageRawText } from "../../../infrastructure/browser/pdf-text-extraction";
 import { pdfDocument } from "../../app/viewer-state";
@@ -163,8 +164,13 @@ export async function readHistoricalPaper(
   );
   const loadedDocument = isCurrentDocument
     ? pdfDocument.value!
-    : await getDocument({ data: await getHistoricalPaperBytes(record) })
-        .promise;
+    : await getDocument({
+      data: await getHistoricalPaperBytes(record),
+      // Decoder/CMap assets: without them a scanned or CJK document parses but
+      // yields no usable text, which is the difference between an indexed paper
+      // and an empty one. See pdf-asset-options.ts.
+      ...buildPdfAssetOptions(),
+    }).promise;
   try {
     const query =
       typeof argumentsValue.query === "string"

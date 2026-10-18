@@ -296,6 +296,14 @@
 }
 
 .outline-list button {
+  /* The list is a column flex container with `overflow-y: auto`, so its rows are flex
+     items — and flex items shrink by default. With many entries the container has less
+     height than its content, so every row was squeezed to its 35px minimum while a
+     wrapped title needed ~53px, and the extra lines printed over the row below. That
+     is the "outline rows overlap" symptom. Rows must keep their content height and let
+     the list scroll instead. */
+  flex: none;
+  height: auto;
   min-height: 35px;
   border: 0;
   border-radius: 7px;
@@ -304,6 +312,10 @@
   font-size: 13px;
   line-height: 1.35;
   padding-right: 9px;
+  /* Deeply nested academic outlines contain long unbroken tokens; without this they
+     push out of the sidebar instead of wrapping inside the row. */
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 
 .outline-list button:hover {

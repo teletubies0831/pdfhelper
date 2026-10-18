@@ -1,0 +1,39 @@
+/* App-level error dialog: the readable counterpart of the status bar. */
+
+.app-error-dialog {
+  width: min(680px, calc(100vw - 48px));
+}
+
+.app-error-dialog .app-confirm-dialog-card {
+  /* The message is the reason this dialog exists, so it gets the space. */
+  max-height: min(70vh, 620px);
+}
+
+/* Long messages must wrap instead of widening the dialog, and must stay
+   selectable so the user can paste them into a bug report. */
+.app-error-dialog-message {
+  margin: 0;
+  padding: 12px 18px;
+  overflow-y: auto;
+  max-height: min(46vh, 420px);
+  border-top: 1px solid #eef2f8;
+  border-bottom: 1px solid #eef2f8;
+  background: #fbfdff;
+  color: #34445c;
+  font-family: var(--font-ui, system-ui, sans-serif);
+  font-size: 12.5px;
+  line-height: 1.7;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.app-error-dialog-message:focus-visible {
+  outline: 2px solid var(--primary, #1f67e8);
+  outline-offset: -2px;
+}
+
+.app-error-dialog header p[hidden] {
+  display: none;
+}

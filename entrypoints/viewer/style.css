@@ -9,6 +9,8 @@
 @import url("../../src/viewer/features/knowledge-base/editor.css");
 @import url("../../src/viewer/features/knowledge-base/content-editor.css");
 @import url("../../src/viewer/features/vocabulary-library/styles.css");
+@import url("../../src/viewer/features/knowledge-graph/styles.css");
+@import url("../../src/viewer/features/knowledge-graph/review-dialog.css");
 @import url("../../src/viewer/features/vocabulary-library/editor-mode.css");
 @import url("../../src/viewer/features/translation/styles.css");
 @import url("../../src/viewer/styles/reader-visual-refresh.css");
@@ -16,6 +18,7 @@
 @import url("../../src/viewer/styles/translation-visual-refresh.css");
 @import url("../../src/viewer/styles/select-theme.css");
 @import url("../../src/viewer/styles/dialog-motion.css");
+@import url("../../src/viewer/styles/error-dialog.css");
 @import url("../../src/viewer/styles/workspace-navigation.css");
 @import url("../../src/viewer/features/onboarding-tour/styles.css");
 @import url("../../src/viewer/styles/responsive-workspace.css");

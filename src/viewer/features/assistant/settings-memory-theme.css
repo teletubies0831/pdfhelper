@@ -308,6 +308,78 @@
   box-shadow: 0 0 0 3px rgb(31 103 232 / 10%);
 }
 
+/* Translation preferences section (inside the memory settings page). */
+.settings-translation-preferences {
+  margin-top: 18px;
+  border-top: 1px solid #e3e8f2;
+  padding-top: 14px;
+}
+
+.translation-preference-item .translation-preference-term {
+  flex: none;
+  width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1f67e8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.translation-preference-dialog {
+  width: min(470px, calc(100vw - 32px));
+}
+
+/* Neutral accent: the shared confirm-dialog icon styling is the danger tone. */
+.translation-preference-dialog .app-confirm-dialog-icon {
+  background: #eef4ff;
+  color: var(--primary, #1f67e8);
+  font-size: 15px;
+}
+
+/* Keep the header and the footer buttons visible; only the fields scroll. */
+.translation-preference-dialog .app-confirm-dialog-card {
+  max-height: min(86vh, 720px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.translation-preference-dialog form {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.translation-preference-contextual {
+  display: grid;
+  gap: 12px;
+  border-left: 3px solid #dbe7fb;
+  padding-left: 12px;
+}
+
+.translation-preference-suggestions {
+  display: grid;
+  gap: 8px;
+  max-height: min(320px, 45vh);
+  overflow: auto;
+}
+
+.translation-preference-suggestion {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #dfe7f1;
+  border-radius: 10px;
+  background: #fbfcfe;
+  padding: 10px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.translation-preference-suggestion input {
+  margin-top: 2px;
+}
+
 @media (max-width: 720px) {
   .settings-compact-grid {
     grid-template-columns: 1fr;

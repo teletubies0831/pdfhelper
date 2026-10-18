@@ -50,6 +50,53 @@ export function setSummaryMetadataRefreshHandler(
 
 
 
+const SAVED_TOAST_MS = 2_600;
+let savedToastTimer: number | null = null;
+let lastSaveState: 'none' | 'pending' | 'saved' = 'none';
+
+/**
+ * Shows "已保存" as a short-lived floating chip instead of a permanent toolbar label.
+ *
+ * A permanent "已保存" sat in the toolbar forever, reporting the result of an action
+ * that had finished minutes earlier. Now the label only occupies the row while it is
+ * *actionable* (pending changes or saving in progress); the "saved" confirmation
+ * floats over the page for a couple of seconds and then disappears.
+ *
+ * Driven by transitions only. Holding a "toast already shown" flag is what keeps the
+ * frequent `updateControls()` calls from re-showing it in a loop after it expires.
+ */
+function updateSavedToast(hasDocument: boolean, hasPendingSave: boolean): void {
+  const state: 'none' | 'pending' | 'saved' = !hasDocument
+    ? 'none'
+    : hasPendingSave
+      ? 'pending'
+      : 'saved';
+  if (state === lastSaveState) return;
+  lastSaveState = state;
+
+  if (savedToastTimer !== null) {
+    window.clearTimeout(savedToastTimer);
+    savedToastTimer = null;
+  }
+  saveCurrentPdfButton.classList.remove('is-saved-toast');
+
+  if (state === 'pending') {
+    saveCurrentPdfButton.hidden = false;
+    return;
+  }
+  if (state === 'none') {
+    saveCurrentPdfButton.hidden = true;
+    return;
+  }
+  saveCurrentPdfButton.hidden = false;
+  saveCurrentPdfButton.classList.add('is-saved-toast');
+  savedToastTimer = window.setTimeout(() => {
+    savedToastTimer = null;
+    saveCurrentPdfButton.classList.remove('is-saved-toast');
+    saveCurrentPdfButton.hidden = true;
+  }, SAVED_TOAST_MS);
+}
+
 export function updateControls() {
   const hasDocument = pdfDocument.value !== null;
   const page = hasDocument ? pdfViewer.currentPageNumber : 0;
@@ -139,6 +186,7 @@ export function updateControls() {
       : hasUnsavedChanges.value
         ? "保存当前 PDF 的修改"
         : "当前 PDF 已保存";
+  updateSavedToast(hasDocument, hasPendingSave);
   saveAnnotatedPdfButton.disabled = !hasDocument || isSavingAnnotatedPdf.value;
   updateOutlineActivePage();
 }
@@ -271,6 +319,31 @@ export async function getDestinationPageNumber(
 
 
 
+/**
+ * Indent per nesting level, capped.
+ *
+ * The sidebar is ~260px wide; an uncapped `12 + depth * 18` leaves a deeply nested
+ * entry almost no room for its title, and a title squeezed into one character per line
+ * is what makes a long outline unreadable.
+ */
+const OUTLINE_INDENT_STEP = 14;
+const OUTLINE_MAX_INDENT_DEPTH = 3;
+
+function outlineIndent(depth: number): string {
+  const clamped = Math.min(Math.max(0, depth), OUTLINE_MAX_INDENT_DEPTH);
+  return `${12 + clamped * OUTLINE_INDENT_STEP}px`;
+}
+
+/**
+ * Which render pass owns the list.
+ *
+ * `renderOutlineItems` is asynchronous (each destination is resolved separately), so a
+ * second pass can start while the first is still awaiting. Without a token the stale
+ * pass keeps appending into the freshly cleared list, mixing two renderings together —
+ * which puts rows from both passes at overlapping positions.
+ */
+let outlineRenderToken = 0;
+
 export function appendOutlineButton({
   label,
   depth,
@@ -286,7 +359,7 @@ export function appendOutlineButton({
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = label;
-  button.style.paddingLeft = `${12 + depth * 18}px`;
+  button.style.paddingLeft = outlineIndent(depth);
   if (pageNumber) button.dataset.outlinePage = String(pageNumber);
   button.addEventListener("click", onClick);
   outlineList.appendChild(button);
@@ -298,13 +371,16 @@ export async function renderOutlineItems(
   documentProxy: PDFDocumentProxy,
   items: Array<{ title?: string; dest?: unknown; items?: unknown[] }>,
   depth = 0,
+  token = outlineRenderToken,
 ) {
   for (const item of items) {
+    // A newer pass took over the list: stop appending into it.
+    if (token !== outlineRenderToken) return;
     const title = item.title?.trim() || "未命名目录项";
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = title;
-    button.style.paddingLeft = `${12 + depth * 18}px`;
+    button.style.paddingLeft = outlineIndent(depth);
     button.addEventListener("click", () => {
       if (item.dest) void navigateToDestinationWithoutReturnHistory(item.dest);
     });
@@ -314,6 +390,7 @@ export async function renderOutlineItems(
       void getDestinationPageNumber(documentProxy, item.dest).then(
         (pageNumber) => {
           if (!pageNumber || pdfDocument.value !== documentProxy) return;
+          if (token !== outlineRenderToken) return;
           button.dataset.outlinePage = String(pageNumber);
           updateOutlineActivePage();
           summaryMetadataRefreshHandler?.();
@@ -322,7 +399,7 @@ export async function renderOutlineItems(
     }
 
     if (Array.isArray(item.items) && item.items.length > 0) {
-      await renderOutlineItems(documentProxy, item.items as any, depth + 1);
+      await renderOutlineItems(documentProxy, item.items as any, depth + 1, token);
     }
   }
 }
@@ -331,6 +408,8 @@ export async function renderOutlineItems(
 
 export async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
   if (!outlineList) return;
+  outlineRenderToken += 1;
+  const token = outlineRenderToken;
   outlineList.textContent = "";
 
   try {
@@ -339,10 +418,11 @@ export async function renderDocumentOutline(documentProxy: PDFDocumentProxy) {
       dest?: unknown;
       items?: unknown[];
     }> | null;
-    if (pdfDocument.value !== documentProxy) return;
+    if (pdfDocument.value !== documentProxy || token !== outlineRenderToken) return;
 
     if (outline && outline.length > 0) {
-      await renderOutlineItems(documentProxy, outline);
+      await renderOutlineItems(documentProxy, outline, 0, token);
+      if (token !== outlineRenderToken) return;
       updateOutlineActivePage();
       summaryMetadataRefreshHandler?.();
       return;
@@ -431,7 +511,6 @@ export const AUTO_TRANSLATE_DELAY_MS = 700;
 
 
 export const MAX_SUMMARY_SOURCE_LENGTH = 18_000;
-
 
 export const MAX_CARD_SOURCE_LENGTH = 18_000;
 

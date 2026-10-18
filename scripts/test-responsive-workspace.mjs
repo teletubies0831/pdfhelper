@@ -19,7 +19,7 @@ before(async () => {
   page = await browser.newPage({ reducedMotion: 'reduce' });
   const template = name => read(`src/viewer/templates/${name}.html`);
   const stage = (await template('workspace-stage')).replace('<!-- workspace-views -->',
-    (await Promise.all(['reader-workspace', 'knowledge-base', 'vocabulary-library'].map(template))).join('\n'));
+    (await Promise.all(['reader-workspace', 'knowledge-base', 'knowledge-graph', 'vocabulary-library'].map(template))).join('\n'));
   const overlays = (await Promise.all(['reader-overlays', 'knowledge-base-overlays', 'vocabulary-library-overlays', 'overlays'].map(template))).join('\n');
   await page.setContent(`<!doctype html><div class="app-frame">${await template('toolbar')}${stage}</div>${overlays}`);
   await page.addStyleTag({ content: await read('node_modules/pdfjs-dist/web/pdf_viewer.css') });

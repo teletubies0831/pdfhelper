@@ -202,6 +202,54 @@
   color: #175cd3;
 }
 
+/* ---------------------------------------------------------------------------
+   Saved confirmation as a transient floating chip
+   ---------------------------------------------------------------------------
+   "已保存" describes something that already happened, so it does not belong in the
+   toolbar as a permanent label. While changes are pending the control stays inline
+   (it is then an action); the confirmation that follows floats over the page for a
+   couple of seconds and then disappears.
+
+   `hidden` needs an explicit rule to beat the toolbar's own display rules, and the
+   floating variant is positioned against the viewport rather than the row. */
+
+.toolbar .annotation-save-current[hidden] {
+  display: none;
+}
+
+.toolbar .annotation-save-current.is-saved-toast {
+  position: fixed;
+  top: 76px;
+  right: 28px;
+  z-index: 60;
+  min-width: 0;
+  padding: 0 12px;
+  border-color: #cfe0d2;
+  background: #f2fbf4;
+  color: #2f7a45;
+  box-shadow: 0 8px 24px rgb(23 48 26 / 14%);
+  /* Informational: it must not swallow clicks on the page underneath. */
+  pointer-events: none;
+  animation: saved-toast-in 220ms var(--motion-ease-out, ease-out);
+}
+
+@keyframes saved-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The annotation row only exists for the reader view; see
+   application-navigation's setCurrentApplicationView. */
+#annotation-tools-bar[hidden] {
+  display: none;
+}
+
 .toolbar-menu:has(.toolbar-menu-panel .active) > .toolbar-menu-trigger,
 .toolbar-menu.open > .toolbar-menu-trigger,
 .toolbar-settings-button.active {

@@ -44,6 +44,11 @@ const { handleAiRequest } = evaluate(await compile('src/background/ai/request-ha
   './provider-runtime': { getProviderAdapter: () => adapter },
   './conversation-builder': {},
   './document-overview-service': {},
+  // Knowledge-graph entity extraction, relation judgement and entity explanations are exercised by
+  // their own contract tests; here they only need to exist so the handler module can be loaded.
+  './entity-extraction-service': {},
+  './relation-judgement-service': {},
+  './entity-explanation-service': {},
 });
 const config = { ...contracts.DEFAULT_AI_CONFIG, providerId: 'openai-compatible',
   apiKey: 'unit-test-key', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.7-code' };
@@ -109,6 +114,70 @@ test('empty thinking-only responses and provider errors remain distinguishable',
     assert.match(result.error, /HTTP 429.*rate_limit_reached_error/);
     assert.match(preferences.explainConnectionTestError(result.error), /限流/);
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test('every knowledge-graph AI request type is accepted by the whitelist and answered', async () => {
+  // Two independent gates stand between a viewer feature and the provider: `isAiRuntimeRequest`
+  // (the background listener ignores anything it does not recognise) and the if-chain in
+  // `handleAiRequest`. Missing either one is silent — the feature sees `undefined` instead of a
+  // response — so both are asserted here for the whole knowledge-graph family, not just the newest
+  // member. This is exactly how a new request type failed once in real use.
+  const { handleAiRequest: handle } = evaluate(await compile('src/background/ai/request-handler.ts'), {
+    '../../modules/ai/public': ai,
+    '../../modules/reading-mode/public': {},
+    './vision-service': vision,
+    './ai-config-repository': {
+      getAiConfig: async () => config,
+      getVisionAiConfig: async () => ({}),
+    },
+    './provider-runtime': { getProviderAdapter: () => adapter },
+    './conversation-builder': {},
+    './document-overview-service': {},
+    './entity-extraction-service': {
+      extractEntities: async () => ({
+        content: '{"entities":[]}', batchCount: 1, failedBatches: [], promptVersion: 'test',
+      }),
+    },
+    './relation-judgement-service': {
+      judgeRelations: async () => ({ content: '{"relations":[]}', batchCount: 1, failedBatches: [] }),
+    },
+    './entity-explanation-service': {
+      explainEntities: async () => ({ content: '{"explanations":[]}' }),
+    },
+  });
+
+  const messages = [
+    {
+      type: 'pdf-helper:ai-extract-entities', requestId: 'r-extract', paperId: 'p1',
+      paperTitle: 'T', documentName: 'd.pdf', maxCandidatesPerChunk: 5,
+      chunks: [{ chunkId: 'c1', startPage: 1, endPage: 1, text: 't' }],
+    },
+    {
+      type: 'pdf-helper:ai-judge-relations', requestId: 'r-judge',
+      pairs: [{
+        pairKey: 'a|b', leftTitle: 'L', rightTitle: 'R', leftSummary: '', rightSummary: '',
+        sharedEntities: [], recallReasons: [],
+      }],
+    },
+    {
+      type: 'pdf-helper:ai-explain-entities', requestId: 'r-explain',
+      items: [{ name: 'X', type: 'Method', paperTitle: 'T', quotes: [] }],
+    },
+  ];
+
+  for (const message of messages) {
+    assert.equal(
+      contracts.isAiRuntimeRequest(message),
+      true,
+      `${message.type} must pass the background's whitelist, or the listener ignores it`,
+    );
+    const response = await handle(message);
+    assert.ok(
+      response && typeof response.ok === 'boolean',
+      `${message.type} must get a response object, not undefined`,
+    );
+    assert.equal(response.ok, true, `${message.type} failed in the handler: ${response.error}`);
+  }
 });
 
 let browser, page;

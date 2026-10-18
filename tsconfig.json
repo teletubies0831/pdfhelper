@@ -2,6 +2,11 @@
   "extends": "./.wxt/tsconfig.json",
   "compilerOptions": {
     "strict": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    // Pure domain modules are exercised directly by the `scripts/test-*.mjs`
+    // contract tests, which run on Node's native TypeScript stripping and
+    // therefore need explicit extensions on relative imports. The bundler
+    // resolves either form, so this only widens what is allowed.
+    "allowImportingTsExtensions": true
   }
 }

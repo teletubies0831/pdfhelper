@@ -1,21 +1,24 @@
 import {
   knowledgeBasePageElement,
+  knowledgeGraphPageElement,
   readerWorkspaceElement,
   vocabularyLibraryPageElement,
   workspaceStageElement,
 } from "./viewer-elements";
 
-export type WorkspaceView = "viewer" | "knowledge" | "vocabulary";
+export type WorkspaceView = "viewer" | "knowledge" | "graph" | "vocabulary";
 
 const WORKSPACE_ORDER: WorkspaceView[] = [
   "viewer",
   "knowledge",
+  "graph",
   "vocabulary",
 ];
 
 const workspaceElements: Record<WorkspaceView, HTMLElement> = {
   viewer: readerWorkspaceElement,
   knowledge: knowledgeBasePageElement,
+  graph: knowledgeGraphPageElement,
   vocabulary: vocabularyLibraryPageElement,
 };
 
@@ -26,20 +29,23 @@ if (
   workspaceViews.some((element) => element.parentElement !== workspaceStageElement)
 ) {
   throw new Error(
-    "Workspace stage must contain exactly the viewer, knowledge, and vocabulary pages.",
+    "Workspace stage must contain exactly the viewer, knowledge, graph, and vocabulary pages.",
   );
 }
 
 let activeWorkspaceView: WorkspaceView = !vocabularyLibraryPageElement.hidden
   ? "vocabulary"
-  : !knowledgeBasePageElement.hidden
-    ? "knowledge"
-    : "viewer";
+  : !knowledgeGraphPageElement.hidden
+    ? "graph"
+    : !knowledgeBasePageElement.hidden
+      ? "knowledge"
+      : "viewer";
 let workspaceTransitionToken = 0;
 let workspaceAnimations: Animation[] = [];
 
 function detectVisibleWorkspace(): WorkspaceView {
   if (!vocabularyLibraryPageElement.hidden) return "vocabulary";
+  if (!knowledgeGraphPageElement.hidden) return "graph";
   if (!knowledgeBasePageElement.hidden) return "knowledge";
   return "viewer";
 }

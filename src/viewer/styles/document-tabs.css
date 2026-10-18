@@ -83,14 +83,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  /* A 20px target with a faint glyph was easy to miss; the close affordance is the
+     whole point of the strip being usable, so it gets a full hit target. */
+  width: 24px;
+  height: 24px;
   flex: none;
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #8b9ab8;
-  font-size: 14px;
+  color: #7b8aa8;
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   transition:
@@ -98,8 +100,12 @@
     color var(--motion-fast, 140ms) var(--motion-ease-out, ease-out);
 }
 
+.document-tab:hover .document-tab-close {
+  color: #4d5f80;
+}
+
 .document-tab-close:hover {
-  background: rgb(31 103 232 / 12%);
+  background: rgb(31 103 232 / 14%);
   color: var(--primary, #1f67e8);
 }
 

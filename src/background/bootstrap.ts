@@ -29,6 +29,7 @@ import {
 } from "./ai/ai-runtime";
 import { getSafeProviderErrorDetails as getSafeErrorDetails } from "../modules/ai/public";
 import { withAiRequestLifetime } from "./ai/request-lifetime";
+import { registerExplanationStreamPort } from "./ai/explanation-stream";
 
 async function configureActionBehavior(): Promise<void> {
   if (!browser.sidePanel?.setPanelBehavior) return;
@@ -53,6 +54,9 @@ export function bootstrapBackground(): void {
   void registerContextMenus();
 
   void configureActionBehavior().catch(() => undefined);
+
+  // The one-line entity explanation has its own port: it streams a sentence, not a conversation.
+  registerExplanationStreamPort();
 
   browser.action.onClicked.addListener(() => {
     void handleActionClick().catch(() => undefined);

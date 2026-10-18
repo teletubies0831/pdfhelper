@@ -24,6 +24,7 @@ import { pdfViewer, sourceName } from "../../app/viewer-state";
 
 import { setStatus } from "../recent-files/public";
 import { scheduleSummaryGeneration } from "./summary-generation";
+import { loadTranslationPreferencePromptBlock } from "./translation-preferences-context";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { activeAssistantView, aiConfig, aiSelectionUpdateFrame, autoTranslateTimer, cardAbortController, currentCardContext, currentEnglishLearningResult, currentEnglishLearningSourceSentence, currentEnglishLearningSourceText, currentGeneratedCard, currentSummaryContext, lastCardRequestKey, lastSummaryPoints, lastSummaryRequestKey, lastTranslatedText, moreExamplesAbortController, selectedTextForAi, selectedTextPageNumber, translationAbortController } from "../../app/public";
 import { activeSummaryScope, lastViewerSelectionText } from "../../app/public";
@@ -200,11 +201,13 @@ export async function translateSelectedText(text: string): Promise<void> {
   );
 
   try {
+    const translationPreferenceBlock = await loadTranslationPreferencePromptBlock();
     const prompt = isWord
       ? [
           "你是严谨的英汉词典与英语教师。请为一个英文单词制作学习卡。",
           `当前选中单词：${selectedWord}`,
           `该单词所在的 PDF 原句：${sourceSentence}`,
+          ...(translationPreferenceBlock ? [translationPreferenceBlock] : []),
           "原句或释义中出现数学公式时，使用标准 LaTeX，并用 $...$（行内）或 $$...$$（独立公式）包裹；不要把公式改写成乱码或纯文字。",
           "先核验当前选中内容是否完整单词；若不是，selectionComplete 必须为 false。",
           "严格只输出 JSON 对象，不要 Markdown、代码块或额外说明。",
@@ -215,6 +218,7 @@ export async function translateSelectedText(text: string): Promise<void> {
       : [
           "你是面向英语学习者的 PDF 原句翻译助手。",
           `需要翻译的当前 PDF 原句或短段：${sourceSentence}`,
+          ...(translationPreferenceBlock ? [translationPreferenceBlock] : []),
           "即使用户最初只框选了句子的一部分，也必须翻译这里提供的完整句子，译文不得在句中截断。",
           "保留原文中的数学关系；所有公式使用标准 LaTeX，并用 $...$（行内）或 $$...$$（独立公式）包裹，以便客户端渲染。",
           "严格只输出 JSON 对象，不要 Markdown、代码块或额外说明。",

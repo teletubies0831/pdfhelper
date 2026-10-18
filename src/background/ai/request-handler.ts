@@ -9,6 +9,9 @@ import { getAiConfig, getVisionAiConfig } from './ai-config-repository';
 import { getProviderAdapter } from "./provider-runtime";
 import { buildConversation } from "./conversation-builder";
 import { generateDocumentOverview } from "./document-overview-service";
+import { extractEntities } from "./entity-extraction-service";
+import { explainEntities } from "./entity-explanation-service";
+import { judgeRelations } from "./relation-judgement-service";
 import type { AiDocumentOverviewProgress } from "../../modules/ai/public";
 
 function assertVisionTestMarker(content: string): void {
@@ -185,6 +188,51 @@ export async function handleAiRequest(message: AiRuntimeRequest, onOverviewProgr
     if (message.type === 'pdf-helper:ai-generate-document-overview') {
       const result = await generateDocumentOverview(adapter, config, message, onOverviewProgress);
       return { ok: true, ...result };
+    }
+
+    if (message.type === 'pdf-helper:ai-extract-entities') {
+      if (!message.chunks.length) {
+        return { ok: false, error: '没有可抽取的正文片段，请先建立全文索引。' };
+      }
+      const result = await extractEntities(adapter, config, message);
+      return {
+        ok: true,
+        content: result.content,
+        model: config.model,
+        // Raw batch metadata travels back to the caller, which owns parsing and
+        // decides what to persist about a partially successful run.
+        entityExtraction: {
+          batchCount: result.batchCount,
+          failedBatches: result.failedBatches,
+          promptVersion: result.promptVersion,
+        },
+      };
+    }
+
+    if (message.type === 'pdf-helper:ai-judge-relations') {
+      if (!message.pairs.length) {
+        return { ok: false, error: '没有需要判断的论文对。' };
+      }
+      const result = await judgeRelations(adapter, config, message);
+      return {
+        ok: true,
+        content: result.content,
+        model: config.model,
+        // Batch metadata travels back so the caller can report partial results
+        // rather than presenting an incomplete run as complete.
+        relationJudgement: {
+          batchCount: result.batchCount,
+          failedBatches: result.failedBatches,
+        },
+      };
+    }
+
+    if (message.type === 'pdf-helper:ai-explain-entities') {
+      if (!message.items.length) {
+        return { ok: false, error: '没有需要解释的实体。' };
+      }
+      const result = await explainEntities(adapter, config, message);
+      return { ok: true, content: result.content, model: config.model };
     }
 
     if (message.type === 'pdf-helper:ai-detect-reading-mode') {

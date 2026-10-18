@@ -24,7 +24,7 @@ import {
   showRecentFilesDialog,
   writeRecentFiles,
 } from "../../../features/recent-files/public";
-import { openPdf, openRemotePdf } from "../../document-open";
+import { openPdf, openPdfBatch, openRemotePdf } from "../../document-open";
 
 import type { FilePickerWindow } from "../../viewer-types";
 
@@ -93,11 +93,13 @@ export function registerReaderFileOpenEvents(): void {
     const pickerWindow = window as FilePickerWindow;
     if (typeof pickerWindow.showOpenFilePicker === "function") {
       try {
-        const [fileHandle] = await pickerWindow.showOpenFilePicker({
-          multiple: false,
+        // Multiple selection: opening a batch one file at a time is the slowest
+        // possible path for the user's most common action (adding papers).
+        const handles = await pickerWindow.showOpenFilePicker({
+          multiple: true,
           types: [
             {
-    description: "PDF 文件",
+              description: "PDF 文件",
               accept: {
                 "application/pdf": [".pdf"],
               },
@@ -105,15 +107,19 @@ export function registerReaderFileOpenEvents(): void {
           ],
         });
 
-        if (!fileHandle) return;
-        const file = await fileHandle.getFile();
-        await openPdf(await file.arrayBuffer(), file.name, fileHandle, false);
+        if (!handles || !handles.length) return;
+        const items = [];
+        for (const handle of handles) {
+          const file = await handle.getFile();
+          items.push({ name: file.name, data: await file.arrayBuffer(), fileHandle: handle });
+        }
+        await openPdfBatch(items);
         return;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError")
           return;
         console.warn(
-        "File System Access API 打开失败，降级到普通文件选择。",
+          "File System Access API 打开失败，降级到普通文件选择。",
           error,
         );
       }
@@ -123,9 +129,14 @@ export function registerReaderFileOpenEvents(): void {
   });
 
   fileInput.addEventListener("change", async () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    await openPdf(await file.arrayBuffer(), file.name, null, false);
+    const files = [...(fileInput.files ?? [])];
+    if (!files.length) return;
+    const items = [];
+    for (const file of files) {
+      items.push({ name: file.name, data: await file.arrayBuffer(), fileHandle: null });
+    }
+    // Cleared before opening so re-picking the same files fires `change` again.
     fileInput.value = "";
+    await openPdfBatch(items);
   });
 }

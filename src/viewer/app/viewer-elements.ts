@@ -1,4 +1,5 @@
 export * from "./elements/reader-elements";
+export * from "./elements/shell-elements";
 export * from "./elements/annotation-elements";
 export * from "./elements/navigation-elements";
 export * from "./elements/knowledge-elements";
@@ -6,4 +7,5 @@ export * from "./elements/assistant-elements";
 export * from "./elements/translation-elements";
 export * from "./elements/reading-card-elements";
 export * from "./elements/vocabulary-elements";
+export * from "./elements/knowledge-graph-elements";
 export { requiredElement } from "./elements/required-element";

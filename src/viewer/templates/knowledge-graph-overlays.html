@@ -1,0 +1,167 @@
+<dialog id="knowledge-graph-review-dialog" class="app-confirm-dialog knowledge-graph-review-dialog" aria-labelledby="knowledge-graph-review-title">
+  <header class="knowledge-graph-review-header">
+    <div>
+      <h2 id="knowledge-graph-review-title">确认候选实体</h2>
+      <p id="knowledge-graph-review-summary" class="knowledge-graph-review-summary"></p>
+    </div>
+    <button id="knowledge-graph-review-close" class="knowledge-graph-action" type="button" aria-label="关闭">×</button>
+  </header>
+
+  <div class="knowledge-graph-review-toolbar">
+    <label class="knowledge-graph-check">
+      <input id="knowledge-graph-review-show-low" type="checkbox" />
+      <span>显示低置信度候选</span>
+    </label>
+    <label class="knowledge-graph-check" id="knowledge-graph-review-translate-field" hidden>
+      <input id="knowledge-graph-review-translate" type="checkbox" />
+      <span>显示中文释义</span>
+    </label>
+    <label class="knowledge-graph-check" id="knowledge-graph-review-synonym-field" hidden>
+      <input id="knowledge-graph-review-synonym" type="checkbox" />
+      <span>检查同义写法</span>
+    </label>
+    <div class="knowledge-graph-review-toolbar-actions">
+      <button id="knowledge-graph-review-select-all" class="knowledge-graph-action" type="button">全选</button>
+      <button id="knowledge-graph-review-select-none" class="knowledge-graph-action" type="button">全不选</button>
+    </div>
+  </div>
+
+  <p class="knowledge-graph-review-hint">
+    只有确认的实体才会进入图谱并连接到文献；未确认的候选会保留但不会出现在图谱里。改名或改类型后，该候选会标记为人工修正。
+  </p>
+
+  <div id="knowledge-graph-review-groups" class="knowledge-graph-review-groups" role="region" aria-label="候选实体分组"></div>
+
+  <footer class="knowledge-graph-review-footer">
+    <span id="knowledge-graph-review-selection" class="knowledge-graph-review-selection" aria-live="polite"></span>
+    <div class="knowledge-graph-review-footer-actions">
+      <button id="knowledge-graph-review-later" class="knowledge-graph-action" type="button">稍后再说</button>
+      <button id="knowledge-graph-review-confirm" class="knowledge-graph-action knowledge-graph-action-primary" type="button">确认入图</button>
+    </div>
+  </footer>
+</dialog>
+
+<dialog id="knowledge-graph-merge-dialog" class="app-confirm-dialog knowledge-graph-merge-dialog" aria-labelledby="knowledge-graph-merge-title">
+  <header class="knowledge-graph-review-header">
+    <div>
+      <h2 id="knowledge-graph-merge-title">合并同义实体</h2>
+      <p id="knowledge-graph-merge-summary" class="knowledge-graph-review-summary"></p>
+    </div>
+    <button id="knowledge-graph-merge-close" class="knowledge-graph-action" type="button" aria-label="关闭">×</button>
+  </header>
+
+  <p class="knowledge-graph-review-hint">
+    合并后，被合并实体的名称会成为保留实体的别名，它的边会改挂到保留实体上，记录本身保留为墓碑以便溯源。相似度仅用于排序与预勾选，最终由你决定。
+  </p>
+
+  <div id="knowledge-graph-merge-groups" class="knowledge-graph-review-groups" role="region" aria-label="建议合并的实体"></div>
+
+  <footer class="knowledge-graph-review-footer">
+    <span id="knowledge-graph-merge-selection" class="knowledge-graph-review-selection" aria-live="polite"></span>
+    <div class="knowledge-graph-review-footer-actions">
+      <button id="knowledge-graph-merge-restore" class="knowledge-graph-action" type="button" hidden></button>
+      <button id="knowledge-graph-merge-later" class="knowledge-graph-action" type="button">稍后再说</button>
+      <button id="knowledge-graph-merge-apply" class="knowledge-graph-action knowledge-graph-action-primary" type="button">合并所选</button>
+    </div>
+  </footer>
+</dialog>
+
+<dialog id="knowledge-graph-metrics-dialog" class="app-confirm-dialog knowledge-graph-review-dialog knowledge-graph-metrics-dialog" aria-labelledby="knowledge-graph-metrics-title">
+  <header class="knowledge-graph-review-header">
+    <div>
+      <h2 id="knowledge-graph-metrics-title">图谱质量统计</h2>
+      <p id="knowledge-graph-metrics-summary" class="knowledge-graph-review-summary"></p>
+    </div>
+    <button id="knowledge-graph-metrics-close" class="knowledge-graph-action" type="button" aria-label="关闭">×</button>
+  </header>
+
+  <p class="knowledge-graph-review-hint">
+    这些数字全部由已存记录即时算出，没有另外维护计数器。采纳率与复用率是判断这张图谱是否真的有用的两个关键指标：候选采纳率下降说明抽取提示词在产生噪声，实体复用率接近零说明图谱还只是彼此孤立的文献堆。
+  </p>
+
+  <div id="knowledge-graph-metrics-body" class="knowledge-graph-metrics-body" role="region" aria-label="图谱统计指标"></div>
+
+  <footer class="knowledge-graph-review-footer">
+    <span id="knowledge-graph-metrics-note" class="knowledge-graph-review-selection"></span>
+    <div class="knowledge-graph-review-footer-actions">
+      <button id="knowledge-graph-metrics-copy" class="knowledge-graph-action" type="button" title="把统计与建议复制为纯文本">复制报告</button>
+      <button id="knowledge-graph-metrics-done" class="knowledge-graph-action knowledge-graph-action-primary" type="button">关闭</button>
+    </div>
+  </footer>
+</dialog>
+
+<dialog id="knowledge-graph-conflict-dialog" class="app-confirm-dialog knowledge-graph-review-dialog knowledge-graph-conflict-dialog" aria-labelledby="knowledge-graph-conflict-title">
+  <header class="knowledge-graph-review-header">
+    <div>
+      <h2 id="knowledge-graph-conflict-title">互相矛盾的关系结论</h2>
+      <p id="knowledge-graph-conflict-summary" class="knowledge-graph-review-summary"></p>
+    </div>
+    <button id="knowledge-graph-conflict-close" class="knowledge-graph-action" type="button" aria-label="关闭">×</button>
+  </header>
+
+  <p class="knowledge-graph-review-hint">
+    同一对文献留下了不止一条结论（换模型、换提示词或重复判断都可能造成）。图谱会把两条都当成当前结论呈现，所以需要你决定留下哪一条：被退役的结论会从图谱中删除，保留的那条会记下这次裁决，之后新的判断不会覆盖你的选择。
+  </p>
+
+  <div id="knowledge-graph-conflict-groups" class="knowledge-graph-review-groups" role="region" aria-label="矛盾结论列表"></div>
+
+  <footer class="knowledge-graph-review-footer">
+    <span id="knowledge-graph-conflict-selection" class="knowledge-graph-review-selection" aria-live="polite"></span>
+    <div class="knowledge-graph-review-footer-actions">
+      <button id="knowledge-graph-conflict-later" class="knowledge-graph-action" type="button">稍后再说</button>
+      <button id="knowledge-graph-conflict-apply" class="knowledge-graph-action knowledge-graph-action-primary" type="button">消解所选</button>
+    </div>
+  </footer>
+</dialog>
+
+<dialog id="knowledge-graph-relation-dialog" class="app-confirm-dialog knowledge-graph-review-dialog knowledge-graph-relation-dialog" aria-labelledby="knowledge-graph-relation-title">
+  <header class="knowledge-graph-review-header">
+    <div>
+      <h2 id="knowledge-graph-relation-title">确认关系判断结果</h2>
+      <p id="knowledge-graph-relation-summary" class="knowledge-graph-review-summary"></p>
+    </div>
+    <button id="knowledge-graph-relation-close" class="knowledge-graph-action" type="button" aria-label="关闭">×</button>
+  </header>
+
+  <div class="knowledge-graph-review-toolbar">
+    <span class="knowledge-graph-relation-hint">写入后这些论文对会被视为"已判断"，不会再次消耗 Token。</span>
+    <div class="knowledge-graph-review-toolbar-actions">
+      <button id="knowledge-graph-relation-select-all" class="knowledge-graph-action" type="button">全选</button>
+      <button id="knowledge-graph-relation-select-none" class="knowledge-graph-action" type="button">全不选</button>
+    </div>
+  </div>
+
+  <div id="knowledge-graph-relation-groups" class="knowledge-graph-review-groups" role="region" aria-label="关系判断结果"></div>
+
+  <footer class="knowledge-graph-review-footer">
+    <span id="knowledge-graph-relation-selection" class="knowledge-graph-review-selection" aria-live="polite"></span>
+    <div class="knowledge-graph-review-footer-actions">
+      <button id="knowledge-graph-relation-discard" class="knowledge-graph-action" type="button" title="本次结论全部不写入，图谱不变；这些论文对下次会重新判断">全部不写入</button>
+      <button id="knowledge-graph-relation-write" class="knowledge-graph-action knowledge-graph-action-primary" type="button">写入所选</button>
+    </div>
+  </footer>
+</dialog>
+
+<dialog id="knowledge-graph-papers-dialog" class="app-confirm-dialog knowledge-graph-review-dialog knowledge-graph-papers-dialog" aria-labelledby="knowledge-graph-papers-title">
+  <header class="knowledge-graph-review-header">
+    <div>
+      <h2 id="knowledge-graph-papers-title">图谱中的文献</h2>
+      <p id="knowledge-graph-papers-summary" class="knowledge-graph-review-summary"></p>
+    </div>
+    <button id="knowledge-graph-papers-close" class="knowledge-graph-action" type="button" aria-label="关闭">×</button>
+  </header>
+
+  <p class="knowledge-graph-review-hint">
+    图谱里的文献就是知识库里的文献：只有点「添加到知识库」的 PDF 才会进入图谱。想删除某篇，请到知识库页操作——移出知识库会把它的图谱记录、实体、关系与抽取任务一并删除。
+  </p>
+
+  <div id="knowledge-graph-papers-groups" class="knowledge-graph-review-groups" role="region" aria-label="图谱文献列表"></div>
+
+  <footer class="knowledge-graph-review-footer">
+    <span id="knowledge-graph-papers-selection" class="knowledge-graph-review-selection" aria-live="polite"></span>
+    <div class="knowledge-graph-review-footer-actions">
+      <button id="knowledge-graph-papers-library" class="knowledge-graph-action knowledge-graph-action-primary" type="button">去知识库</button>
+      <button id="knowledge-graph-papers-later" class="knowledge-graph-action" type="button">关闭</button>
+    </div>
+  </footer>
+</dialog>
