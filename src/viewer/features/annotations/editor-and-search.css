@@ -122,9 +122,10 @@
   width: var(--pdf-helper-ink-cursor-diameter, 4px);
   height: var(--pdf-helper-ink-cursor-diameter, 4px);
   box-sizing: border-box;
-  border: 1px solid rgb(15 23 42 / 90%);
+  /* Drawn in the colour the next stroke will use, so the pen's colour is visible before drawing. */
+  border: 1px solid color-mix(in srgb, var(--pdf-helper-ink-color, #0f172a) 90%, transparent);
   border-radius: 50%;
-  background: rgb(15 23 42 / 24%);
+  background: color-mix(in srgb, var(--pdf-helper-ink-color, #0f172a) 24%, transparent);
   box-shadow: 0 0 0 1px rgb(255 255 255 / 90%);
   pointer-events: none;
   transform: translate3d(-100px, -100px, 0);

@@ -25,11 +25,15 @@ before(async () => {
   await page.setContent(`<!doctype html><div class="app-frame">${await template('toolbar')}${stage}</div>${overlays}`);
   await page.addStyleTag({ content: await read('node_modules/pdfjs-dist/web/pdf_viewer.css') });
   await page.addStyleTag({ content: await css(new URL('entrypoints/viewer/style.css', root)) });
-  const sources = await Promise.all(['app/workspace-navigation.ts', 'app/application-navigation.ts'].map(async path =>
+  const sources = await Promise.all([
+    'app/workspace-navigation.ts',
+    'app/application-navigation.ts',
+    'app/focus-release.ts',
+  ].map(async path =>
     ts.transpileModule(await read(`src/viewer/${path}`), { compilerOptions: {
       target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS,
     } }).outputText));
-  await page.evaluate(([workspaceCode, presentationCode]) => {
+  await page.evaluate(([workspaceCode, presentationCode, focusReleaseCode]) => {
     const get = id => document.getElementById(id);
     const elements = {
       workspaceStageElement: get('workspace-stage'), readerWorkspaceElement: get('reader-workspace'),
@@ -44,7 +48,14 @@ before(async () => {
       annotationToolsBar: get('annotation-tools-bar'),
     };
     window.workspace = {};
-    new Function('require', 'exports', workspaceCode)(() => elements, workspace);
+    // Everything resolves to the element map except the focus helper, which view switching really calls before
+    // hiding a workspace.
+    const focusRelease = {};
+    new Function('require', 'exports', focusReleaseCode)(() => ({}), focusRelease);
+    new Function('require', 'exports', workspaceCode)(
+      name => (name === './focus-release' ? focusRelease : elements),
+      workspace,
+    );
     window.presentation = {};
     new Function('require', 'exports', presentationCode)(name => name.endsWith('viewer-elements') ? elements :
       name.endsWith('workspace-navigation') ? workspace : name.endsWith('application-navigation') ? presentation : { renderKnowledgeBase() {} }, presentation);
@@ -112,6 +123,89 @@ test('icon clicks, keyboard navigation and mode refresh keep stable button geome
   await page.locator('#vocabulary-library-entry').focus();
   await page.keyboard.press('Space');
   assert.equal(await page.evaluate(() => workspace.getActiveWorkspaceView()), 'vocabulary');
+});
+
+test('the pen offers a colour choice, not just a thickness', async () => {
+  // Reported from real use: 高亮 has a colour picker and three recent colours, but 画笔 only had a
+  // thickness slider and drew in PDF.js's default black. The pen's popover now carries black, red, blue,
+  // green, orange and purple plus a native picker for anything else, so it has to be *reachable*: real
+  // swatches, large enough to hit, all inside the popover and not clipped by it.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  // The earlier tests leave the app on the vocabulary view, where the annotation row is hidden — a hidden
+  // row has no layout box, so every swatch would measure 0×0. Put the reader back first.
+  await page.evaluate(() => {
+    presentation.setCurrentApplicationView('viewer');
+    document.getElementById('annotation-tools-bar').hidden = false;
+  });
+  const report = await page.evaluate(() => {
+    const control = document.getElementById('ink-thickness-control');
+    const picker = document.getElementById('ink-color');
+    control.hidden = false;
+    const swatches = [...control.querySelectorAll('[data-ink-color-index]')];
+    const boxes = swatches.map((button) => button.getBoundingClientRect());
+    const controlBox = control.getBoundingClientRect();
+    return {
+      label: control.getAttribute('aria-label'),
+      swatches: swatches.map((button) => ({
+        color: (button.dataset.inkColor ?? '').toLowerCase(),
+        name: button.getAttribute('aria-label') ?? '',
+        width: Math.round(button.getBoundingClientRect().width),
+        height: Math.round(button.getBoundingClientRect().height),
+        // Every swatch must be painted in the colour it stands for.
+        paint: getComputedStyle(button).backgroundColor,
+        inPopover:
+          button.getBoundingClientRect().left >= controlBox.left - 1 &&
+          button.getBoundingClientRect().right <= controlBox.right + 1,
+      })),
+      controlWidth: Math.round(controlBox.width),
+      controlHeight: Math.round(controlBox.height),
+      // A popover that overflows its own box would clip the last colour or the picker.
+      overflow: Math.round(control.scrollWidth - control.clientWidth),
+      picker: picker
+        ? {
+          type: picker.type,
+          width: Math.round(picker.getBoundingClientRect().width),
+          insideCustomChip: Boolean(picker.closest('.annotation-ink-color-custom')),
+        }
+        : null,
+      height: Math.round(control.getBoundingClientRect().height),
+    };
+  });
+
+  assert.match(report.label ?? '', /画笔/, 'the popover is announced as the pen’s own settings');
+  assert.ok(
+    report.swatches.length >= 6,
+    `expected a palette, got ${report.swatches.length} swatches; ${JSON.stringify(report)}`,
+  );
+  assert.equal(
+    new Set(report.swatches.map((swatch) => swatch.color)).size,
+    report.swatches.length,
+    `every swatch is a different colour: ${report.swatches.map((swatch) => swatch.color).join(', ')}`,
+  );
+  for (const swatch of report.swatches) {
+    assert.match(swatch.color, /^#[0-9a-f]{6}$/, `"${swatch.color}" is not a usable colour`);
+    assert.ok(swatch.name.length > 0, `the ${swatch.color} swatch needs a spoken name`);
+    assert.ok(
+      swatch.width >= 16 && swatch.height >= 16,
+      `the ${swatch.color} swatch is too small to hit (${swatch.width}×${swatch.height}); ${JSON.stringify(report)}`,
+    );
+    assert.ok(swatch.inPopover, `the ${swatch.color} swatch is outside the popover`);
+    assert.ok(
+      swatch.paint !== 'rgba(0, 0, 0, 0)',
+      `the ${swatch.color} swatch is not painted, so it cannot show its colour`,
+    );
+  }
+  assert.deepEqual(
+    report.picker,
+    { type: 'color', width: report.picker.width, insideCustomChip: true },
+    'a native picker covers the "anything else" case',
+  );
+  assert.ok(report.picker.width >= 16, 'the custom picker is clickable too');
+  assert.equal(report.overflow, 0, `the popover must not clip its own contents (${report.overflow}px)`);
+  assert.ok(
+    report.controlHeight < 120,
+    `the popover must stay a compact two-row plate; it is ${report.controlHeight}px tall`,
+  );
 });
 
 test('focus mode still collapses the complete toolbar', async () => {

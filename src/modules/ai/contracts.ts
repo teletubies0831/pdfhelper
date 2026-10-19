@@ -68,6 +68,37 @@ export interface AiConfig {
 
 export type VisionAiMode = 'disabled' | 'separate';
 
+/**
+ * Web retrieval through DeepSeek's Search / Fetch tools, used by 「相关论文」 and by the chat's 联网 switch.
+ *
+ * Not part of a model connection: the tools endpoints are DeepSeek's own service (they take no model name
+ * and are authorised by a DeepSeek key), so they get their own settings rather than a field on whichever
+ * provider the user happened to add.
+ */
+export interface AiWebRetrievalConfig {
+  /** Tools base URL; `/search` and `/fetch` are appended. */
+  baseUrl: string;
+  apiKey: string;
+  /** Candidates asked for per search. Upstream allows 1–50; billing is per request, not per result. */
+  count: number;
+  /** Pages that may be fetched for full text when a search result carried none. */
+  maxFetches: number;
+}
+
+/** DeepSeek's tools base URL. The chat base is `https://api.deepseek.com`; this one ends at `/v1/tools`. */
+export const DEEPSEEK_TOOLS_BASE_URL = 'https://api.deepseek.com/v1/tools';
+
+export const WEB_RETRIEVAL_DEFAULT_COUNT = 8;
+export const WEB_RETRIEVAL_COUNT_MIN = 3;
+export const WEB_RETRIEVAL_COUNT_MAX = 20;
+export const WEB_RETRIEVAL_MAX_FETCHES_LIMIT = 3;
+
+/** What one related-papers run cost, in tool calls. Shown to the user; never derived from tokens. */
+export interface AiWebRetrievalUsage {
+  searchCalls: number;
+  fetchCalls: number;
+}
+
 export interface VisionAiConfig {
   mode: VisionAiMode;
   providerId: 'openai-compatible';
@@ -118,6 +149,13 @@ export interface AiDocumentContext {
   conversationSummary?: string;
   longTermMemory?: string;
   readingMode?: ResolvedReadingMode;
+  /**
+   * Web pages fetched for this turn, pre-formatted for the prompt.
+   *
+   * A context field rather than a tool: the model gets one round of search results and cannot page through more,
+   * which bounds both latency and cost per question.
+   */
+  webSearchNotes?: string;
 }
 
 export interface AiChatRequest {
@@ -148,6 +186,44 @@ export interface AiTestRequest {
     capabilities?: Array<'text' | 'vision'>;
   };
   imageDataUrl?: string;
+}
+
+/**
+ * Probes the configured tools endpoint with one search.
+ *
+ * Deliberately a separate request instead of folding it into `AiTestRequest`: a model test scans models and
+ * spends tokens, while this spends a search call and must report the *tools* error taxonomy (401 vs 402 vs
+ * 429) — the difference between "wrong key", "no balance" and "slow down".
+ */
+export interface AiTestWebRetrievalRequest {
+  type: 'pdf-helper:ai-test-web-retrieval';
+}
+
+/**
+ * Builds (or rebuilds) the 「相关论文」 section for one saved overview.
+ *
+ * On demand rather than during overview generation: it costs a retrieval call and a model call, and the user
+ * decides when to spend them.
+ */
+export interface AiRelatedLiteratureRequest {
+  type: 'pdf-helper:ai-related-literature';
+  requestId: string;
+  documentName: string;
+  overviewMarkdown: string;
+}
+
+/**
+ * One web search for a chat turn, run by the service worker.
+ *
+ * The page asks; the background resolves the settings and holds the key. That keeps the credential out of the
+ * viewer and gives one place that can answer "is web retrieval configured".
+ */
+export interface AiWebSearchRequest {
+  type: 'pdf-helper:ai-web-search';
+  requestId: string;
+  query: string;
+  /** The user's question, so the engine reads the intent rather than a keyword soup. */
+  oriQuestion?: string;
 }
 
 export interface AiDetectReadingModeRequest {
@@ -209,28 +285,43 @@ export interface AiExtractEntitiesRequest {
   promptOverride?: string;
 }
 
+/**
+ * One paper, as the relation judge sees it: title plus a verbatim excerpt.
+ *
+ * The excerpt is sent **once per paper** rather than per pair, because a bridge concept has to be
+ * supported by a quote from each side and the quote is verified against exactly this text afterwards.
+ * Sending it per pair would multiply the input by the number of pairs for no extra information.
+ */
+export interface AiRelationPaperExcerpt {
+  paperId: string;
+  title: string;
+  /** Abstract, else the knowledge base overview lead. Empty when neither exists. */
+  excerpt: string;
+}
+
 /** One paper pair to judge, with the context the model needs. */
 export interface AiRelationCandidate {
   /** Deterministic key; echoed back by the model so answers can be matched. */
   pairKey: string;
+  leftPaperId: string;
+  rightPaperId: string;
   leftTitle: string;
   rightTitle: string;
-  leftSummary: string;
-  rightSummary: string;
   sharedEntities: string[];
   recallReasons: string[];
 }
 
 /**
- * Knowledge-graph paper-to-paper relationship judgement.
+ * Knowledge-graph paper-to-paper relationship judgement, plus bridge concepts.
  *
- * The candidate list is already bounded by the caller's recall funnel, so this
- * request is small by construction — the token ceiling was decided before the
- * message was built, not here.
+ * The candidate list is already bounded by the caller's selection or recall funnel, so this request is
+ * small by construction — the token ceiling was decided before the message was built, not here.
  */
 export interface AiJudgeRelationsRequest {
   type: 'pdf-helper:ai-judge-relations';
   requestId: string;
+  /** Excerpts for every paper mentioned by `pairs`. */
+  papers: AiRelationPaperExcerpt[];
   pairs: AiRelationCandidate[];
   /** Injected for testability; defaults to the built-in judgement prompt. */
   promptOverride?: string;
@@ -381,6 +472,9 @@ export type AiStreamServerMessage =
 export type AiRuntimeRequest =
   | AiChatRequest
   | AiTestRequest
+  | AiTestWebRetrievalRequest
+  | AiRelatedLiteratureRequest
+  | AiWebSearchRequest
   | AiDetectReadingModeRequest
   | AiGenerateDocumentOverviewRequest
   | AiExtractEntitiesRequest
@@ -416,6 +510,22 @@ export interface AiRuntimeResponse {
   relationJudgement?: {
     batchCount: number;
     failedBatches: Array<{ pairKeys: string[]; error: string }>;
+  };
+  /**
+   * Present on `pdf-helper:ai-related-literature` responses: the section itself plus what it cost, so the
+   * page can say "1 次检索" instead of pretending the lookup was free.
+   */
+  relatedLiterature?: {
+    markdown: string;
+    usage: AiWebRetrievalUsage;
+    /** Which candidate sources contributed; `openalex` alone means web retrieval was unavailable. */
+    sources: Array<'deepseek' | 'openalex'>;
+    degraded?: string;
+  };
+  /** Present on `pdf-helper:ai-web-search` responses: what the turn's search found and cost. */
+  webSearch?: {
+    hits: Array<{ title: string; url: string; summary: string }>;
+    searchCalls: number;
   };
 }
 
@@ -477,6 +587,9 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
   const type = (value as { type?: unknown }).type;
   return type === 'pdf-helper:ai-chat'
     || type === 'pdf-helper:ai-test'
+    || type === 'pdf-helper:ai-test-web-retrieval'
+    || type === 'pdf-helper:ai-related-literature'
+    || type === 'pdf-helper:ai-web-search'
     || type === 'pdf-helper:ai-detect-reading-mode'
     || type === 'pdf-helper:ai-generate-document-overview'
     || type === 'pdf-helper:ai-extract-entities'
@@ -485,6 +598,50 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
     || type === 'pdf-helper:ai-compress-conversation'
     || type === 'pdf-helper:ai-vision'
     || type === 'pdf-helper:ai-vision-test';
+}
+
+/**
+ * Normalizes the tools base URL.
+ *
+ * A different value from `normalizeAiBaseUrl` in one respect: an **empty** entry means "not configured" and
+ * must stay empty rather than fall back to a default, because the whole point of the empty state is that the
+ * 检索 button says so instead of silently calling DeepSeek with someone else's endpoint.
+ */
+export function normalizeAiToolsBaseUrl(value: unknown): string {
+  const candidate = typeof value === 'string' ? value.trim() : '';
+  if (!candidate) return '';
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    throw new Error('联网检索地址不是有效的 URL。');
+  }
+  const hostname = url.hostname.toLowerCase();
+  const isLoopback = hostname === 'localhost'
+    || hostname === '[::1]'
+    || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
+    throw new Error('联网检索地址必须使用 HTTPS；本机 localhost 服务可使用 HTTP。');
+  }
+  if (url.search || url.hash) {
+    throw new Error('联网检索地址不能包含查询参数或锚点。');
+  }
+  return candidate.replace(/\/+$/, '');
+}
+
+export function normalizeWebRetrievalCount(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return WEB_RETRIEVAL_DEFAULT_COUNT;
+  return Math.min(
+    WEB_RETRIEVAL_COUNT_MAX,
+    Math.max(WEB_RETRIEVAL_COUNT_MIN, Math.trunc(parsed)),
+  );
+}
+
+export function normalizeWebRetrievalMaxFetches(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(WEB_RETRIEVAL_MAX_FETCHES_LIMIT, Math.max(0, Math.trunc(parsed)));
 }
 
 export function normalizeAiMaxOutputTokens(value: unknown): number {

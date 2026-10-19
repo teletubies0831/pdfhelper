@@ -139,15 +139,21 @@
   color: #1257d8;
 }
 
-.chat-reasoning-control {
-  position: relative;
-  display: inline-block;
+/* Capability toggles beside the composer: 思考 and 联网.
+   One shape, one rule: colour carries the state (blue = on, grey = off, faded = unavailable), so there is no
+   "开启/关闭" text and no dropdown any more. The buttons keep a fixed width so flipping one does not move the
+   other, and the row around the send button keeps its height. */
+
+.chat-capability-toggles {
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
 }
 
-.chat-reasoning-trigger {
+.chat-capability-toggle {
   display: inline-flex;
-  min-width: 98px;
+  min-width: 62px;
   height: 30px;
   align-items: center;
   justify-content: center;
@@ -155,37 +161,49 @@
   border: 1px solid #d7e1ee;
   border-radius: 8px;
   background: #f8fafc;
-  color: #334155;
+  color: #64748b;
   font-size: 11px;
   line-height: 1;
   outline: 0;
-  padding: 0 7px;
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  padding: 0 10px;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, color 120ms ease;
 }
 
-.chat-reasoning-trigger:hover,
-.chat-reasoning-trigger.open {
+.chat-capability-toggle:hover {
   border-color: #9bbcff;
   background: #eaf2ff;
   color: #1257d8;
 }
 
-.chat-reasoning-trigger.open {
-  box-shadow: 0 0 0 2px rgb(31 103 232 / 6%);
-}
-
-.chat-reasoning-trigger:focus-visible {
+.chat-capability-toggle:focus-visible {
   border-color: #7aa9ff;
   box-shadow: 0 0 0 2px rgb(31 103 232 / 8%);
 }
 
-.chat-reasoning-trigger.is-enabled {
+/* On: the blue the rest of the AI panels use. */
+.chat-capability-toggle.is-on {
   border-color: #b9cff7;
   background: #f0f5ff;
   color: #1257d8;
+  font-weight: 600;
 }
 
-.chat-reasoning-icon {
+/* Unavailable (no DeepSeek key): grey and inert, but still hoverable — the tooltip is the only thing that
+   says how to enable it, and a `disabled` button would swallow that hover. */
+.chat-capability-toggle.is-unavailable {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #9aa8bc;
+  cursor: not-allowed;
+}
+
+.chat-capability-toggle.is-unavailable:hover {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #9aa8bc;
+}
+
+.chat-capability-icon {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
@@ -194,87 +212,6 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.8;
-}
-
-.chat-reasoning-trigger-label {
-  color: #64748b;
-}
-
-.chat-reasoning-value {
-  min-width: 22px;
-  color: currentColor;
-  font-weight: 600;
-  text-align: center;
-}
-
-.chat-reasoning-chevron {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-  transition: transform 120ms ease;
-}
-
-.chat-reasoning-trigger.open .chat-reasoning-chevron {
-  transform: rotate(180deg);
-}
-
-.chat-reasoning-menu {
-  position: absolute;
-  z-index: 20;
-  right: 0;
-  bottom: calc(100% + 6px);
-  width: 100%;
-  min-width: 98px;
-  padding: 4px;
-  border: 1px solid #dce5f1;
-  border-radius: 9px;
-  background: #fff;
-  box-shadow:
-    0 4px 14px rgb(15 23 42 / 7%),
-    0 1px 3px rgb(15 23 42 / 4%);
-}
-
-.chat-reasoning-menu button {
-  display: flex;
-  width: 100%;
-  height: 30px;
-  align-items: center;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #334155;
-  font-size: 11px;
-  justify-content: space-between;
-  padding: 0 10px;
-  text-align: left;
-}
-
-.chat-reasoning-menu button::after {
-  color: transparent;
-  content: "✓";
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.chat-reasoning-menu button:hover,
-.chat-reasoning-menu button:focus-visible {
-  background: #f1f5f9;
-  outline: none;
-}
-
-.chat-reasoning-menu button.selected {
-  background: #eaf2ff;
-  color: #1257d8;
-  font-weight: 600;
-}
-
-.chat-reasoning-menu button.selected::after {
-  color: #1257d8;
 }
 
 #chat-provider-status {

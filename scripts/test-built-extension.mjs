@@ -108,38 +108,100 @@ test('the graph workspace opens and finishes loading from the packaged bundle', 
   await entry.click();
   await page.waitForSelector('#knowledge-graph-page:not([hidden])', { timeout: 15_000 });
 
-  // The status line is written twice: once when the load starts and again when it
-  // finishes. Waiting for the *finished* message is what distinguishes "the page
-  // became visible" from "the workspace actually loaded" — the difference between
-  // this suite and a screenshot assertion.
-  const completion = /(已载入|已同步)/;
+  // Load completion is read from the **counts line**, not from a status message: the status text now lives
+  // in the floating notice, which removes itself after a few seconds, and the counts line is the one
+  // summary the page keeps on screen. It is written at the end of the first redraw, so it also
+  // distinguishes "the page became visible" from "the workspace actually loaded".
   const finished = await page.waitForFunction(
-    () => /(已载入|已同步)/.test(
-      document.getElementById('knowledge-graph-status')?.textContent ?? '',
-    ),
+    () => /\d+\s*文献/.test(document.getElementById('knowledge-graph-counts')?.textContent ?? ''),
     { timeout: 30_000 },
   ).then(() => true).catch(() => false);
 
   const state = await page.evaluate(() => {
     const canvas = document.getElementById('knowledge-graph-canvas');
     return {
-      status: document.getElementById('knowledge-graph-status')?.textContent?.trim() ?? '',
+      counts: document.getElementById('knowledge-graph-counts')?.textContent?.trim() ?? '',
       canvas: canvas ? { width: canvas.width, height: canvas.height } : null,
       inspector: document.getElementById('knowledge-graph-inspector')?.hidden,
     };
   });
 
-  // Reported with the status that was actually reached, so a failure here says which
+  // Reported with the counts that were actually reached, so a failure here says which
   // way the load path went wrong instead of only that it timed out.
-  assert.ok(finished, `the graph load never completed; last status: ${state.status || '(empty)'}`);
-  assert.match(state.status, completion, `unexpected status: ${state.status}`);
+  assert.ok(finished, `the graph load never completed; counts: ${state.counts || '(empty)'}`);
+  assert.match(state.counts, /文献/, `unexpected counts line: ${state.counts}`);
 
   // The canvas only gets a backing store once the renderer was constructed and sized.
   assert.ok(
     state.canvas && state.canvas.width > 0 && state.canvas.height > 0,
     `canvas was not sized: ${JSON.stringify(state.canvas)}`,
   );
+
+  // The action row ends at the right edge of the header. Left-packed right after the title it read as part of
+  // the title and left an empty band on the right — the user's report. Measured, because "aligned right" is a
+  // layout fact and not something the markup can show.
+  const alignment = await page.evaluate(() => {
+    const actions = document.querySelector('.knowledge-graph-header-actions');
+    const header = actions?.closest('.knowledge-graph-header');
+    const buttons = [...(actions?.children ?? [])];
+    if (!actions || !header || !buttons.length) return null;
+    const headerRect = header.getBoundingClientRect();
+    const boxes = buttons.map((button) => button.getBoundingClientRect());
+    const last = boxes[boxes.length - 1];
+    const padding = Number.parseFloat(getComputedStyle(header).paddingRight) || 0;
+    return {
+      rightGap: Math.round(headerRect.right - padding - last.right),
+      // One row of 32px buttons; a wrapped row would double the vertical span. Measured as a span rather
+      // than as distinct `top` values, because a fractional button height makes the rounded tops differ.
+      span: Math.round(
+        Math.max(...boxes.map((box) => box.bottom)) - Math.min(...boxes.map((box) => box.top)),
+      ),
+    };
+  });
+  assert.ok(alignment, 'the header still has its action row');
+  assert.ok(
+    Math.abs(alignment.rightGap) <= 2,
+    `the last action must sit against the header's right edge; gap ${alignment.rightGap}px`,
+  );
+  assert.ok(
+    alignment.span <= 48,
+    `the toolbar must stay one line; the buttons span ${alignment.span}px vertically`,
+  );
   assert.deepEqual(pageErrors, [], 'opening the graph workspace must not throw');
+});
+
+test('graph task messages float as a toast and clear themselves when finished', async () => {
+  // The header line alone was too easy to miss far from the canvas, so status and progress are mirrored
+  // into the same plate the reader uses for background tasks (`.knowledge-background-task-toast`). It has
+  // to appear while a task runs and remove itself afterwards — a plate that stays would cover the graph.
+  // A fresh profile shows the onboarding tour, whose overlay sits on top of the graph header (its backdrop
+  // intercepts pointer events). Dismissing it is what a real user does, and it keeps this test about the
+  // toast rather than about the tour's hit areas.
+  await page.locator('#onboarding-tour-skip').click({ timeout: 3_000 }).catch(() => undefined);
+  await page.locator('#knowledge-graph-refresh').click({ timeout: 10_000 }).catch(async () => {
+    // Still covered (a tour step without a skip button): dispatch the click directly. The assertion below
+    // is about the toast, and a blocked click would only be reported as a timeout.
+    await page.evaluate(() => document.getElementById('knowledge-graph-refresh')?.click());
+  });
+  const toast = page.locator('#knowledge-graph-task-notice');
+  await toast.waitFor({ state: 'visible', timeout: 10_000 });
+
+  const appearance = await page.evaluate(() => {
+    const element = document.getElementById('knowledge-graph-task-notice');
+    return {
+      classes: element?.className ?? '',
+      text: (element?.textContent ?? '').trim(),
+      title: element?.querySelector('strong')?.textContent ?? '',
+    };
+  });
+  assert.match(appearance.classes, /knowledge-background-task-toast/, 'the reader toast styling is reused');
+  assert.equal(appearance.title, '知识图谱', 'and it names the page it belongs to');
+  assert.ok(appearance.text.length > 4, `the toast must carry the message; got "${appearance.text}"`);
+
+  // A finished task removes itself: this is the difference between a hint and a permanent overlay.
+  await toast.waitFor({ state: 'detached', timeout: 20_000 });
+  assert.equal(await page.locator('#knowledge-graph-task-notice').count(), 0);
+  assert.deepEqual(pageErrors, [], 'the toast lifecycle must not throw');
 });
 
 test('the "PDF 阅读" tab leaves the knowledge graph workspace', async () => {
@@ -347,18 +409,26 @@ test('a document added to the knowledge base reaches the graph without a manual 
     window.dispatchEvent(new CustomEvent('pdf-helper:knowledge-corpus-change'));
   }, documentId);
 
-  const paperCount = async () => {
-    const status = await page.locator('#knowledge-graph-status').textContent();
-    const match = /共 (\d+) 篇/.exec(status ?? '');
+  // The paper total is read from the **empty-canvas hint**, not from the counts line: the counts line
+  // reports what is actually *drawn*, and the whole-graph view builds its node set from edges, so a
+  // paper that has no relation yet counts as `0 文献 … 未连接 1` rather than as one paper. The hint is
+  // keyed on how many documents the projection found ("知识库里的 N 篇文献之间还没有任何关系"), which is
+  // exactly the number the user saw stuck at 0. (It also replaces the status message, which is a
+  // transient floating notice now and would have to be caught in its four seconds.)
+  const projectedPapers = async () => {
+    const hint = await page.locator('#knowledge-graph-empty-hint').textContent();
+    const match = /知识库里的\s*(\d+)\s*篇文献/.exec(hint ?? '');
     return match ? Number(match[1]) : -1;
   };
 
   await addDocument('kb-e2e-1');
   await page.waitForFunction(
-    () => /共 1 篇/.test(document.getElementById('knowledge-graph-status')?.textContent ?? ''),
+    () => /知识库里的\s*1\s*篇文献/.test(
+      document.getElementById('knowledge-graph-empty-hint')?.textContent ?? '',
+    ),
     { timeout: 30_000 },
   );
-  assert.equal(await paperCount(), 1, 'the added document is projected');
+  assert.equal(await projectedPapers(), 1, 'the added document is projected');
   assert.equal(
     await page.locator('#knowledge-graph-batch').isDisabled(),
     false,
@@ -368,10 +438,12 @@ test('a document added to the knowledge base reaches the graph without a manual 
   // A second write must not be missed either, and must not leave the count behind.
   await addDocument('kb-e2e-2');
   await page.waitForFunction(
-    () => /共 2 篇/.test(document.getElementById('knowledge-graph-status')?.textContent ?? ''),
+    () => /知识库里的\s*2\s*篇文献/.test(
+      document.getElementById('knowledge-graph-empty-hint')?.textContent ?? '',
+    ),
     { timeout: 30_000 },
   );
-  assert.equal(await paperCount(), 2, 'the graph follows the knowledge base while it is open');
+  assert.equal(await projectedPapers(), 2, 'the graph follows the knowledge base while it is open');
 });
 
 test('the packaged service worker answers the explanation stream port', async () => {

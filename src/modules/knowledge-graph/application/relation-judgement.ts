@@ -1,4 +1,5 @@
 import {
+  ENTITY_TYPES,
   NEGATIVE_EDGE_TYPES,
   PAPER_PAPER_EDGE_TYPES,
   type EdgeType,
@@ -7,6 +8,12 @@ import {
   type PaperPaperEdgeType,
 } from '../contracts.ts';
 import { createGraphId } from '../domain/graph-identity.ts';
+import {
+  emptyBridgeDrops,
+  parseBridgeSuggestions,
+  type BridgeDropStats,
+  type RelationBridgeSuggestion,
+} from './relation-bridges.ts';
 import type { RelationCandidatePair } from './relation-recall.ts';
 import { relationPairKey } from './relation-recall.ts';
 
@@ -32,7 +39,14 @@ export type RelationVerdict = PaperPaperEdgeType | 'NONE';
 
 export const RELATION_NONE = 'NONE';
 
-export const RELATION_PROMPT_VERSION = 'relation-judgement-1';
+/**
+ * - `relation-judgement-1` judged only the relation type.
+ * - `relation-judgement-2` adds the second task: bridge concepts, with a verbatim quote required from
+ *   **each** paper. The quotes are checked locally against the excerpts that were sent
+ *   (`quoteAppearsIn`), which is what turns "the model should not invent entities" from a wish into a
+ *   rule: an invented concept has no quote to point at, so it never reaches the graph.
+ */
+export const RELATION_PROMPT_VERSION = 'relation-judgement-2';
 
 /** Evidence quotes kept per edge, and their maximum length. */
 export const MAX_RELATION_EVIDENCE = 2;
@@ -40,20 +54,43 @@ export const MAX_RELATION_QUOTE_LENGTH = 200;
 
 export function buildRelationJudgementPrompt(): string {
   return [
-    '你判断两篇论文之间的关系，用于构建知识图谱。只输出 JSON，不要解释。',
+    '你是学术文献关系判定器，同时负责为知识图谱找出"能把两篇论文真正连起来"的概念实体。',
     '',
-    '关系类型（只能用这些英文枚举值，或 NONE）：',
-    ...PAPER_PAPER_EDGE_TYPES.map((type) => `- ${type}`),
-    '- NONE：两篇论文之间没有可判断的实质关系。',
+    '输入包含两部分：',
+    '1. 论文清单：每篇的标题与原文摘录（摘录是原文片段，不是概括）。',
+    '2. 待判断的论文对。',
     '',
-    '要求：',
-    '1. 对输入的每一对论文都给出一个结论，包括 NONE。',
-    '2. 只依据给出的标题、摘要与共享实体判断，不要引入外部知识。',
-    '3. evidence 必须是给定摘要中的逐字片段；没有依据就判 NONE。',
-    '4. 不确定时判 NONE，不要猜测。',
+    '【任务一：判断关系类型】',
+    '每对只给一个结论：',
+    '- CITES：一篇引用或依赖另一篇',
+    '- EXTENDS：在一篇的基础上扩展/改进',
+    '- IMPROVES：针对同一问题给出更好的结果',
+    '- COMPARES_WITH：明确相互比较或评测',
+    '- SIMILAR_TO：做同一件事、方法高度相似，但无直接引用或继承',
+    '- NONE：在方法、任务、数据、结论上都没有实质联系',
     '',
-    '输出格式：{"relations":[{"pairKey":"...","relation":"EXTENDS",'
-      + '"confidence":0.8,"evidence":"逐字片段","rationale":"不超过30字"}]}',
+    '只看摘录里的实际内容。标题相似、年份接近、同属一个领域，都不构成关系。',
+    '方向要依据证据给出：被引用的、被改进的那一篇是左篇（leftPaperId），另一篇是右篇。',
+    '',
+    '【任务二：寻找桥接概念】',
+    '若两篇论文确实共享某个具体的概念、方法、数据集、指标或问题设定，把它整理成一个可入图的知识实体，'
+      + '并给出**两篇论文各自的原文引文**：',
+    '- 引文必须逐字摘自对应论文的摘录：不能改写、不能翻译、不能拼接两句。',
+    '- 若某篇摘录里找不到支撑它的句子，这个桥接实体就不成立，不要给出。',
+    '- 名字必须是具体的"名字"，例如 "Booth 乘法器"、"Wallace 树"、"ΔE >> 5%"；'
+      + '不要给描述性短语，例如 "一种优化方法"、"两者的共同点"、"该论文提出的框架"。',
+    '- 宁缺毋滥。没有就返回空数组 []，绝对不要为了凑数而编造。',
+    '',
+    '【输出格式】',
+    '只输出 JSON，不要解释文字，不要 Markdown 代码块：',
+    '{"pairs":[{"pairKey":"a|b","relation":"EXTENDS","confidence":0.82,'
+      + '"rationale":"不超过50字","evidence":"支持该判定的原文片段",'
+      + '"bridges":[{"name":"Booth 乘法器","type":"Method",'
+      + '"leftQuote":"逐字摘自左篇摘录的句子","rightQuote":"逐字摘自右篇摘录的句子",'
+      + '"reason":"不超过30字","confidence":0.7}]}]}',
+    '',
+    `type 只能是 ${ENTITY_TYPES.join(' / ')}。`,
+    'relation 为 NONE 时 bridges 一般为空数组。',
   ].join('\n');
 }
 
@@ -67,6 +104,8 @@ export interface ParsedRelation {
   rationale: string;
   /** Edge to write, or null for `NONE`. */
   edge: GraphEdge | null;
+  /** Bridge concepts accepted for this pair (already validated against the excerpts). */
+  bridges: RelationBridgeSuggestion[];
 }
 
 export interface RelationParseResult {
@@ -79,6 +118,10 @@ export interface RelationParseResult {
    * again. Pairs the model simply omitted are NOT included — see the module note.
    */
   explicitNone: ParsedRelation[];
+  /** Every accepted bridge, flattened across pairs, in pair order. */
+  bridges: RelationBridgeSuggestion[];
+  /** Bridges refused by the local checks, by reason. */
+  bridgeDrops: BridgeDropStats;
   /** Pairs that were sent but never mentioned. Not cacheable. */
   unansweredPairKeys: string[];
   rejected: Array<{ reason: string; raw: unknown }>;
@@ -172,17 +215,27 @@ function relationRows(payload: unknown): unknown[] | null {
 export function parseRelationJudgements(
   content: string,
   pairs: readonly RelationCandidatePair[],
-  options: { now?: number; model?: string; promptVersion?: string } = {},
+  options: {
+    now?: number;
+    model?: string;
+    promptVersion?: string;
+    /** Verbatim excerpts by paper id, required for bridge validation. */
+    excerpts?: ReadonlyMap<string, string>;
+  } = {},
 ): RelationParseResult {
   const now = options.now ?? Date.now();
   const byPairKey = new Map(pairs.map((pair) => [pair.pairKey, pair]));
   const payload = extractJson(content);
   const rows = relationRows(payload);
+  const bridgeDrops = emptyBridgeDrops();
+  const excerpts = options.excerpts ?? new Map<string, string>();
 
   if (!rows) {
     return {
       relations: [],
       explicitNone: [],
+      bridges: [],
+      bridgeDrops,
       // Every pair is unanswered: a response we could not read tells us nothing,
       // so nothing may be cached.
       unansweredPairKeys: pairs.map((pair) => pair.pairKey),
@@ -192,8 +245,17 @@ export function parseRelationJudgements(
 
   const relations: ParsedRelation[] = [];
   const explicitNone: ParsedRelation[] = [];
+  const bridges: RelationBridgeSuggestion[] = [];
   const answered = new Set<string>();
   const rejected: RelationParseResult['rejected'] = [];
+
+  const accumulate = (drops: BridgeDropStats): void => {
+    bridgeDrops.quoteMismatch += drops.quoteMismatch;
+    bridgeDrops.lowQuality += drops.lowQuality;
+    bridgeDrops.badType += drops.badType;
+    bridgeDrops.overLimit += drops.overLimit;
+    bridgeDrops.duplicate += drops.duplicate;
+  };
 
   for (const row of rows) {
     if (!isRecord(row)) {
@@ -219,6 +281,10 @@ export function parseRelationJudgements(
     }
     answered.add(pairKey);
 
+    const parsedBridges = parseBridgeSuggestions(row.bridges, pair, { excerpts });
+    accumulate(parsedBridges.drops);
+    bridges.push(...parsedBridges.bridges);
+
     const evidenceQuote = normalizeText(row.evidence ?? row.quote, MAX_RELATION_QUOTE_LENGTH);
     const rationale = normalizeText(row.rationale ?? row.reason, 60);
     const confidence = verdict === RELATION_NONE ? 1 : clampUnit(row.confidence, 0.5);
@@ -238,6 +304,7 @@ export function parseRelationJudgements(
         model: options.model,
         promptVersion: options.promptVersion ?? RELATION_PROMPT_VERSION,
       }),
+      bridges: parsedBridges.bridges,
     };
     if (verdict === RELATION_NONE) explicitNone.push(parsed);
     else relations.push(parsed);
@@ -246,6 +313,8 @@ export function parseRelationJudgements(
   return {
     relations,
     explicitNone,
+    bridges,
+    bridgeDrops,
     unansweredPairKeys: pairs
       .filter((pair) => !answered.has(pair.pairKey))
       .map((pair) => pair.pairKey),
@@ -327,6 +396,8 @@ export interface JudgementReviewRow {
   confidence: number;
   evidenceQuote: string;
   rationale: string;
+  /** Bridge concepts proposed for this pair, each already validated against the excerpts. */
+  bridges: RelationBridgeSuggestion[];
 }
 
 /**
@@ -348,6 +419,7 @@ export function buildJudgementReviewRows(
     confidence: relation.confidence,
     evidenceQuote: relation.evidenceQuote,
     rationale: relation.rationale,
+    bridges: relation.bridges,
   });
 
   const relations = [...parsed.relations]
@@ -376,14 +448,23 @@ export function buildJudgementReviewRows(
 export function filterAcceptedJudgements(
   parsed: RelationParseResult,
   acceptedPairKeys: ReadonlySet<string>,
+  acceptedBridgeKeys?: ReadonlySet<string>,
 ): { parsed: RelationParseResult; discardedPairKeys: string[] } {
   const keep = (relation: ParsedRelation): boolean => acceptedPairKeys.has(relation.pairKey);
   const relations = parsed.relations.filter(keep);
   const explicitNone = parsed.explicitNone.filter(keep);
+  // A bridge survives only when its pair survived *and* the user ticked it: unticking a pair row means
+  // "do not write this conclusion", and a bridge under a refused conclusion would contradict that.
+  const bridges = parsed.bridges.filter((bridge) => (
+    acceptedPairKeys.has(bridge.pairKey)
+    && (acceptedBridgeKeys ? acceptedBridgeKeys.has(bridge.bridgeKey) : true)
+  ));
   return {
     parsed: {
       relations,
       explicitNone,
+      bridges,
+      bridgeDrops: parsed.bridgeDrops,
       unansweredPairKeys: parsed.unansweredPairKeys,
       rejected: parsed.rejected,
     },

@@ -26,9 +26,38 @@ export const MAX_TERMS_PER_REQUEST = 60;
 /** Distinct terms remembered across dialog openings. */
 export const TRANSLATION_CACHE_LIMIT = 400;
 
+/**
+ * How many times one name may be sent before the translator gives up on it.
+ *
+ * It used to be one. A single reply that left a name out — an omitted line, an answer echoing the
+ * original because the prompt allowed it — was remembered as "no gloss" for the rest of the session, so
+ * turning 中文释义 off and on again could never fix it: the reader saw one row that "cannot be
+ * translated" while its neighbours were fine, with nothing they could do about it.
+ */
+export const GLOSS_ATTEMPT_LIMIT = 3;
+
+/** At most one batch plus one re-ask per call: a partial reply is worth finishing, not a loop. */
+const MAX_ROUNDS_PER_CALL = 2;
+
 /** True when a term is worth translating: it carries Latin letters, so it is not Chinese already. */
 export function needsTranslation(term: string): boolean {
   return /[A-Za-z]/.test(term);
+}
+
+/**
+ * Comparison key for a term: case, punctuation and spacing are noise.
+ *
+ * A model echoes the term it was given, but not always byte for byte: it straightens a typographic
+ * apostrophe (`Paar’s` → `Paar's`), drops a trailing period, or turns a hyphen into a space. Keyed on
+ * the raw string those answers matched nothing and were silently dropped — which is why a name with an
+ * apostrophe in it was exactly the row that never got a gloss.
+ */
+export function normalizeGlossTerm(term: string): string {
+  return term
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
 }
 
 /**
@@ -36,14 +65,19 @@ export function needsTranslation(term: string): boolean {
  *
  * Asks for a flat JSON object rather than prose, because the answer is looked up by term and a
  * model that also explains will be asked to keep the explanation out.
+ *
+ * Rule 2 is where this prompt used to leak: "专有名词保留原文，可以补充中文说明" invited the model to echo
+ * `Paar's heuristic` back unchanged, and the parser — correctly — refuses to show a name as its own
+ * translation. So the one kind of name a reader most needs help with was the one that never got a
+ * gloss. The prompt now demands Chinese in every answer, and coverage of every term.
  */
 export function buildEntityTranslationPrompt(terms: readonly string[]): string {
   return [
     '你在帮我审阅从学术论文中抽取出的术语列表。请为每个术语给出简洁的简体中文译名。',
     '要求：',
     '1. 译文要短，能直接读懂的术语就译成通行中文术语（例如 “heuristic” → “启发式”），不要解释、不要造句。',
-    '2. 人名、算法名、模型名等专有名词保留原文，可以在括号里补充中文说明，例如 “Boyar-Peralta 算法”。',
-    '3. 不确定的术语保留原文，不要猜测。',
+    '2. 专有名词（人名、算法名、模型名）保留原文，但后面必须跟一个中文类别词，例如 “Paar\'s heuristic” → “Paar 启发式”，“DPLL” → “DPLL 算法”。',
+    '3. 每个术语都必须在 items 里出现且只出现一次，不能遗漏；zh 里必须有中文，不能把原文照抄回来。',
     '4. 严格只输出 JSON，不要 Markdown、代码块或任何额外说明。',
     'JSON 格式：{"items":[{"term":"原文术语","zh":"中文译名"}]}',
     '',
@@ -77,28 +111,48 @@ function readJsonObject(content: string): Record<string, unknown> {
  * `{"term":"译名"}` object is accepted too, and anything that was not asked for is dropped. A term
  * the model chose not to translate simply has no gloss — echoing the original back as its own
  * translation would be noise dressed up as an answer.
+ *
+ * Matching is exact first (case aside), then by `normalizeGlossTerm` when that leaves one candidate:
+ * an answer about a name that differs from the request only in punctuation is an answer about that
+ * name, not an unknown term.
  */
 export function parseEntityTranslations(
   content: string,
   requested: readonly string[],
 ): Map<string, string> {
   const parsed = readJsonObject(content);
-  const requestedByKey = new Map(
-    requested
-      .map((term) => term.trim())
-      .filter(Boolean)
-      .map((term) => [term.toLocaleLowerCase(), term] as const),
-  );
+  const requestedByKey = new Map<string, string>();
+  const requestedByLooseKey = new Map<string, Set<string>>();
+  for (const raw of requested) {
+    const term = raw.trim();
+    if (!term) continue;
+    requestedByKey.set(term.toLocaleLowerCase(), term);
+    const loose = normalizeGlossTerm(term);
+    const bucket = requestedByLooseKey.get(loose) ?? new Set<string>();
+    bucket.add(term);
+    requestedByLooseKey.set(loose, bucket);
+  }
+
+  const resolve = (rawTerm: string): string | undefined => {
+    const exact = requestedByKey.get(rawTerm.toLocaleLowerCase());
+    if (exact) return exact;
+    const bucket = requestedByLooseKey.get(normalizeGlossTerm(rawTerm));
+    // Ambiguous (two requested names differ only in punctuation): refuse rather than guess, because
+    // the gloss would land on the wrong row.
+    return bucket && bucket.size === 1 ? [...bucket][0] : undefined;
+  };
+
   const found = new Map<string, string>();
 
   const record = (rawTerm: unknown, rawGloss: unknown): void => {
     if (typeof rawTerm !== 'string' || typeof rawGloss !== 'string') return;
-    const key = rawTerm.trim().toLocaleLowerCase();
-    const original = requestedByKey.get(key);
+    if (!rawTerm.trim()) return;
+    const original = resolve(rawTerm);
     if (!original) return;
     const gloss = rawGloss.trim();
-    // Identical text means the model echoed the input; that is not a translation.
-    if (!gloss || gloss.toLocaleLowerCase() === key) return;
+    if (!gloss) return;
+    // The same name, punctuation aside, means the model echoed the input; that is not a translation.
+    if (normalizeGlossTerm(gloss) === normalizeGlossTerm(original)) return;
     found.set(original, gloss);
   };
 
@@ -125,13 +179,18 @@ export interface EntityTranslator {
 /**
  * Builds a translator around a request function.
  *
- * The cache also remembers *refusals* (a name the model declined to translate) as an empty string,
- * so a term it will not translate is not asked about on every opening.
+ * Two kinds of memory, deliberately different:
+ *
+ * - a **gloss**, keyed by name, answered for free on every later opening;
+ * - an **attempt count** for names that came back without one. A single silent omission is not a
+ *   verdict — it is usually a model that skipped a line — so the name is asked for again next time,
+ *   up to `GLOSS_ATTEMPT_LIMIT` tries.
  */
 export function createEntityTranslator(
   request: (prompt: string, terms: readonly string[]) => Promise<string>,
 ): EntityTranslator {
   const cache = new Map<string, string>();
+  const attempts = new Map<string, number>();
 
   return {
     async translate(terms) {
@@ -142,25 +201,40 @@ export function createEntityTranslator(
         if (!trimmed || !needsTranslation(trimmed)) continue;
         const key = trimmed.toLocaleLowerCase();
         if (seen.has(key) || cache.has(key)) continue;
+        if ((attempts.get(key) ?? 0) >= GLOSS_ATTEMPT_LIMIT) continue;
         seen.add(key);
         wanted.push(trimmed);
         if (wanted.length >= MAX_TERMS_PER_REQUEST) break;
       }
 
-      // Everything asked for is already known: no request, no tokens.
-      if (wanted.length) {
-        const content = await request(buildEntityTranslationPrompt(wanted), wanted);
-        for (const [term, gloss] of parseEntityTranslations(content, wanted)) {
+      // The batch, then one re-ask for whatever it left out. A reply that named three of ten terms used
+      // to leave seven names permanently unglossed; a reply that named none is a refusal, and re-asking
+      // it immediately would only spend the same tokens again.
+      let pending = wanted;
+      for (let round = 0; round < MAX_ROUNDS_PER_CALL && pending.length; round += 1) {
+        const content = await request(buildEntityTranslationPrompt(pending), pending);
+        for (const [term, gloss] of parseEntityTranslations(content, pending)) {
           cache.set(term.toLocaleLowerCase(), gloss);
         }
-        for (const term of wanted) {
-          if (!cache.has(term.toLocaleLowerCase())) cache.set(term.toLocaleLowerCase(), '');
-        }
-        while (cache.size > TRANSLATION_CACHE_LIMIT) {
-          const oldest = cache.keys().next();
-          if (oldest.done) break;
-          cache.delete(oldest.value);
-        }
+        const missing = pending.filter((term) => !cache.has(term.toLocaleLowerCase()));
+        if (!missing.length || missing.length === pending.length) break;
+        pending = missing;
+      }
+
+      for (const term of pending) {
+        const key = term.toLocaleLowerCase();
+        attempts.set(key, (attempts.get(key) ?? 0) + 1);
+      }
+      while (attempts.size > TRANSLATION_CACHE_LIMIT) {
+        const oldest = attempts.keys().next();
+        if (oldest.done) break;
+        attempts.delete(oldest.value);
+      }
+
+      while (cache.size > TRANSLATION_CACHE_LIMIT) {
+        const oldest = cache.keys().next();
+        if (oldest.done) break;
+        cache.delete(oldest.value);
       }
 
       const answers = new Map<string, string>();

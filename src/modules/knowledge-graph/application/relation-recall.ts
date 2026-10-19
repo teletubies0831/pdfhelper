@@ -311,6 +311,98 @@ export function recallCandidatePairs(
 }
 
 /**
+ * How many papers the user may put in one explicit analysis.
+ *
+ * The reason is arithmetic, not taste: pairs grow as n(n-1)/2, so 6 papers is 15 judgements — three
+ * provider calls at five pairs each, a few thousand tokens after the excerpts. Seven papers would be
+ * 21 pairs, and the number the user agreed to pay for would stop matching what they ticked.
+ */
+export const MAX_SELECTED_PAPERS = 6;
+
+/**
+ * Candidate pairs for papers the user picked by hand.
+ *
+ * The recall funnel exists for "the user asked for an analysis, not for specific papers": its score
+ * floor and Top-K decide *what* to judge. An explicit selection already answers that, so the floor is
+ * skipped — a pair the user ticked with no other signal at all is exactly the pair they want judged
+ * (they believe the papers are related; that belief is the input).
+ *
+ * The context signals are still computed, because the model is given them: "same folder", "shares one
+ * confirmed entity" are reasons it can use, not filters that decide membership.
+ */
+export function buildSelectedCandidatePairs(
+  papers: readonly GraphPaper[],
+  edges: readonly GraphEdge[],
+  paperIds: readonly string[],
+  options: {
+    entityNames?: ReadonlyMap<string, string>;
+    summaryCharacters?: number;
+    /** Default true: a pair with a recorded conclusion is not paid for twice. */
+    skipJudged?: boolean;
+  } = {},
+): RelationCandidatePair[] {
+  const wanted = [...new Set(paperIds)].slice(0, MAX_SELECTED_PAPERS);
+  const selected = wanted
+    .map((paperId) => papers.find((paper) => paper.paperId === paperId))
+    .filter((paper): paper is GraphPaper => Boolean(paper));
+  if (selected.length < 2) return [];
+
+  const summaryCharacters = options.summaryCharacters ?? DEFAULT_SUMMARY_CHARACTERS;
+  const sharedByPair = sharedEntityIdsByPair(selected, edges);
+  const entityNameById = options.entityNames ?? new Map<string, string>();
+  const nameOf = (entityId: string): string => entityNameById.get(entityId) ?? entityId;
+  const judged = options.skipJudged === false ? new Set<string>() : collectJudgedPairKeys(edges);
+
+  const pairs: RelationCandidatePair[] = [];
+  for (let leftIndex = 0; leftIndex < selected.length; leftIndex += 1) {
+    const left = selected[leftIndex]!;
+    for (let rightIndex = leftIndex + 1; rightIndex < selected.length; rightIndex += 1) {
+      const right = selected[rightIndex]!;
+      const pairKey = relationPairKey(left.paperId, right.paperId);
+      if (judged.has(pairKey)) continue;
+
+      let score = 0;
+      const reasons: string[] = ['你在清单里选中了这两篇'];
+      const sharedIds = sharedByPair.get(pairKey) ?? [];
+      if (sharedIds.length) {
+        score += RECALL_WEIGHTS.sharedEntity * sharedIds.length;
+        reasons.push(`共享 ${sharedIds.length} 个已确认实体`);
+      }
+      if (left.folderId && left.folderId === right.folderId) {
+        score += RECALL_WEIGHTS.sameFolder;
+        reasons.push('同一文件夹');
+      }
+      if (left.venue && left.venue === right.venue) {
+        score += RECALL_WEIGHTS.sameVenue;
+        reasons.push('同一来源');
+      }
+      const yearGap = left.year !== null && right.year !== null
+        ? Math.abs(left.year - right.year)
+        : null;
+      if (yearGap !== null && yearGap <= 2) {
+        score += RECALL_WEIGHTS.yearProximity;
+        reasons.push(`年份接近（相差 ${yearGap} 年）`);
+      }
+
+      pairs.push({
+        pairKey,
+        leftPaperId: left.paperId,
+        rightPaperId: right.paperId,
+        leftTitle: left.title,
+        rightTitle: right.title,
+        leftSummary: truncate(left.abstract, summaryCharacters),
+        rightSummary: truncate(right.abstract, summaryCharacters),
+        sharedEntityNames: sharedIds.map(nameOf),
+        recallReasons: reasons,
+        recallScore: score,
+        yearGap,
+      });
+    }
+  }
+  return pairs;
+}
+
+/**
  * Splits recalled pairs into the set worth asking a model about and the rest.
  *
  * `topK` is the user's explicit cost ceiling, so it is applied last and

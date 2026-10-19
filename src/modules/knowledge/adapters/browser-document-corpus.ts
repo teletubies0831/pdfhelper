@@ -39,6 +39,19 @@ export interface KnowledgeLibraryDocument {
   overviewDraftComplete?: boolean;
   overviewProgress?: string;
   overviewEditedAt?: string;
+  /**
+   * The 「相关论文」 section, kept beside the overview rather than inside it.
+   *
+   * Separate because it is produced on demand and must survive the user editing the overview by hand: folding
+   * it into `overviewMarkdown` would mean an edit (or a regeneration) silently deletes a section the user paid
+   * a retrieval call for.
+   */
+  relatedLiteratureMarkdown?: string;
+  relatedLiteratureAt?: string;
+  /** Tool calls this section cost, so the page can say "1 次检索" instead of implying it was free. */
+  relatedLiteratureUsage?: { searchCalls: number; fetchCalls: number };
+  relatedLiteratureSources?: Array<"deepseek" | "openalex">;
+  relatedLiteratureError?: string;
 }
 
 interface KnowledgeCorpusState {

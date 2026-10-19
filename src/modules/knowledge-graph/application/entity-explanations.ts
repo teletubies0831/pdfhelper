@@ -406,3 +406,114 @@ export function describeExplanationResult(result: EntityExplanationResult): stri
   if (!result.described) return '';
   return `已为 ${result.described} 个实体生成解释，右侧面板可查看。`;
 }
+
+/** How many entities in the graph still have no meaning. Pending candidates are excluded. */
+export function countEntitiesMissingExplanation(entities: readonly GraphEntity[]): number {
+  return entities.filter((entity) => (
+    entity.status === 'confirmed' && !(entity.description ?? '').trim()
+  )).length;
+}
+
+/**
+ * Rounds a bulk run will make before it stops on its own.
+ *
+ * `EXPLANATIONS_PER_CALL` entities per round, so this is a ceiling of 240 entities — enough for a real
+ * corpus, and a stop against the one loop that could run forever: an entity the model keeps refusing to
+ * explain stays a target, so "keep asking until nothing is missing" would never finish.
+ */
+export const MAX_EXPLANATION_ROUNDS = 20;
+
+export interface BulkExplanationResult extends EntityExplanationResult {
+  /** Entities asked about across all rounds. */
+  attempted: number;
+  /** True when the run stopped at `MAX_EXPLANATION_ROUNDS` with work left. */
+  truncated: boolean;
+}
+
+/**
+ * Fills in the meaning of **every** confirmed entity that does not have one yet.
+ *
+ * Batched rather than one call for the whole graph: a corpus of 200 entities is not one prompt, and a
+ * single failure would lose every answer. Rounds stop on three conditions — nothing missing, a round that
+ * describes nothing new (the model is refusing; asking again spends tokens for the same silence), and the
+ * round ceiling.
+ *
+ * `onProgress` is called after each round, because this can take a minute and the header line is the
+ * only sign of life.
+ */
+export async function explainMissingDescriptions(
+  options: {
+    papers: readonly GraphPaper[];
+    maxRounds?: number;
+    signal?: AbortSignal;
+    onProgress?(progress: {
+      described: number;
+      remaining: number;
+      message: string;
+    }): void;
+  },
+  ports: EntityExplanationPorts,
+  repository: EntityExplanationRepository,
+): Promise<BulkExplanationResult> {
+  const maxRounds = Math.max(1, options.maxRounds ?? MAX_EXPLANATION_ROUNDS);
+  let described = 0;
+  let attempted = 0;
+  let lastError: string | undefined;
+  let truncated = false;
+
+  for (let round = 0; round < maxRounds; round += 1) {
+    options.signal?.throwIfAborted();
+    const entities = await repository.listEntities();
+    const remaining = countEntitiesMissingExplanation(entities);
+    if (!remaining) break;
+    if (round === maxRounds - 1) truncated = remaining > 0;
+
+    // One round is exactly one provider call, so the per-call cap is what the round itself uses.
+    const result = await explainEntityDescriptions(
+      { papers: options.papers, limit: EXPLANATIONS_PER_CALL, requestId: `explanations:bulk:${round}` },
+      ports,
+      repository,
+    );
+    attempted += result.described + result.missed;
+    described += result.described;
+    if (result.error) {
+      lastError = result.error;
+      break;
+    }
+    options.onProgress?.({
+      described,
+      remaining: Math.max(0, remaining - result.described),
+      message: `正在生成实体解释：已完成 ${described} 个，还剩 ${
+        Math.max(0, remaining - result.described)
+      } 个…`,
+    });
+    // A round that produced nothing means the model will not answer for these; asking again would spend
+    // tokens to receive the same silence.
+    if (!result.described) break;
+  }
+
+  const entities = await repository.listEntities();
+  const left = countEntitiesMissingExplanation(entities);
+  return {
+    described,
+    missed: left,
+    attempted,
+    truncated: truncated && left > 0,
+    ...(lastError ? { error: lastError } : {}),
+  };
+}
+
+/** One-line summary for a bulk run. */
+export function describeBulkExplanationResult(result: BulkExplanationResult): string {
+  if (result.error) {
+    return result.described
+      ? `已生成 ${result.described} 个解释，随后失败（${result.error}）`
+      : `解释没有生成（${result.error}）`;
+  }
+  if (!result.described) {
+    return result.missed ? '模型没有给出可用的解释。' : '所有实体都已有解释。';
+  }
+  return `已为 ${result.described} 个实体生成解释`
+    + (result.missed ? `，还有 ${result.missed} 个没有成功（可再点一次）` : '。')
+    + (result.truncated ? '（已达单次上限，可再点一次继续）' : '');
+}

@@ -48,3 +48,21 @@
 .knowledge-overview-shell > footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 28px; border-top: 1px solid #e8edf5; background: #fbfcfe; }
 .knowledge-overview-shell > footer button { min-height: 38px; padding: 0 16px; border: 1px solid #d8e1ee; border-radius: 9px; background: #fff; color: #3c4d66; }
 .knowledge-overview-shell > footer .primary-button { border-color: #3975d5; background: #3975d5; color: #fff; }
+
+/* 「相关论文」 is appended to the overview body, so it inherits this dialog's padding and typography. Only the
+   provenance line needs a rule of its own: it is metadata about a paid call, not prose. */
+
+.knowledge-overview-related-section {
+  margin-top: 6px;
+}
+
+.knowledge-overview-related-note {
+  margin: 10px 0 0;
+  color: #7a8aa0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.knowledge-overview-related-note.is-error {
+  color: #b42318;
+}

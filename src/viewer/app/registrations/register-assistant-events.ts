@@ -1,8 +1,11 @@
+import { browser } from "wxt/browser";
+
 import { interactionBoundary } from "../interaction-boundary";
 import {
   AI_PROVIDERS,
   type AiProviderId,
   type AiReasoningMode,
+  type AiRuntimeResponse,
 } from "../../../modules/ai/public";
 
 import {
@@ -22,10 +25,8 @@ import {
   chatImageInput,
   chatInput,
   chatMessagesElement,
-  chatReasoningControl,
-  chatReasoningMenu,
-  chatReasoningOptionButtons,
   chatReasoningTrigger,
+  chatWebSearchTrigger,
   clearChatButton,
   clearChatDialog,
   clearChatDialogCancelButton,
@@ -45,6 +46,7 @@ import {
   testDeepSeekButton,
   testSelectedModelsButton,
   testVisionAiButton,
+  testWebRetrievalButton,
 } from "../viewer-elements";
 import {
   addAiProviderButton,
@@ -59,6 +61,9 @@ import {
   settingsTutorialButton,
   startOnboardingTourButton,
   settingsPrimaryTabButtons,
+  webRetrievalApiKeyInput,
+  webRetrievalCountInput,
+  webRetrievalMaxFetchesInput,
 } from "../viewer-elements";
 import { setFocusMode, setLeftPanelCollapsed } from "../../core/pdf-reader/public";
 import { jumpToPdfCitations } from "../../features/translation/public";
@@ -123,15 +128,24 @@ import {
 
 
 import {
+  syncChatWebSearchToggle,
+  toggleChatWebSearch,
+} from "../../features/assistant/public";
+import {
+  refreshWebRetrievalConfig,
+  saveWebRetrievalSettings,
+} from "../../features/assistant/public";
+
+
+import {
   toolbarMenus,
   setToolbarMenuOpen,
   closeToolbarMenus,
   activateAiTab,
 } from "../app-ui";
 import {
-  selectChatReasoningMode,
-  setChatReasoningMenuOpen,
   syncChatReasoningControl,
+  toggleChatReasoning,
 } from "../chat-reasoning-control";
 import { getActiveWorkspaceView } from "../workspace-navigation";
 import { aiConfig, aiConfigLoaded, chatHistory, chatImagePreviewOverlay, chatRequestPending, setAssistantView, setDeepSeekSettingsOpen, showSettingsSavedFeedback, AssistantView } from "../public";
@@ -183,16 +197,11 @@ export function registerAssistantEvents(): void {
     const target = event.target as Node;
     if (!toolbarMenus.some((menu) => menu.contains(target)))
       closeToolbarMenus();
-    if (!chatReasoningControl.contains(target)) setChatReasoningMenuOpen(false);
   });
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     closeToolbarMenus();
-    if (!chatReasoningMenu.hidden) {
-      setChatReasoningMenuOpen(false);
-      chatReasoningTrigger.focus();
-    }
     if (!assistantSettingsPanel.hidden && interactionBoundary.ownsRegion(event, assistantSettingsPanel)) {
       cancelSettingsConnectionActivity();
       setDeepSeekSettingsOpen(false);
@@ -369,6 +378,61 @@ export function registerAssistantEvents(): void {
     });
   });
 
+  /**
+   * The 联网检索 fields save on change, like the其它 preferences in this page.
+   *
+   * Saving immediately is what keeps the 联网 switch and the 检索相关论文 button honest: they read the resolved
+   * configuration, so an unsaved key would leave them grey while the form on screen says otherwise.
+   */
+  const applyWebRetrievalSettings = async (): Promise<boolean> => {
+    const saved = await saveWebRetrievalSettings();
+    if (!saved) return false;
+    await refreshWebRetrievalConfig();
+    showSettingsStatus(
+      saved.webRetrieval.baseUrl
+        ? '已保存联网检索设置。'
+        : '已清空联网检索地址：检索相关论文和联网开关会保持不可用。',
+      'success',
+    );
+    return true;
+  };
+  // The address field is read-only (it is fixed to DeepSeek's tools endpoint), so only the fields the user can
+  // actually change need a listener.
+  for (const field of [
+    webRetrievalApiKeyInput,
+    webRetrievalCountInput,
+    webRetrievalMaxFetchesInput,
+  ]) {
+    field.addEventListener("change", () => {
+      void applyWebRetrievalSettings();
+    });
+  }
+  testWebRetrievalButton.addEventListener("click", async () => {
+    if (!(await applyWebRetrievalSettings())) return;
+    testWebRetrievalButton.disabled = true;
+    showSettingsStatus('正在测试联网检索…', 'info');
+    try {
+      // One search, fixed query: enough to prove the key, the address and the balance. The service worker
+      // resolves the configuration itself, so the key never travels through this message.
+      const response = await browser.runtime.sendMessage({
+        type: 'pdf-helper:ai-test-web-retrieval',
+      }) as AiRuntimeResponse | undefined;
+      showSettingsStatus(
+        response?.ok
+          ? response.content || '联网检索可用。'
+          : response?.error || '联网检索失败，请稍后重试。',
+        response?.ok ? 'success' : 'error',
+      );
+    } catch (error) {
+      showSettingsStatus(
+        `联网检索测试失败：${error instanceof Error ? error.message : String(error)}`,
+        'error',
+      );
+    } finally {
+      testWebRetrievalButton.disabled = false;
+    }
+  });
+
   testDeepSeekButton.addEventListener("click", () => {
     void discoverDeepSeekModels();
   });
@@ -450,19 +514,14 @@ export function registerAssistantEvents(): void {
     }
   });
 
+  // One click, one flip, colour as the state — there is no menu to open any more.
   chatReasoningTrigger.addEventListener("click", () => {
-    setChatReasoningMenuOpen(chatReasoningMenu.hidden);
+    toggleChatReasoning();
   });
 
-  for (const button of chatReasoningOptionButtons) {
-    button.addEventListener("click", () => {
-      const mode = button.dataset.chatReasoningValue;
-      if (mode === "enabled" || mode === "disabled") {
-        selectChatReasoningMode(mode);
-        chatReasoningTrigger.focus();
-      }
-    });
-  }
+  chatWebSearchTrigger.addEventListener("click", () => {
+    toggleChatWebSearch();
+  });
 
   chatForm.addEventListener("submit", (event) => {
     event.preventDefault();

@@ -14,7 +14,7 @@ import { citationReturnButton, citationReturnPosition, deepSeekMaxOutputTokensIn
 import { getPdfFingerprint } from "../../app/document-identity";
 import { getCurrentReadingPosition, scheduleReadingPositionSave } from "../recent-files/public";
 import { internalNavigationHistory, isOpeningDocument, isRestoringReadingPosition, isReturningFromInternalNavigation, linkService, pdfDocument, pdfViewer, sourceName, suppressInternalNavigationCapture } from "../../app/viewer-state";
-import { aiConfig, aiConfigLoaded, conversationMemoryConfig, setDeepSeekSettingsOpen, visionAiConfig } from "../../app/public";
+import { aiConfig, aiConfigLoaded, conversationMemoryConfig, setDeepSeekSettingsOpen, visionAiConfig, webRetrievalConfig } from "../../app/public";
 
 
 
@@ -24,6 +24,8 @@ import { clearSettingsStatus, loadSettingsConnectionCatalog, saveSettingsRoutes,
 import { loadConnectionTestPreferences, readConnectionTestPreferences, saveConnectionTestPreferences } from './connection-test-preferences';
 import { createVisionTestImage } from './connection-test-controller';
 import { syncChatReasoningControl } from '../../app/chat-reasoning-control';
+import { syncChatWebSearchToggle } from './chat-web-search';
+import { populateWebRetrievalForm } from './web-retrieval-settings';
 
 
 
@@ -147,6 +149,10 @@ export function populateDeepSeekConfigForm(config: AiConfig): void {
   deepSeekMaxOutputTokensInput.value = String(config.maxOutputTokens);
   deepSeekThinkingSelect.value = config.reasoning;
   syncChatReasoningControl();
+  // The compose box's two capability switches are re-read here because this is the single funnel for
+  // "the AI configuration changed": 联网 becomes available (or not) with the key, and must never sit there
+  // looking usable after the DeepSeek connection was removed.
+  syncChatWebSearchToggle();
   updateSettingsConnectionSummaries();
 }
 
@@ -155,9 +161,23 @@ export function populateDeepSeekConfigForm(config: AiConfig): void {
 export async function syncAiConfigsFromConnectionCatalog(): Promise<void> {
   aiConfig.value = await aiConnectionCatalog.resolveTextConfig('chat');
   visionAiConfig.value = await aiConnectionCatalog.resolveVisionConfig();
+  webRetrievalConfig.value = await aiConnectionCatalog.resolveWebRetrievalConfig();
   aiConfigLoaded.value = true;
+  populateWebRetrievalForm();
   populateDeepSeekConfigForm(aiConfig.value);
   updateDeepSeekProviderStatus();
+}
+
+/**
+ * Re-resolves the retrieval settings after they (or the connections they borrow a key from) changed.
+ *
+ * `webRetrievalConfig` is what the 联网 switch and the 检索相关论文 button read, so both are resynced here rather
+ * than each asking the catalog on every render.
+ */
+export async function refreshWebRetrievalConfig(): Promise<void> {
+  webRetrievalConfig.value = await aiConnectionCatalog.resolveWebRetrievalConfig();
+  syncChatWebSearchToggle();
+  populateDeepSeekConfigForm(aiConfig.value);
 }
 
 

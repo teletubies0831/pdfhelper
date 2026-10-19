@@ -66,6 +66,10 @@ export async function judgeRelations(
   for (const batch of batches) {
     signal?.throwIfAborted();
     try {
+      // Only the papers this batch mentions: a batch of five pairs would otherwise re-send every
+      // excerpt in the run, which is most of the input.
+      const batchPaperIds = new Set(batch.flatMap((pair) => [pair.leftPaperId, pair.rightPaperId]));
+      const papers = message.papers.filter((paper) => batchPaperIds.has(paper.paperId));
       // Reused for the same reason extraction reuses it: it forces
       // `reasoning: 'disabled'` and retries once with a doubled budget on
       // truncation. Without it a reasoning model can spend the entire output
@@ -76,16 +80,10 @@ export async function judgeRelations(
         {
           role: "user",
           content: [
+            "论文清单：",
+            JSON.stringify(papers),
             "待判断的论文对：",
-            JSON.stringify(batch.map((pair) => ({
-              pairKey: pair.pairKey,
-              leftTitle: pair.leftTitle,
-              rightTitle: pair.rightTitle,
-              leftSummary: pair.leftSummary,
-              rightSummary: pair.rightSummary,
-              sharedEntities: pair.sharedEntities,
-              recallReasons: pair.recallReasons,
-            }))),
+            JSON.stringify(batch),
           ].join("\n\n"),
         },
       ], signal);

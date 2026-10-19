@@ -34,6 +34,7 @@ import {
   requestAiStream,
 } from "./chat-session";
 import { loadLongTermMemoryContext } from "./memory-controller";
+import { fetchChatWebSearchNotes, isChatWebSearchEnabled } from "./chat-web-search";
 import { mergeEvidenceSources, readKnowledgeEvidenceSources } from "./tool-evidence";
 import { aiConfig, chatHistory, chatRequestPending, pendingChatImages, resolvedReadingMode, selectedTextForAi, selectedTextPageNumber, setDeepSeekSettingsOpen, visionAiConfig } from "../../app/public";
 
@@ -207,6 +208,44 @@ export async function sendChatMessage(): Promise<void> {
       "done",
       "",
     );
+
+    /**
+     * This turn's web search, when the 联网 switch is on.
+     *
+     * Runs before the model call and never fails it: a search that errors shows up as an activity row and the
+     * answer proceeds without notes. The row that reports it also states what it cost, which is the only place a
+     * user can see that this turn spent a retrieval call.
+     */
+    let webSearchNotes: string | undefined;
+    if (isChatWebSearchEnabled()) {
+      updateChatActivity(assistantMessage, "web-search", "正在联网检索…", "active", "");
+      try {
+        const notes = await fetchChatWebSearchNotes(
+          userPrompt,
+          documentNameAtRequestStart
+            ? getDisplayFileName(documentNameAtRequestStart)
+            : undefined,
+        );
+        webSearchNotes = notes?.notes;
+        updateChatActivity(
+          assistantMessage,
+          "web-search",
+          notes
+            ? `联网检索完成 · ${notes.hitCount} 条结果 · ${notes.searchCalls} 次调用（约 ¥0.005）`
+            : "联网检索没有返回结果（不计费）",
+          "done",
+          "",
+        );
+      } catch (error) {
+        updateChatActivity(
+          assistantMessage,
+          "web-search",
+          "联网检索失败，本轮回答未使用网页资料",
+          "error",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
     const requestHistory = preparedChatHistory.messages.map((message) => ({
       role: message.role,
       content: message.content,
@@ -249,6 +288,7 @@ export async function sendChatMessage(): Promise<void> {
         imageAnalysis: imageAnalyses.join("\n\n") || undefined,
         conversationSummary: preparedChatHistory.summary,
         longTermMemory: longTermMemoryContext.text || undefined,
+        webSearchNotes,
         readingMode: documentAtRequestStart
           ? "paper"
           : resolvedReadingMode.value,

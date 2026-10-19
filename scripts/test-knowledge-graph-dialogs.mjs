@@ -439,6 +439,28 @@ before(async () => {
         mergeCalls.push({ keepEntityId, mergeEntityId });
         return { keepEntityId, absorbedEntityId: mergeEntityId, edgesRewritten: 1, edgesDropped: 0 };
       },
+      /**
+       * The bridge report is a pure counting function, so it is written out here rather than stubbed
+       * away: the test asserts the *rendered* numbers, and a no-op stub would make that assertion
+       * vacuous. Kept in sync with `relation-bridges.ts` / `relation-runner.ts` by the empty case.
+       */
+      totalBridgeDrops(drops) {
+        return (drops?.quoteMismatch ?? 0) + (drops?.lowQuality ?? 0) + (drops?.badType ?? 0)
+          + (drops?.overLimit ?? 0) + (drops?.duplicate ?? 0);
+      },
+      describeBridgeDrops(drops) {
+        const parts = [
+          drops?.quoteMismatch ? `${drops.quoteMismatch} 条因引文对不上原文被丢弃` : '',
+          drops?.lowQuality ? `${drops.lowQuality} 条不是实体名被丢弃` : '',
+          drops?.badType ? `${drops.badType} 条类型无效被丢弃` : '',
+          drops?.overLimit ? `${drops.overLimit} 条超过每对上限被丢弃` : '',
+          drops?.duplicate ? `${drops.duplicate} 条重复被丢弃` : '',
+        ].filter(Boolean);
+        return parts.length ? `AI 还给出了一些超出规则的桥接建议：${parts.join('，')}。` : '';
+      },
+      describeEdgeType(type) {
+        return window.edgeLabels?.describeEdgeType(type) ?? type;
+      },
     };
 
     const dialogMotion = {
@@ -515,7 +537,13 @@ before(async () => {
       instantiate('src/modules/knowledge-graph/application/graph-metrics.ts'),
       instantiate('src/modules/knowledge-graph/application/conflict-resolution.ts'),
       instantiate('src/modules/knowledge-graph/domain/edge-labels.ts'),
+      // The review dialog now also renders bridge concepts and their refusal counts, so the real
+      // counting/formatting code is used here rather than a copy: the numbers the user reads are the
+      // numbers the tests assert.
+      instantiate('src/modules/knowledge-graph/application/relation-bridges.ts'),
+      instantiate('src/modules/knowledge-graph/domain/entity-normalization.ts'),
     );
+    window.edgeLabels = instantiate('src/modules/knowledge-graph/domain/edge-labels.ts');
 
     window.review = {};
     build(reviewSource, window.review);
@@ -845,6 +873,63 @@ test('a Chinese gloss can be shown under each candidate name, without renaming i
     await page.evaluate(() => document.querySelector('.knowledge-graph-review-name').value),
     'Transformer',
   );
+
+  await page.locator('#knowledge-graph-review-later').click();
+  await waitForClosed('#knowledge-graph-review-dialog');
+  await page.evaluate(() => { window.reviewTranslateStub = null; });
+});
+
+test('a row that only becomes visible later still gets a gloss', async () => {
+  // Reported from real use: with 中文释义 on, turning 显示低置信度候选 on revealed rows with no gloss under them
+  // and no way to get one — the request only ever covered the rows visible at the moment the switch was
+  // flipped, so those rows looked exactly like names the model refuses to translate.
+  await page.evaluate(() => {
+    window.translateCalls = [];
+    const table = new Map([
+      ['Transformer', 'Transformer 变换器'],
+      ['BLEU', 'BLEU（双语评估替补指标）'],
+      ['Obscure Trick', '晦涩技巧'],
+    ]);
+    window.reviewTranslateStub = async (terms) => {
+      window.translateCalls.push([...terms]);
+      // A real translator only answers the names it was asked about, so the stub does the same.
+      return new Map(terms.filter((term) => table.has(term)).map((term) => [term, table.get(term)]));
+    };
+  });
+  await openReview();
+  await page.locator('#knowledge-graph-review-translate').check();
+  await page.waitForSelector('.knowledge-graph-review-translation', { timeout: 10_000 });
+  assert.deepEqual(
+    await page.evaluate(() => window.translateCalls),
+    [['Transformer', 'BLEU']],
+    'the hidden row is not paid for',
+  );
+
+  await page.locator('#knowledge-graph-review-show-low').check();
+  await page.waitForFunction(
+    () => document.querySelectorAll('.knowledge-graph-review-row').length === 3,
+    { timeout: 5_000 },
+  );
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.knowledge-graph-review-row')]
+      .every((row) => row.querySelector('.knowledge-graph-review-translation')),
+    { timeout: 10_000 },
+  );
+
+  const calls = await page.evaluate(() => window.translateCalls);
+  assert.equal(calls.length, 2, 'the rows that just appeared are asked about too');
+  assert.ok(calls[1].includes('Obscure Trick'), `the newly visible row is in the request: ${calls[1]}`);
+  // And the gloss already paid for is not lost when the second answer comes back.
+  const glosses = await page.evaluate(() => [...document.querySelectorAll('.knowledge-graph-review-row')]
+    .map((row) => [
+      row.querySelector('.knowledge-graph-review-name').value,
+      row.querySelector('.knowledge-graph-review-translation')?.textContent ?? '',
+    ]));
+  assert.deepEqual(glosses, [
+    ['Transformer', 'Transformer 变换器'],
+    ['Obscure Trick', '晦涩技巧'],
+    ['BLEU', 'BLEU（双语评估替补指标）'],
+  ]);
 
   await page.locator('#knowledge-graph-review-later').click();
   await waitForClosed('#knowledge-graph-review-dialog');
@@ -1597,26 +1682,43 @@ test('relation review starts fully accepted, drops individual pairs, and declini
   const rows = [
     { pairKey: 'p1|p2', leftPaperId: 'p1', rightPaperId: 'p2',
       verdict: 'EXTENDS', confidence: 0.92, evidenceQuote: 'we extend the encoder',
-      rationale: '相同任务上的扩展' },
+      rationale: '相同任务上的扩展',
+      bridges: [{
+        bridgeKey: 'p1|p2#booth乘法器', pairKey: 'p1|p2', name: 'Booth 乘法器', type: 'Method',
+        evidence: [
+          { paperId: 'p1', quote: 'we use a Booth multiplier' },
+          { paperId: 'p2', quote: 'the Booth multiplier is our baseline' },
+        ],
+        reason: '两篇共用同一个乘法器', confidence: 0.7,
+      }] },
     { pairKey: 'p1|p3', leftPaperId: 'p1', rightPaperId: 'p3',
-      verdict: 'CITES', confidence: 0.7, evidenceQuote: '', rationale: '' },
+      verdict: 'CITES', confidence: 0.7, evidenceQuote: '', rationale: '', bridges: [] },
     { pairKey: 'p2|p3', leftPaperId: 'p2', rightPaperId: 'p3',
-      verdict: 'NONE', confidence: 0, evidenceQuote: '', rationale: '领域不同' },
+      verdict: 'NONE', confidence: 0, evidenceQuote: '', rationale: '领域不同', bridges: [] },
   ];
   const opened = await page.evaluate((reviewRows) => {
     window.reviewResult = 'pending';
-    window.openRelationReview = (list, rejectedCount) => {
+    window.openRelationReview = (list, rejectedCount, bridgeDrops) => {
       window.reviewResult = 'pending';
       window.relationReview.openRelationReviewDialog({
         rows: list,
         paperTitles: new Map([['p1', 'Attention Is All You Need'], ['p2', 'BERT'], ['p3', 'GPT-3']]),
         model: 'deepseek-chat',
         rejectedCount,
+        bridgeDrops,
+        existingEntityNames: new Set(['booth乘法器']),
       }).then((accepted) => {
-        window.reviewResult = accepted ? [...accepted] : null;
+        window.reviewResult = accepted
+          ? {
+            pairs: [...accepted.acceptedPairKeys],
+            bridges: [...(accepted.acceptedBridgeKeys ?? [])],
+            manual: (accepted.manualBridges ?? []).map((entry) => entry.name),
+          }
+          : null;
       });
     };
-    window.openRelationReview(reviewRows, 1);
+    window.openRelationReview(reviewRows, 1, { quoteMismatch: 2, lowQuality: 0, badType: 0,
+      overLimit: 0, duplicate: 0 });
     return reviewRows.length;
   }, rows);
   assert.equal(opened, 3);
@@ -1628,18 +1730,38 @@ test('relation review starts fully accepted, drops individual pairs, and declini
   assert.match(summary, /3 条结论待确认/);
   assert.match(summary, /deepseek-chat/);
   assert.match(summary, /1 条无法解析/);
+  // Bridges the local checks refused are reported as a count, not silently dropped.
+  assert.match(summary, /2 条因引文对不上原文被丢弃/);
 
   // Everything starts accepted: the model's output is what the user paid for, so the
-  // common case must not be the slow one.
+  // common case must not be the slow one. The negative pair is folded away by default, so only the
+  // two positive rows (and their bridge) are on screen until the user asks for the rest.
   assert.deepEqual(
     await page.evaluate(() => [...document.querySelectorAll(
       '#knowledge-graph-relation-groups input[type="checkbox"]',
     )].map((box) => box.checked)),
     [true, true, true],
+    'two relation rows and their bridge are all ticked',
   );
   assert.match(await page.locator('#knowledge-graph-relation-selection').textContent(), /已选 3 \/ 3/);
+  assert.match(
+    await page.locator('#knowledge-graph-relation-selection').textContent(),
+    /桥接实体 1 \/ 1/,
+  );
   assert.match(await page.locator('#knowledge-graph-relation-write').textContent(), /写入所选（3）/);
 
+  // A bridge that lands on an existing entity says so: the difference between growing the graph and
+  // growing a duplicate farm.
+  const bridgeText = await page.evaluate(() => document.querySelector(
+    '#knowledge-graph-relation-groups .knowledge-graph-bridge-row',
+  ).textContent);
+  assert.match(bridgeText, /Booth 乘法器/);
+  assert.match(bridgeText, /复用已有实体/);
+
+  // The negatives are one click away, and the button says how many are hidden.
+  const toggle = page.locator('#knowledge-graph-relation-groups .knowledge-graph-negatives-toggle');
+  assert.match(await toggle.textContent(), /展开无关的 1 对/);
+  await toggle.click();
   const rendered = await page.evaluate(() => [...document.querySelectorAll(
     '#knowledge-graph-relation-groups .knowledge-graph-review-row',
   )].map((row) => ({
@@ -1657,14 +1779,17 @@ test('relation review starts fully accepted, drops individual pairs, and declini
   assert.match(rendered[2].text, /避免下次重复消耗 Token/);
   assert.match(rendered[0].text, /we extend the encoder/);
 
-  // Dropping one pair leaves the rest accepted.
-  await page.locator('#knowledge-graph-relation-groups input[type="checkbox"]').nth(1).uncheck();
+  // Unticking one relation row leaves the rest accepted. The row checkboxes are direct children of the
+  // row, which is what distinguishes them from the bridge checkbox nested inside.
+  await page.locator(
+    '#knowledge-graph-relation-groups .knowledge-graph-review-row > input[type="checkbox"]',
+  ).nth(1).uncheck();
   assert.match(await page.locator('#knowledge-graph-relation-selection').textContent(), /已选 2 \/ 3/);
   await page.locator('#knowledge-graph-relation-write').click();
   await waitForClosed('#knowledge-graph-relation-dialog');
   assert.deepEqual(
     await page.evaluate(() => window.reviewResult),
-    ['p1|p2', 'p2|p3'],
+    { pairs: ['p1|p2', 'p2|p3'], bridges: ['p1|p2#booth乘法器'], manual: [] },
     'the accepted set is exactly what remains ticked',
   );
 
@@ -1693,6 +1818,66 @@ test('relation review starts fully accepted, drops individual pairs, and declini
   });
   await waitForClosed('#knowledge-graph-relation-dialog');
   assert.equal(await page.evaluate(() => window.reviewResult), null);
+});
+
+test('a refused "no relation" can be replaced by a node the user types', async () => {
+  // The whole point of the negative branch: the user does not believe the model, and knows what
+  // connects the papers themselves. Typing a node must be mutually exclusive with accepting "no
+  // relation" — writing both would be two contradictory claims about one pair.
+  const rows = [{
+    pairKey: 'p1|p2', leftPaperId: 'p1', rightPaperId: 'p2',
+    verdict: 'NONE', confidence: 0, evidenceQuote: '', rationale: '看起来无关', bridges: [],
+  }];
+  await page.evaluate((reviewRows) => {
+    window.reviewResult = 'pending';
+    window.relationReview.openRelationReviewDialog({
+      rows: reviewRows,
+      paperTitles: new Map([['p1', 'Attention'], ['p2', 'BERT']]),
+    }).then((accepted) => {
+      window.reviewResult = accepted
+        ? {
+          pairs: [...accepted.acceptedPairKeys],
+          manual: (accepted.manualBridges ?? []).map((entry) => `${entry.name}|${entry.type}`),
+        }
+        : null;
+    });
+  }, rows);
+  await page.waitForSelector('#knowledge-graph-relation-dialog[open]');
+  await page.locator('#knowledge-graph-relation-groups .knowledge-graph-negatives-toggle').click();
+  await page.locator('#knowledge-graph-relation-groups .knowledge-graph-manual-open').click();
+
+  // An empty name is refused in place, without closing the form.
+  await page.locator('.knowledge-graph-manual-form .knowledge-graph-action').first().click();
+  assert.equal(await page.locator('.knowledge-graph-manual-error').isVisible(), true);
+  assert.match(await page.locator('.knowledge-graph-manual-error').textContent(), /请填写节点名称/);
+
+  await page.locator('.knowledge-graph-manual-name').fill('Booth 乘法器');
+  // The app wraps every `<select>` in a `.ui-select` trigger, so the native element is driven the way
+  // the entity review test drives it: set the value and dispatch `change`.
+  await page.evaluate(() => {
+    const select = document.querySelector('.knowledge-graph-manual-type');
+    select.value = 'Method';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.locator('.knowledge-graph-manual-description').fill('我认为两篇都用到它');
+  await page.locator('.knowledge-graph-manual-form .knowledge-graph-action').first().click();
+
+  // Saving shows what will be written, and unticks the verdict it contradicts.
+  assert.match(
+    await page.locator('#knowledge-graph-relation-groups .knowledge-graph-manual-chip').textContent(),
+    /Booth 乘法器（Method）/,
+  );
+  assert.match(await page.locator('#knowledge-graph-relation-selection').textContent(), /已选 0 \/ 1/);
+  assert.match(await page.locator('#knowledge-graph-relation-selection').textContent(), /手写节点 1/);
+  assert.equal(await page.locator('#knowledge-graph-relation-write').isDisabled(), false);
+
+  await page.locator('#knowledge-graph-relation-write').click();
+  await waitForClosed('#knowledge-graph-relation-dialog');
+  assert.deepEqual(
+    await page.evaluate(() => window.reviewResult),
+    { pairs: [], manual: ['Booth 乘法器|Method'] },
+    'the node is the only thing written; the "no relation" it replaces is not',
+  );
 });
 
 test('the papers dialog reports every knowledge-base paper and offers no way to delete one', async () => {

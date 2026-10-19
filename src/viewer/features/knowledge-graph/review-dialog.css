@@ -374,18 +374,16 @@ select.knowledge-graph-review-type {
   color: #fff;
 }
 
-/* Extraction progress readout in the page header. */
-.knowledge-graph-extract-progress {
-  max-width: 260px;
-  overflow: hidden;
-  color: #5c7290;
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* A destructive action: outlined rather than filled, so it is findable without being the thing a
+   thumb lands on. The colour is the same red the app uses for errors. */
+.knowledge-graph-action-danger {
+  border-color: #f0c8c2;
+  color: #c0392b;
 }
 
-.knowledge-graph-extract-progress.error {
-  color: #c0392b;
+.knowledge-graph-action-danger:hover {
+  border-color: #c0392b;
+  background: #fdf2f0;
 }
 
 /* --------------------------------------------------------------------------
@@ -628,61 +626,5 @@ select.knowledge-graph-review-type {
 /* A failed write leaves the dialog open, so the reason has to be visible in it. */
 .knowledge-graph-review-selection.error {
   color: #c0392b;
-}
-
-/* --------------------------------------------------------------------------
-   Relation judgement review dialog
-   -------------------------------------------------------------------------- */
-
-.knowledge-graph-relation-dialog {
-  width: min(860px, calc(100vw - 48px));
-}
-
-.knowledge-graph-relation-dialog[open] {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-}
-
-.knowledge-graph-relation-hint {
-  color: #5c7290;
-  font-size: 12px;
-}
-
-.knowledge-graph-relation-pair {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-  color: #16233d;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.knowledge-graph-relation-verdict {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: #e6f0ff;
-  color: #1f67e8;
-  font-size: 11px;
-  font-weight: 650;
-}
-
-/* A negative verdict is not a weaker relationship — it is a different kind of
-   record, so it is coloured as a note rather than as a claim. */
-.knowledge-graph-relation-verdict-none {
-  background: #eef2f8;
-  color: #5c7290;
-}
-
-.knowledge-graph-review-row[data-negative] {
-  border-color: #e4eaf4;
-  background: #fbfdff;
-}
-
-.knowledge-graph-relation-none-note {
-  margin: 0;
-  color: #8598b3;
-  font-size: 11px;
-  line-height: 1.6;
 }
 

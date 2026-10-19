@@ -9,6 +9,7 @@ import { getAiConfig, getVisionAiConfig } from './ai-config-repository';
 import { getProviderAdapter } from "./provider-runtime";
 import { buildConversation } from "./conversation-builder";
 import { generateDocumentOverview } from "./document-overview-service";
+import { generateRelatedLiterature, probeWebRetrieval, searchForChat } from "./web-retrieval-service";
 import { extractEntities } from "./entity-extraction-service";
 import { explainEntities } from "./entity-explanation-service";
 import { judgeRelations } from "./relation-judgement-service";
@@ -185,6 +186,42 @@ export async function handleAiRequest(message: AiRuntimeRequest, onOverviewProgr
       return { ok: true, content: result.content.slice(0, 12000), model: result.model };
     }
 
+    if (message.type === 'pdf-helper:ai-test-web-retrieval') {
+      // Runs before the model is touched: this probe is about the tools endpoint, not about a model.
+      return probeWebRetrieval();
+    }
+
+    if (message.type === 'pdf-helper:ai-web-search') {
+      // Deliberately tolerant of a missing configuration: the caller asked for enrichment, and an answer
+      // without it is still an answer.
+      const found = await searchForChat({
+        query: message.query,
+        oriQuestion: message.query,
+      });
+      if (!found) {
+        return { ok: false, error: '联网搜索还没有配置 DeepSeek API Key。' };
+      }
+      return { ok: true, content: '', webSearch: found };
+    }
+
+    if (message.type === 'pdf-helper:ai-related-literature') {
+      const related = await generateRelatedLiterature(adapter, config, {
+        documentName: message.documentName,
+        overviewMarkdown: message.overviewMarkdown,
+      });
+      return {
+        ok: true,
+        content: related.markdown,
+        model: config.model,
+        relatedLiterature: {
+          markdown: related.markdown,
+          usage: related.usage,
+          sources: related.sources,
+          degraded: related.degraded || undefined,
+        },
+      };
+    }
+
     if (message.type === 'pdf-helper:ai-generate-document-overview') {
       const result = await generateDocumentOverview(adapter, config, message, onOverviewProgress);
       return { ok: true, ...result };
@@ -259,9 +296,10 @@ export async function handleAiRequest(message: AiRuntimeRequest, onOverviewProgr
       return { ok: true, model: result.model, ...detection };
     }
 
+    const chatMessage = message as Extract<AiRuntimeRequest, { type: 'pdf-helper:ai-chat' }>;
     const result = await adapter.chat(
       config,
-      buildConversation(message.messages, message.context),
+      buildConversation(chatMessage.messages, chatMessage.context),
       config.maxOutputTokens,
     );
     return {

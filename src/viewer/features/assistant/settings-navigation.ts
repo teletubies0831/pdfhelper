@@ -9,6 +9,7 @@ import {
   type AiTaskRouteId,
 } from '../../../modules/ai/public';
 import { clearConnectionTestResults } from './connection-test-preferences';
+import { releaseFocusBeforeHiding } from '../../app/public';
 import { addAvailableModel, clearAvailableModels, hasSelectedAvailableModels } from './connection-model-selection';
 import {
   aiProviderSelect,
@@ -136,6 +137,9 @@ function setSettingsModelScreenImmediately(screen: SettingsModelScreen): void {
   visible.hidden = false;
   visible.inert = false;
   visible.removeAttribute('aria-hidden');
+  // Blur before hiding: a 返回 button inside the screen being hidden keeps focus after the click, and Chromium
+  // refuses (and logs an error for) `aria-hidden` on an ancestor of the focused element.
+  releaseFocusBeforeHiding(hidden);
   hidden.hidden = true;
   hidden.inert = true;
   hidden.setAttribute('aria-hidden', 'true');
@@ -161,6 +165,7 @@ async function transitionSettingsModelScreen(screen: SettingsModelScreen): Promi
   incoming.hidden = false;
   outgoing.inert = true;
   incoming.inert = false;
+  releaseFocusBeforeHiding(outgoing);
   outgoing.setAttribute('aria-hidden', 'true');
   incoming.removeAttribute('aria-hidden');
 

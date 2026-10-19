@@ -51,8 +51,11 @@ function paperEntityEdge(paperId, entityId) {
 function createPorts(seed = {}) {
   const state = {
     edges: seed.edges ?? [],
+    entities: seed.entities ?? [],
     requests: [],
     applied: [],
+    entityPlans: [],
+    excerpts: seed.excerpts ?? new Map(),
     response: seed.response ?? { ok: true, content: '{"relations":[]}' },
   };
   return {
@@ -74,6 +77,30 @@ function createPorts(seed = {}) {
         }
       }
       return plan.edges.length;
+    },
+    // The entity side of a run: bridge concepts and hand-typed nodes land here, in the same
+    // transaction as the relation edges.
+    async applyEntityPlan(plan) {
+      state.entityPlans.push(plan);
+      const dropped = new Set(plan.dropOriginKeys);
+      state.edges = state.edges.filter((edge) => !dropped.has(edge.originKey));
+      for (const edge of plan.edges) {
+        if (!state.edges.some((existing) => existing.originKey === edge.originKey)) {
+          state.edges.push(edge);
+        }
+      }
+      const byId = new Map(state.entities.map((entity) => [entity.entityId, entity]));
+      for (const entity of plan.entities) byId.set(entity.entityId, entity);
+      state.entities = [...byId.values()];
+      return plan.edges.length;
+    },
+    async listEntities() {
+      return [...state.entities];
+    },
+    async loadExcerpts(paperIds) {
+      return new Map(paperIds.flatMap((paperId) => (
+        state.excerpts.has(paperId) ? [[paperId, state.excerpts.get(paperId)]] : []
+      )));
     },
   };
 }
@@ -363,7 +390,7 @@ const runWithReview = (decision, seed = threeWayResponse) => {
 
 // The review sees every verdict with the material needed to judge it, positives
 // first (the user is looking for relationships, not for confirmations of absence).
-const subset = runWithReview(new Set(['p1|p2']));
+const subset = runWithReview({ acceptedPairKeys: new Set(['p1|p2']) });
 const subsetResult = await subset.run();
 assert.equal(subset.reviews.length, 1, 'the review happens exactly once, before writing');
 const rows = subset.reviews[0].rows;
@@ -441,7 +468,7 @@ assert.doesNotMatch(describeRelationResult(allBatchesFailedResult), /放弃写�
 
 // An empty selection is the same outcome as dismissing, reached by unticking
 // everything rather than by closing the dialog.
-const emptySelection = runWithReview(new Set());
+const emptySelection = runWithReview({ acceptedPairKeys: new Set() });
 const emptySelectionResult = await emptySelection.run();
 assert.equal(emptySelectionResult.status, 'discarded');
 assert.equal(emptySelection.ports.state.applied.length, 0);
@@ -591,6 +618,203 @@ assert.doesNotMatch(
   noPendingHint.reason,
   /未确认的实体/,
   'with nothing pending there is no advice to give',
+);
+
+// ---------------------------------------------------------------------------
+// Explicit selection: the user ticked papers, so every pair among them is judged.
+//
+// The recall funnel answers "what should be judged"; a selection already answers it, including the
+// case the funnel refuses — two papers with no shared entity, no shared folder and years apart, which
+// is exactly the pair a user asks about when the entity layer found nothing.
+// ---------------------------------------------------------------------------
+const selectionPapers = [
+  paper('a1', { year: 2005, abstract: 'A circuit minimisation heuristic.' }),
+  paper('a2', { year: 2019, abstract: 'A multiplication algorithm survey.' }),
+  paper('a3', { year: 2021, abstract: 'A database paper.' }),
+];
+const selectionPorts = createPorts({
+  excerpts: new Map([
+    ['a1', 'We compare against the Boyar-Peralta heuristic on a multiplier.'],
+    ['a2', 'The Boyar-Peralta heuristic is our baseline in Table 2.'],
+  ]),
+  response: {
+    ok: true,
+    content: JSON.stringify({
+      pairs: [
+        {
+          pairKey: 'a1|a2', relation: 'COMPARES_WITH', confidence: 0.7,
+          rationale: 'same baseline',
+          bridges: [{
+            name: 'Boyar-Peralta heuristic', type: 'Method',
+            leftQuote: 'compare against the Boyar-Peralta heuristic',
+            rightQuote: 'The Boyar-Peralta heuristic is our baseline',
+            reason: '两篇都拿它当基线', confidence: 0.8,
+          }],
+        },
+        { pairKey: 'a1|a3', relation: 'NONE', confidence: 1 },
+        { pairKey: 'a2|a3', relation: 'NONE', confidence: 1 },
+      ],
+    }),
+  },
+});
+const selectionRun = await runRelationAnalysis(selectionPorts, {
+  papers: selectionPapers,
+  topK: 5,
+  maxCandidates: 40,
+  paperIds: ['a1', 'a2', 'a3'],
+});
+assert.equal(selectionRun.status, 'done');
+assert.equal(
+  selectionPorts.state.requests[0].pairs.length,
+  3,
+  'three selected papers means three pairs, however weak the signals',
+);
+assert.equal(selectionRun.judgedPairs, 3);
+assert.equal(selectionRun.relationsFound, 1);
+
+// The request carries one excerpt per paper, plus the pair ids — the model needs to know which text
+// it is quoting from, and the quotes are verified against exactly this map afterwards.
+const selectionRequest = selectionPorts.state.requests[0];
+assert.equal(selectionRequest.papers.length, 3, 'excerpts travel once per paper, not once per pair');
+assert.equal(selectionRequest.papers.find((item) => item.paperId === 'a1').excerpt.includes('Boyar'), true);
+assert.equal(selectionRequest.pairs[0].leftPaperId, 'a1');
+assert.equal('leftSummary' in selectionRequest.pairs[0], false, 'the abstracts travel as excerpts');
+
+// Bridge entity + relation edges land in ONE transaction: a node without its edges would be an
+// orphan, and the relation edge without the node would be a line to nothing.
+assert.equal(selectionRun.bridgesCreated, 1);
+assert.equal(selectionPorts.state.entityPlans.length, 1, 'a single transaction for both halves');
+assert.equal(selectionPorts.state.applied.length, 0, 'the relation-only plan is not also used');
+const writtenEntity = selectionPorts.state.entities.find(
+  (entity) => entity.name === 'Boyar-Peralta heuristic',
+);
+assert.ok(writtenEntity, 'the bridge concept became an entity');
+assert.equal(writtenEntity.status, 'confirmed');
+const entityEdge = selectionPorts.state.entityPlans[0].edges.filter(
+  (edge) => edge.target === writtenEntity.entityId,
+);
+assert.equal(entityEdge.length, 2, 'and it is connected to both papers');
+const relationEdge = selectionPorts.state.entityPlans[0].edges.find(
+  (edge) => edge.type === 'COMPARES_WITH',
+);
+assert.ok(relationEdge, 'the relation edge is in the same plan');
+
+// Unticking a bridge in the review discards it outright — no entity, no pending record.
+const uncheckedBridgePorts = createPorts({
+  excerpts: selectionPorts.state.excerpts,
+  response: selectionPorts.state.response,
+});
+const uncheckedRun = await runRelationAnalysis(uncheckedBridgePorts, {
+  papers: selectionPapers,
+  topK: 5,
+  maxCandidates: 40,
+  paperIds: ['a1', 'a2'],
+  onJudged: async () => ({ acceptedPairKeys: new Set(['a1|a2']), acceptedBridgeKeys: new Set() }),
+});
+assert.equal(uncheckedRun.bridgesCreated, 0);
+assert.equal(uncheckedRun.edgesWritten, 1, 'the relation edge is still written');
+assert.equal(
+  uncheckedBridgePorts.state.entities.length,
+  0,
+  'an unticked bridge leaves nothing behind — not even a pending candidate',
+);
+
+// A bridge under a refused relation goes with it: two contradictory decisions about one pair are not
+// something the user can mean.
+const refusedPairPorts = createPorts({
+  excerpts: selectionPorts.state.excerpts,
+  response: selectionPorts.state.response,
+});
+await runRelationAnalysis(refusedPairPorts, {
+  papers: selectionPapers,
+  topK: 5,
+  maxCandidates: 40,
+  paperIds: ['a1', 'a2'],
+  onJudged: async () => ({
+    acceptedPairKeys: new Set(['a2|a3']),
+    acceptedBridgeKeys: new Set(['a1|a2#boyarperaltaheuristic']),
+  }),
+});
+assert.equal(refusedPairPorts.state.entities.length, 0, 'a refused pair takes its bridges with it');
+
+// The dropped-suggestion report reaches the review, so "the model proposed nothing" and "everything it
+// proposed was refused" do not look the same.
+const droppingPorts = createPorts({
+  excerpts: new Map([['a1', 'We compare against the Boyar-Peralta heuristic.']]),
+  response: {
+    ok: true,
+    content: JSON.stringify({
+      pairs: [{
+        pairKey: 'a1|a2', relation: 'SIMILAR_TO', confidence: 0.6,
+        bridges: [{
+          name: 'Invented Concept', type: 'Concept',
+          leftQuote: 'a sentence that is not in the abstract',
+          rightQuote: 'another sentence that is not there',
+        }],
+      }],
+    }),
+  },
+});
+const droppingReviews = [];
+await runRelationAnalysis(droppingPorts, {
+  papers: selectionPapers,
+  topK: 5,
+  maxCandidates: 40,
+  paperIds: ['a1', 'a2'],
+  onJudged: async (review) => {
+    droppingReviews.push(review);
+    return 'accept-all';
+  },
+});
+assert.equal(droppingReviews[0].rows[0].bridges.length, 0);
+assert.equal(droppingReviews[0].bridgeDrops.quoteMismatch, 1, 'the refusal is reported, not hidden');
+
+// ---------------------------------------------------------------------------
+// The node the user types instead of accepting "no relation".
+//
+// It is written even though the pair's verdict was refused (that is the point), and the refused
+// `NO_RELATION` record is retired so the canvas and the record cannot contradict each other.
+// ---------------------------------------------------------------------------
+const manualPorts = createPorts({
+  edges: [{
+    edgeId: 'nr', source: 'a1', sourceKind: 'paper', target: 'a2', targetKind: 'paper',
+    type: 'NO_RELATION', confidence: 0, evidence: [], sourcePaperId: 'a1', origin: 'ai',
+    originKey: 'NO_RELATION|a1|a2', provenance: {}, createdAt: 1, updatedAt: 1,
+  }],
+  response: {
+    ok: true,
+    content: JSON.stringify({
+      pairs: [{ pairKey: 'a1|a2', relation: 'NONE', confidence: 1, rationale: '看起来无关' }],
+    }),
+  },
+});
+const manualRun = await runRelationAnalysis(manualPorts, {
+  papers: selectionPapers,
+  topK: 5,
+  maxCandidates: 40,
+  paperIds: ['a1', 'a2'],
+  forceJudged: true,
+  onJudged: async () => ({
+    acceptedPairKeys: new Set(),
+    manualBridges: [{
+      pairKey: 'a1|a2', name: 'Booth 乘法器', type: 'Method', description: '我认为它们都用到这个',
+    }],
+  }),
+});
+assert.equal(manualRun.status, 'done');
+assert.equal(manualRun.manualNodes, 1);
+const manualEntity = manualPorts.state.entities[0];
+assert.equal(manualEntity.name, 'Booth 乘法器');
+assert.equal(manualEntity.userEdited, true, 'it is the user’s claim, not a model suggestion');
+assert.equal(manualEntity.description, '我认为它们都用到这个');
+assert.equal(
+  manualPorts.state.edges.filter((edge) => edge.target === manualEntity.entityId).length,
+  2,
+  'and it connects both papers',
+);
+assert.ok(
+  !manualPorts.state.edges.some((edge) => edge.type === 'NO_RELATION'),
+  'the refused "no relation" is gone, so the graph does not deny the node the user just added',
 );
 
 console.log('Relation runner contract tests passed.');

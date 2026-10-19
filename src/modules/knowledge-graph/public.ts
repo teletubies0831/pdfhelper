@@ -280,6 +280,18 @@ export {
 } from './application/relation-judgement.ts';
 
 export {
+  emptyBridgeDrops,
+  nameSupportedByQuotes,
+  parseBridgeSuggestions,
+  quoteAppearsIn,
+  totalBridgeDrops,
+  MAX_BRIDGES_PER_PAIR,
+  type BridgeDropStats,
+  type BridgeParseOptions,
+  type RelationBridgeSuggestion,
+} from './relation-exports.ts';
+
+export {
   deriveTagRecords,
   hashTagName,
   normalizeTagName,
@@ -340,6 +352,7 @@ export {
 } from './application/graph-transfer.ts';
 
 export {
+  describeBridgeDrops,
   describeRelationResult,
   isFullyJudged,
   previewRelationAnalysis,
@@ -350,8 +363,14 @@ export {
   type RelationJudgementDecision,
   type RelationJudgementReview,
   type RelationPreview,
+  type RelationReviewAcceptance,
   type RunRelationAnalysisOptions,
 } from './application/relation-runner.ts';
+
+// Bridge concepts and node deletion live in their own small barrel: they are what a knowledge-graph
+// *edit* can touch beyond relations, and grouping them here keeps this file inside the architecture
+// check's line limit. `export *` on purpose — the list is that file's own concern.
+export * from './relation-exports.ts';
 
 export {
   computeGraphMetrics,
@@ -366,6 +385,7 @@ export {
 } from './application/graph-metrics.ts';
 
 export {
+  buildSelectedCandidatePairs,
   collectJudgedPairKeys,
   cosineSimilarity,
   estimateJudgementTokens,
@@ -375,6 +395,7 @@ export {
   DEFAULT_MAX_CANDIDATES,
   DEFAULT_MIN_RECALL_SCORE,
   DEFAULT_VECTOR_THRESHOLD,
+  MAX_SELECTED_PAPERS,
   PAPER_RELATION_EDGE_TYPES,
   RECALL_WEIGHTS,
   type RecallOptions,

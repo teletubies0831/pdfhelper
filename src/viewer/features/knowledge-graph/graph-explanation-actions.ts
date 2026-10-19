@@ -1,13 +1,18 @@
 import {
   attachEntityDescriptions,
+  countEntitiesMissingExplanation,
+  describeBulkExplanationResult,
   describeExplanationResult,
   explainEntityDescriptions,
+  explainMissingDescriptions,
   knowledgeGraphRepository,
   normalizeStreamingExplanation,
   planExplanationTargets,
+  EXPLANATIONS_PER_CALL,
   type GraphEntity,
   type GraphPaper,
 } from '../../../modules/knowledge-graph/public';
+import { knowledgeGraphExplainAllButton } from '../../app/viewer-elements';
 import { setStatus } from '../../app/status-bar';
 import { createEntityExplanationPorts } from './graph-extraction-repository';
 import {
@@ -63,6 +68,63 @@ let explanationProgress: ExplanationProgress | null = null;
 
 export function currentExplanationProgress(): ExplanationProgress | null {
   return explanationProgress;
+}
+
+/**
+ * Above this many missing meanings the bulk run asks before spending.
+ *
+ * Below it, a run is a couple of calls and the confirmation would be noise the user learns to dismiss
+ * without reading — the same reasoning as the relation-analysis threshold.
+ */
+export const BULK_EXPLAIN_CONFIRM_THRESHOLD = 24;
+
+/**
+ * Fills in every missing meaning in one go, from the header's 「补全解释」 button.
+ *
+ * Two things make this more than a loop: it says how many entities it is about to ask about **before**
+ * spending anything (and asks for confirmation above a threshold), and it reports progress in the header
+ * line — a bulk run over a real corpus takes a minute, and a button that looks frozen is the failure this
+ * panel already had once.
+ */
+export async function explainAllMissingEntities(): Promise<void> {
+  const { getPapers, reload, setProgress } = requireContext();
+  const entities = await knowledgeGraphRepository.listEntities();
+  const missing = countEntitiesMissingExplanation(entities);
+  if (!missing) {
+    setStatus('所有实体都已有解释。');
+    return;
+  }
+  // The estimate is deliberately crude and honest: one call per 12 entities, each a few hundred tokens.
+  const rounds = Math.ceil(missing / EXPLANATIONS_PER_CALL);
+  if (missing > BULK_EXPLAIN_CONFIRM_THRESHOLD) {
+    const proceed = window.confirm(
+      `将为 ${missing} 个还没有解释的实体生成含义，分 ${rounds} 次请求，`
+      + '大约消耗几千 token。\n\n已有解释的实体不会重复请求。继续吗？',
+    );
+    if (!proceed) {
+      setStatus('已取消，未发送任何请求。');
+      return;
+    }
+  }
+
+  knowledgeGraphExplainAllButton.disabled = true;
+  setProgress({ message: `正在为 ${missing} 个实体生成解释…`, done: false });
+  try {
+    const result = await explainMissingDescriptions(
+      {
+        papers: getPapers(),
+        onProgress: ({ message }) => setProgress({ message, done: false }),
+      },
+      createEntityExplanationPorts(),
+      knowledgeGraphRepository,
+    );
+    setProgress({ message: '', done: true });
+    setStatus(describeBulkExplanationResult(result), Boolean(result.error));
+    if (result.described) await reload();
+  } finally {
+    knowledgeGraphExplainAllButton.disabled = false;
+    setProgress({ message: '', done: true });
+  }
 }
 
 /**

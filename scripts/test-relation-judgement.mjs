@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 
 import {
+  buildSelectedCandidatePairs,
   collectJudgedPairKeys,
   cosineSimilarity,
   estimateJudgementTokens,
   recallCandidatePairs,
   relationPairKey,
   selectTopKForJudgement,
+  MAX_SELECTED_PAPERS,
 } from '../src/modules/knowledge-graph/application/relation-recall.ts';
 import {
   buildJudgementReviewRows,
@@ -16,6 +18,17 @@ import {
   planRelationJudgementWrites,
   RELATION_PROMPT_VERSION,
 } from '../src/modules/knowledge-graph/application/relation-judgement.ts';
+import {
+  nameSupportedByQuotes,
+  parseBridgeSuggestions,
+  quoteAppearsIn,
+  MAX_BRIDGES_PER_PAIR,
+} from '../src/modules/knowledge-graph/application/relation-bridges.ts';
+import {
+  planBridgeEntityWrites,
+  planManualBridgeWrites,
+} from '../src/modules/knowledge-graph/application/bridge-entities.ts';
+import { normalizeEntityName } from '../src/modules/knowledge-graph/domain/entity-normalization.ts';
 
 function paper(paperId, overrides = {}) {
   return {
@@ -541,5 +554,233 @@ const withUnanswered = parseRelationJudgements(
 const passedThrough = filterAcceptedJudgements(withUnanswered, new Set([pairA]));
 assert.deepEqual(passedThrough.parsed.unansweredPairKeys, [pairB]);
 assert.deepEqual(passedThrough.discardedPairKeys, []);
+
+// ---------------------------------------------------------------------------
+// Explicit selection: the user ticked papers, so the funnel's opinions are moot.
+//
+// The score floor and Top-K exist to answer "what should be judged". A selection already answers it —
+// including the case the funnel would reject: two papers with no shared entity, no shared folder and
+// a decade apart, which is exactly the pair a user asks about when the entity layer found nothing.
+// ---------------------------------------------------------------------------
+const distantPapers = [
+  paper('d1', { year: 2005, abstract: 'A circuit minimisation heuristic.' }),
+  paper('d2', { year: 2019, abstract: 'A multiplication algorithm survey.' }),
+  paper('d3', { year: 1999, abstract: 'Unrelated database work.' }),
+];
+const selectedPairs = buildSelectedCandidatePairs(distantPapers, [], ['d1', 'd2']);
+assert.equal(selectedPairs.length, 1, 'a selected pair is judged even with no recall signal at all');
+assert.equal(selectedPairs[0].recallScore, 0, 'and its score stays honest: zero signal');
+assert.ok(
+  selectedPairs[0].recallReasons.some((reason) => reason.includes('清单')),
+  'the model is told why the pair is being judged',
+);
+
+// Every pair among six papers is 15; the cap is what keeps the price predictable.
+const sixPapers = Array.from({ length: 8 }, (_, index) => paper(`s${index + 1}`));
+assert.equal(MAX_SELECTED_PAPERS, 6);
+assert.equal(
+  buildSelectedCandidatePairs(sixPapers, [], sixPapers.map((item) => item.paperId)).length,
+  15,
+  'six selected papers is exactly 15 pairs, whatever the ordering',
+);
+
+// A pair with a recorded conclusion is not paid for twice unless the caller insists.
+const judgedEdges = [{
+  edgeId: 'j1', source: 'd1', sourceKind: 'paper', target: 'd2', targetKind: 'paper',
+  type: 'EXTENDS', confidence: 0.9, evidence: [], sourcePaperId: 'd1', origin: 'ai',
+  originKey: 'EXTENDS|d1|d2', provenance: {}, createdAt: 1, updatedAt: 1,
+}];
+assert.equal(
+  buildSelectedCandidatePairs(distantPapers, judgedEdges, ['d1', 'd2']).length,
+  0,
+  'an already-judged selected pair is skipped',
+);
+assert.equal(
+  buildSelectedCandidatePairs(distantPapers, judgedEdges, ['d1', 'd2'], { skipJudged: false }).length,
+  1,
+  'and can be forced when the user asked for a re-judge',
+);
+
+// ---------------------------------------------------------------------------
+// Bridge validation: the part that makes "the model may not invent entities" true.
+// ---------------------------------------------------------------------------
+const excerptLeft = 'We compare against the Boyar-Peralta heuristic on a 15-bit multiplier.';
+const excerptRight = 'The Boyar-Peralta heuristic is used as a baseline in Table 2.';
+const bridgePair = selectedPairs[0];
+
+assert.ok(quoteAppearsIn('compare against the Boyar-Peralta heuristic', excerptLeft));
+assert.ok(
+  !quoteAppearsIn('compare against the Booth heuristic', excerptLeft),
+  'a quote that is not in the excerpt is refused',
+);
+assert.ok(
+  !quoteAppearsIn('the', excerptLeft),
+  'and so is a fragment too short to prove anything',
+);
+assert.ok(nameSupportedByQuotes('Boyar-Peralta', [excerptLeft]), 'the name appears in the quote');
+assert.ok(
+  !nameSupportedByQuotes('Wallace tree', [excerptLeft]),
+  'an invented name supported by an unrelated sentence is refused',
+);
+
+const bridgeExcerpts = new Map([['d1', excerptLeft], ['d2', excerptRight]]);
+const rawBridges = [
+  {
+    name: 'Boyar-Peralta heuristic', type: 'Method',
+    leftQuote: 'compare against the Boyar-Peralta heuristic',
+    rightQuote: 'The Boyar-Peralta heuristic is used as a baseline',
+    reason: '两篇都把它作为对比基线', confidence: 0.8,
+  },
+  // Rewritten quote: refused, and counted as such.
+  {
+    name: 'Boyar-Peralta heuristic', type: 'Method',
+    leftQuote: 'we compare to the BP heuristic',
+    rightQuote: 'The Boyar-Peralta heuristic is used as a baseline',
+  },
+  // Description, not a name.
+  {
+    name: '一种优化方法', type: 'Method',
+    leftQuote: 'compare against the Boyar-Peralta heuristic',
+    rightQuote: 'The Boyar-Peralta heuristic is used as a baseline',
+  },
+  // Invalid type.
+  {
+    name: 'Boyar-Peralta heuristic', type: 'Algorithm',
+    leftQuote: 'compare against the Boyar-Peralta heuristic',
+    rightQuote: 'The Boyar-Peralta heuristic is used as a baseline',
+  },
+  // Not a name at all: a table fragment. Caught by the name-quality rules before any quote check.
+  {
+    name: '63', type: 'Metric',
+    leftQuote: 'compare against the Boyar-Peralta heuristic',
+    rightQuote: 'The Boyar-Peralta heuristic is used as a baseline',
+  },
+];
+const parsedBridges = parseBridgeSuggestions(rawBridges, bridgePair, { excerpts: bridgeExcerpts });
+assert.equal(parsedBridges.bridges.length, 1, 'only the fully supported suggestion survives');
+assert.equal(parsedBridges.bridges[0].name, 'Boyar-Peralta heuristic');
+assert.deepEqual(
+  parsedBridges.bridges[0].evidence.map((entry) => entry.paperId),
+  ['d1', 'd2'],
+  'both papers must be quoted',
+);
+// Two refusals are quote/name-support failures: the rewritten quote, and a description whose words
+// appear in neither quote (the prompt asks for names, and a phrase cannot be pinned to the text).
+assert.equal(parsedBridges.drops.quoteMismatch, 2);
+assert.equal(parsedBridges.drops.lowQuality, 1, 'the table fragment never even reaches the quote check');
+assert.equal(parsedBridges.drops.badType, 1);
+
+// The cap is applied in code, never stated in the prompt: a number in a prompt is read as a target.
+const manyBridges = Array.from({ length: 5 }, (_, index) => ({
+  name: `Boyar-Peralta variant ${index}`, type: 'Method',
+  leftQuote: 'compare against the Boyar-Peralta heuristic',
+  rightQuote: 'The Boyar-Peralta heuristic is used as a baseline',
+  confidence: 0.5 + index * 0.05,
+}));
+const cappedBridges = parseBridgeSuggestions(manyBridges, bridgePair, { excerpts: bridgeExcerpts });
+assert.equal(cappedBridges.bridges.length, MAX_BRIDGES_PER_PAIR);
+assert.equal(cappedBridges.drops.overLimit, 3, 'and the review is told how many were dropped');
+assert.ok(
+  cappedBridges.bridges[0].confidence > cappedBridges.bridges[1].confidence,
+  'the most confident suggestions are the ones kept',
+);
+assert.doesNotMatch(
+  buildRelationJudgementPrompt(),
+  /最多\\s*\\d+\\s*个桥接/,
+  'the prompt must not advertise a quota for bridges',
+);
+assert.match(buildRelationJudgementPrompt(), /引文必须逐字摘自/, 'the prompt states the quote rule');
+
+// ---------------------------------------------------------------------------
+// Bridge writes: one entity per concept, however many pairs proposed it.
+// ---------------------------------------------------------------------------
+const bridgeWrite = planBridgeEntityWrites(
+  [
+    ...parsedBridges.bridges,
+    {
+      ...parsedBridges.bridges[0],
+      bridgeKey: 'd1|d3#boyar-peralta heuristic',
+      pairKey: 'd1|d3',
+      evidence: [
+        { paperId: 'd1', quote: 'compare against the Boyar-Peralta heuristic' },
+        { paperId: 'd3', quote: 'The Boyar-Peralta heuristic is used as a baseline' },
+      ],
+    },
+  ],
+  [],
+  { now: 5 },
+);
+assert.equal(bridgeWrite.entities.length, 1, 'the same concept from two pairs is one entity');
+assert.equal(bridgeWrite.entities[0].status, 'confirmed', 'the user ticked it, so it is confirmed');
+assert.equal(bridgeWrite.edges.length, 3, 'and it is linked to every paper that quoted it');
+assert.deepEqual(
+  bridgeWrite.edges.map((edge) => [edge.source, edge.targetKind, edge.type]),
+  [['d1', 'entity', 'MENTIONS'], ['d2', 'entity', 'MENTIONS'], ['d3', 'entity', 'MENTIONS']],
+  'each edge is a paper → entity MENTIONS edge, deduplicated across the two pairs',
+);
+assert.equal(
+  bridgeWrite.entities[0].evidence[0].pageNumber,
+  0,
+  'evidence from an abstract carries page 0, which the inspector renders as 「摘要」',
+);
+
+// An existing entity is reused and confirmed rather than duplicated.
+const reused = planBridgeEntityWrites(
+  [parsedBridges.bridges[0]],
+  [{
+    entityId: 'entity:existing', name: 'Boyar-Peralta heuristic',
+    // The real normalized form: entity identity is decided by this key, so the fixture must use it.
+    normalizedName: normalizeEntityName('Boyar-Peralta heuristic'), aliases: [], type: 'Method',
+    status: 'pending', confidence: 0.4, sourcePaperId: 'd1', evidence: [],
+    mergedInto: null, userEdited: false, createdAt: 1, updatedAt: 1,
+  }],
+  { now: 6 },
+);
+assert.equal(reused.entities.length, 1);
+assert.equal(reused.entities[0].entityId, 'entity:existing', 'no duplicate node');
+assert.equal(reused.entities[0].status, 'confirmed');
+assert.deepEqual(reused.reusedEntityIds, ['entity:existing']);
+
+// ---------------------------------------------------------------------------
+// The node the user types in place of a refused "no relation".
+// ---------------------------------------------------------------------------
+const noRelationEdge = {
+  edgeId: 'nr', source: 'd1', sourceKind: 'paper', target: 'd2', targetKind: 'paper',
+  type: 'NO_RELATION', confidence: 0, evidence: [], sourcePaperId: 'd1', origin: 'ai',
+  originKey: 'NO_RELATION|d1|d2', provenance: {}, createdAt: 1, updatedAt: 1,
+};
+const manual = planManualBridgeWrites(
+  { pairKey: 'd1|d2', name: 'Booth 乘法器', type: 'Method', description: '我加的概念' },
+  [],
+  [noRelationEdge],
+  { now: 7 },
+);
+assert.equal(manual.entities.length, 1);
+assert.equal(manual.entities[0].userEdited, true, 'a hand-typed node is marked as the user’s');
+assert.equal(manual.entities[0].confidence, 1, 'it is an assertion, not an estimate');
+assert.equal(manual.entities[0].description, '我加的概念');
+assert.equal(manual.edges.length, 2, 'linked to both papers');
+assert.ok(
+  manual.edges.every((edge) => edge.origin === 'user'),
+  'and marked as user-originated, so the origin filter can find it',
+);
+assert.deepEqual(
+  manual.dropOriginKeys,
+  ['NO_RELATION|d1|d2'],
+  'the refused "no relation" is retired: the canvas must not contradict the node the user just added',
+);
+
+// An empty name is refused; a name that already exists is reused instead of duplicated.
+assert.equal(
+  planManualBridgeWrites({ pairKey: 'd1|d2', name: '   ', type: 'Method' }, [], []).rejectedReason,
+  '请填写节点名称。',
+);
+const manualReuse = planManualBridgeWrites(
+  { pairKey: 'd1|d2', name: 'boyar-peralta HEURISTIC', type: 'Method' },
+  bridgeWrite.entities,
+  [],
+);
+assert.equal(manualReuse.entities[0].entityId, bridgeWrite.entities[0].entityId);
+assert.equal(manualReuse.createdEntityIds.length, 0, 'typing an existing name connects, not duplicates');
 
 console.log('Relation recall and judgement contract tests passed.');

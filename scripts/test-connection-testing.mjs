@@ -49,6 +49,8 @@ const { handleAiRequest } = evaluate(await compile('src/background/ai/request-ha
   './entity-extraction-service': {},
   './relation-judgement-service': {},
   './entity-explanation-service': {},
+  // Web retrieval is exercised by its own contract test; here it only has to exist.
+  './web-retrieval-service': {},
 });
 const config = { ...contracts.DEFAULT_AI_CONFIG, providerId: 'openai-compatible',
   apiKey: 'unit-test-key', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.7-code' };
@@ -144,6 +146,14 @@ test('every knowledge-graph AI request type is accepted by the whitelist and ans
     './entity-explanation-service': {
       explainEntities: async () => ({ content: '{"explanations":[]}' }),
     },
+    // Web retrieval is exercised by its own contract test; here it has to exist and answer.
+    './web-retrieval-service': {
+      probeWebRetrieval: async () => ({ ok: true, content: 'connectivity ok' }),
+      generateRelatedLiterature: async () => ({
+        markdown: '## related', usage: { searchCalls: 0, fetchCalls: 0 }, sources: [],
+      }),
+      searchForChat: async () => ({ hits: [], searchCalls: 1 }),
+    },
   });
 
   const messages = [
@@ -163,6 +173,14 @@ test('every knowledge-graph AI request type is accepted by the whitelist and ans
       type: 'pdf-helper:ai-explain-entities', requestId: 'r-explain',
       items: [{ name: 'X', type: 'Method', paperTitle: 'T', quotes: [] }],
     },
+    // The web-retrieval family: a settings probe, the on-demand 相关论文 section and the chat's 联网 search. They
+    // were added later than the rest, which is exactly the case this test exists for.
+    { type: 'pdf-helper:ai-test-web-retrieval' },
+    {
+      type: 'pdf-helper:ai-related-literature', requestId: 'r-related',
+      documentName: 'd.pdf', overviewMarkdown: '# T',
+    },
+    { type: 'pdf-helper:ai-web-search', requestId: 'r-web', query: 'attention' },
   ];
 
   for (const message of messages) {
@@ -187,6 +205,8 @@ const uiFiles = {
   navigation: 'src/viewer/features/assistant/settings-navigation.ts',
   controller: 'src/viewer/features/assistant/connection-test-controller.ts',
   models: 'src/modules/ai/domain/ai-connection.ts',
+  primaryTransition: 'src/viewer/features/assistant/settings-primary-transition.ts',
+  focusRelease: 'src/viewer/app/focus-release.ts',
 };
 const elementIds = {};
 before(async () => {
@@ -216,6 +236,11 @@ beforeEach(async () => {
     const ai = { ...run('src/modules/ai/contracts.ts'),
       ...run('src/modules/ai/domain/connection-test-settings.ts'), ...run(uiFiles.models) };
     const elements = Object.fromEntries(Object.entries(elementIds).map(([name, id]) => [name, document.getElementById(id)]));
+    // The real element module exposes these as `Array.from(querySelectorAll(...))`; the id map cannot express that,
+    // and switching tabs needs them.
+    elements.settingsPrimaryTabButtons = [...document.querySelectorAll('[data-settings-tab]')];
+    elements.settingsPrimaryPanels = [...document.querySelectorAll('[data-settings-panel]')];
+    const { releaseFocusBeforeHiding } = run(uiFiles.focusRelease);
     window.saved = {};
     const browser = { storage: { local: {
       get: async () => window.saved,
@@ -232,7 +257,12 @@ beforeEach(async () => {
     const navigation = run(uiFiles.navigation, {
       '../../../modules/ai/public': ai, './connection-test-preferences': prefs,
       './connection-model-selection': selection,
-      '../../app/viewer-elements': elements, './settings-primary-transition': {},
+      '../../app/viewer-elements': elements,
+      // The real module: the focus-before-hiding fix lives in it too, so a stub would hide the bug under test.
+      './settings-primary-transition': run(uiFiles.primaryTransition, {
+        '../../app/public': { releaseFocusBeforeHiding },
+      }),
+      '../../app/public': { releaseFocusBeforeHiding },
     });
     const controller = run(uiFiles.controller, {
       'wxt/browser': { browser }, '../../../modules/ai/public': ai,
@@ -241,6 +271,8 @@ beforeEach(async () => {
       '../../app/viewer-state': { linkService: { goToDestination() {} } }, './memory-controller': {},
       './settings-navigation': navigation, './connection-test-preferences': prefs,
       './connection-model-selection': selection, '../../app/chat-reasoning-control': {},
+      './chat-web-search': { syncChatWebSearchToggle() {} },
+      './web-retrieval-settings': { populateWebRetrievalForm() {} },
     });
     Object.assign(window, { prefs, selection, navigation, controller, elements });
     elements.aiProviderSelect.value = 'openai-compatible';
@@ -360,4 +392,66 @@ test('late results cannot verify an edited or switched connection', async () => 
       disabled: elements.testDeepSeekButton.disabled };
   });
   assert.deepEqual(result, { ok: false, verified: false, content: '', disabled: false });
+});
+
+test('a hidden screen never keeps the focus (the aria-hidden error Edge reported)', async () => {
+  // Edge listed "Blocked aria-hidden on an element because its descendant retained focus", naming
+  // #settings-connection-back inside #settings-connection-editor: clicking the back button leaves focus on it, and the
+  // screen it lives in is then hidden. The browser is right to refuse — hiding the focused element from assistive
+  // technology drops the caret into nowhere — so focus has to leave before the attribute is written.
+  const result = await page.evaluate(async () => {
+    const editor = document.getElementById('settings-connection-editor');
+    const overview = document.getElementById('settings-model-overview');
+    // The settings panel is hidden in this harness; nothing inside a `hidden` subtree can take focus, and this test is
+    // about focus.
+    const panel = document.getElementById('assistant-settings-panel');
+    if (panel) panel.hidden = false;
+    navigation.showSettingsConnectionEditor();
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const opened = {
+      visible: !editor.hidden && !editor.inert,
+      focusInside: editor.contains(document.activeElement),
+    };
+    document.getElementById('settings-connection-back').focus();
+    const focusedBefore = editor.contains(document.activeElement);
+    // Watch the exact moment the attribute is written: that is when the browser decides whether to block it, and by
+    // the time the transition settles the element may already have been blurred for other reasons.
+    const violations = [];
+    const observer = new MutationObserver(() => {
+      if (editor.getAttribute('aria-hidden') !== 'true') return;
+      violations.push({
+        hidden: editor.hidden,
+        focusInside: editor.contains(document.activeElement),
+      });
+    });
+    observer.observe(editor, { attributes: true, attributeFilter: ['aria-hidden'] });
+    navigation.showSettingsModelOverview();
+    await new Promise(resolve => setTimeout(resolve, 600));
+    observer.disconnect();
+    return {
+      opened,
+      focusedBefore,
+      violations,
+      editorHidden: editor.hidden,
+      editorAriaHidden: editor.getAttribute('aria-hidden'),
+      focusStillInside: editor.contains(document.activeElement),
+      overviewVisible: !overview.hidden && !overview.inert && !overview.hasAttribute('aria-hidden'),
+    };
+  });
+  assert.equal(result.opened.visible, true, 'the editor screen has to open first');
+  assert.equal(result.focusedBefore, true, 'the test must start with focus inside the screen being hidden');
+  assert.ok(result.violations.length > 0, 'the screen was hidden at least once');
+  assert.deepEqual(
+    result.violations.filter((entry) => entry.focusInside),
+    [],
+    'aria-hidden was applied while the screen still held the focus — exactly what the browser blocked',
+  );
+  assert.equal(result.editorHidden, true);
+  assert.equal(result.editorAriaHidden, 'true');
+  assert.equal(
+    result.focusStillInside,
+    false,
+    'a hidden screen must not still hold the focus — that is the combination the browser blocks',
+  );
+  assert.equal(result.overviewVisible, true, 'and the screen that replaced it is exposed');
 });

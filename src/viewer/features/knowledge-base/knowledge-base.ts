@@ -6,3 +6,4 @@ export * from './editor-controller';
 export * from './current-pdf-add-to-library';
 export * from './knowledge-corpus-repository';
 export * from './knowledge-pdf-overview';
+export * from './knowledge-related-papers';

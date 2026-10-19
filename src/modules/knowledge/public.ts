@@ -1,6 +1,6 @@
 import { KnowledgeLibrary } from './application/knowledge-library';
 export * from './adapters/browser-document-corpus';
-export { saveDocumentOverview, getDocumentOverviewMarkdown } from './application/document-overview';
+export { saveDocumentOverview, saveRelatedLiterature, getDocumentOverviewMarkdown } from './application/document-overview';
 import { BrowserStorageKnowledgeRepository } from './adapters/browser-storage-knowledge-repository';
 import { HuggingFaceEmbeddingProvider } from './adapters/hugging-face-embedding-provider';
 import { IndexedDbKnowledgeVectorRepository } from './adapters/indexed-db/indexed-db-knowledge-vector-repository';

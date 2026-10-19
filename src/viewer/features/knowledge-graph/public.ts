@@ -13,8 +13,8 @@ export {
 } from './knowledge-graph-page';
 
 export {
-  analyzePaperRelations,
   configureGraphActions,
+  deleteGraphEntityFromInspector,
   exportGraph,
   extractEntitiesForAllPapers,
   extractEntitiesForCurrentPaper,
@@ -27,9 +27,27 @@ export {
   refreshConflictCount,
   refreshExtractionAvailability,
   refreshPendingCount,
-  RELATION_CONFIRM_TOKEN_THRESHOLD,
+  setExtractionProgress,
   type GraphActionContext,
 } from './graph-entity-actions';
+
+export {
+  configureExplanationActions,
+  currentExplanationProgress,
+  explainAllMissingEntities,
+  explainConfirmedEntities,
+  regenerateEntityExplanation,
+  BULK_EXPLAIN_CONFIRM_THRESHOLD,
+  type ExplanationActionContext,
+} from './graph-explanation-actions';
+
+export {
+  configureRelationActions,
+  analyzePaperRelations,
+  rejudgePaperRelation,
+  RELATION_CONFIRM_TOKEN_THRESHOLD,
+  type RelationActionContext,
+} from './graph-relation-actions';
 
 export { installGraphActions } from './knowledge-graph-page';
 
@@ -69,6 +87,14 @@ export {
   registerRelationReviewEvents,
   type RelationReviewDialogInput,
 } from './relation-review-dialog';
+
+export {
+  isRelationPickerOpen,
+  openRelationPaperPicker,
+  registerRelationPickerEvents,
+  type RelationPickerPaper,
+  type RelationPickerResult,
+} from './relation-paper-picker';
 
 export {
   isPapersDialogOpen,

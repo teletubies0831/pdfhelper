@@ -209,6 +209,39 @@ export { jobRepository as extractionJobRepository };
     applyRelationPlan: (plan) => knowledgeGraphRepository.applyRelationPlan(plan),
 
     /**
+     * Bridge entities and their `MENTIONS` edges, in the same transaction as the relation edges.
+     *
+     * Required for the bridge half of a run: an entity written without its edges would be an orphan
+     * node, and a retired `NO_RELATION` without its replacement would lose a decision.
+     */
+    applyEntityPlan: (plan) => knowledgeGraphRepository.applyEntityPlan(plan),
+    listEntities: () => knowledgeGraphRepository.listEntities(),
+
+    /**
+     * The verbatim text a bridge quote has to come from.
+     *
+     * The bibliographic abstract wins; most local PDFs have none, so the knowledge base's generated
+     * overview lead is the fallback — the same order the extraction prompt uses, for the same reason.
+     */
+    async loadExcerpts(paperIds) {
+      const papers = await knowledgeGraphRepository.listPapers();
+      const excerpts = new Map<string, string>();
+      for (const paperId of paperIds) {
+        const paper = papers.find((candidate) => candidate.paperId === paperId);
+        const fromLibrary = paper?.abstract?.trim();
+        if (fromLibrary) {
+          excerpts.set(paperId, fromLibrary);
+          continue;
+        }
+        const document = getKnowledgeDocument(paperId);
+        if (!document) continue;
+        const lead = overviewLeadAsAbstract(getDocumentOverviewMarkdown(document));
+        if (lead) excerpts.set(paperId, lead);
+      }
+      return excerpts;
+    },
+
+    /**
      * Vectors are not produced yet: the embedding mode defaults to `off`, and
      * generating embeddings is a separate opt-in step. Returning null keeps recall
      * on its zero-cost signals rather than silently skipping them.

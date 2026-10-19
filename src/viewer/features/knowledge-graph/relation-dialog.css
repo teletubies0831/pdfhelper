@@ -1,0 +1,209 @@
+/* --------------------------------------------------------------------------
+   Relation judgement and paper-picking dialogs.
+
+   Split out of `review-dialog.css` when that file passed the 700-line limit: these two dialogs are
+   one feature (pick papers → judge them → review the verdicts, the bridges and the refusals), so
+   their styles belong together and away from the entity-review rules.
+   -------------------------------------------------------------------------- */
+
+.knowledge-graph-relation-dialog {
+  width: min(860px, calc(100vw - 48px));
+}
+
+.knowledge-graph-relation-dialog[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.knowledge-graph-relation-hint {
+  color: #5c7290;
+  font-size: 12px;
+}
+
+.knowledge-graph-relation-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  color: #16233d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.knowledge-graph-relation-verdict {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e6f0ff;
+  color: #1f67e8;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+/* A negative verdict is not a weaker relationship — it is a different kind of
+   record, so it is coloured as a note rather than as a claim. */
+.knowledge-graph-relation-verdict-none {
+  background: #eef2f8;
+  color: #5c7290;
+}
+
+.knowledge-graph-review-row[data-negative] {
+  border-color: #e4eaf4;
+  background: #fbfdff;
+}
+
+.knowledge-graph-relation-none-note {
+  margin: 0;
+  color: #8598b3;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* Sections and the fold that keeps a wall of "no relation" below the answer. */
+.knowledge-graph-review-section {
+  margin: 4px 0 0;
+  color: #5c7290;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.knowledge-graph-negatives-toggle {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* Bridge concepts: a sub-list of the relation they belong to, so the nesting is visible. */
+.knowledge-graph-bridge-list {
+  margin: 6px 0 0;
+  padding: 0 0 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 2px solid #d7e3f5;
+  list-style: none;
+}
+
+.knowledge-graph-bridge-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.knowledge-graph-bridge-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #16233d;
+  cursor: pointer;
+}
+
+.knowledge-graph-bridge-name {
+  font-weight: 650;
+}
+
+.knowledge-graph-bridge-type {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #eef3fb;
+  color: #5c7290;
+  font-size: 10px;
+}
+
+.knowledge-graph-bridge-state {
+  color: #8a6d1f;
+  font-size: 10px;
+}
+
+.knowledge-graph-bridge-state[data-reuse] {
+  color: #2f7a56;
+}
+
+/* The hand-typed replacement for a refused verdict. */
+.knowledge-graph-manual-open {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+
+.knowledge-graph-manual-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px dashed #cfdcee;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.knowledge-graph-manual-form input[type="text"],
+.knowledge-graph-manual-form select {
+  min-height: 28px;
+  padding: 2px 8px;
+  border: 1px solid #cfdcee;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #16233d;
+  background: #ffffff;
+}
+
+.knowledge-graph-manual-name {
+  flex: 1 1 180px;
+}
+
+.knowledge-graph-manual-description {
+  flex: 1 1 220px;
+}
+
+.knowledge-graph-manual-note,
+.knowledge-graph-manual-error {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.knowledge-graph-manual-note {
+  color: #8598b3;
+}
+
+.knowledge-graph-manual-error {
+  color: #c0392b;
+}
+
+.knowledge-graph-manual-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.knowledge-graph-manual-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  color: #2f7a56;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* The picker highlights the papers that share nothing yet: those are the bridge candidates. */
+.knowledge-graph-relation-picker {
+  width: min(780px, calc(100vw - 48px));
+}
+
+.knowledge-graph-relation-picker[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.knowledge-graph-relation-picker .knowledge-graph-review-row[data-highlight] {
+  border-color: #cfe0f6;
+  background: #f7fbff;
+}
+
+.knowledge-graph-relation-picker .knowledge-graph-papers-text {
+  font-weight: 600;
+}

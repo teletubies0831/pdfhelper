@@ -4,6 +4,20 @@ export type AiConnectionCapability = 'text' | 'vision';
 export type AiTaskRouteId = 'chat' | 'translation' | 'vision';
 export type AiConnectionModelCapabilities = Record<string, AiConnectionCapability[]>;
 
+/**
+ * The DeepSeek Search / Fetch settings.
+ *
+ * Stored beside the connections but **not inside one**: the tools endpoints take no model, and a user who
+ * added 火山方舟 as their chat provider still needs a DeepSeek key to search. Empty `baseUrl` means "not
+ * configured"; an empty `apiKey` means "reuse the DeepSeek connection's key".
+ */
+export interface AiWebRetrievalSettings {
+  baseUrl: string;
+  apiKey: string;
+  count: number;
+  maxFetches: number;
+}
+
 export interface AiConnectionRecord {
   id: string;
   name: string;
@@ -27,6 +41,7 @@ export interface AiConnectionCatalogState {
   routes: Partial<Record<AiTaskRouteId, AiModelRoute>>;
   reasoning: AiReasoningMode;
   maxOutputTokens: number;
+  webRetrieval: AiWebRetrievalSettings;
 }
 
 export interface AiConnectionInput {

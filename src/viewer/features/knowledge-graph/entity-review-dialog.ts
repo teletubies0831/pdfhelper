@@ -532,6 +532,23 @@ let explainer: ((names: readonly string[]) => void) | null = null;
 function visibleNames(): string[] {
   return [...new Set(visibleRows().map((row) => row.original.name.trim()))].filter(Boolean);
 }
+
+/**
+ * Asks for the annotations the current switches call for, for the rows on screen *now*.
+ *
+ * The request only ever covers what was visible when the switch was flipped, so a row that becomes visible
+ * later — 显示低置信度候选 turned on, or new candidates arriving from an extraction — used to sit there with no
+ * gloss and no way to get one: the reader saw one row untranslated among rows that were fine. Names already
+ * answered come from the translator's cache, so this only pays for the new ones.
+ */
+function refreshAnnotationsForVisibleRows(): void {
+  if (knowledgeGraphReviewTranslateInput.checked) {
+    void annotations.setGlossEnabled(true, visibleNames());
+  }
+  if (knowledgeGraphReviewSynonymInput.checked) {
+    void annotations.setSynonymEnabled(true, visibleNames());
+  }
+}
 function sourceLabel(paperId: string): string | null {
   const title = paperTitles.get(paperId)?.trim();
   if (title) return `来源 ${title}`;
@@ -582,6 +599,8 @@ export async function refreshEntityReviewIfOpen(): Promise<void> {
   rows = buildRows(review.groups);
   droppedCount = 0;
   renderGroups();
+  // Candidates that arrived while the dialog was open are rows the translator has never seen.
+  refreshAnnotationsForVisibleRows();
 }
 
 export function registerEntityReviewEvents(): void {
@@ -590,7 +609,11 @@ export function registerEntityReviewEvents(): void {
   knowledgeGraphReviewConfirmButton.addEventListener('click', () => {
     void confirmSelection();
   });
-  knowledgeGraphReviewShowLowInput.addEventListener('change', renderGroups);
+  knowledgeGraphReviewShowLowInput.addEventListener('change', () => {
+    renderGroups();
+    // The rows that just appeared have never been sent to the translator.
+    refreshAnnotationsForVisibleRows();
+  });
   knowledgeGraphReviewTranslateInput.addEventListener('change', () => {
     void annotations.setGlossEnabled(knowledgeGraphReviewTranslateInput.checked, visibleNames());
   });

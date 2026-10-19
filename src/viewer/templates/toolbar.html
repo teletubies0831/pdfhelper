@@ -67,10 +67,22 @@
       <button class="highlight-color-history-button" type="button" data-highlight-color-history-index="2" aria-label="最近颜色 3"></button>
     </div>
     <button class="toolbar-nav-button" type="button" data-editor-mode="ink" title="自由绘制" aria-haspopup="true" aria-expanded="false" aria-controls="ink-thickness-control"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-pen" /></svg>画笔</button>
-    <label id="ink-thickness-control" class="annotation-size-control" role="group" aria-label="调节画笔粗细" hidden>
+    <label id="ink-thickness-control" class="annotation-size-control annotation-ink-control" role="group" aria-label="画笔设置" hidden>
       <span>粗细</span>
       <input id="ink-thickness" type="range" min="1" max="20" step="1" value="3" aria-label="画笔粗细" />
       <output id="ink-thickness-value" for="ink-thickness">3</output>
+      <div class="annotation-ink-colors" role="group" aria-label="画笔颜色">
+        <span>颜色</span>
+        <button class="annotation-ink-color" type="button" data-ink-color-index="0" data-ink-color="#000000" style="--ink-color: #000000" title="黑色" aria-label="黑色画笔" aria-pressed="true"></button>
+        <button class="annotation-ink-color" type="button" data-ink-color-index="1" data-ink-color="#e5484d" style="--ink-color: #e5484d" title="红色" aria-label="红色画笔" aria-pressed="false"></button>
+        <button class="annotation-ink-color" type="button" data-ink-color-index="2" data-ink-color="#1f67e8" style="--ink-color: #1f67e8" title="蓝色" aria-label="蓝色画笔" aria-pressed="false"></button>
+        <button class="annotation-ink-color" type="button" data-ink-color-index="3" data-ink-color="#1a7f47" style="--ink-color: #1a7f47" title="绿色" aria-label="绿色画笔" aria-pressed="false"></button>
+        <button class="annotation-ink-color" type="button" data-ink-color-index="4" data-ink-color="#e8590c" style="--ink-color: #e8590c" title="橙色" aria-label="橙色画笔" aria-pressed="false"></button>
+        <button class="annotation-ink-color" type="button" data-ink-color-index="5" data-ink-color="#7048e8" style="--ink-color: #7048e8" title="紫色" aria-label="紫色画笔" aria-pressed="false"></button>
+        <label class="annotation-ink-color-custom" title="自定义画笔颜色">
+          <input id="ink-color" type="color" value="#000000" aria-label="自定义画笔颜色" />
+        </label>
+      </div>
     </label>
     <button class="toolbar-nav-button" type="button" data-editor-mode="text" title="在页面上添加文本"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-note" /></svg>批注</button>
     <button id="erase-selected-annotation" class="toolbar-nav-button" type="button" title="橡皮擦：仅删除拖过的画笔线段" aria-pressed="false" aria-haspopup="true" aria-expanded="false" aria-controls="ink-eraser-size-control"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eraser" /></svg>擦除</button>

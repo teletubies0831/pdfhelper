@@ -47,25 +47,14 @@
   font-weight: 700;
 }
 
-.knowledge-graph-status {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: #5c7290;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.knowledge-graph-status.error {
-  color: #c0392b;
-  font-weight: 600;
-}
-
 .knowledge-graph-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Pushed to the right edge of the header: left-packed right after the title they read as part of the title,
+     and the empty band they left on the right looked like a hole in the toolbar. No wrapping is added —
+     the row keeps its single line and simply ends at the right edge, which is what the user asked for. */
+  margin-left: auto;
 }
 
 .knowledge-graph-action {
@@ -490,6 +479,13 @@
 .knowledge-graph-evidence-source {
   color: #8598b3;
   font-size: 11px;
+}
+
+/* The floating task toast reuses the knowledge-base plate (`.knowledge-background-task-toast`: spinner,
+   message, progress bar, success/error states) and only moves it down past this page's header and counts
+   row, so it floats over the canvas instead of covering the controls that started the task. */
+.knowledge-graph-task-notice {
+  top: 128px;
 }
 
 /* Narrow workspaces drop the inspector below the canvas rather than crushing it. */

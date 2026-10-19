@@ -9,3 +9,4 @@
 export * from './feature-models';
 export * from './app-view-persistence';
 export * from './assistant-state';
+export * from './focus-release';

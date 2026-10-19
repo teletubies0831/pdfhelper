@@ -74,7 +74,10 @@ export function createAnnotationController(
     slot.error = '';
     options.onChange();
     try {
-      slot.values = new Map(await source(unique));
+      const fresh = await source(unique);
+      // Merged, never replaced. Turning 显示低置信度候选 on asks only about the rows that just appeared, and a
+      // fresh map would drop the glosses already paid for on the rows above it.
+      for (const [name, text] of fresh) slot.values.set(name, text);
       slot.status = 'ready';
     } catch (error) {
       slot.status = 'error';

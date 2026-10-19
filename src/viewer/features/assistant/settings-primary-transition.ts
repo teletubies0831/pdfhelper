@@ -1,3 +1,5 @@
+import { releaseFocusBeforeHiding } from '../../app/public';
+
 export type SettingsPrimaryPanelName =
   | 'general'
   | 'models'
@@ -33,6 +35,9 @@ function settlePanels(
     const visible = panel.dataset.settingsPanel === visibleName;
     panel.hidden = !visible;
     panel.inert = !visible;
+    // A control inside the panel being hidden may still hold focus after the click that switched tabs; Chromium
+    // refuses `aria-hidden` on an ancestor of the focused element, so focus leaves first.
+    if (!visible) releaseFocusBeforeHiding(panel);
     panel.toggleAttribute('aria-hidden', !visible);
   }
 }
@@ -64,6 +69,7 @@ export function showSettingsPrimaryPanel(
   incoming.hidden = false;
   outgoing.inert = true;
   incoming.inert = false;
+  releaseFocusBeforeHiding(outgoing);
   outgoing.setAttribute('aria-hidden', 'true');
   incoming.removeAttribute('aria-hidden');
   container.classList.add('is-primary-transitioning');

@@ -8,6 +8,11 @@ import {
 } from '../src/modules/knowledge-graph/domain/graph-query.ts';
 import { buildSharedEntityBridges } from '../src/modules/knowledge-graph/domain/shared-entity-bridges.ts';
 import {
+  deleteGraphEntity,
+  describeEntityDeletion,
+  planEntityDeletion,
+} from '../src/modules/knowledge-graph/application/entity-deletion.ts';
+import {
   createEdgeOriginKey,
   clampConfidence,
   normalizeEdgeEndpoints,
@@ -26,7 +31,9 @@ import { shouldWriteProjection } from '../src/modules/knowledge-graph/domain/pap
 import {
   buildEntityTranslationPrompt,
   createEntityTranslator,
+  GLOSS_ATTEMPT_LIMIT,
   needsTranslation,
+  normalizeGlossTerm,
   parseEntityTranslations,
   MAX_TERMS_PER_REQUEST,
 } from '../src/viewer/features/knowledge-graph/entity-translation-plan.ts';
@@ -651,6 +658,13 @@ assert.equal(
   'exactly the requested terms, one per line',
 );
 assert.match(glossPrompt, /\{"items":\[\{"term":"原文术语","zh":"中文译名"\}\]\}/, 'the reply shape is stated');
+// The rule that used to leak: "专有名词保留原文，可以补充中文说明" let the model echo `Paar's heuristic` back
+// unchanged, and the parser then (correctly) refused to show a name as its own translation — so the one kind
+// of name a reader most needs a gloss for was the kind that never got one.
+assert.match(glossPrompt, /必须跟一个中文类别词/, 'proper nouns get a Chinese category word, not an echo');
+assert.match(glossPrompt, /不能把原文照抄回来/, 'echoing the term back is explicitly not an answer');
+assert.match(glossPrompt, /必须在 items 里出现且只出现一次/, 'every term must be answered: coverage is required');
+assert.doesNotMatch(glossPrompt, /不确定的术语保留原文/, 'the "keep the original when unsure" escape hatch is gone');
 
 // The documented shape is read back.
 assert.deepEqual(
@@ -665,6 +679,28 @@ assert.deepEqual(
   [...parseEntityTranslations('{"boyar-perralta heuristic":"Boyar-Peralta 启发式"}', ['Boyar-Perralta heuristic'])],
   [['Boyar-Perralta heuristic', 'Boyar-Peralta 启发式']],
 );
+// The model echoes the term it was given, but not byte for byte: a typographic apostrophe, a hyphen read as
+// a space, a trailing period. Keyed on the raw string those answers matched no request and were silently
+// dropped — which is exactly why the one name with an apostrophe never got a gloss.
+assert.equal(normalizeGlossTerm('Paar’s  heuristic.'), normalizeGlossTerm("Paar's heuristic"));
+assert.deepEqual(
+  [...parseEntityTranslations(
+    '{"items":[{"term":"Paar\u2019s heuristic","zh":"Paar 启发式"},{"term":"DPLL.","zh":"DPLL 算法"}]}',
+    ["Paar's heuristic", 'DPLL'],
+  )],
+  [["Paar's heuristic", 'Paar 启发式'], ['DPLL', 'DPLL 算法']],
+  'an answer about a name that differs only in punctuation still lands on that name',
+);
+// Two requested names that differ only in punctuation are ambiguous: refuse rather than put the gloss on the
+// wrong row.
+assert.equal(
+  parseEntityTranslations(
+    '{"items":[{"term":"AC.3 algorithm","zh":"AC-3 算法"}]}',
+    ['AC-3 algorithm', 'AC 3 algorithm'],
+  ).size,
+  0,
+  'an ambiguous match is dropped, not guessed',
+);
 // Nothing that was not asked for survives, and a refusal is not a translation.
 assert.equal(
   parseEntityTranslations(
@@ -673,6 +709,12 @@ assert.equal(
   ).size,
   0,
   'unknown terms, blank glosses and echoed originals are all dropped',
+);
+// An echo that differs only in punctuation and case is still an echo.
+assert.equal(
+  parseEntityTranslations('{"items":[{"term":"Paar\u2019s heuristic","zh":"Paar\'s Heuristic"}]}', ["Paar's heuristic"]).size,
+  0,
+  'a re-cased, re-punctuated original is not a translation either',
 );
 
 // One request for the whole batch, and a second call for the same names costs nothing.
@@ -695,15 +737,38 @@ assert.equal(
   assert.equal((await translator.translate(['图神经网络'])).size, 0);
   assert.equal(prompts.length, 1);
 
-  // A refused term is remembered as "no gloss" so it is not retried on every opening.
+  // A reply that answered some of the batch is finished by re-asking for the rest, in the same call. That is
+  // what a model skipping a line looks like from here, and it used to leave those rows unglossed for good.
+  const partialPrompts = [];
+  const partial = createEntityTranslator(async (prompt) => {
+    partialPrompts.push(prompt);
+    return partialPrompts.length === 1
+      ? '{"items":[{"term":"SAT solver","zh":"SAT 求解器"}]}'
+      : '{"items":[{"term":"DPLL","zh":"DPLL 算法"}]}';
+  });
+  assert.deepEqual(
+    [...(await partial.translate(['SAT solver', 'DPLL']))],
+    [['SAT solver', 'SAT 求解器'], ['DPLL', 'DPLL 算法']],
+  );
+  assert.equal(partialPrompts.length, 2, 'the unanswered term is asked for again');
+  assert.equal((partialPrompts[1].match(/^- /gm) ?? []).length, 1, 'and only that term is re-asked');
+
+  // A reply that answered nothing at all is a refusal, not a truncation: re-asking it immediately would spend
+  // the same tokens for the same answer. It is remembered — but as an *attempt*, so a later opening (the user
+  // flipping 中文释义 off and on) tries again instead of that row being unglossable for the whole session.
   const refuserPrompts = [];
   const refuser = createEntityTranslator(async (prompt) => {
     refuserPrompts.push(prompt);
     return '{"items":[]}';
   });
-  assert.equal((await refuser.translate(['mystery term'])).size, 0);
-  assert.equal((await refuser.translate(['mystery term'])).size, 0);
-  assert.equal(refuserPrompts.length, 1, 'a refusal is cached too');
+  for (let round = 0; round < GLOSS_ATTEMPT_LIMIT + 2; round += 1) {
+    assert.equal((await refuser.translate(['mystery term'])).size, 0);
+  }
+  assert.equal(
+    refuserPrompts.length,
+    GLOSS_ATTEMPT_LIMIT,
+    'a name is retried on later calls, and only given up on after GLOSS_ATTEMPT_LIMIT tries',
+  );
 }
 
 // The batch is capped: a dialog with hundreds of rows must not become one enormous request.
@@ -1546,5 +1611,106 @@ assert.equal(distanceToSegment(5, 0, 0, 0, 10, 0), 0);
 assert.equal(distanceToSegment(-3, 0, 0, 0, 10, 0), 3);
 // A degenerate segment (both endpoints equal) must not divide by zero.
 assert.equal(distanceToSegment(3, 4, 0, 0, 0, 0), 5);
+
+// ---------------------------------------------------------------------------
+// Deleting a node: entities only, and their edges go with them.
+//
+// A paper node is a knowledge-base projection, so deleting it in the graph would disagree with the
+// knowledge base until the next sync put it back. And an edge whose endpoint is gone breaks the
+// renderer's one hard invariant, so the cascade is part of the plan, not an afterthought.
+// ---------------------------------------------------------------------------
+const deletePapers = [paper('p1'), paper('p2')];
+const deleteEntities = [
+  entity('entity:hub', 'Shared Hub'),
+  entity('entity:leaf', 'Private Leaf'),
+  // Spread rather than a third argument: the `entity` helper takes (id, name) only, and a silently
+  // ignored override is how this test first asserted the wrong thing.
+  { ...entity('entity:tombstone', 'Old Name'), status: 'merged', mergedInto: 'entity:hub' },
+];
+const deleteEdges = [
+  edge({ originKey: 'MENTIONS|p1|entity:hub', source: 'p1', target: 'entity:hub' }),
+  edge({ originKey: 'MENTIONS|p2|entity:hub', source: 'p2', target: 'entity:hub' }),
+  edge({ originKey: 'MENTIONS|p1|entity:leaf', source: 'p1', target: 'entity:leaf' }),
+];
+
+const deletable = planEntityDeletion({
+  entityId: 'entity:hub',
+  entities: deleteEntities,
+  edges: deleteEdges,
+  papers: deletePapers,
+});
+// The hub is the survivor of a merge, so it is refused — deleting it would leave the tombstone
+// pointing at nothing.
+assert.equal(deletable.allowed, false);
+assert.match(deletable.reason, /已合并/);
+
+const leafPlan = planEntityDeletion({
+  entityId: 'entity:leaf',
+  entities: deleteEntities,
+  edges: deleteEdges,
+  papers: deletePapers,
+});
+assert.equal(leafPlan.allowed, true);
+assert.deepEqual(leafPlan.edgeIds, ['edge:MENTIONS|p1|entity:leaf'], 'only the edges touching it');
+assert.equal(leafPlan.paperCount, 1, 'and it knows how many papers are involved');
+assert.equal(leafPlan.keywordNode, false);
+assert.match(describeEntityDeletion(leafPlan, 'Private Leaf'), /1 条边会一起删除/);
+assert.match(
+  describeEntityDeletion(leafPlan, 'Private Leaf'),
+  /知识库中的文献也不会被删除/,
+  'the copy promises the papers are untouched',
+);
+
+// A paper id is refused, whatever the caller passes.
+const paperPlan = planEntityDeletion({
+  entityId: 'p1',
+  entities: deleteEntities,
+  edges: deleteEdges,
+  papers: deletePapers,
+});
+assert.equal(paperPlan.allowed, false);
+assert.match(paperPlan.reason, /知识库/);
+
+// An unknown id and a tombstone are refused with their own reasons, not a generic failure.
+assert.match(
+  planEntityDeletion({ entityId: 'entity:nope', entities: deleteEntities, edges: [], papers: deletePapers }).reason,
+  /已经不在图谱里/,
+);
+assert.match(
+  planEntityDeletion({
+    entityId: 'entity:tombstone', entities: deleteEntities, edges: [], papers: deletePapers,
+  }).reason,
+  /已被合并的旧记录/,
+);
+
+// A keyword node can be deleted, but the confirmation says it comes back on the next projection —
+// otherwise the node reappearing would look like a broken delete.
+const keywordPlan = planEntityDeletion({
+  entityId: 'keyword:attention',
+  entities: [entity('keyword:attention', 'attention', { type: 'Concept' })],
+  edges: [edge({ originKey: 'HAS_KEYWORD|p1|keyword:attention', type: 'HAS_KEYWORD', source: 'p1', target: 'keyword:attention' })],
+  papers: deletePapers,
+});
+assert.equal(keywordPlan.allowed, true);
+assert.equal(keywordPlan.keywordNode, true);
+assert.match(describeEntityDeletion(keywordPlan, 'attention'), /下次同步图谱时会重新出现/);
+
+// The service re-reads the store before deleting: a plan built from a stale page snapshot could leave
+// edges that were added meanwhile pointing at a node that no longer exists.
+const deletionCalls = [];
+const deletionPorts = {
+  async listEntities() { return deleteEntities; },
+  async listEdges() { return deleteEdges; },
+  async listPapers() { return deletePapers; },
+  async deleteEntityCascade(entityId, edgeIds) { deletionCalls.push({ entityId, edgeIds }); },
+};
+const deletionResult = await deleteGraphEntity('entity:leaf', deletionPorts);
+assert.equal(deletionResult.deleted, true);
+assert.equal(deletionResult.edgesDeleted, 1);
+assert.deepEqual(deletionCalls, [{ entityId: 'entity:leaf', edgeIds: ['edge:MENTIONS|p1|entity:leaf'] }]);
+
+const refusedDeletion = await deleteGraphEntity('p1', deletionPorts);
+assert.equal(refusedDeletion.deleted, false);
+assert.equal(deletionCalls.length, 1, 'a refused delete calls the cascade at all');
 
 console.log('Knowledge graph contract tests passed.');

@@ -641,9 +641,43 @@
   box-shadow: 0 0 0 3px rgb(31 103 232 / 10%);
 }
 
+/* 联网检索: the DeepSeek Search / Fetch settings. Two short number fields share a row so the block stays
+   compact under 任务分配 — it is a secondary setting, not a second routing table. */
+
+/* The tools address is fixed, so it is shown as a value rather than an editable field: a read-only input keeps the
+   text selectable and screen-reader friendly, unlike `disabled`. */
+.settings-field input.settings-readonly-input {
+  border-color: #e6ebf2;
+  background: #f7f9fc;
+  color: #5b6b82;
+  cursor: default;
+}
+
+.settings-field input.settings-readonly-input:focus {
+  border-color: #e6ebf2;
+  box-shadow: none;
+}
+
+.settings-web-retrieval {
+  display: grid;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.settings-web-retrieval-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 @media (max-width: 720px) {
   .settings-connection-grid {
     grid-template-columns: 1fr;
+  }
+
+  .settings-web-retrieval-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
 
   .settings-routing-row {

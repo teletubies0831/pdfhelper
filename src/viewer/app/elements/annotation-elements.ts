@@ -26,6 +26,18 @@ export const inkThicknessInput =
 export const inkThicknessValue =
   requiredElement<HTMLOutputElement>("ink-thickness-value");
 
+/**
+ * The pen's colour controls: preset swatches plus one native picker for anything else.
+ *
+ * The palette itself lives in the template (`data-ink-color`), so the colours and their names have a
+ * single source that a DOM test can read without booting the feature.
+ */
+export const inkColorButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-ink-color-index]"),
+);
+
+export const inkColorInput = requiredElement<HTMLInputElement>("ink-color");
+
 export const inkEraserSizeControl =
   requiredElement<HTMLElement>("ink-eraser-size-control");
 

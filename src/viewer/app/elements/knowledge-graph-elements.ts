@@ -12,10 +12,6 @@ export const knowledgeGraphBackButton = requiredElement<HTMLButtonElement>(
   "knowledge-graph-back",
 );
 
-export const knowledgeGraphStatusElement = requiredElement<HTMLElement>(
-  "knowledge-graph-status",
-);
-
 export const knowledgeGraphRefreshButton = requiredElement<HTMLButtonElement>(
   "knowledge-graph-refresh",
 );
@@ -120,10 +116,6 @@ export const knowledgeGraphBatchButton = requiredElement<HTMLButtonElement>(
   "knowledge-graph-batch",
 );
 
-export const knowledgeGraphExtractProgressElement = requiredElement<HTMLElement>(
-  "knowledge-graph-extract-progress",
-);
-
 export const knowledgeGraphPendingButton = requiredElement<HTMLButtonElement>(
   "knowledge-graph-pending",
 );
@@ -196,6 +188,11 @@ export const knowledgeGraphReviewCloseButton = requiredElement<HTMLButtonElement
 
 export const knowledgeGraphMergeButton = requiredElement<HTMLButtonElement>(
   "knowledge-graph-merge",
+);
+
+/** One click to give every entity without a meaning one: batched, and it says how many first. */
+export const knowledgeGraphExplainAllButton = requiredElement<HTMLButtonElement>(
+  "knowledge-graph-explain",
 );
 
 export const knowledgeGraphRelationButton = requiredElement<HTMLButtonElement>(
@@ -397,4 +394,36 @@ export const knowledgeGraphRelationDiscardButton = requiredElement<HTMLButtonEle
 
 export const knowledgeGraphRelationCloseButton = requiredElement<HTMLButtonElement>(
   "knowledge-graph-relation-close",
+);
+
+export const knowledgeGraphRelationPickerDialog = requiredElement<HTMLDialogElement>(
+  "knowledge-graph-relation-picker-dialog",
+);
+
+export const knowledgeGraphRelationPickerTitleElement = requiredElement<HTMLElement>(
+  "knowledge-graph-relation-picker-title",
+);
+
+export const knowledgeGraphRelationPickerSummaryElement = requiredElement<HTMLElement>(
+  "knowledge-graph-relation-picker-summary",
+);
+
+export const knowledgeGraphRelationPickerGroupsElement = requiredElement<HTMLElement>(
+  "knowledge-graph-relation-picker-groups",
+);
+
+export const knowledgeGraphRelationPickerSelectionElement = requiredElement<HTMLElement>(
+  "knowledge-graph-relation-picker-selection",
+);
+
+export const knowledgeGraphRelationPickerRunButton = requiredElement<HTMLButtonElement>(
+  "knowledge-graph-relation-picker-run",
+);
+
+export const knowledgeGraphRelationPickerCancelButton = requiredElement<HTMLButtonElement>(
+  "knowledge-graph-relation-picker-cancel",
+);
+
+export const knowledgeGraphRelationPickerCloseButton = requiredElement<HTMLButtonElement>(
+  "knowledge-graph-relation-picker-close",
 );
