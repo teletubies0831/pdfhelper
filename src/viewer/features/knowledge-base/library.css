@@ -587,6 +587,21 @@
 .knowledge-pdf-actions button { min-height: 34px; padding: 0 12px; border: 1px solid #d9e0eb; border-radius: 8px; background: #fff; cursor: pointer; }
 .knowledge-pdf-actions .knowledge-ai-intro-button { border-color: #b7d0ff; color: #1769e0; background: #f5f8ff; }
 .knowledge-pdf-actions .danger-button { color: #b42318; }
+/* 检索相关论文: the paid action sits between the two free ones, so it is styled as a peer rather than a call to
+   action — one colour step quieter than 查看概览, and unmistakably inert when there is no DeepSeek key. */
+.knowledge-pdf-actions .knowledge-related-button { color: #3c4d66; font-size: 13px; line-height: 1.25; }
+.knowledge-pdf-actions .knowledge-related-button:hover { border-color: #9bbcff; background: #f5f8ff; color: #1769e0; }
+.knowledge-pdf-actions .knowledge-related-button[aria-disabled="true"] {
+  border-color: #e6ebf2;
+  background: #f7f9fc;
+  color: #9aa8bc;
+  cursor: not-allowed;
+}
+.knowledge-pdf-actions .knowledge-related-button[aria-disabled="true"]:hover {
+  border-color: #e6ebf2;
+  background: #f7f9fc;
+  color: #9aa8bc;
+}
 .knowledge-pdf-body .index-ready { color: #067647; }
 .knowledge-pdf-body .index-indexing { color: #175cd3; }
 .knowledge-pdf-body .index-error { color: #b42318; }

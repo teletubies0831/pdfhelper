@@ -3,15 +3,14 @@
     <header class="knowledge-graph-header">
       <button id="knowledge-graph-back" class="knowledge-graph-back-button" type="button">← 返回 PDF</button>
       <h1 class="knowledge-graph-title">知识图谱</h1>
-      <div id="knowledge-graph-status" class="knowledge-graph-status" role="status" aria-live="polite"></div>
       <div class="knowledge-graph-header-actions">
         <button id="knowledge-graph-extract" class="knowledge-graph-action" type="button" title="对当前打开的文献全文抽取候选实体">抽取候选实体</button>
         <button id="knowledge-graph-batch" class="knowledge-graph-action" type="button" title="对图谱里的全部文献逐篇抽取（正文未变化的会跳过，不消耗 Token）">批量抽取</button>
-        <span id="knowledge-graph-extract-progress" class="knowledge-graph-extract-progress" role="status" aria-live="polite"></span>
         <button id="knowledge-graph-pending" class="knowledge-graph-action" type="button" title="确认待入图的候选实体">
           待确认 <span id="knowledge-graph-pending-count">0</span>
         </button>
         <button id="knowledge-graph-merge" class="knowledge-graph-action" type="button" title="合并同义实体">合并同义实体</button>
+        <button id="knowledge-graph-explain" class="knowledge-graph-action" type="button" title="给图谱里所有还没有解释的实体补一句含义（分批调用，会消耗 Token）">补全解释</button>
         <button id="knowledge-graph-relation" class="knowledge-graph-action" type="button" title="按需判断文献之间的关系：先免费召回，只对最相关的几对调用模型；已判断过的会跳过">分析关系</button>
         <button id="knowledge-graph-metrics" class="knowledge-graph-action" type="button" title="查看图谱质量统计：候选采纳率、实体复用率、证据覆盖率与改进建议">统计</button>
         <button id="knowledge-graph-conflicts" class="knowledge-graph-action" type="button" title="同一对文献存在互相矛盾的结论时，在这里决定保留哪一条">

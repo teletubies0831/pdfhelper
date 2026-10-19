@@ -1,6 +1,5 @@
 import type { AiConfig, AiDocumentOverviewProgress } from "../../modules/ai/public";
 import type { AiProviderAdapter } from "./provider-runtime";
-import { appendRelatedLiterature } from "./related-literature-service";
 import { requestOverviewCompletion } from "./overview-completion";
 
 const OVERVIEW_INSTRUCTIONS = [
@@ -65,8 +64,11 @@ export async function generateDocumentOverview(
       content: `${documentHeader}\n\n${sourceLabel}：\n${material}`,
     }]);
   const enrichOverview = async (content: string, model: string) => {
-    await onProgress?.({ content, complete: true, message: "概览正文已生成，正在完成补充信息。" });
-    return { content: await appendRelatedLiterature(adapter, config, content), model };
+    // The 「相关论文」 section is *not* built here any more: it costs a retrieval call and a model call, and the
+    // user asks for it explicitly from the saved overview (「检索相关论文」). Generating it unasked also made
+    // every overview slower for readers of books, manuals and contracts, which never needed it.
+    await onProgress?.({ content, complete: true, message: "概览正文已生成。" });
+    return { content, model };
   };
 
   try {

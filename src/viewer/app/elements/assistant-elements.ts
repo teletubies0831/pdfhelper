@@ -74,24 +74,19 @@ export const deepSeekMaxOutputTokensInput = requiredElement<HTMLInputElement>(
 export const deepSeekThinkingSelect =
   requiredElement<HTMLSelectElement>("deepseek-thinking");
 
-export const chatReasoningControl = requiredElement<HTMLElement>(
-  "chat-reasoning-control",
-);
-
+/** The reasoning switch. Its state is carried by colour, so the button is only a switch, not a menu. */
 export const chatReasoningTrigger = requiredElement<HTMLButtonElement>(
   "chat-reasoning-trigger",
 );
 
-export const chatReasoningValue = requiredElement<HTMLElement>(
-  "chat-reasoning-value",
-);
-
-export const chatReasoningMenu = requiredElement<HTMLElement>(
-  "chat-reasoning-menu",
-);
-
-export const chatReasoningOptionButtons = Array.from(
-  document.querySelectorAll<HTMLButtonElement>("[data-chat-reasoning-value]"),
+/**
+ * The web-search switch, next to it and the same shape.
+ *
+ * Kept separate from `chat-reasoning-trigger` on purpose: the two capabilities cost money per use and are
+ * switched independently, so one shared control would make "which one is on" ambiguous in the UI.
+ */
+export const chatWebSearchTrigger = requiredElement<HTMLButtonElement>(
+  "chat-web-search-trigger",
 );
 
 export const deepSeekBaseUrlInput =
@@ -107,6 +102,27 @@ export const saveDeepSeekSettingsButton = requiredElement<HTMLButtonElement>(
 
 export const testDeepSeekButton = requiredElement<HTMLButtonElement>("test-deepseek");
 export const testSelectedModelsButton = requiredElement<HTMLButtonElement>("test-selected-models");
+
+/**
+ * The 「联网检索」 block: DeepSeek's Search / Fetch settings.
+ *
+ * Its own fields rather than a per-connection one, because these endpoints take no model: the settings belong
+ * to the DeepSeek *service*, and a user whose chat runs on another provider still needs them.
+ */
+export const webRetrievalBaseUrlInput =
+  requiredElement<HTMLInputElement>("web-retrieval-base-url");
+
+export const webRetrievalApiKeyInput =
+  requiredElement<HTMLInputElement>("web-retrieval-api-key");
+
+export const webRetrievalCountInput =
+  requiredElement<HTMLInputElement>("web-retrieval-count");
+
+export const webRetrievalMaxFetchesInput =
+  requiredElement<HTMLInputElement>("web-retrieval-max-fetches");
+
+export const testWebRetrievalButton =
+  requiredElement<HTMLButtonElement>("test-web-retrieval");
 
 export const visionSettingsStatus = requiredElement<HTMLElement>(
   "vision-settings-status",

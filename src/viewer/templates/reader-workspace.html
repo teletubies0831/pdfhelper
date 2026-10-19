@@ -145,21 +145,22 @@
                       <img src="/resources/ai-settings/image.svg" alt="" aria-hidden="true" />
                     </button>
                     <span id="chat-provider-status">AI 尚未配置</span>
-                    <div id="chat-reasoning-control" class="chat-reasoning-control" title="设置聊天回答是否启用思考模式">
+                    <!-- Two capability toggles, one pattern: colour is the state (blue = on, grey = off).
+                         The reasoning mode still lives in the hidden select, which is what the rest of the
+                         app reads; the button is only its switch. -->
+                    <div class="chat-capability-toggles">
                       <select id="deepseek-thinking" aria-label="聊天思考模式" hidden>
                         <option value="disabled">关闭</option>
                         <option value="enabled">开启</option>
                       </select>
-                      <button id="chat-reasoning-trigger" class="chat-reasoning-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="chat-reasoning-menu">
-                        <svg class="chat-reasoning-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
-                        <span class="chat-reasoning-trigger-label">思考</span>
-                        <span id="chat-reasoning-value" class="chat-reasoning-value">关闭</span>
-                        <svg class="chat-reasoning-chevron" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-chevron-down" /></svg>
+                      <button id="chat-reasoning-trigger" class="chat-capability-toggle" type="button" aria-pressed="false" title="思考模式：关闭（点击切换）">
+                        <svg class="chat-capability-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
+                        <span>思考</span>
                       </button>
-                      <div id="chat-reasoning-menu" class="chat-reasoning-menu" role="listbox" aria-label="聊天思考模式" hidden>
-                        <button type="button" role="option" aria-selected="true" data-chat-reasoning-value="disabled">关闭</button>
-                        <button type="button" role="option" aria-selected="false" data-chat-reasoning-value="enabled">开启</button>
-                      </div>
+                      <button id="chat-web-search-trigger" class="chat-capability-toggle" type="button" aria-pressed="false" aria-disabled="true" title="联网搜索需要先配置 DeepSeek API Key">
+                        <svg class="chat-capability-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-globe" /></svg>
+                        <span>联网</span>
+                      </button>
                     </div>
                   </div>
                   <button id="chat-send" class="primary-button" type="submit">发送</button>
@@ -284,6 +285,47 @@
                         <span><strong>页面与图表识别</strong><small>截图、公式、图表和页面布局</small></span>
                         <select id="vision-route-summary"><option value="">请先添加视觉模型连接</option></select>
                       </label>
+                    </div>
+
+                    <div class="settings-section-divider" role="separator"></div>
+                    <div class="settings-section-heading settings-web-retrieval-heading">
+                      <div>
+                        <strong>联网检索</strong>
+                        <p>给「相关论文」补充网页检索。只有主动点击检索时才调用，按成功请求计费（约 ¥0.005 一次）。</p>
+                      </div>
+                      <div class="settings-section-actions">
+                        <button id="test-web-retrieval" class="settings-outline-button" type="button">测试联网检索</button>
+                      </div>
+                    </div>
+                    <div class="settings-web-retrieval">
+                      <label class="settings-field">
+                        <span>API 地址</span>
+                        <input id="web-retrieval-base-url" class="settings-readonly-input" type="url" autocomplete="off" spellcheck="false" value="https://api.deepseek.com/v1/tools" readonly aria-readonly="true" />
+                        <small>固定为 DeepSeek 的 Search / Fetch 接口地址，不包含 /search 或 /fetch。</small>
+                      </label>
+                      <label class="settings-field">
+                        <span>API Key</span>
+                        <span class="settings-secret-field">
+                          <input id="web-retrieval-api-key" type="password" autocomplete="off" placeholder="请填写 DeepSeek API Key" />
+                          <button type="button" data-toggle-secret="web-retrieval-api-key" aria-label="显示或隐藏 API Key">◉</button>
+                        </span>
+                        <small>只有 DeepSeek 的密钥能用于这个接口；其他供应商的密钥会返回 401。</small>
+                      </label>
+                      <div class="settings-web-retrieval-row">
+                        <label class="settings-field">
+                          <span>候选条数</span>
+                          <input id="web-retrieval-count" type="number" min="3" max="20" step="1" value="8" inputmode="numeric" />
+                          <small>一次检索返回多少条候选；条数不影响单价。</small>
+                        </label>
+                        <label class="settings-field">
+                          <span>补抓正文上限</span>
+                          <input id="web-retrieval-max-fetches" type="number" min="0" max="3" step="1" value="1" inputmode="numeric" />
+                          <small>候选正文缺失时最多补抓几篇；0 表示不补抓。</small>
+                        </label>
+                      </div>
+                      <p class="settings-privacy-note">
+                        检索结果来自公开网页，可能包含错误或过期信息；结果里的链接会逐字引用，便于点开核对。
+                      </p>
                     </div>
 
                     <details class="settings-advanced">

@@ -11,6 +11,7 @@
 @import url("../../src/viewer/features/vocabulary-library/styles.css");
 @import url("../../src/viewer/features/knowledge-graph/styles.css");
 @import url("../../src/viewer/features/knowledge-graph/review-dialog.css");
+@import url("../../src/viewer/features/knowledge-graph/relation-dialog.css");
 @import url("../../src/viewer/features/vocabulary-library/editor-mode.css");
 @import url("../../src/viewer/features/translation/styles.css");
 @import url("../../src/viewer/styles/reader-visual-refresh.css");

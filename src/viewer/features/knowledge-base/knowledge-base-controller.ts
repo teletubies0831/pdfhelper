@@ -39,6 +39,11 @@ import {
 } from "./knowledge-corpus-repository";
 import { syncCurrentPdfLibraryButton } from "./current-pdf-add-to-library";
 import { openKnowledgePdfOverview, registerKnowledgePdfOverviewEvents } from "./knowledge-pdf-overview";
+import {
+  isRelatedPapersSearchRunning,
+  relatedPapersAvailability,
+  searchRelatedPapers,
+} from "./knowledge-related-papers";
 import { persistCurrentAppViewState, resolvedReadingMode, selectedKnowledgeRecordKey, SavedKnowledgeNote } from "../../app/public";
 import { KnowledgeItem } from "../../app/public";
 
@@ -253,6 +258,15 @@ function renderCorpusDocuments(
       : item.overviewStatus === "generating"
         ? "处理中…"
         : "生成概览";
+    // 「检索相关论文」 sits between 查看概览 and 移出知识库: it belongs with the two things the user already does
+    // with a document here, and it keeps the money-spending action out of the overview dialog.
+    const related = relatedPapersAvailability(item);
+    const relatedRunning = isRelatedPapersSearchRunning(item.documentId);
+    const relatedLabel = relatedRunning
+      ? "检索中…"
+      : item.relatedLiteratureMarkdown?.trim()
+        ? "重新检索"
+        : "检索相关论文";
     return `<article class="knowledge-pdf-card" data-document-id="${escapeCorpusHtml(item.documentId)}">
       <div class="knowledge-pdf-icon">PDF</div>
       <div class="knowledge-pdf-body">
@@ -265,6 +279,7 @@ function renderCorpusDocuments(
       </div>
       <div class="knowledge-pdf-actions">
         <button type="button" class="knowledge-ai-intro-button" data-introduce-document="${escapeCorpusHtml(item.documentId)}">${overviewButtonText}</button>
+        <button type="button" class="knowledge-related-button" data-search-related="${escapeCorpusHtml(item.documentId)}"${related.available && !relatedRunning ? "" : ' aria-disabled="true"'} title="${escapeCorpusHtml(related.reason)}">${relatedLabel}</button>
         <button type="button" class="danger-button" data-remove-document="${escapeCorpusHtml(item.documentId)}">移出知识库</button>
       </div>
     </article>`;
@@ -338,6 +353,16 @@ export function registerKnowledgeCorpusEvents(): void {
   });
   knowledgeListElement.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
+    const related = target.closest<HTMLButtonElement>("[data-search-related]");
+    if (related?.dataset.searchRelated) {
+      const item = listKnowledgeDocuments()
+        .find((document) => document.documentId === related.dataset.searchRelated);
+      // `aria-disabled` rather than `disabled`: a disabled button cannot be hovered, and its tooltip is the only
+      // thing that explains what to do first.
+      if (item && !related.getAttribute("aria-disabled")) void searchRelatedPapers(item);
+      else if (item) related.title = relatedPapersAvailability(item).reason;
+      return;
+    }
     const remove = target.closest<HTMLButtonElement>("[data-remove-document]");
     if (remove?.dataset.removeDocument) {
       if (!window.confirm("将这份 PDF 移出知识库吗？它将不再参与跨文献检索。")) return;

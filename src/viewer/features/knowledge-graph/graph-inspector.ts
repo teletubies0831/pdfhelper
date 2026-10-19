@@ -35,6 +35,14 @@ export interface InspectorActions {
    * missing when the confirm-time call failed or the entity predates the feature.
    */
   explainEntity(entityName: string): void;
+  /**
+   * Deletes one entity **and every edge that touches it**.
+   *
+   * Only entities: a paper node is a knowledge-base projection, so removing it here would disagree with
+   * the knowledge base until the next sync put it back. The action is offered only by the entity
+   * inspector, and the module refuses a paper id even if one arrives.
+   */
+  deleteEntity(entityId: string, entityName: string): void;
 }
 
 function appendMetaRow(
@@ -370,6 +378,20 @@ export function renderEntityInspector(
     appendSectionTitle(container, '原文证据');
     container.append(buildEvidenceList(entity.evidence, papersById, actions));
   }
+
+  // Deleting a node is the one destructive action in this panel, so it sits last, on its own row, in
+  // the destructive style: it must be findable but never the thing the thumb lands on.
+  appendSectionTitle(container, '维护');
+  const danger = document.createElement('div');
+  danger.className = 'knowledge-graph-inspector-actions';
+  const remove = createActionButton(
+    '删除这个节点',
+    () => actions.deleteEntity(entity.entityId, entity.name),
+  );
+  remove.classList.add('knowledge-graph-action-danger');
+  remove.title = '删除该实体以及它的全部连线（论文节点由知识库管理，不在这里删除）';
+  danger.append(remove);
+  container.append(danger);
 }
 
 export function renderEdgeInspector(
@@ -487,17 +509,22 @@ function buildEvidenceList(
     listItem.append(quote);
 
     const paper = papersById.get(item.paperId);
+    // Evidence can come from an abstract or an overview rather than a page of the PDF (bridge concepts
+    // are verified against the excerpt that was sent), so `pageNumber: 0` means "no page" — printing
+    // 「第 0 页」 would send the reader looking for a page that cannot exist.
+    const fromDocument = item.pageNumber > 0;
     const source = document.createElement('div');
     source.className = 'knowledge-graph-evidence-source';
-    source.textContent = `${paper?.title ?? item.paperId} · 第 ${item.pageNumber} 页`;
+    source.textContent = `${paper?.title ?? item.paperId} · `
+      + (fromDocument ? `第 ${item.pageNumber} 页` : '摘要');
     listItem.append(source);
 
     if (paper) {
       const actionsRow = document.createElement('div');
       actionsRow.className = 'knowledge-graph-inspector-actions';
       actionsRow.append(createActionButton(
-        `跳回原文 第 ${item.pageNumber} 页`,
-        () => actions.openPaperSource(paper, item.pageNumber, item.quote),
+        fromDocument ? `跳回原文 第 ${item.pageNumber} 页` : '打开该文献',
+        () => actions.openPaperSource(paper, fromDocument ? item.pageNumber : undefined, item.quote),
       ));
       listItem.append(actionsRow);
     }

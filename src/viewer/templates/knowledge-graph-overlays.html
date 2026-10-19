@@ -142,6 +142,30 @@
   </footer>
 </dialog>
 
+<dialog id="knowledge-graph-relation-picker-dialog" class="app-confirm-dialog knowledge-graph-review-dialog knowledge-graph-relation-picker" aria-labelledby="knowledge-graph-relation-picker-title">
+  <header class="knowledge-graph-review-header">
+    <div>
+      <h2 id="knowledge-graph-relation-picker-title">选择要分析的文献</h2>
+      <p id="knowledge-graph-relation-picker-summary" class="knowledge-graph-review-summary"></p>
+    </div>
+    <button id="knowledge-graph-relation-picker-close" class="knowledge-graph-action" type="button" aria-label="关闭">×</button>
+  </header>
+
+  <p class="knowledge-graph-review-hint">
+    最多选 6 篇（两两分析，最多 15 对）。还没有共享实体的文献排在最前面——它们最需要 AI 找出一座"桥"。已有结论的论文对不会重复计费。
+  </p>
+
+  <div id="knowledge-graph-relation-picker-groups" class="knowledge-graph-review-groups" role="region" aria-label="可选文献"></div>
+
+  <footer class="knowledge-graph-review-footer">
+    <span id="knowledge-graph-relation-picker-selection" class="knowledge-graph-review-selection" aria-live="polite"></span>
+    <div class="knowledge-graph-review-footer-actions">
+      <button id="knowledge-graph-relation-picker-cancel" class="knowledge-graph-action" type="button">取消</button>
+      <button id="knowledge-graph-relation-picker-run" class="knowledge-graph-action knowledge-graph-action-primary" type="button" disabled>开始分析</button>
+    </div>
+  </footer>
+</dialog>
+
 <dialog id="knowledge-graph-papers-dialog" class="app-confirm-dialog knowledge-graph-review-dialog knowledge-graph-papers-dialog" aria-labelledby="knowledge-graph-papers-title">
   <header class="knowledge-graph-review-header">
     <div>

@@ -19,11 +19,15 @@ before(async () => {
   for (const path of ['styles/toolbar-shell.css', 'styles/workspace-navigation.css', 'features/vocabulary-library/styles.css']) {
     await page.addStyleTag({ content: await readFile(new URL(`../src/viewer/${path}`, import.meta.url), 'utf8') });
   }
-  const sources = await Promise.all(['app/workspace-navigation.ts', 'features/vocabulary-library/vocabulary-library-controller.ts'].map(async path => {
+  const sources = await Promise.all([
+    'app/workspace-navigation.ts',
+    'features/vocabulary-library/vocabulary-library-controller.ts',
+    'app/focus-release.ts',
+  ].map(async path => {
     const source = await readFile(new URL(`../src/viewer/${path}`, import.meta.url), 'utf8');
     return ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
   }));
-  await page.evaluate(([navigationCode, controllerCode]) => {
+  await page.evaluate(([navigationCode, controllerCode, focusReleaseCode]) => {
     const get = id => document.getElementById(id);
     const elements = {
       workspaceStageElement: get('stage'), readerWorkspaceElement: get('reader'), knowledgeBasePageElement: get('kb'), knowledgeGraphPageElement: get('graph'), vocabularyLibraryPageElement: get('vocab'),
@@ -36,7 +40,14 @@ before(async () => {
       sourceText: '', documentName: 'Fixture.pdf', createdAt: '2026-10-12T00:00:00Z', updatedAt: '2026-10-12T00:00:00Z',
     }));
     window.navigation = {};
-    new Function('require', 'exports', navigationCode)(() => elements, navigation);
+    // Everything else resolves to the element map (this file only imports elements), except the focus helper, which
+    // has to be the real module: workspace switching calls it before hiding a view.
+    const focusRelease = {};
+    new Function('require', 'exports', focusReleaseCode)(() => ({}), focusRelease);
+    new Function('require', 'exports', navigationCode)(
+      name => (name === './focus-release' ? focusRelease : elements),
+      navigation,
+    );
     window.pendingReads = [];
     window.holdReads = false;
     const dependencies = {

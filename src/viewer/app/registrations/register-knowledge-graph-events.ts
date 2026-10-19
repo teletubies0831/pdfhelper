@@ -29,6 +29,7 @@ import {
   knowledgeGraphFocusHopsInput,
   knowledgeGraphFocusHopsValue,
   knowledgeGraphMergeButton,
+  knowledgeGraphExplainAllButton,
   knowledgeGraphMetricsButton,
   knowledgeGraphPapersButton,
   knowledgeGraphConflictsButton,
@@ -65,8 +66,10 @@ import {
   registerEntityReviewEvents,
   registerGraphMetricsEvents,
   registerRelationReviewEvents,
+  registerRelationPickerEvents,
   registerPapersDialogEvents,
   registerKnowledgeGraphCanvasEvents,
+  explainAllMissingEntities,
   renderKnowledgeGraph,
   rerenderKnowledgeGraph,
   resyncKnowledgeGraph,
@@ -107,6 +110,12 @@ export function registerKnowledgeGraphEvents(): void {
     void openMergeReview();
   });
 
+  // One click to give every entity that has no meaning one. Batched and confirmed above a threshold,
+  // because it is the only action here that can spend tokens on hundreds of entities at once.
+  knowledgeGraphExplainAllButton.addEventListener("click", () => {
+    void explainAllMissingEntities();
+  });
+
   knowledgeGraphRelationButton.addEventListener("click", () => {
     void analyzePaperRelations();
   });
@@ -142,6 +151,7 @@ export function registerKnowledgeGraphEvents(): void {
   registerGraphMetricsEvents();
   registerConflictEvents();
   registerRelationReviewEvents();
+  registerRelationPickerEvents();
   registerPapersDialogEvents();
 
   knowledgeGraphFitButton.addEventListener("click", fitKnowledgeGraph);

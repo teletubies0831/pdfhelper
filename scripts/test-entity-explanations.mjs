@@ -5,8 +5,11 @@ import {
   buildEntityExplanationPrompt,
   buildExplanationUserMessage,
   buildStreamingExplanationPrompt,
+  countEntitiesMissingExplanation,
+  describeBulkExplanationResult,
   describeExplanationResult,
   explainEntityDescriptions,
+  explainMissingDescriptions,
   normalizeExplanation,
   normalizeStreamingExplanation,
   parseEntityExplanations,
@@ -355,5 +358,129 @@ assert.ok(
   'the stored text is bounded by the same cap as the batch path',
 );
 assert.equal(normalizeStreamingExplanation('   '), '', 'an empty stream stores nothing');
+
+// ---------------------------------------------------------------------------
+// The bulk run behind 「补全解释」: every confirmed entity without a meaning, in rounds.
+//
+// It is a loop, so the loop's stop conditions are the interesting part: no missing entities, a round
+// that produced nothing (the model is refusing — asking again buys the same silence), and the round
+// ceiling. Plus the one thing a bulk action must never do: re-ask for an entity that already has a
+// meaning.
+// ---------------------------------------------------------------------------
+assert.equal(
+  countEntitiesMissingExplanation([
+    entity('a', 'A'),
+    entity('b', 'B', { description: '已有' }),
+    entity('c', 'C', { status: 'pending' }),
+  ]),
+  1,
+  'only confirmed entities without a meaning count',
+);
+
+const bulkRepository = createRepository(
+  Array.from({ length: 5 }, (_, index) => entity(`bulk-${index}`, `Bulk ${index}`)),
+);
+const bulkPorts = createPorts((request) => ({
+  ok: true,
+  content: JSON.stringify({
+    explanations: request.items.map((item) => ({ name: item.name, explain: `${item.name} 的解释` })),
+  }),
+}));
+const bulkProgress = [];
+const bulk = await explainMissingDescriptions(
+  { papers, onProgress: (progress) => bulkProgress.push(progress) },
+  bulkPorts,
+  bulkRepository,
+);
+assert.equal(bulk.described, 5);
+assert.equal(bulk.missed, 0);
+assert.equal(bulkPorts.state.requests.length, 1, 'five entities fit in one round');
+assert.equal(bulkRepository.state.entities.every((item) => item.description), true);
+assert.equal(bulkProgress.length, 1);
+assert.match(bulkProgress[0].message, /还剩 0 个/);
+assert.match(describeBulkExplanationResult(bulk), /已为 5 个实体生成解释/);
+
+// More entities than one call holds: further rounds, and the described ones are never re-asked.
+const manyRepository = createRepository(
+  Array.from({ length: 20 }, (_, index) => entity(`many-${index}`, `Many ${index}`)),
+);
+const manyPorts = createPorts((request) => ({
+  ok: true,
+  content: JSON.stringify({
+    explanations: request.items.map((item) => ({ name: item.name, explain: `${item.name} 的解释` })),
+  }),
+}));
+const many = await explainMissingDescriptions({ papers }, manyPorts, manyRepository);
+assert.equal(many.described, 20);
+assert.equal(manyPorts.state.requests.length, 2, '20 entities is two rounds of the per-call cap');
+assert.equal(manyPorts.state.requests[0].items.length, EXPLANATIONS_PER_CALL);
+assert.equal(
+  manyPorts.state.requests[1].items.length,
+  20 - EXPLANATIONS_PER_CALL,
+  'the second round only asks for what is left',
+);
+const secondRoundNames = manyPorts.state.requests[1].items.map((item) => item.name);
+assert.ok(
+  !secondRoundNames.includes('Many 0'),
+  'an entity explained in round one is not asked about again',
+);
+
+// A round that describes nothing ends the run: asking the same question again would spend tokens to
+// receive the same silence.
+const stubbornRepository = createRepository([
+  entity('s1', 'Stubborn One'),
+  entity('s2', 'Stubborn Two'),
+]);
+const stubbornPorts = createPorts({ ok: true, content: '{"explanations":[]}' });
+const stubborn = await explainMissingDescriptions({ papers }, stubbornPorts, stubbornRepository);
+assert.equal(stubborn.described, 0);
+assert.equal(stubborn.missed, 2);
+assert.equal(stubbornPorts.state.requests.length, 1, 'one unanswered round is enough to stop');
+assert.match(describeBulkExplanationResult(stubborn), /模型没有给出可用的解释/);
+
+// Nothing missing: no request is made at all.
+const allDonePorts = createPorts({ ok: true, content: '{}' });
+const allDone = await explainMissingDescriptions(
+  { papers },
+  allDonePorts,
+  createRepository([entity('done', 'Done', { description: '已经有了' })]),
+);
+assert.equal(allDonePorts.state.requests.length, 0);
+assert.match(describeBulkExplanationResult(allDone), /所有实体都已有解释/);
+
+// The round ceiling stops a corpus that keeps failing partway, and says so instead of looping.
+const ceilingPorts = createPorts((request) => ({
+  ok: true,
+  content: JSON.stringify({ explanations: [{ name: request.items[0]?.name, explain: '只解释第一个' }] }),
+}));
+const ceiling = await explainMissingDescriptions(
+  { papers, maxRounds: 2 },
+  ceilingPorts,
+  createRepository(Array.from({ length: 6 }, (_, index) => entity(`ceil-${index}`, `Ceil ${index}`))),
+);
+assert.equal(ceilingPorts.state.requests.length, 2);
+assert.equal(ceiling.truncated, true, 'a capped run is reported as truncated, not as finished');
+assert.ok(ceiling.missed > 0);
+assert.match(describeBulkExplanationResult(ceiling), /已达单次上限/);
+
+// A provider error stops the run but keeps whatever already landed: partial success is reported, not
+// thrown away.
+const failingRepository = createRepository(
+  Array.from({ length: 14 }, (_, index) => entity(`fail-${index}`, `Fail ${index}`)),
+);
+const failingPorts = createPorts((request) => (
+  request.requestId?.endsWith(':1')
+    ? { ok: false, error: 'provider exploded' }
+    : {
+      ok: true,
+      content: JSON.stringify({
+        explanations: request.items.map((item) => ({ name: item.name, explain: '一句解释' })),
+      }),
+    }
+));
+const failingBulk = await explainMissingDescriptions({ papers }, failingPorts, failingRepository);
+assert.equal(failingBulk.described, EXPLANATIONS_PER_CALL, 'round one is kept');
+assert.match(failingBulk.error, /provider exploded/);
+assert.match(describeBulkExplanationResult(failingBulk), /随后失败/);
 
 console.log('Entity explanation contract tests passed.');

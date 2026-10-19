@@ -44,6 +44,8 @@ import {
   findAnnotationEditorAtPoint,
   getFreeTextSize,
   getHighlightNote,
+  getInkColor,
+  getInkThickness,
   hideAnnotationActionBar,
   hideHighlightNote,
   hideSelectionContextMenu,
@@ -64,7 +66,9 @@ import {
   setFreeTextColor,
   setFreeTextSize,
   setHighlightColor,
+  setInkColor,
   setInkEraserMode,
+  setInkThickness,
   showAnnotationActionBar,
   showHighlightNote,
   showSelectionContextMenuAt,
@@ -103,6 +107,12 @@ export function registerReaderAnnotationEvents(): void {
       }
       if (mode === "ink") {
         setEditorMode(AnnotationEditorType.INK);
+        // The stored pen settings are applied *here*, not only at startup: they live on PDF.js's editor
+        // defaults, which do not exist until an open document has initialized its editor layer. A
+        // startup-only restore was therefore lost on the first stroke after a restart, and the pen fell
+        // back to black at the default width until the controls were touched.
+        setInkColor(getInkColor(), false);
+        setInkThickness(getInkThickness(), false);
         openAnnotationSizePopover(inkThicknessControl, button);
       }
       if (mode === "text") setEditorMode(AnnotationEditorType.FREETEXT);

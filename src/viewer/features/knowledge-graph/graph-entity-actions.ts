@@ -12,21 +12,19 @@ import {
   knowledgeGraphConflictsButton,
   knowledgeGraphConflictsCountElement,
   knowledgeGraphExtractButton,
-  knowledgeGraphExtractProgressElement,
   knowledgeGraphMergeButton,
   knowledgeGraphImportButton,
   knowledgeGraphMetricsButton,
   knowledgeGraphPendingButton,
   knowledgeGraphPendingCountElement,
-  knowledgeGraphRelationButton,
 } from '../../app/viewer-elements';
 import { setStatus } from '../../app/status-bar';
 import { showAppError } from '../../app/error-dialog';
-import { createGraphExtractionPorts, createRelationAnalysisPorts } from './graph-extraction-repository';
+import { showGraphTaskNotice } from './graph-task-notice';
+import { createGraphExtractionPorts } from './graph-extraction-repository';
 import { openEntityMergeDialog } from './entity-merge-dialog';
 import { openGraphMetricsDialog, type GraphMetricsSource } from './graph-metrics-dialog';
 import { openConflictDialog } from './conflict-dialog';
-import { openRelationReviewDialog } from './relation-review-dialog';
 import { manageGraphPapers } from './graph-paper-actions';
 import {
   openEntityReviewDialog,
@@ -36,14 +34,13 @@ import { createEntityTranslator } from './entity-translation';
 import { createEntitySynonymChecker } from './entity-synonym';
 import { explainConfirmedEntities } from './graph-explanation-actions';
 import {
-  describeRelationResult,
+  deleteGraphEntity,
+  describeEntityDeletion,
   loadPendingReview,
+  planEntityDeletion,
   reconcileIgnoredPendingCandidates,
-  relationPairKey,
-  runRelationAnalysis,
   type GraphPaper,
   type ImportStrategy,
-  type RelationPreview,
 } from '../../../modules/knowledge-graph/public';
 import {
   describeResolutionResult,
@@ -108,11 +105,19 @@ function requireContext(): GraphActionContext {
  * the user must be able to keep reading and panning the graph while it runs.
  */
 function setExtractionProgress(progress: ExtractionProgress): void {
-  knowledgeGraphExtractProgressElement.textContent = progress.message;
-  knowledgeGraphExtractProgressElement.classList.toggle('error', progress.phase === 'failed');
-  // Progress stays in the header (it must not block panning), but a *failure* opens
-  // the readable dialog: that slot is 260px wide with an ellipsis, which used to cut
-  // the reason off mid-sentence — the user could see that extraction failed but not why.
+  // The floating notice is the only progress surface now: the header's grey slot was easy to miss and
+  // truncated the message. Extraction, relation analysis and explanation generation all report through
+  // this one funnel, so one call here covers every long task on the page.
+  const finished = progress.phase === 'done' || progress.phase === 'skipped';
+  showGraphTaskNotice({
+    message: progress.message,
+    state: progress.phase === 'failed' ? 'error' : finished ? 'success' : 'active',
+    ...(progress.totalBatches > 0
+      ? { progress: Math.round((progress.completedBatches / progress.totalBatches) * 100) }
+      : {}),
+  });
+  // A *failure* also opens the readable dialog: the plate is narrow and disappears after a few seconds,
+  // so the reason someone has to act on cannot live only there.
   if (progress.phase === 'failed') {
     showAppError(progress.message, { title: '抽取失败', summary: '这次抽取没有完成，图谱未被改动。' });
   }
@@ -342,6 +347,52 @@ export async function openMergeReview(): Promise<void> {
 }
 
 /**
+ * Deletes one entity and its edges, after explaining exactly what goes with it.
+ *
+ * The confirmation quotes the *current* edge count, and the delete itself re-reads the store rather
+ * than trusting the page snapshot: an extraction or a relation run can add edges between the panel
+ * rendering and the click, and deleting from a stale list would leave those new edges pointing at a
+ * node that no longer exists.
+ *
+ * Papers are refused inside the module (`planEntityDeletion`), not here — the button is only rendered
+ * for entities, but the rule belongs where the store is.
+ */
+export async function deleteGraphEntityFromInspector(
+  entityId: string,
+  entityName: string,
+): Promise<void> {
+  const { reload } = requireContext();
+  try {
+    const [entities, edges, papers] = await Promise.all([
+      knowledgeGraphRepository.listEntities(),
+      knowledgeGraphRepository.listEdges(),
+      knowledgeGraphRepository.listPapers(),
+    ]);
+    const plan = planEntityDeletion({ entityId, entities, edges, papers });
+    if (!plan.allowed) {
+      setStatus(plan.reason ?? '这个节点不能删除。', true);
+      return;
+    }
+    if (!window.confirm(describeEntityDeletion(plan, entityName))) return;
+
+    const result = await deleteGraphEntity(entityId, knowledgeGraphRepository);
+    if (!result.deleted) {
+      setStatus(result.reason ?? '删除失败。', true);
+      return;
+    }
+    setStatus(
+      result.edgesDeleted
+        ? `已删除节点「${entityName}」及其 ${result.edgesDeleted} 条连线。`
+        : `已删除节点「${entityName}」。`,
+    );
+    await reload();
+    await refreshPendingCount();
+  } catch (error) {
+    setStatus(`删除节点失败：${error instanceof Error ? error.message : String(error)}`, true);
+  }
+}
+
+/**
  * Counts contradictory conclusions and updates the header badge.
  *
  * Runs on every page load: it is one store read, and a conflict that exists but is
@@ -414,124 +465,6 @@ export async function openConflictReview(): Promise<void> {
   // Retiring a conclusion removes an edge, so the snapshot has to be re-read
   // rather than patched in place.
   if (result.pairs) await reload();
-}
-
-/**
- * Above this many estimated tokens, the user is asked before anything is sent.
- *
- * A threshold rather than a prompt every time: this is the only feature that
- * spends tokens without the user typing a message, but a confirmation dialog for
- * every small run would be noise the user learns to dismiss without reading —
- * which is worse than no prompt at all.
- */
-export const RELATION_CONFIRM_TOKEN_THRESHOLD = 2_000;
-
-/**
- * Runs on-demand paper-to-paper relation judgement.
- *
- * The order is deliberate: recall is free, so the price is known before the user
- * is asked, and declining leaves the graph and the token balance untouched.
- *
- * One more step sits between the request and the write: the **review**. A stored
- * conclusion is also the cache — the pair is never asked about again — so writing
- * verdicts the user has not seen would make the model's mistakes permanent, and the
- * negative ones would not even be visible on the canvas.
- */
-export async function analyzePaperRelations(): Promise<void> {
-  await runRelationPass();
-}
-
-/**
- * Re-judges one existing paper pair, from the 「重新判断」 action in the edge inspector.
- *
- * A stored conclusion is also the cache, so without an explicit request the pair
- * could never be re-asked and a wrong verdict would be permanent. Recall is
- * narrowed to the two papers involved: the user asked about *this* pair, not for
- * another batch of candidates, and the reply replaces the old conclusion through
- * the same retire-then-write plan a normal run uses.
- */
-export async function rejudgePaperRelation(leftPaperId: string, rightPaperId: string): Promise<void> {
-  const { getPapers } = requireContext();
-  const papers = getPapers();
-  const left = papers.find((paper) => paper.paperId === leftPaperId);
-  const right = papers.find((paper) => paper.paperId === rightPaperId);
-  if (!left || !right) {
-    setStatus('这两篇文献已不在文献库中，无法重新判断。', true);
-    return;
-  }
-  await runRelationPass({
-    papers: [left, right],
-    forcePairs: new Set([relationPairKey(left.paperId, right.paperId)]),
-  });
-}
-
-function relationPassConfirmText(preview: RelationPreview, forced: boolean): string {
-  if (forced) {
-    return `即将重新判断这 1 对文献的关系，预计消耗约 ${preview.estimatedTokens} tokens。\n\n`
-      + '新的结论会替换这对文献原有的结论。\n\n继续吗？';
-  }
-  return `即将判断 ${preview.selected.length} 对论文的关系，预计消耗约 ${preview.estimatedTokens} tokens。\n\n`
-    + `召回候选 ${preview.candidates.length} 对，只对前 ${preview.selected.length} 对调用模型。\n`
-    + '已判断过的论文对会被跳过，不重复消耗。\n\n继续吗？';
-}
-
-async function runRelationPass(forced?: {
-  papers: GraphPaper[];
-  forcePairs: ReadonlySet<string>;
-}): Promise<void> {
-  const { getPapers, getEntityNames, reload, ensureReady } = requireContext();
-  ensureReady();
-  await reload();
-
-  const papers = forced?.papers ?? getPapers();
-  if (papers.length < 2) {
-    setStatus('至少需要两篇文献才能判断关系。', true);
-    return;
-  }
-
-  knowledgeGraphRelationButton.disabled = true;
-  try {
-    const settings = await knowledgeGraphRepository.readSettings();
-    const paperTitles = new Map(getPapers().map((paper) => [paper.paperId, paper.title]));
-    // Only used to explain an empty recall: pending entities are invisible to recall
-    // because shared entities count only once confirmed, which is the usual reason a
-    // corpus with plenty of candidates recalls nothing.
-    const pendingEntityCount = (await loadPendingReview(knowledgeGraphRepository)).total;
-    const result = await runRelationAnalysis(createRelationAnalysisPorts(), {
-      papers,
-      topK: settings.relationTopK,
-      maxCandidates: settings.maximalRecallCandidates,
-      entityNames: getEntityNames(),
-      pendingEntityCount,
-      ...(forced ? { forcePairs: forced.forcePairs } : {}),
-      onPreview: async (preview) => {
-        if (preview.estimatedTokens < RELATION_CONFIRM_TOKEN_THRESHOLD) return true;
-        return window.confirm(relationPassConfirmText(preview, Boolean(forced)));
-      },
-      onJudged: async (review) => {
-        const accepted = await openRelationReviewDialog({
-          rows: review.rows,
-          paperTitles,
-          ...(review.model ? { model: review.model } : {}),
-          rejectedCount: review.rejectedCount,
-        });
-        // `null` means the review was dismissed: decline to write rather than
-        // accepting claims on the user's behalf.
-        return accepted ?? null;
-      },
-      onProgress: (message) => setExtractionProgress({
-        phase: 'extracting',
-        message,
-        completedBatches: 0,
-        totalBatches: 0,
-      }),
-    });
-
-    setStatus(describeRelationResult(result), result.status === 'failed');
-    if (result.edgesWritten) await reload();
-  } finally {
-    await refreshExtractionAvailability();
-  }
 }
 
 /**

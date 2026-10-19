@@ -13,7 +13,7 @@ import {
   installAnnotationSizePopoverDismissal,
   installHighlightNotePointerHover,
   installHighlightNoteTextEditingProtection,
-  installInkThicknessInteractions,
+  installInkToolInteractions,
   setHighlightColor,
 } from "../../../features/annotations/public";
 import {
@@ -59,7 +59,7 @@ export function registerReaderFileOpenEvents(): void {
   setHighlightColor(initializeHighlightColorHistory());
   installHighlightNoteTextEditingProtection();
   installAnnotationSizePopoverDismissal();
-  installInkThicknessInteractions();
+  installInkToolInteractions();
 
   for (const searchButton of document.querySelectorAll<HTMLButtonElement>(
     "#outline-search-button, #reader-search-button",

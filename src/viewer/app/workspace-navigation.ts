@@ -5,6 +5,7 @@ import {
   vocabularyLibraryPageElement,
   workspaceStageElement,
 } from "./viewer-elements";
+import { releaseFocusBeforeHiding } from "./focus-release";
 
 export type WorkspaceView = "viewer" | "knowledge" | "graph" | "vocabulary";
 
@@ -73,6 +74,7 @@ function settleWorkspace(view: WorkspaceView): void {
     [WorkspaceView, HTMLElement]
   >) {
     const visible = candidate === view;
+    if (!visible) releaseFocusBeforeHiding(element);
     element.hidden = !visible;
     element.inert = !visible;
     element.toggleAttribute("aria-hidden", !visible);
@@ -119,6 +121,7 @@ export async function transitionWorkspaceView(
     const involved = candidate === outgoingView || candidate === view;
     element.hidden = !involved;
     element.inert = candidate !== view;
+    if (candidate !== view) releaseFocusBeforeHiding(element);
     element.toggleAttribute("aria-hidden", candidate !== view);
   }
   outgoing.classList.add("is-workspace-outgoing");

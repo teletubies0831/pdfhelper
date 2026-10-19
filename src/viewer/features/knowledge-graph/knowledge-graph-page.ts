@@ -46,7 +46,6 @@ import {
   knowledgeGraphEntryButton,
   knowledgeGraphBatchButton,
   knowledgeGraphExtractButton,
-  knowledgeGraphExtractProgressElement,
   knowledgeGraphFilterConfidenceInput,
   knowledgeGraphFilterConfidenceValue,
   knowledgeGraphFilterEntityInput,
@@ -63,7 +62,6 @@ import {
   knowledgeGraphPendingButton,
   knowledgeGraphPendingCountElement,
   knowledgeGraphSearchInput,
-  knowledgeGraphStatusElement,
   aiPanelToggleButton,
 } from '../../app/viewer-elements';
 import { setCurrentApplicationView } from '../../app/application-navigation';
@@ -92,6 +90,9 @@ import {
 } from './graph-viewport';
 import { createGraphViewportController } from './graph-viewport-controller';
 import { createGraphLayoutRunner } from './graph-layout-runner';
+import { hideGraphTaskNotice } from './graph-task-notice';
+import { setPageStatus, updateEmptyState } from './graph-page-status';
+import { syncFilterControls } from './graph-filter-controls';
 import { registerGraphCanvasInteraction } from './graph-canvas-interaction';
 import { describeGraphView, type GraphViewReport } from './graph-view-report';
 import {
@@ -117,9 +118,10 @@ import {
   refreshConflictCount,
   refreshExtractionAvailability,
   refreshPendingCount,
-  rejudgePaperRelation,
+  deleteGraphEntityFromInspector,
   setExtractionProgress,
 } from './graph-entity-actions';
+import { configureRelationActions, rejudgePaperRelation } from './graph-relation-actions';
 import { regenerateEntityExplanation } from './graph-explanation-actions';
 import {
   openEntityReviewDialog,
@@ -176,14 +178,6 @@ const layoutRunner = createGraphLayoutRunner({
   }),
   previewNodeBudget: LAYOUT_NODE_BUDGET,
 });
-
-function setPageStatus(message: string, isError = false): void {
-  knowledgeGraphStatusElement.textContent = message;
-  knowledgeGraphStatusElement.classList.toggle('error', isError);
-  // The page header is a single short line; a failure reason needs the readable
-  // dialog, otherwise the part that matters is ellipsised away.
-  if (isError) showAppError(message, { title: '知识图谱出错' });
-}
 
 /** The open document's graph id, or undefined when nothing matching is stored. */
 function currentPaperId(): string | undefined {
@@ -332,17 +326,6 @@ function redraw(): void {
 }
 
 /**
- * Shows or hides the empty-canvas explanation.
- *
- * The wording for each situation is decided in `graph-view-report.ts`, where it is
- * testable: the hint used to blame the filters for every empty canvas.
- */
-function updateEmptyState(report: GraphViewReport): void {
-  knowledgeGraphEmptyElement.hidden = !report.empty;
-  if (report.empty) knowledgeGraphEmptyHintElement.textContent = report.emptyHint;
-}
-
-/**
  * Layout and framing live in `graph-layout-runner.ts`: they run on their own clock (an animation
  * frame, then one fit), which is a different reason to change than the page's state funnel.
  */
@@ -375,6 +358,11 @@ function buildInspectorActions(): InspectorActions {
     explainEntity(entityName) {
       // Also re-reads and re-renders when the answer lands, so the panel updates in place.
       void regenerateEntityExplanation(entityName);
+    },
+    deleteEntity(entityId, entityName) {
+      // Confirmation, cascade and the reload all happen in the action: the panel must not guess at
+      // what the store currently holds.
+      void deleteGraphEntityFromInspector(entityId, entityName);
     },
     focusNode(nodeId, kind) {
       graphSelectedNodeId.value = nodeId;
@@ -416,24 +404,6 @@ function redrawInspector(): void {
   clearInspector();
 }
 
-function syncFilterControls(): void {
-  knowledgeGraphFilterPaperInput.checked = graphShowPapers.value;
-  knowledgeGraphFilterEntityInput.checked = graphShowEntities.value;
-  knowledgeGraphFilterOriginAiInput.checked = graphShowOriginAi.value;
-  knowledgeGraphFilterOriginRuleInput.checked = graphShowOriginRule.value;
-  knowledgeGraphFilterOriginUserInput.checked = graphShowOriginUser.value;
-  knowledgeGraphFilterConfidenceInput.value = String(graphMinConfidence.value);
-  knowledgeGraphFilterConfidenceValue.value = graphMinConfidence.value.toFixed(2);
-  knowledgeGraphSearchInput.value = graphSearchQuery.value;
-  knowledgeGraphFocusHopsInput.value = String(graphFocusHops.value);
-  knowledgeGraphFocusHopsValue.value = String(graphFocusHops.value);
-  knowledgeGraphFocusAllButton.classList.toggle('is-active', graphFocusMode.value === 'all');
-  knowledgeGraphFocusCurrentButton.classList.toggle(
-    'is-active',
-    graphFocusMode.value === 'current',
-  );
-}
-
 /**
  * The personal layer, assembled in its own file.
  *
@@ -471,7 +441,7 @@ export function rerenderKnowledgeGraph(): void {
 async function loadAndRender(force: boolean): Promise<void> {
   if (loading) return loading;
   loading = (async () => {
-    setPageStatus(force ? '正在重新同步文献库…' : '正在读取图谱…');
+    setPageStatus(force ? '正在重新同步文献库…' : '正在读取图谱…', false, 'active');
     try {
       if (force) {
         const overview = await openKnowledgeGraph(buildPersonalProvider());
@@ -585,6 +555,8 @@ export function openKnowledgeGraphPage(): void {
 export function closeKnowledgeGraphPage(): void {
   if (getActiveWorkspaceView() !== 'graph') return;
   openToken += 1;
+  // The toast is a fixed-position plate on `body`, so it would otherwise float over the reader.
+  hideGraphTaskNotice();
   knowledgeGraphEntryButton.classList.remove('active');
   aiPanelToggleButton?.classList.add('active');
   setCurrentApplicationView('viewer');
@@ -667,6 +639,26 @@ function installGraphActions(): void {
       completedBatches: 0,
       totalBatches: 0,
     }),
+  });
+  // Relation analysis needs the paper list twice (the picker and recall) and reports progress through
+  // the same header line extraction uses.
+  configureRelationActions({
+    getPapers: () => snapshot.papers,
+    getEntityNames: () => new Map(
+      snapshot.entities.map((entity) => [entity.entityId, entity.name]),
+    ),
+    currentPaperId,
+    reload: () => loadAndRender(false),
+    ensureReady: () => {
+      ensureRenderer();
+    },
+    setProgress: ({ message, done }) => setExtractionProgress({
+      phase: done ? 'done' : 'extracting',
+      message,
+      completedBatches: 0,
+      totalBatches: 0,
+    }),
+    refreshAvailability: refreshExtractionAvailability,
   });
 }
 

@@ -9,4 +9,6 @@ export * from './settings-navigation';
 export * from './knowledge-retrieval-settings';
 export * from './agent-tool-catalog-view';
 export * from './chat-controller';
+export * from './chat-web-search';
+export * from './web-retrieval-settings';
 export * from './translation-preferences-panel';

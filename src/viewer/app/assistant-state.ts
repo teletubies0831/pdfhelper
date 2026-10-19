@@ -4,6 +4,7 @@ import {
   type AiConfig,
   type AiConversationMessage,
   type AiImageAttachment,
+  type AiWebRetrievalConfig,
   type VisionAiConfig,
 } from "../../modules/ai/public";
 import {
@@ -34,6 +35,14 @@ export let conversationMemoryConfig: { value: ConversationMemoryConfig } = { val
 export let aiConfigLoaded = { value: false };
 
 export let visionAiConfig: { value: VisionAiConfig } = { value: { ...DEFAULT_VISION_AI_CONFIG } };
+
+/**
+ * The resolved DeepSeek tools settings, or `null` when they cannot be used.
+ *
+ * Resolved once per configuration change and read synchronously by the UI (the 联网 switch, the 检索 button)
+ * instead of each of them re-deriving "is web retrieval available" from the raw catalog.
+ */
+export let webRetrievalConfig: { value: AiWebRetrievalConfig | null } = { value: null };
 
 export let chatHistory: { value: AiConversationMessage[] } = { value: [] };
 

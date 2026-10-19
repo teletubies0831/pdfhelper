@@ -66,6 +66,16 @@ export function buildSystemContent(context?: AiDocumentContext): string {
         .join("\n"),
     );
   }
+  if (context?.webSearchNotes?.trim()) {
+    contextParts.push(
+      [
+        "【本轮联网检索到的网页资料】",
+        "以下是用户开启「联网」后检索到的公开网页；用作当前 PDF 之外的补充信息。",
+        "引用其中的事实时必须保留给出的链接，不要编造链接或把摘要改写成确定结论；资料与 PDF 冲突时以 PDF 原文为准，并指出冲突。",
+        context.webSearchNotes.trim().slice(0, 12_000),
+      ].join("\n"),
+    );
+  }
   if (context?.documentText?.trim()) {
     const documentInstructions = context?.imageAnalysis?.trim()
       ? [

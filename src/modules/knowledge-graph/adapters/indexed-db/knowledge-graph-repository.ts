@@ -52,6 +52,14 @@ export interface KnowledgeGraphRepository {
   ): Promise<void>;
   /** Removes entities by id (alias of `deleteEntities`, for the cleanup port). */
   deleteEntitiesById(entityIds: string[]): Promise<void>;
+  /**
+   * Removes one entity and the edges that touch it, in one transaction.
+   *
+   * Same reason as `deletePaperCascade`: an interrupted delete would leave edges whose endpoint no
+   * longer exists, and every edge endpoint being present is the renderer's one hard invariant. The
+   * paper store is not touched at all — a paper is a knowledge-base projection, not a deletable node.
+   */
+  deleteEntityCascade(entityId: string, edgeIds: string[]): Promise<void>;
   /** Removes edges by id (alias of `deleteEdges`, for the cleanup port). */
   deleteEdgesById(edgeIds: string[]): Promise<void>;
   /** Removes every edge with the given origin key; used before a re-judgement. */
@@ -261,6 +269,29 @@ implements KnowledgeGraphRepository {
 
   async deleteEntitiesById(entityIds: string[]): Promise<void> {
     await this.deleteEntities(entityIds);
+  }
+
+  /**
+   * Deletes one entity and its edges together.
+   *
+   * Two stores, one transaction: the edges must not outlive their endpoint, and the entity must not
+   * outlive them either (a node whose edges vanished in a separate step would look like a node the user
+   * un-connected rather than deleted).
+   */
+  async deleteEntityCascade(entityId: string, edgeIds: string[]): Promise<void> {
+    const database = await openKnowledgeGraphDatabase();
+    try {
+      const transaction = database.transaction(
+        [GRAPH_ENTITIES_STORE, GRAPH_EDGES_STORE],
+        'readwrite',
+      );
+      const edgeStore = transaction.objectStore(GRAPH_EDGES_STORE);
+      for (const edgeId of edgeIds) edgeStore.delete(edgeId);
+      transaction.objectStore(GRAPH_ENTITIES_STORE).delete(entityId);
+      await transactionDone(transaction);
+    } finally {
+      database.close();
+    }
   }
 
   async deleteEdgesById(edgeIds: string[]): Promise<void> {

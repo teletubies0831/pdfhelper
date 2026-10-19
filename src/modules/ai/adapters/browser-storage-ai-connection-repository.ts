@@ -4,8 +4,10 @@ import {
   AI_PROVIDERS,
   DEFAULT_AI_CONFIG,
   DEEPSEEK_MODELS,
+  DEEPSEEK_TOOLS_BASE_URL,
   LEGACY_DEEPSEEK_CONFIG_STORAGE_KEY,
   VISION_AI_CONFIG_STORAGE_KEY,
+  WEB_RETRIEVAL_DEFAULT_COUNT,
   type AiConfig,
   type VisionAiConfig,
 } from '../contracts';
@@ -28,6 +30,12 @@ function emptyState(): AiConnectionCatalogState {
     routes: {},
     reasoning: DEFAULT_AI_CONFIG.reasoning,
     maxOutputTokens: DEFAULT_AI_CONFIG.maxOutputTokens,
+    webRetrieval: {
+      baseUrl: DEEPSEEK_TOOLS_BASE_URL,
+      apiKey: '',
+      count: WEB_RETRIEVAL_DEFAULT_COUNT,
+      maxFetches: 1,
+    },
   };
 }
 
@@ -58,7 +66,10 @@ export class BrowserStorageAiConnectionRepository implements AiConnectionReposit
         routes: current.routes,
         reasoning: current.reasoning,
         maxOutputTokens: current.maxOutputTokens,
-      };
+        // Tables written before retrieval existed have no such field; `normalizeAiConnectionCatalogState`
+        // fills in the defaults, so an upgrade keeps the user's key and gains a working address.
+        webRetrieval: current.webRetrieval,
+      } as AiConnectionCatalogState;
     }
 
     const migrated = this.migrateLegacy(
