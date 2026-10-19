@@ -18,10 +18,10 @@ import {
   type GraphRenderNode,
   type WorldBounds,
 } from '../../../modules/knowledge-graph/public';
+import { planGraphImage } from '../../../modules/knowledge-graph/public';
 import type { GraphTheme } from './graph-theme';
 import { isPersonalKind, nodeFill } from './graph-theme';
 import type { GraphViewport } from './graph-viewport';
-
 export type RenderNode = GraphRenderNode;
 export type RenderEdge = GraphRenderEdge;
 export type RenderModel = GraphRenderModel;
@@ -137,7 +137,8 @@ export function orderNodesForDrawing(nodes: readonly RenderNode[]): RenderNode[]
  * than to fight a third-party style system for.
  */
 export class GraphCanvasRenderer {
-  private readonly context: CanvasRenderingContext2D;
+  private context: CanvasRenderingContext2D;
+  private canvas: HTMLCanvasElement;
   private model: RenderModel = {
     nodes: [],
     edges: [],
@@ -177,12 +178,13 @@ export class GraphCanvasRenderer {
   };
 
   constructor(
-    private readonly canvas: HTMLCanvasElement,
+    canvas: HTMLCanvasElement,
     theme: GraphTheme,
     viewport: GraphViewport,
   ) {
     const context = canvas.getContext('2d');
     if (!context) throw new Error('无法创建知识图谱画布上下文。');
+    this.canvas = canvas;
     this.context = context;
     this.theme = theme;
     this.viewport = viewport;
@@ -287,8 +289,67 @@ export class GraphCanvasRenderer {
     context.restore();
   }
 
-  private drawGrid(context: CanvasRenderingContext2D): void {
-    const spacing = 32 * this.viewport.scale;
+  /**
+   * Renders the whole model into a detached canvas, fitted to the image size.
+   *
+   * The export has to show the *whole* graph, not the current viewport: the page canvas is whatever the window
+   * is, at whatever pan and zoom the user left it, so a screenshot of it would crop. The drawing code, though,
+   * is exactly the same — it reads `canvas`, `context`, `viewport`, `state` and `devicePixelRatio` off the
+   * instance. Those are swapped for the duration of one frame and restored afterwards, which keeps a single
+   * implementation of "how a graph looks" instead of a second painter that would drift.
+   *
+   * The state is neutralised on purpose: a hover ring, a selection or a search highlight belong to the user's
+   * pointer, not to a file someone will look at later.
+   */
+  renderWholeGraphImage(options: { maxSize?: number } = {}): HTMLCanvasElement | null {
+    const plan = planGraphImage(
+      this.model.nodes.map((node) => ({ x: node.x, y: node.y })),
+      options,
+    );
+    if (plan.empty) return null;
+
+    const ratio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+    const target = document.createElement('canvas');
+    target.width = Math.max(1, Math.round(plan.width * ratio));
+    target.height = Math.max(1, Math.round(plan.height * ratio));
+    const context = target.getContext('2d');
+    if (!context) throw new Error('无法创建导出用的画布上下文。');
+
+    const saved = {
+      canvas: this.canvas,
+      context: this.context,
+      viewport: this.viewport,
+      state: this.state,
+      devicePixelRatio: this.devicePixelRatio,
+      lastFrameEdges: this.lastFrameEdges,
+      frameStats: this.frameStats,
+    };
+    this.canvas = target;
+    this.context = context;
+    this.viewport = { scale: plan.scale, offsetX: plan.offsetX, offsetY: plan.offsetY };
+    this.state = {
+      hoveredNodeId: null,
+      selectedNodeId: null,
+      selectedEdgeId: null,
+      matchedNodeIds: new Set(),
+      dimmedNodeIds: new Set(),
+    };
+    this.devicePixelRatio = ratio;
+    try {
+      this.render();
+    } finally {
+      this.canvas = saved.canvas;
+      this.context = saved.context;
+      this.viewport = saved.viewport;
+      this.state = saved.state;
+      this.devicePixelRatio = saved.devicePixelRatio;
+      this.lastFrameEdges = saved.lastFrameEdges;
+      this.frameStats = saved.frameStats;
+    }
+    return target;
+  }
+
+  private drawGrid(context: CanvasRenderingContext2D): void {    const spacing = 32 * this.viewport.scale;
     if (spacing < 14) return;
     const offsetX = this.viewport.offsetX % spacing;
     const offsetY = this.viewport.offsetY % spacing;

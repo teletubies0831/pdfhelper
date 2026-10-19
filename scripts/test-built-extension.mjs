@@ -170,6 +170,71 @@ test('the graph workspace opens and finishes loading from the packaged bundle', 
   assert.deepEqual(pageErrors, [], 'opening the graph workspace must not throw');
 });
 
+test('skipping the tour does not leave the focus inside a hidden overlay', async () => {
+  // Edge reported this as an extension error: "Blocked aria-hidden on an element because its descendant retained
+  // focus", naming #onboarding-tour-skip inside #onboarding-tour. Clicking 跳过引导 leaves focus on that button, and
+  // finishing the tour then hides its ancestor — which the browser refuses, because hiding the focused element from
+  // assistive technology drops the caret into nowhere.
+  //
+  // This runs before the toast test, which is the one that skips the tour for the rest of the suite: a fresh profile
+  // still has it open here, which is exactly the situation the error was reported from.
+  // A fresh profile opens the tour on its own, but not instantly; a filtered run may also arrive after something else
+  // dismissed it, in which case it is replayed from 设置 → 常规.
+  const opened = await page.waitForSelector('#onboarding-tour:not([hidden])', { timeout: 10_000 })
+    .then(() => true).catch(() => false);
+  if (!opened) {
+    await page.evaluate(() => {
+      document.getElementById('ai-settings-button')?.click();
+      document.querySelector('[data-settings-tab="general"]')?.click();
+    });
+    await page.waitForTimeout(600);
+    // Dispatched, not clicked through the locator: the button sits at the bottom of a scrollable panel and this test is
+    // about focus, not about hit targets.
+    await page.evaluate(() => document.getElementById('start-onboarding-tour')?.click());
+    await page.waitForSelector('#onboarding-tour:not([hidden])', { timeout: 10_000 });
+  }
+  const before = await page.evaluate(() => {
+    const root = document.getElementById('onboarding-tour');
+    return { hidden: root?.hidden ?? null, skip: Boolean(document.getElementById('onboarding-tour-skip')) };
+  });
+  assert.equal(
+    before.hidden === false && before.skip,
+    true,
+    `the tour has to be open for this test to mean anything (hidden: ${before.hidden}, skip: ${before.skip})`,
+  );
+  // The violation is only visible at the instant `aria-hidden` is written, and by the next tick the browser has moved
+  // the carets itself. What *is* observable is whether the focus was released **during** the click handler: with the
+  // fix the screen blurs its own control first, without it the button keeps the focus until the browser gets around to
+  // it. The read happens synchronously after the click, so nothing else can have intervened.
+  const result = await page.evaluate(() => {
+    const root = document.getElementById('onboarding-tour');
+    const skip = document.getElementById('onboarding-tour-skip');
+    skip.focus();
+    const focusedBefore = root.contains(document.activeElement);
+    // A programmatic click runs the real handler and leaves the focus where it is, which is the situation the user
+    // reported: the button they pressed is still focused when the tour closes.
+    skip.click();
+    const focusAfterClick = root.contains(document.activeElement);
+    return {
+      focusedBefore,
+      focusAfterClick,
+      hidden: root.hidden,
+      ariaHidden: root.getAttribute('aria-hidden'),
+      activeElement: document.activeElement?.id ?? document.activeElement?.tagName ?? '',
+    };
+  });
+  assert.equal(result.focusedBefore, true, 'the test must start with the focus on 跳过引导');
+  assert.equal(result.hidden, true, 'skipping hides the tour');
+  assert.equal(result.ariaHidden, 'true', 'and withdraws it from the accessibility tree');
+  assert.equal(
+    result.focusAfterClick,
+    false,
+    `the tour closed while its 跳过 button still held the focus (${result.activeElement}) — the state the browser `
+    + 'blocks as "Blocked aria-hidden on an element because its descendant retained focus"',
+  );
+  assert.deepEqual(pageErrors, [], 'skipping the tour must not throw');
+});
+
 test('graph task messages float as a toast and clear themselves when finished', async () => {
   // The header line alone was too easy to miss far from the canvas, so status and progress are mirrored
   // into the same plate the reader uses for background tasks (`.knowledge-background-task-toast`). It has
@@ -495,6 +560,66 @@ test('the packaged service worker answers the explanation stream port', async ()
     `the background must answer the explanation port; saw ${JSON.stringify(result.seen)} `
       + `and disconnect "${result.disconnected}"`,
   );
+});
+
+test('the packaged service worker answers the translation stream port', async () => {
+  // Same probe as the explanation port, and the same failure it catches: a background older than the page answers
+  // nothing, which in the panel looks like "翻译永远不出现" rather than like a version problem. `started` is posted
+  // before the provider call, so seeing it means the background knows this port at all.
+  const result = await page.evaluate(async () => {
+    const port = chrome.runtime.connect({ name: 'pdf-helper:ai-translate-stream-v1' });
+    return new Promise((resolve) => {
+      const seen = [];
+      let disconnected = '';
+      const timer = setTimeout(() => {
+        try {
+          port.disconnect();
+        } catch {
+          // Already gone.
+        }
+        resolve({ seen, disconnected, timedOut: true });
+      }, 10_000);
+      port.onMessage.addListener((message) => {
+        seen.push(message?.type ?? 'unknown');
+        if (message?.type === 'error') {
+          clearTimeout(timer);
+          resolve({ seen, disconnected, timedOut: false, error: message.error ?? '' });
+          return;
+        }
+        // `started` asks for a provider key we do not have in a test profile; a disconnect after it is enough.
+        if (message?.type === 'started') {
+          clearTimeout(timer);
+          try {
+            port.disconnect();
+          } catch {
+            // Already gone.
+          }
+          resolve({ seen, disconnected, timedOut: false });
+        }
+      });
+      port.onDisconnect.addListener(() => {
+        disconnected = chrome.runtime.lastError?.message ?? '(no reason)';
+        clearTimeout(timer);
+        resolve({ seen, disconnected, timedOut: false });
+      });
+      port.postMessage({
+        type: 'start',
+        requestId: 'packaged-translation-probe',
+        task: 'translation',
+        text: 'The shortest linear program problem is to find the shortest linear function.',
+      });
+    });
+  });
+
+  assert.ok(
+    result.seen.includes('started') || result.seen.includes('error'),
+    'the background must answer the translation port; saw '
+      + `${JSON.stringify(result.seen)} and disconnect "${result.disconnected}"`,
+  );
+  // A missing key is the expected answer in a test profile; it must be a readable message, not a crash.
+  if (result.seen.includes('error')) {
+    assert.ok(result.error.length > 0, 'an error from this port carries a reason');
+  }
 });
 
 test('nothing was logged as an error while the extension booted and loaded', () => {

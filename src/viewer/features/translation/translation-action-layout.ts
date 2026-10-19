@@ -20,11 +20,20 @@ export function placeTranslationActionsBeforeResult(
   if (actions && resultSection) resultSection.before(actions);
 }
 
+/**
+ * Replaces the result body with a one-line state message.
+ *
+ * An **empty** message is not "clear the panel": the result element holds the record card, and writing `''` into it
+ * deletes the card while the data stays in `currentEnglishLearningResult` — the panel then looks empty until some
+ * other action re-renders it from state. That is precisely how a finished translation appeared blank, so an empty
+ * message is now a no-op (there is nothing to say, so say nothing).
+ */
 export function replaceTranslationResultText(
   resultElement: Pick<HTMLElement, "textContent">,
   message: string,
   root: ParentNode = document,
 ): void {
+  if (!message) return;
   placeTranslationActionsBeforeResult(root);
   resultElement.textContent = message;
 }

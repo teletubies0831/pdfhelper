@@ -199,12 +199,9 @@ export const knowledgeGraphRelationButton = requiredElement<HTMLButtonElement>(
   "knowledge-graph-relation",
 );
 
+/** Exports the current graph as a PNG image; there is no import counterpart (the library owns graph membership). */
 export const knowledgeGraphExportButton = requiredElement<HTMLButtonElement>(
   "knowledge-graph-export",
-);
-
-export const knowledgeGraphImportButton = requiredElement<HTMLButtonElement>(
-  "knowledge-graph-import",
 );
 
 export const knowledgeGraphMergeDialog = requiredElement<HTMLDialogElement>(

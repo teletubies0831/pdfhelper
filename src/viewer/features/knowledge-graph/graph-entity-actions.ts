@@ -13,7 +13,6 @@ import {
   knowledgeGraphConflictsCountElement,
   knowledgeGraphExtractButton,
   knowledgeGraphMergeButton,
-  knowledgeGraphImportButton,
   knowledgeGraphMetricsButton,
   knowledgeGraphPendingButton,
   knowledgeGraphPendingCountElement,
@@ -39,8 +38,8 @@ import {
   loadPendingReview,
   planEntityDeletion,
   reconcileIgnoredPendingCandidates,
+  suggestGraphImageFileName,
   type GraphPaper,
-  type ImportStrategy,
 } from '../../../modules/knowledge-graph/public';
 import {
   describeResolutionResult,
@@ -48,13 +47,7 @@ import {
   resolveRelationConflicts,
   scanRelationConflicts,
 } from '../../../modules/knowledge-graph/public';
-import {
-  applyGraphImport,
-  exportKnowledgeGraph,
-  pickSnapshotFile,
-  previewGraphImport,
-  reportExportResult,
-} from './graph-transfer-controller';
+import { downloadGraphImage } from './graph-image-export';
 
 /**
  * Extraction, confirmation and merge actions for the graph page.
@@ -85,6 +78,16 @@ export interface GraphActionContext {
   reload(): Promise<void>;
   /** Ensures a renderer exists before an action that will trigger a redraw. */
   ensureReady(): void;
+  /**
+   * Renders the whole graph into a detached canvas for the PNG export.
+   *
+   * Owned by the controller because it owns the renderer; `null` means there is nothing to draw.
+   */
+  renderExportImage(): {
+    canvas: HTMLCanvasElement;
+    papers: number;
+    entities: number;
+  } | null;
 }
 
 let context: GraphActionContext | null = null;
@@ -495,69 +498,33 @@ export function openPaperManager(): void {
 }
 
 /**
- * Exports the whole graph to a JSON file.
+ * Exports the current graph as a PNG image.
  *
- * Available without any AI configuration: the graph already holds the rule-derived
- * keyword layer, the user's own notes and filing, and any confirmed entities, so
- * exporting is useful even for a user who never configured a key.
+ * No AI configuration needed: the picture shows whatever the canvas is already showing — the rule-derived keyword
+ * layer, the user's own notes and filing, and any confirmed entities.
  */
 export async function exportGraph(): Promise<void> {
   try {
-    reportExportResult(await exportKnowledgeGraph());
+    requireContext().ensureReady();
+    const rendered = requireContext().renderExportImage();
+    if (!rendered) {
+      setStatus('图谱还没有可画的内容，先添加文献或抽取实体再导出。', true);
+      return;
+    }
+    await downloadGraphImage(
+      { canvas: rendered.canvas, fileName: suggestGraphImageFileName() },
+      { papers: rendered.papers, entities: rendered.entities },
+    );
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
   }
 }
 
 /**
- * Imports a graph snapshot, asking for the strategy up front.
+ * Graph import used to live here.
  *
- * The choice is explicit rather than guessed: `replace` is what "restore a
- * backup" means, `merge` is what "complete this machine from the other one"
- * means, and picking for the user risks destroying a graph they meant to extend.
+ * Removed with the button: the graph is a projection of the knowledge base, so a file that adds papers and entities
+ * which no library document owns produces records the next sync has to treat as removed. Nothing replaced it — the
+ * knowledge base is the way papers enter the graph.
  */
-export async function importGraph(): Promise<void> {
-  const file = await pickSnapshotFile();
-  if (!file) return;
 
-  const replace = window.confirm(
-    '导入方式：\n\n'
-    + '确定 = 替换现有图谱（恢复备份）\n'
-    + '取消 = 合并进现有图谱（保留已有记录，只补充缺失的）\n\n'
-    + '两种方式都不会重新抽取，也不会消耗 Token。',
-  );
-  const strategy: ImportStrategy = replace ? 'replace' : 'merge';
-
-  const { preview, error } = await previewGraphImport(file, strategy);
-  if (!preview) {
-    setStatus(error ?? '导入失败。', true);
-    return;
-  }
-
-  const unrecognized = Object.entries(preview.dropped).filter(([, count]) => count > 0);
-  const lossNote = unrecognized.length
-    ? `\n\n文件中的 ${unrecognized.map(([kind, count]) => `${count} 个${kind}`).join('、')} 无法识别，将被跳过。`
-    : '';
-  if (!window.confirm(`${preview.summary}${lossNote}\n\n确认导入吗？`)) {
-    setStatus('已取消导入。');
-    return;
-  }
-
-  knowledgeGraphImportButton.disabled = true;
-  try {
-    const result = await applyGraphImport(preview.plan);
-    setStatus(
-      `已导入（${result.strategy === 'replace' ? '替换' : '合并'}）：`
-      + `${result.papers} 篇文献，${result.entities} 个实体，${result.edges} 条边。`,
-    );
-    await refreshPendingCount();
-    await requireContext().reload();
-  } catch (error) {
-    setStatus(
-      `导入失败：${error instanceof Error ? error.message : String(error)}`,
-      true,
-    );
-  } finally {
-    knowledgeGraphImportButton.disabled = false;
-  }
-}

@@ -25,6 +25,7 @@ import {
   chatInput,
   settingsModalBackdrop,
 } from "./viewer-elements";
+import { releaseFocusBeforeHiding } from "./focus-release";
 
 export let aiConfig: { value: AiConfig } = { value: { ...DEFAULT_AI_CONFIG } };
 
@@ -108,6 +109,9 @@ export function setAssistantView(view: AssistantView): void {
 
   assistantChatPanel.hidden = !showChat;
   assistantToolsRuntime.classList.toggle("active", !showChat);
+  // Switching back to 聊天 hides the tool runtime; a control inside it may still hold the focus from the click that
+  // switched tabs, and `aria-hidden` on an ancestor of the focused element is exactly what browsers refuse.
+  if (showChat) releaseFocusBeforeHiding(assistantToolsRuntime);
   assistantToolsRuntime.setAttribute("aria-hidden", String(showChat));
 
   if (view !== "translate") assistantChoreography?.cancelTranslation();

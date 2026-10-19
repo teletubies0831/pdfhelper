@@ -1,4 +1,5 @@
 import { eventBus, pdfDocument } from "../../app/viewer-state";
+import { releaseFocusBeforeHiding } from "../../app/focus-release";
 import {
   hasSeenOnboarding,
   markOnboardingSeen,
@@ -515,6 +516,9 @@ function finishTour(): void {
   stopObservingTarget();
   if (layoutFrame !== null) window.cancelAnimationFrame(layoutFrame);
   layoutFrame = null;
+  // 跳过 is a button inside the tour, so finishing it means hiding an ancestor of whatever the user just clicked.
+  // Chromium refuses `aria-hidden` on such an element (and logs it as an extension error), so focus leaves first.
+  releaseFocusBeforeHiding(root());
   root().hidden = true;
   root().setAttribute("aria-hidden", "true");
   document.body.classList.remove("onboarding-tour-open");
@@ -538,6 +542,8 @@ function pauseForKnowledgeOverview(): void {
       return;
     }
     interactionSuspended = true;
+    // The card (and its 下一步 button) is about to be hidden so the user can read the overview dialog.
+    releaseFocusBeforeHiding(root());
     root().hidden = true;
     root().setAttribute("aria-hidden", "true");
     dialog.addEventListener("close", () => {

@@ -24,6 +24,7 @@ import { clearSettingsStatus, loadSettingsConnectionCatalog, saveSettingsRoutes,
 import { loadConnectionTestPreferences, readConnectionTestPreferences, saveConnectionTestPreferences } from './connection-test-preferences';
 import { createVisionTestImage } from './connection-test-controller';
 import { syncChatReasoningControl } from '../../app/chat-reasoning-control';
+import { releaseFocusBeforeHiding } from '../../app/focus-release';
 import { syncChatWebSearchToggle } from './chat-web-search';
 import { populateWebRetrievalForm } from './web-retrieval-settings';
 
@@ -46,6 +47,9 @@ export function updateCitationReturnButton() {
   );
 
   citationReturnButton.classList.toggle("visible", isAvailable);
+  // Withdrawing the button can happen while it holds the focus (the user just came back through it); blur it first, or
+  // the browser refuses the `aria-hidden` and reports it as an extension error.
+  if (!isAvailable) releaseFocusBeforeHiding(citationReturnButton);
   citationReturnButton.setAttribute("aria-hidden", String(!isAvailable));
   citationReturnButton.tabIndex = isAvailable ? 0 : -1;
   citationReturnPosition.textContent =

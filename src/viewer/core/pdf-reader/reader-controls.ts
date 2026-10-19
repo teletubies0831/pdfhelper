@@ -507,7 +507,15 @@ export function getViewerSelectionText(
 
 
 
-export const AUTO_TRANSLATE_DELAY_MS = 700;
+/**
+ * How long the selection must be still before a translation starts.
+ *
+ * It exists because `selectionchange` fires on every pointer move while the reader drags across a sentence. 700 ms was
+ * chosen when a translation was a single multi-second request; now the first characters arrive in about a second, so
+ * the settle window was a visible share of the wait. 450 ms still swallows a drag, and an early request that turns out
+ * to be premature is simply aborted by the next selection change.
+ */
+export const AUTO_TRANSLATE_DELAY_MS = 450;
 
 
 export const MAX_SUMMARY_SOURCE_LENGTH = 18_000;
