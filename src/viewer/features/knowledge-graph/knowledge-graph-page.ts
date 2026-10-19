@@ -396,10 +396,14 @@ function redrawInspector(): void {
   if (node) {
     if (node.kind === 'paper' && node.paper) {
       renderPaperInspector(node.paper, snapshot, actions);
-    } else if (node.entity) {
-      renderEntityInspector(node.entity, snapshot, actions, currentExplanationProgress());
+      return;
     }
-    return;
+    if (node.entity) {
+      renderEntityInspector(node.entity, snapshot, actions, currentExplanationProgress());
+      return;
+    }
+    // A personal node (「我的标注」) has neither a paper nor an entity behind it. Falling through to `clearInspector`
+    // is deliberate: selecting one used to leave the *previous* node's panel on screen, with its actions still live.
   }
   clearInspector();
 }

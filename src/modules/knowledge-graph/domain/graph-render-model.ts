@@ -5,6 +5,7 @@ import type {
   GraphPaper,
   GraphUserNode,
 } from '../contracts.ts';
+import { isUndirectedEdgeType } from '../contracts.ts';
 import { buildNodeRoleIndex } from './paper-degree.ts';
 
 /**
@@ -76,9 +77,15 @@ export function dashPatternForOrigin(origin: EdgeOrigin): number[] {
   return [7, 6];
 }
 
-/** Undirected relationship types are drawn without an arrow head. */
+/**
+ * Undirected relationship types are drawn without an arrow head.
+ *
+ * Delegates to the contract's list instead of repeating two of its three entries: the derived `SHARED_ENTITIES` edge was
+ * missing here, so "these two papers mention the same thing" — a symmetric fact whose endpoints are sorted by id — was
+ * drawn with an arbitrary arrow.
+ */
 export function isDirectedEdgeType(type: GraphEdge['type']): boolean {
-  return type !== 'SIMILAR_TO' && type !== 'RELATED_TO';
+  return !isUndirectedEdgeType(type);
 }
 
 /**

@@ -44,6 +44,8 @@ const { handleAiRequest } = evaluate(await compile('src/background/ai/request-ha
   './provider-runtime': { getProviderAdapter: () => adapter },
   './conversation-builder': {},
   './document-overview-service': {},
+  // Bibliographic metadata extraction is exercised by the library workbench test; here it only has to exist.
+  './document-metadata-service': {},
   // Knowledge-graph entity extraction, relation judgement and entity explanations are exercised by
   // their own contract tests; here they only need to exist so the handler module can be loaded.
   './entity-extraction-service': {},
@@ -135,6 +137,11 @@ test('every knowledge-graph AI request type is accepted by the whitelist and ans
     './provider-runtime': { getProviderAdapter: () => adapter },
     './conversation-builder': {},
     './document-overview-service': {},
+    './document-metadata-service': {
+      extractDocumentMetadata: async () => ({
+        authors: [], publishDate: '', language: '', documentUrl: '', doi: '',
+      }),
+    },
     './entity-extraction-service': {
       extractEntities: async () => ({
         content: '{"entities":[]}', batchCount: 1, failedBatches: [], promptVersion: 'test',

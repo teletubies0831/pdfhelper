@@ -212,11 +212,25 @@ const steps: TourStep[] = [
   {
     id: "knowledge-document",
     eyebrow: "PDF 知识库",
-    title: "查看 PDF 概览和原文",
-    description: "点击高亮的 PDF 标题可以查看内容概览；概览窗口右上角还可以重新打开原文。关闭概览后，引导会继续。",
-    target: () => document.querySelector<HTMLElement>(".knowledge-pdf-title-button[data-introduce-document]"),
+    title: "先选中一篇文献",
+    description: "列表视图下一行就是一篇 PDF：点任意一行把它选中，右侧面板会显示它的阅读状态、索引与概览进度，以及能对它做的操作。",
+    note: "想换成卡片视图，可以用搜索框右边的「列表 / 卡片」切换。",
+    target: () => document.querySelector<HTMLElement>("#knowledge-table-body .knowledge-table-row")
+      ?? document.querySelector<HTMLElement>(".knowledge-pdf-title-button[data-introduce-document]"),
     fallbackTarget: "#knowledge-list",
     placement: "right",
+    advance: "next",
+    nextLabel: "选中了，继续",
+    canUseNext: () => true,
+  },
+  {
+    id: "knowledge-overview",
+    eyebrow: "PDF 概览",
+    title: "查看或生成概览",
+    description: "右侧面板里的这个按钮会打开概览窗口；概览窗口右上角还可以重新打开原文。关闭概览后，引导会继续。",
+    target: "#knowledge-doc-overview",
+    fallbackTarget: "#knowledge-list",
+    placement: "left",
     advance: "knowledge-overview",
     nextLabel: "暂不查看，继续",
     canUseNext: () => true,
@@ -225,10 +239,10 @@ const steps: TourStep[] = [
     id: "related-papers",
     eyebrow: "扩展阅读",
     title: "点一下，检索相关论文",
-    description: "每张 PDF 卡片中间的这颗按钮会调用一次联网检索，把相关论文写进这份 PDF 概览的末尾；已经有结果时它会变成「重新检索」。",
+    description: "右侧面板里的这颗按钮会调用一次联网检索，把相关论文写进这份 PDF 概览的末尾；已经有结果时它会变成「重新检索」。",
     note: "需要先在设置里填好 DeepSeek API Key，并且这份 PDF 已经生成过概览。引导里不会真的替你花掉这次调用。",
-    target: "[data-search-related]",
-    fallbackTarget: "#knowledge-list",
+    target: "#knowledge-doc-search-related",
+    fallbackTarget: "[data-search-related]",
     placement: "left",
     advance: "next",
     nextLabel: "知道了，继续",
@@ -655,7 +669,8 @@ export function initializeOnboardingTour(): void {
   window.addEventListener("resize", requestTourLayout, { passive: true });
   document.addEventListener("scroll", requestTourLayout, { capture: true, passive: true });
   window.addEventListener("pdf-helper:knowledge-corpus-change", () => {
-    if (active && steps[currentStepIndex]?.id === "knowledge-document") {
+    if (active && (steps[currentStepIndex]?.id === "knowledge-document"
+      || steps[currentStepIndex]?.id === "knowledge-overview")) {
       window.requestAnimationFrame(rebindCurrentTarget);
     }
   });

@@ -1,7 +1,7 @@
 export {
   listKnowledgeFolders, listKnowledgeDocuments, getKnowledgeDocument,
   addKnowledgeDocument, updateKnowledgeDocument, removeKnowledgeDocument,
-  createKnowledgeFolder, deleteKnowledgeFolder,
+  linkKnowledgeDocumentSource, createKnowledgeFolder, deleteKnowledgeFolder,
 } from '../../../modules/knowledge/public';
 export type {
   KnowledgeDocumentIndexStatus, KnowledgeDocumentOverviewStatus,

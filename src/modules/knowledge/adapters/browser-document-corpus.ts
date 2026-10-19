@@ -1,5 +1,8 @@
 const KNOWLEDGE_CORPUS_STORAGE_KEY = "pdf-helper-knowledge-corpus-v1";
 
+/** How many older file identities one record remembers; see `linkKnowledgeDocumentSource`. */
+const MAX_SOURCE_ALIASES = 5;
+
 export type KnowledgeDocumentIndexStatus =
   | "pending"
   | "indexing"
@@ -11,6 +14,15 @@ export type KnowledgeDocumentOverviewStatus =
   | "generating"
   | "ready"
   | "error";
+
+/**
+ * How far the reader has got with a document.
+ *
+ * Three states, no more: a library view needs "what have I not read yet" and "what am I in the middle of", and every
+ * extra state is one more thing to decide when filing a paper. Records written before this existed have no value, which
+ * is read as `todo` — no migration pass.
+ */
+export type KnowledgeDocumentReadingStatus = "todo" | "reading" | "done";
 
 export interface KnowledgeFolder {
   id: string;
@@ -24,6 +36,15 @@ export interface KnowledgeLibraryDocument {
   documentName: string;
   pageCount: number;
   recentEntryId?: string;
+  /**
+   * 同一篇文献的其他文件身份（PDF 指纹）。
+   *
+   * The same paper is often more than one file on disk: saving annotated PDFs re-saves the bytes (pdf-lib writes an
+   * embedded attachment), so the file's fingerprint changes while the paper does not. The record keeps its original
+   * `documentId` — that id is the graph's paper id and every entity hangs off it — and remembers the newer files here,
+   * so opening the annotated copy still finds this record instead of offering to add the paper a second time.
+   */
+  aliases?: string[];
   folderId: string | null;
   addedAt: string;
   updatedAt: string;
@@ -52,6 +73,29 @@ export interface KnowledgeLibraryDocument {
   relatedLiteratureUsage?: { searchCalls: number; fetchCalls: number };
   relatedLiteratureSources?: Array<"deepseek" | "openalex">;
   relatedLiteratureError?: string;
+  /** Absent on records written before the field existed; treat as `todo`. */
+  readingStatus?: KnowledgeDocumentReadingStatus;
+
+  /**
+   * Bibliographic metadata, filled by the model when a document is added.
+   *
+   * All of it is optional and independent: a contract has no DOI, a web page has no page count, and an old scan
+   * has no authors the model can find. Empty means "not known", never "the model said there are none" — which is
+   * why the panel shows a dash instead of hiding a row, and why nothing here is required for the library to work.
+   */
+  authors?: string[];
+  /** Publication date as the model read it (`2026`, `2026-10`, `2026-10-18`); kept verbatim rather than guessed. */
+  publishDate?: string;
+  /** ISO 639-1 code (`en`, `zh`, …), as a two-letter language tag. */
+  language?: string;
+  /** Canonical link to the work (arXiv, publisher, DOI resolver). */
+  documentUrl?: string;
+  /** Bare DOI (`10.xxxx/yyy`), without the `https://doi.org/` prefix. */
+  doi?: string;
+  /** Whether the metadata pass has run, so the panel can say "尚未提取" instead of showing five dashes. */
+  metadataStatus?: "pending" | "extracting" | "ready" | "error";
+  metadataError?: string;
+  metadataAt?: string;
 }
 
 interface KnowledgeCorpusState {
@@ -96,10 +140,54 @@ export function listKnowledgeDocuments(): KnowledgeLibraryDocument[] {
   return [...readState().documents];
 }
 
+/**
+ * Finds the record by its id **or by any file identity it has absorbed**.
+ *
+ * Resolution lives here rather than at each call site because every caller asks the same question — "is this open PDF
+ * in the library" — and the answer must not depend on which of the paper's files happens to be open. Writes resolve the
+ * same way, so marking a re-saved file as 已读 updates the paper rather than silently doing nothing.
+ */
+function resolveDocument(
+  documents: KnowledgeLibraryDocument[],
+  documentId: string,
+): KnowledgeLibraryDocument | undefined {
+  const direct = documents.find((item) => item.documentId === documentId);
+  if (direct) return direct;
+  return documents.find((item) => item.aliases?.includes(documentId));
+}
+
 export function getKnowledgeDocument(
   documentId: string,
 ): KnowledgeLibraryDocument | undefined {
-  return readState().documents.find((item) => item.documentId === documentId);
+  return resolveDocument(readState().documents, documentId);
+}
+
+/**
+ * Points a record at a newer file with the same paper's content (e.g. the copy saved with annotations embedded).
+ *
+ * The `documentId` stays put: it is the graph's paper id and the key every entity, edge and extraction job was
+ * recorded under. Only the "which file do we open" edge changes, plus an alias so the new file resolves to this record.
+ * The alias list keeps the most recent few — every save re-writes the bytes, so an unbounded list would grow with each
+ * save forever.
+ */
+export function linkKnowledgeDocumentSource(
+  documentId: string,
+  source: { sourceDocumentId: string; recentEntryId?: string },
+): KnowledgeLibraryDocument | undefined {
+  const state = readState();
+  const document = resolveDocument(state.documents, documentId);
+  if (!document) return undefined;
+  const aliases = (document.aliases ?? []).filter((alias) => alias !== document.documentId);
+  const nextAliases = source.sourceDocumentId === document.documentId
+    ? aliases
+    : [source.sourceDocumentId, ...aliases.filter((alias) => alias !== source.sourceDocumentId)];
+  Object.assign(document, {
+    aliases: nextAliases.length ? nextAliases.slice(0, MAX_SOURCE_ALIASES) : undefined,
+    recentEntryId: source.recentEntryId ?? document.recentEntryId,
+    updatedAt: new Date().toISOString(),
+  });
+  writeState(state);
+  return document;
 }
 
 export function addKnowledgeDocument(
@@ -126,6 +214,10 @@ export function addKnowledgeDocument(
     indexStatus: "pending",
     chunkCount: 0,
     overviewStatus: "pending",
+    readingStatus: "todo",
+    // The bibliographic pass runs right after the text extraction that follows this call; until it does, the panel
+    // shows "尚未提取" rather than five empty rows pretending to be facts.
+    metadataStatus: "pending",
   };
   state.documents.unshift(document);
   writeState(state);
@@ -137,7 +229,7 @@ export function updateKnowledgeDocument(
   changes: Partial<Omit<KnowledgeLibraryDocument, "documentId" | "addedAt">>,
 ): void {
   const state = readState();
-  const document = state.documents.find((item) => item.documentId === documentId);
+  const document = resolveDocument(state.documents, documentId);
   if (!document) return;
   Object.assign(document, changes, { updatedAt: new Date().toISOString() });
   writeState(state);
@@ -145,8 +237,10 @@ export function updateKnowledgeDocument(
 
 export function removeKnowledgeDocument(documentId: string): void {
   const state = readState();
+  const target = resolveDocument(state.documents, documentId);
+  if (!target) return;
   state.documents = state.documents.filter(
-    (item) => item.documentId !== documentId,
+    (item) => item.documentId !== target.documentId,
   );
   writeState(state);
 }

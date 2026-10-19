@@ -11,7 +11,8 @@
 }
 
 .knowledge-detail-panel {
-  display: none !important;
+  /* The panel this rule used to hide is now the document inspector (`library-table.css`). */
+  min-width: 0;
 }
 
 .knowledge-sidebar {

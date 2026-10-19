@@ -2,7 +2,6 @@ import {
   knowledgeGroupSelect,
   knowledgeMainElement,
   knowledgeSearchInput,
-  knowledgeSortSelect,
   vocabularyLibraryMainElement,
   vocabularySearchInput,
   vocabularySortSelect,
@@ -84,10 +83,6 @@ export function readPersistedAppViewState(): PersistedAppViewState | null {
           : "all",
       knowledgeSearch:
         typeof value.knowledgeSearch === "string" ? value.knowledgeSearch : "",
-      knowledgeSort:
-        typeof value.knowledgeSort === "string"
-          ? value.knowledgeSort
-          : "newest",
       knowledgeGroup:
         typeof value.knowledgeGroup === "string"
           ? value.knowledgeGroup
@@ -146,7 +141,6 @@ export function persistCurrentAppViewState(): void {
     knowledgeReadingStatus: activeKnowledgeReadingStatus.value,
     knowledgePriority: activeKnowledgePriority.value,
     knowledgeSearch: knowledgeSearchInput.value,
-    knowledgeSort: knowledgeSortSelect.value,
     knowledgeGroup: knowledgeGroupSelect.value,
     selectedKnowledgeRecordKey: selectedKnowledgeRecordKey.value,
     knowledgeScrollTop: knowledgeMainElement?.scrollTop ?? 0,
@@ -182,7 +176,6 @@ export function applyPersistedKnowledgeState(state: PersistedAppViewState): void
   selectedKnowledgeRecordKey.value = state.selectedKnowledgeRecordKey;
 
   knowledgeSearchInput.value = state.knowledgeSearch;
-  knowledgeSortSelect.value = state.knowledgeSort;
   knowledgeGroupSelect.value = "none";
 }
 

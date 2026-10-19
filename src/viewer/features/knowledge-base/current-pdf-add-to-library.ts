@@ -1,4 +1,5 @@
 import { knowledgeRetrievalService } from "../../../modules/knowledge/public";
+import { findSamePaperDocument } from "../../../modules/knowledge/public";
 import { getDocument } from "pdfjs-dist";
 import { currentRecentEntryId, pdfDocument, sourceName, sourcePdfBytes } from "../../app/viewer-state";
 import { getDisplayFileName, buildPdfAssetOptions } from "../../core/pdf-reader/public";
@@ -6,9 +7,13 @@ import { getDocumentChatId } from "../../app/document-identity";
 import {
   addKnowledgeDocument,
   getKnowledgeDocument,
+  linkKnowledgeDocumentSource,
+  listKnowledgeDocuments,
   updateKnowledgeDocument,
 } from "./knowledge-corpus-repository";
 import { generateAndSaveKnowledgeOverview } from "./knowledge-overview-background-task";
+import { extractDocumentMetadataFor } from "./document-metadata-extraction";
+import { extractTextItems } from "./pdf-text-extraction";
 
 interface KnowledgeIndexWorkerMessage {
   type: "progress" | "done" | "error";
@@ -21,18 +26,9 @@ interface KnowledgeIndexWorkerMessage {
 
 const knowledgeIndexWorkers = new Map<string, Worker>();
 
-function extractTextItems(items: unknown[]): string {
-  return items
-    .map((item) => {
-      if (!item || typeof item !== "object" || !("str" in item)) return "";
-      const textItem = item as { str?: unknown; hasEOL?: unknown };
-      const text = typeof textItem.str === "string" ? textItem.str : "";
-      return textItem.hasEOL ? `${text}\n` : `${text} `;
-    })
-    .join("")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+/** True while this page is indexing that document; the library uses it to tell "running" from "interrupted". */
+export function isKnowledgeIndexRunning(documentId: string): boolean {
+  return knowledgeIndexWorkers.has(documentId);
 }
 
 function showBackgroundIndexNotice(
@@ -114,35 +110,73 @@ export function addCurrentPdfToLibrary(): void {
   const documentProxy = pdfDocument.value;
   if (!documentProxy) return;
   const documentId = getDocumentChatId(documentProxy);
+  const documentName = getDisplayFileName(sourceName.value) || "未命名 PDF";
   const existingDocument = getKnowledgeDocument(documentId);
   if (existingDocument && existingDocument.indexStatus !== "error") {
     syncCurrentPdfLibraryButton();
     return;
   }
 
-  if (!existingDocument) {
+  // Before a second record is created: is this the *same paper* under a new file identity? Saving annotated PDFs
+  // re-writes the bytes (pdf-lib embeds an attachment), which changes the fingerprint — so the file the user just
+  // opened is not the file the library knows, even though the paper is the same one. Adding it again would mean a
+  // second index, a second graph paper and two entries for one work, so the existing record is pointed at this file
+  // instead ("打开原文" then opens the annotated copy rather than the stale one).
+  //
+  // Everything below works on `targetDocumentId`, the *record* id — not the file id. They only differ after linking,
+  // and the index has to be written under the record id or the chunks land on an id nothing looks up.
+  let targetDocumentId = documentId;
+  let linkedToExisting = false;
+  const samePaper = findSamePaperDocument(listKnowledgeDocuments(), {
+    documentId,
+    documentName,
+    pageCount: documentProxy.numPages,
+  });
+  if (samePaper) {
+    linkKnowledgeDocumentSource(samePaper.documentId, {
+      sourceDocumentId: documentId,
+      recentEntryId: currentRecentEntryId.value || undefined,
+    });
+    targetDocumentId = samePaper.documentId;
+    linkedToExisting = true;
+    const linked = getKnowledgeDocument(targetDocumentId);
+    if (linked && linked.indexStatus !== "error") {
+      syncCurrentPdfLibraryButton();
+      showBackgroundIndexNotice(
+        targetDocumentId,
+        "这篇文献已在知识库中，已把原文指向刚打开的这份文件，不会重复添加。",
+        "success",
+        100,
+      );
+      return;
+    }
+    // The linked record's index failed earlier: fall through to the retry, but under the record's id — otherwise the
+    // 「↻ 重试知识库索引」 button would link and return forever without ever indexing anything.
+  }
+
+  if (!linkedToExisting && !existingDocument) {
     addKnowledgeDocument({
-      documentId,
-      documentName: getDisplayFileName(sourceName.value) || "未命名 PDF",
+      documentId: targetDocumentId,
+      documentName,
       pageCount: documentProxy.numPages,
       recentEntryId: currentRecentEntryId.value || undefined,
     });
   }
-  updateKnowledgeDocument(documentId, { indexStatus: "indexing" });
+  updateKnowledgeDocument(targetDocumentId, { indexStatus: "indexing" });
   syncCurrentPdfLibraryButton();
   const bytes = sourcePdfBytes.value;
   if (!bytes) {
-    updateKnowledgeDocument(documentId, {
+    updateKnowledgeDocument(targetDocumentId, {
       indexStatus: "error",
       indexError: "无法读取当前 PDF 数据，请重新打开后再添加。",
     });
     syncCurrentPdfLibraryButton();
-    showBackgroundIndexNotice(documentId, "无法读取 PDF 数据，请重新打开后再试。", "error");
+    showBackgroundIndexNotice(targetDocumentId, "无法读取 PDF 数据，请重新打开后再试。", "error");
     return;
   }
 
   void startBackgroundKnowledgeIndex({
-    documentId,
+    documentId: targetDocumentId,
     documentName: getDisplayFileName(sourceName.value) || "未命名 PDF",
     fingerprint: documentProxy.fingerprints?.find(Boolean) || documentId,
     pageCount: documentProxy.numPages,
@@ -183,6 +217,13 @@ async function startBackgroundKnowledgeIndex(input: {
     }
     await backgroundPdf.destroy();
     backgroundPdf = null;
+
+    // 元数据与索引并行：索引要跑分类/嵌入，几百页要几十秒；元数据只是首页一次短调用，让作者和 DOI 先到位，
+    // 用户不必盯着「已添加到库」等概览才看到有用的信息。
+    void extractDocumentMetadataFor(documentId, {
+      documentName: input.documentName,
+      text: pages.slice(0, 2).map((page) => page.text).join("\n\n").slice(0, 6_000),
+    });
 
     const worker = new Worker(new URL("./knowledge-index.worker.ts", import.meta.url), {
     type: "module",

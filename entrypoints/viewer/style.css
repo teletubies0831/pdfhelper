@@ -6,6 +6,9 @@
 @import url("../../src/viewer/features/knowledge-base/dashboard.css");
 @import url("../../src/viewer/core/pdf-reader/styles.css");
 @import url("../../src/viewer/features/knowledge-base/library.css");
+@import url("../../src/viewer/features/knowledge-base/library-doc-panel.css");
+@import url("../../src/viewer/features/knowledge-base/library-batch.css");
+@import url("../../src/viewer/features/knowledge-base/library-table.css");
 @import url("../../src/viewer/features/knowledge-base/editor.css");
 @import url("../../src/viewer/features/knowledge-base/content-editor.css");
 @import url("../../src/viewer/features/vocabulary-library/styles.css");

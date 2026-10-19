@@ -1,0 +1,160 @@
+/* ==========================================================================
+   Knowledge library — 多选, the batch bar, and the row context menu.
+   Both are "act on documents" chrome: the bar appears only while a selection exists, and the menu is a one-document shortcut.
+   ========================================================================== */
+
+/* ---------------------------------------------------------- 多选与批量栏 */
+
+/* The checkbox column and the header's 全选 share one look: a quiet square that only becomes
+   prominent on the rows that are actually part of a batch. */
+.knowledge-table thead .knowledge-col-select,
+.knowledge-table tbody .knowledge-col-select {
+  padding: 0 4px 0 12px;
+  text-align: left;
+}
+
+.knowledge-row-check,
+#knowledge-select-all {
+  width: 15px;
+  height: 15px;
+  accent-color: #2a6fd6;
+  cursor: pointer;
+}
+
+/* A checked row is a *different* state from the inspector's selection, so it gets a left bar of its
+   own instead of reusing the blue highlight — otherwise a batch of five would look like five selected
+   documents. */
+.knowledge-table-row.is-checked {
+  background: #f4f8ff;
+  box-shadow: inset 3px 0 0 #9dc0ff;
+}
+
+.knowledge-pdf-card.is-checked {
+  border-color: #b9d4ff;
+  background: #fbfdff;
+}
+
+.knowledge-card-check {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-height: 24px;
+  color: #7a8798;
+  font-size: 12px;
+}
+
+.knowledge-card-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: #2a6fd6;
+  cursor: pointer;
+}
+
+/* The batch bar replaces nothing: it slides in above the list only while something is selected. */
+.knowledge-batch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 14px;
+  border: 1px solid #cfe0ff;
+  border-radius: 12px;
+  background: #f4f8ff;
+  padding: 8px 12px;
+}
+
+.knowledge-batch-bar[hidden] {
+  display: none !important;
+}
+
+.knowledge-batch-bar strong {
+  color: #1f5fbf;
+  font-size: 13px;
+}
+
+.knowledge-batch-bar select {
+  height: 32px;
+  min-width: 132px;
+  border: 1px solid #dbe4f2;
+  border-radius: 8px;
+  background: #fff;
+  color: #34445c;
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.knowledge-batch-bar button {
+  height: 32px;
+  border: 1px solid #dbe4f2;
+  border-radius: 8px;
+  background: #fff;
+  color: #34445c;
+  font-size: 12px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.knowledge-batch-bar button:hover {
+  border-color: #b9d4ff;
+  color: #2a6fd6;
+}
+
+.knowledge-batch-bar .danger-button {
+  border-color: #f6d8d5;
+  color: #c0392b;
+}
+
+#knowledge-batch-clear {
+  margin-left: auto;
+  border-color: transparent;
+  background: transparent;
+  color: #63748d;
+}
+
+
+/* ------------------------------------------------------------- context menu */
+
+.knowledge-context-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 176px;
+  border: 1px solid #e1e8f4;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgb(15 23 42 / 14%);
+  padding: 5px;
+}
+
+.knowledge-context-menu-item {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #34445c;
+  font-size: 13px;
+  text-align: left;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.knowledge-context-menu-item:hover:not(:disabled) {
+  background: #f2f7ff;
+  color: #2a6fd6;
+}
+
+.knowledge-context-menu-item:disabled {
+  color: #b0bbc9;
+  cursor: not-allowed;
+}
+
+.knowledge-context-menu-item.is-danger {
+  color: #c0392b;
+}
+
+.knowledge-context-menu-item.is-danger:hover {
+  background: #fdeaea;
+}
+

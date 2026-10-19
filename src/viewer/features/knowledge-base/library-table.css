@@ -1,0 +1,362 @@
+/* ==========================================================================
+   Knowledge library — the table view and the reading/state chips.
+   What is left of the old single stylesheet after the inspector and the batch bar moved into their own files.
+   ========================================================================== */
+
+/* The page shell gains a third column for the inspector. `auto` rather than a
+   fixed width so the column disappears with the panel when nothing is
+   selected, instead of leaving a blank 320px strip. */
+.knowledge-base-shell {
+  position: relative;
+  grid-template-columns: 248px minmax(0, 1fr) auto;
+}
+
+#knowledge-list[hidden],
+#knowledge-table-wrap[hidden] {
+  display: none !important;
+}
+
+
+/* --------------------------------------------------------------- view toggle */
+
+/* The search row holds three things now (search, view toggle, clear). The older rules give it three tracks of their own
+   widths, which pushes 清空搜索 onto a second row and stretches it across the whole width — hence the ID, so this wins
+   wherever the older rules are imported. */
+#knowledge-base-page .knowledge-main .research-search-row {
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  justify-content: start;
+}
+
+#knowledge-base-page .knowledge-main .research-search-row #knowledge-clear-filters {
+  width: auto;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+/* The magnifier: drawn as an icon rather than the `⌕` dingbat, whose ink sits far below its em box and read as a speck
+   next to the placeholder. Same stroke conventions as the toolbar icons, sized above the text so it reads as a control. */
+#knowledge-base-page .knowledge-search-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.knowledge-view-toggle {
+  display: inline-flex;
+  min-width: 132px;
+  height: 44px;
+  align-items: stretch;
+  border: 1px solid #dbe4f2;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.knowledge-view-toggle button {
+  width: auto !important;
+  height: 100% !important;
+  flex: 1 1 auto;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent;
+  color: #63748d;
+  font-size: 13px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.knowledge-view-toggle button + button {
+  border-left: 1px solid #e5ebf5 !important;
+}
+
+.knowledge-view-toggle button:hover {
+  background: #f2f7ff;
+  color: #2a6fd6;
+}
+
+.knowledge-view-toggle button.active {
+  background: #e8f1ff;
+  color: #1f5fbf;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------- table */
+
+.knowledge-table-wrap {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e1e8f4;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden auto;
+  box-shadow: 0 5px 18px rgb(36 81 147 / 4%);
+}
+
+.knowledge-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.knowledge-table thead th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  border-bottom: 1px solid #e5ebf5;
+  background: #f8fbff;
+  color: #6b7b93;
+  font-weight: 600;
+  text-align: left;
+  padding: 0;
+}
+
+.knowledge-table thead th button {
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.knowledge-table thead th button:hover {
+  background: #eef5ff;
+  color: #2a6fd6;
+}
+
+.knowledge-table thead th button.is-sorted {
+  color: #1f5fbf;
+}
+
+.knowledge-table thead th button.is-sorted::after {
+  content: attr(data-sort-label);
+  margin-left: 5px;
+  font-size: 11px;
+}
+
+/* Column widths: the title takes what is left; everything else is a short, centred value.
+   Nine columns still have to read as one row, so the numeric/date ones stay narrow. */
+.knowledge-col-select {
+  width: 38px;
+  text-align: center;
+}
+
+.knowledge-col-title {
+  width: auto;
+  text-align: left;
+}
+.knowledge-col-reading { width: 78px; }
+.knowledge-col-pages { width: 60px; }
+/* Dates are `2026-10-18`; the column has to be wide enough that they never wrap onto two lines. */
+.knowledge-col-date { width: 104px; }
+.knowledge-col-published { width: 100px; }
+.knowledge-col-state { width: 56px; }
+
+/* Everything except the title (and the checkbox column, which has its own rule) is centred, in the header and in the
+   body: these are single short values, and a left-aligned column of numbers reads as ragged. */
+.knowledge-table thead th:not(.knowledge-col-title):not(.knowledge-col-select),
+.knowledge-table thead th:not(.knowledge-col-title):not(.knowledge-col-select) button {
+  text-align: center;
+}
+
+.knowledge-table tbody td:not(.knowledge-col-title),
+.knowledge-table tbody td.knowledge-col-published {
+  text-align: center;
+}
+
+.knowledge-table tbody .knowledge-col-state {
+  text-align: center;
+}
+
+.knowledge-table-row {
+  border-bottom: 1px solid #f0f4fa;
+  color: #34445c;
+  cursor: pointer;
+}
+
+.knowledge-table-row:hover {
+  background: #f7faff;
+}
+
+.knowledge-table-row.is-selected {
+  background: #eaf2ff;
+  box-shadow: inset 3px 0 0 #2a6fd6;
+}
+
+.knowledge-table-row:focus-visible {
+  outline: 2px solid #2a6fd6;
+  outline-offset: -2px;
+}
+
+.knowledge-table-row > th,
+.knowledge-table-row > td {
+  height: 44px;
+  padding: 0 10px;
+  font-weight: 400;
+  text-align: left;
+  vertical-align: middle;
+}
+
+/* Short values stay on one line; only the title is allowed to truncate. */
+.knowledge-table-row > .knowledge-col-pages,
+.knowledge-table-row > .knowledge-col-date,
+.knowledge-table-row > .knowledge-col-published {
+  white-space: nowrap;
+}
+
+.knowledge-table-row > .knowledge-col-pages,
+.knowledge-table-row > .knowledge-col-date,
+.knowledge-table-row > .knowledge-col-published {
+  color: #6b7b93;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A missing 发表日期 is a fact, not an error: quiet, like the inspector's dash. */
+.knowledge-table-row > .knowledge-col-published.is-empty {
+  color: #b0bbc9;
+}
+
+.knowledge-table-title {
+  display: block;
+  overflow: hidden;
+  color: #22314a;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-table-empty {
+  margin: 0;
+  color: #8494a9;
+  font-size: 13px;
+  padding: 28px 16px;
+  text-align: center;
+}
+
+
+/* --------------------------------------------------------------- state chips */
+
+/* Completion, not values: ✓ done, … running, ! failed, · not started. The colour
+   is what the eye scans for, so the four states stay visually distinct at 11px. */
+.knowledge-state-chip {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.knowledge-state-chip.is-done {
+  background: #e4f6ec;
+  color: #16804b;
+}
+
+.knowledge-state-chip.is-running {
+  background: #e8f1ff;
+  color: #2a6fd6;
+}
+
+.knowledge-state-chip.is-failed {
+  background: #fdeaea;
+  color: #c0392b;
+}
+
+.knowledge-state-chip.is-missing {
+  background: #f1f4f9;
+  color: #9aa7ba;
+}
+
+/* The reading status is a button everywhere: clicking it advances the state. */
+.knowledge-reading-chip {
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: #f1f4f9 !important;
+  color: #5c6b81 !important;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 10px !important;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.knowledge-reading-chip.is-todo {
+  background: #f1f4f9 !important;
+  color: #5c6b81 !important;
+}
+
+.knowledge-reading-chip.is-reading {
+  background: #e8f1ff !important;
+  color: #1f5fbf !important;
+}
+
+.knowledge-reading-chip.is-done {
+  background: #e4f6ec !important;
+  color: #16804b !important;
+}
+
+.knowledge-reading-chip:hover {
+  filter: brightness(0.97);
+}
+
+.knowledge-list-summary {
+  margin: 12px 2px 0;
+  color: #8494a9;
+  font-size: 12px;
+}
+
+.knowledge-list-summary:empty {
+  display: none;
+}
+
+/* Selected card in the grid view mirrors the table row, so the inspector never
+   points at something the user cannot see is selected. */
+.knowledge-pdf-card.is-selected {
+  border-color: #b9d4ff;
+  box-shadow: 0 0 0 2px #dbe9ff, 0 8px 22px rgb(36 81 147 / 8%);
+}
+
+/* The action column is 104px wide, which fits 「移出知识库」 on one line only if the
+   label is allowed not to wrap — without this it breaks after the third character. */
+.knowledge-pdf-actions button {
+  white-space: nowrap;
+}
+
+
+/* ------------------------------------------------------------------ narrow */
+
+@media (max-width: 1180px) {
+  .knowledge-base-shell { grid-template-columns: 210px minmax(0, 1fr) auto; }
+  .knowledge-detail-panel.knowledge-doc-panel { width: 288px; }
+  .knowledge-col-date { display: none; }
+}
+
+/* Below this width the inspector becomes an overlay: two real columns plus a
+   docked panel leaves the table too narrow to read. */
+@media (max-width: 900px) {
+  .knowledge-base-shell { grid-template-columns: minmax(0, 1fr); }
+  .knowledge-detail-panel.knowledge-doc-panel {
+    position: absolute;
+    z-index: 20;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 86vw);
+    box-shadow: -10px 0 28px rgb(15 35 68 / 14%);
+  }
+}
+

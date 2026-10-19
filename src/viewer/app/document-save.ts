@@ -31,11 +31,11 @@ export async function saveAnnotatedPdf(): Promise<boolean> {
       setStatus(`批注已嵌入当前 PDF（${count} 条）。`);
     } else if (result === "permission-denied-downloaded") {
       setStatus(
-        `未获得覆盖原文件的写入权限，已下载带 PDFPal 数据的新 PDF（${count} 条）。`,
+        `未获得覆盖原文件的写入权限，已下载带 PDFPal 数据的新 PDF（${count} 条）。知识库仍指向原文件：打开刚下载的这份并点一次“添加到知识库”，会把原来的记录指向它（不会重复添加）。`,
       );
     } else {
       setStatus(
-        `当前打开方式不能覆盖原文件，已下载带 PDFPal 数据的新 PDF（${count} 条）。`,
+        `当前打开方式不能覆盖原文件，已下载带 PDFPal 数据的新 PDF（${count} 条）。知识库仍指向原文件：打开刚下载的这份并点一次“添加到知识库”，会把原来的记录指向它（不会重复添加）。`,
       );
     }
     return true;

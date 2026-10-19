@@ -1,0 +1,243 @@
+/* ==========================================================================
+   Knowledge library — the right-hand document inspector.
+   Control and status only: folder, reading state, 文献信息 (作者 / 日期 / 语言 / DOI / 链接), processing states and the actions.
+   ========================================================================== */
+
+/* --------------------------------------------------------- document inspector */
+
+/* Two classes deep on purpose: the older, now-unused `.knowledge-detail-panel`
+   rules in dashboard.css / detail-and-editor.css still apply their layout, and
+   this panel is a document inspector rather than a generic detail view. */
+.knowledge-detail-panel.knowledge-doc-panel {
+  display: flex;
+  width: 320px;
+  flex-direction: column;
+  border-left: 1px solid #e8edf5;
+  background: #fbfdff;
+  overflow: hidden;
+}
+
+.knowledge-doc-panel[hidden] {
+  display: none !important;
+}
+
+.knowledge-doc-panel .knowledge-detail-header strong {
+  overflow: hidden;
+  color: #22314a;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-doc-scroll {
+  flex: 1 1 auto;
+  overflow: hidden auto;
+  padding: 14px;
+}
+
+/* 文件夹 + 阅读状态 share one row: two full-width selects stacked left a lot of empty panel for two short values. */
+.knowledge-doc-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.knowledge-doc-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.knowledge-doc-fields .knowledge-doc-field {
+  margin-bottom: 0;
+}
+
+.knowledge-doc-field > span {
+  color: #7a8798;
+  font-size: 11px;
+}
+
+.knowledge-doc-field select {
+  width: 100%;
+  height: 34px;
+  box-sizing: border-box;
+  border: 1px solid #dbe4f2;
+  border-radius: 9px;
+  background: #fff;
+  color: #34445c;
+  font-size: 13px;
+  padding: 0 8px;
+}
+
+.knowledge-doc-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0 0 14px;
+}
+
+.knowledge-doc-meta > div {
+  min-width: 0;
+}
+
+.knowledge-doc-meta dt {
+  color: #8a97aa;
+  font-size: 11px;
+}
+
+.knowledge-doc-meta dd {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: #34445c;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-doc-section {
+  margin-bottom: 14px;
+  border-top: 1px solid #eef2f8;
+  padding-top: 12px;
+}
+
+.knowledge-doc-section h3 {
+  margin: 0 0 8px;
+  color: #7a8798;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.knowledge-doc-states {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-doc-states li {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.knowledge-doc-states li > span {
+  color: #8a97aa;
+}
+
+.knowledge-doc-state {
+  color: #5c6b81;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-doc-state.is-done { color: #16804b; }
+.knowledge-doc-state.is-running { color: #2a6fd6; }
+.knowledge-doc-state.is-failed { color: #c0392b; }
+.knowledge-doc-state.is-missing { color: #9aa7ba; }
+
+.knowledge-doc-issue {
+  margin: 8px 0 0;
+  border-radius: 8px;
+  background: #fdeaea;
+  color: #b03a2e;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  padding: 6px 8px;
+}
+
+.knowledge-doc-note {
+  margin: 0 0 8px;
+  color: #8494a9;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 文献信息：作者 / 出版日期 / 语言 / DOI / 链接, one row each. */
+.knowledge-doc-biblio {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.knowledge-doc-biblio > div {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.knowledge-doc-biblio dt {
+  color: #8a97aa;
+}
+
+.knowledge-doc-biblio dd {
+  margin: 0;
+  color: #34445c;
+  overflow-wrap: anywhere;
+}
+
+/* A dash is a fact ("not known"), so it is quiet rather than alarming. */
+.knowledge-doc-biblio dd.is-empty {
+  color: #b0bbc9;
+}
+
+.knowledge-doc-biblio a {
+  color: #2a6fd6;
+  text-decoration: none;
+}
+
+.knowledge-doc-biblio a:hover {
+  text-decoration: underline;
+}
+
+.knowledge-doc-panel #knowledge-doc-search-related,
+.knowledge-doc-panel #knowledge-doc-metadata {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid #dbe4f2;
+  border-radius: 9px;
+  background: #fff;
+  color: #2a6fd6;
+  font-size: 12px;
+}
+
+.knowledge-doc-panel #knowledge-doc-search-related:disabled,
+.knowledge-doc-panel #knowledge-doc-metadata:disabled {
+  border-color: #e8edf5;
+  color: #9aa7ba;
+  cursor: not-allowed;
+}
+
+.knowledge-doc-actions {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #eef2f8;
+  padding-top: 12px;
+}
+
+.knowledge-doc-actions button {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #dbe4f2;
+  border-radius: 9px;
+  background: #fff;
+  color: #34445c;
+  font-size: 13px;
+}
+
+.knowledge-doc-actions button:hover {
+  border-color: #b9d4ff;
+  color: #2a6fd6;
+}
+
+.knowledge-doc-actions .danger-button {
+  border-color: #f6d8d5;
+  color: #c0392b;
+}
+
