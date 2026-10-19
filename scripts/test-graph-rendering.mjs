@@ -38,8 +38,13 @@ before(async () => {
   const closure = await loadModuleClosure(
     'src/modules/knowledge-graph/domain/graph-culling.ts',
   );
+  // The PNG export plans its own geometry and then reuses the renderer, so the plan module is grafted onto the
+  // stubbed barrel as well.
+  const imagePlanCode = await loadModule(
+    'src/modules/knowledge-graph/domain/graph-image-plan.ts',
+  );
 
-  await page.evaluate(([rendererSource, themeSource, modules]) => {
+  await page.evaluate(([rendererSource, themeSource, modules, imagePlanSource]) => {
     const codeByPath = new Map(modules);
     const registry = new Map();
     const resolveRelative = (fromPath, spec) => {
@@ -71,9 +76,12 @@ before(async () => {
     };
 
     // The barrel the renderer imports, with the real geometry implementations.
+    const imagePlanModule = {};
+    new Function('require', 'exports', imagePlanSource)(() => ({}), imagePlanModule);
     const barrel = {
       ...instantiate('src/modules/knowledge-graph/domain/graph-render-model.ts'),
       ...instantiate('src/modules/knowledge-graph/domain/graph-culling.ts'),
+      ...imagePlanModule,
     };
 
     const themeModule = {};
@@ -89,7 +97,7 @@ before(async () => {
     build(rendererSource, rendererModule);
 
     window.graph = { barrel, theme: themeModule, ...rendererModule };
-  }, [rendererCode, themeCode, closure]);
+  }, [rendererCode, themeCode, closure, imagePlanCode]);
 });
 
 after(async () => { await browser?.close(); });
@@ -368,6 +376,75 @@ test('hit tests only find what the viewport shows', async () => {
     'an edge crossing the viewport is hit-testable with both endpoints off-screen',
   );
   assert.ok(result.hitNearest, 'and a wider tolerance still finds something nearer');
+});
+
+test('the PNG export draws the whole graph without disturbing the live canvas', async () => {
+  const result = await page.evaluate(() => {
+    const { renderer, canvas, model } = window.scene;
+    // Park the live view somewhere deliberately narrow, so "the export ignores the viewport" is observable.
+    renderer.setViewport({ scale: 3, offsetX: -5550, offsetY: -4797 });
+    renderer.render();
+    const liveBefore = {
+      width: canvas.width,
+      height: canvas.height,
+      signature: canvas.toDataURL().slice(-64),
+      stats: renderer.getRenderStats(),
+    };
+
+    const image = renderer.renderWholeGraphImage({ maxSize: 1_200 });
+    if (!image) throw new Error('the export produced no canvas');
+
+    // The node count in the picture is the whole graph, not the handful on screen at 3x.
+    const pixels = image.getContext('2d').getImageData(0, 0, image.width, image.height).data;
+    let coloured = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      // The background is a flat colour; anything else is a node, an edge, a caption or the grid.
+      if (pixels[index] !== pixels[0] || pixels[index + 1] !== pixels[1] || pixels[index + 2] !== pixels[2]) {
+        coloured += 1;
+      }
+    }
+
+    const liveAfter = {
+      width: canvas.width,
+      height: canvas.height,
+      signature: canvas.toDataURL().slice(-64),
+      stats: renderer.getRenderStats(),
+    };
+    // And the instance still draws from its own viewport afterwards.
+    renderer.render();
+    const redrawn = canvas.toDataURL().slice(-64);
+    return {
+      image: { width: image.width, height: image.height },
+      coloured,
+      nodesInModel: model.nodes.length,
+      liveBefore,
+      liveAfter,
+      redrawn,
+      viewportStillApplied: renderer.getRenderStats().nodesDrawn < model.nodes.length,
+    };
+  });
+
+  // Fitted to the 1200 cap, and taller than it is wide / wider than tall depending on the grid — either way it is a
+  // real bitmap, not a 1×1 canvas.
+  assert.ok(result.image.width >= 1_000, `expected a fitted width, got ${result.image.width}`);
+  assert.ok(result.image.height >= 1_000, `expected a fitted height, got ${result.image.height}`);
+  // The picture has content: the export renders the whole model, not an empty background.
+  assert.ok(
+    result.coloured > result.nodesInModel / 2,
+    `only ${result.coloured} non-background pixels for ${result.nodesInModel} nodes`,
+  );
+
+  assert.deepEqual(
+    result.liveAfter,
+    result.liveBefore,
+    'rendering the image must leave the live canvas, viewport and frame stats exactly as they were',
+  );
+  assert.equal(result.redrawn, result.liveBefore.signature, 'and the live view still draws what it drew before');
+  assert.equal(
+    result.viewportStillApplied,
+    true,
+    'the viewport swap was undone: the live frame is still the zoomed-in one, not the fitted one',
+  );
 });
 
 console.log('Graph rendering budget tests passed.');

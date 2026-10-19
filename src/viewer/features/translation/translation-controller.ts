@@ -26,13 +26,16 @@ import { setStatus } from "../recent-files/public";
 import { scheduleSummaryGeneration } from "./summary-generation";
 import { loadTranslationPreferencePromptBlock } from "./translation-preferences-context";
 import { getDisplayFileName } from "../../core/pdf-reader/public";
-import { activeAssistantView, aiConfig, aiSelectionUpdateFrame, autoTranslateTimer, cardAbortController, currentCardContext, currentEnglishLearningResult, currentEnglishLearningSourceSentence, currentEnglishLearningSourceText, currentGeneratedCard, currentSummaryContext, lastCardRequestKey, lastSummaryPoints, lastSummaryRequestKey, lastTranslatedText, moreExamplesAbortController, selectedTextForAi, selectedTextPageNumber, translationAbortController } from "../../app/public";
+import { activeAssistantView, aiConfig, aiSelectionUpdateFrame, autoTranslateTimer, cardAbortController, currentCardContext, currentEnglishLearningResult, currentEnglishLearningSourceSentence, currentEnglishLearningSourceText, currentGeneratedCard, currentSummaryContext, lastCardRequestKey, lastSummaryPoints, lastSummaryRequestKey, lastTranslatedText, moreExamplesAbortController, selectedTextForAi, selectedTextPageNumber, translationAbortController, type SentenceKeyword, type SentenceLearningResult } from "../../app/public";
 import { activeSummaryScope, lastViewerSelectionText } from "../../app/public";
 
 
 
 import { getEnglishWordSelection, getSelectedEnglishWord, getSelectionSentenceContext, getSelectionSurroundingText, getTranslationScopeFromSelection, normalizeLearningInlineText, setMoreExamplesButtonVisible, setTranslationLearningTitle, setTranslationState } from './selection-context';
-import { parseSentenceLearningResult, parseVocabularyLearningResult, readVocabularyExamples, renderSentenceLearningResult, renderVocabularyLearningResult, setTranslationSelectionEditor } from './learning-view';
+import { parseSentenceKeywords, parseSentenceLearningResult, parseVocabularyLearningResult, readVocabularyExamples, renderVocabularyLearningResult, setTranslationSelectionEditor } from './learning-view';
+import { renderSentenceLearningResult, renderSentenceStreamingCard } from './sentence-card-view';
+import { appendTranslation, createSentenceStreamState, setStreamKeywords, settleTranslation, toSentenceLearningResult } from './sentence-stream-state';
+import { sentenceNeedsLatex, streamTranslationHalf, TRANSLATION_PORT_UNAVAILABLE } from './translation-stream';
 import { updateSummaryMetadata } from './citation-and-summary';
 import { findTranslationHistoryResult, storeTranslationHistoryResult } from './translation-history';
 
@@ -197,11 +200,30 @@ export async function translateSelectedText(text: string): Promise<void> {
     translationLearningHintElement.textContent = `已自动识别为完整单词 “${selectedWord}”，正在查询其语境词义、词性和例句。`;
   }
   setTranslationState(
-    isWord ? "正在生成单词学习卡片，请稍候…" : "正在翻译原句并整理重点词汇，请稍候…",
+    isWord ? "正在生成单词学习卡片，请稍候…" : "正在翻译原句，重点词会在译文出现后补充…",
   );
 
   try {
     const translationPreferenceBlock = await loadTranslationPreferencePromptBlock();
+    if (!isWord) {
+      // The sentence card has its own two-stream path: rendering, waiting and caching all differ from the word card,
+      // and the only thing they share is the preference block.
+      try {
+        await translateSentenceAsStreams(
+          text,
+          sourceSentence,
+          translationPreferenceBlock ?? '',
+          controller,
+        );
+        return;
+      } catch (error) {
+        if (isAbort(error)) return;
+        // Marked unavailable by the stream client: this page is newer than the background, so the older one-shot
+        // request below is the only path that can still answer.
+        if (!(error instanceof Error) || error.name !== TRANSLATION_PORT_UNAVAILABLE) throw error;
+        setStatus('后台没有翻译流式端口，改用普通请求（本次不会逐字显示）。');
+      }
+    }
     const prompt = isWord
       ? [
           "你是严谨的英汉词典与英语教师。请为一个英文单词制作学习卡。",
@@ -311,6 +333,166 @@ export async function translateSelectedText(text: string): Promise<void> {
 }
 
 
+
+/**
+ * The sentence card, in two streams.
+ *
+ * The card is rendered empty first, then filled by two independent requests: a plain-text translation (tiny, streams
+ * immediately) and the vocabulary (JSON, arrives while the reader is already reading the sentence). The previous
+ * shape asked for both in one JSON object and waited for the closing brace, which is why one sentence took several
+ * seconds of a blank panel.
+ *
+ * Nothing here awaits the other half: a keyword failure leaves the translation on screen and says so, and a
+ * translation failure does not cancel words that may already be arriving.
+ */
+async function translateSentenceAsStreams(
+  text: string,
+  sourceSentence: string,
+  preferenceBlock: string,
+  controller: AbortController,
+): Promise<void> {
+  const card = renderSentenceStreamingCard(sourceSentence);
+  const stillWanted = (): boolean =>
+    !controller.signal.aborted && text === selectedTextForAi.value;
+
+  /**
+   * The two halves are merged in a plain state object, not in the DOM.
+   *
+   * They finish in whatever order the provider produces (see `sentence-stream-state.ts`), and that order used to be
+   * able to save a history entry with an empty translation — which then came back as a cache hit and painted an empty
+   * card.
+   */
+  // Two things are merged in a plain state object, not in the DOM.
+  let state = createSentenceStreamState(sourceSentence);
+  const commit = (): void => {
+    const result = toSentenceLearningResult(state);
+    // Never persist a sentence with no translation: that entry comes back on the next selection of the same sentence
+    // and paints an empty card, which is exactly how this bug was reported.
+    if (!result) return;
+    currentEnglishLearningResult.value = result;
+    // Recorded so a later settle of the same selection does not translate it again — the automatic path skips text that
+    // already has a result.
+    lastTranslatedText.value = text;
+    void storeTranslationHistoryResult(text, result);
+  };
+
+  let frame = 0;
+  const flush = (): void => {
+    frame = 0;
+    card.setTranslation(state.translation);
+  };
+
+  card.setStreaming(true);
+  card.setTranslationNote('正在翻译…');
+
+  const keywordHalf = streamTranslationHalf(
+    {
+      task: 'keywords',
+      text: sourceSentence,
+      wantsSourceLatex: sentenceNeedsLatex(sourceSentence),
+      preferenceBlock,
+    },
+    { signal: controller.signal },
+  )
+    .then((result) => {
+      if (!stillWanted()) return;
+      if (result.truncated) {
+        // A JSON object cut at the token limit cannot be parsed; saying why is better than "没有返回有效 JSON".
+        throw new Error('输出被模型的输出上限截断（思考过程与正文共用预算）');
+      }
+      const parsed = parseSentenceKeywords(result.text, sourceSentence);
+      state = setStreamKeywords(state, parsed.keywords, parsed.sourceText);
+      card.setKeywords(parsed.keywords);
+      translationLearningHintElement.textContent = parsed.keywords.length
+        ? '已给出译文，并挑选了值得学习的术语或较难词汇。'
+        : '已给出译文；这句话以常用词为主，没有需要额外记忆的难词。';
+      commit();
+    })
+    .catch((error: unknown) => {
+      if (!stillWanted() || isAbort(error)) return;
+      // The translation above is untouched: an optional reading aid must not take the sentence with it.
+      card.setKeywordNote(
+        `重点词没有生成：${error instanceof Error ? error.message : String(error)}`,
+        true,
+      );
+      state = setStreamKeywords(state, []);
+      commit();
+    });
+
+  try {
+    const result = await streamTranslationHalf(
+      { task: 'translation', text: sourceSentence, preferenceBlock },
+      {
+        signal: controller.signal,
+        onDelta: (delta) => {
+          state = appendTranslation(state, delta);
+          if (!frame) frame = requestAnimationFrame(flush);
+        },
+      },
+    );
+    if (!stillWanted()) return;
+    state = settleTranslation(state, result.text);
+    if (frame) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    }
+    card.setStreaming(false);
+    card.setTranslation(state.translation);
+    if (!state.translation.trim()) {
+      card.setTranslationNote('模型没有返回译文，请稍后重试。', true);
+      setTranslationState('原句翻译失败：模型没有返回译文。', true);
+      return;
+    }
+    if (result.truncated) {
+      // `finish_reason: length`: the text is a prefix. Saying so is the whole point — a cut sentence that looks like a
+      // finished one is worse than no sentence, and it must never reach the history cache.
+      card.setTranslationNote(
+        '译文被模型的输出上限截断（思考过程与正文共用预算）。可以重试，或在设置 → 高级设置里调大“最大输出 Token”、换用能关闭思考的模型。',
+        true,
+      );
+      currentEnglishLearningResult.value = {
+        kind: 'sentence',
+        sourceText: state.sourceText,
+        translation: state.translation.trim(),
+        keywords: state.keywords,
+      };
+      lastTranslatedText.value = text;
+      setTranslationState('');
+      return;
+    }
+    card.setTranslationNote('');
+    commit();
+    // Deliberately no `setTranslationState('')`: that channel *replaces the result body* with its message, so an empty
+    // message blanks the very card this code just filled. The card is the output here; the state line is only for
+    // "nothing to show yet" and for failures.
+    translationLearningHintElement.textContent = state.keywords.length
+      ? '译文已生成，并挑选了值得学习的术语或较难词汇。'
+      : '译文已生成，重点词会继续补充。';
+  } catch (error) {
+    if (!stillWanted() || isAbort(error)) return;
+    const unavailable = error instanceof Error
+      && error.name === TRANSLATION_PORT_UNAVAILABLE;
+    if (unavailable) {
+      // The background has no stream port (a page newer than its service worker). The older one-shot path still
+      // exists, so fall back to it rather than leaving the reader with a dead card.
+      throw error;
+    }
+    card.setStreaming(false);
+    card.setTranslationNote(
+      `翻译失败：${error instanceof Error ? error.message : String(error)}`,
+      true,
+    );
+    setTranslationState(
+      `原句翻译失败：${error instanceof Error ? error.message : String(error)}`,
+      true,
+    );
+  }
+  void keywordHalf;
+}
+
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
 
 export async function generateMoreVocabularyExamples(): Promise<void> {
   const result = currentEnglishLearningResult.value;

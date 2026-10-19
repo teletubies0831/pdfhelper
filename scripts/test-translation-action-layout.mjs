@@ -55,4 +55,19 @@ assert.match(
   "loading and error states must use the action-preserving replacement",
 );
 
-console.log("translation action layout tests passed (2 assertions)");
+// An empty state message must not blank the panel. This channel *replaces* the result body, and the card living there
+// is the output: calling it with "" after a translation finished is what made a completed card look empty until the
+// panel was re-rendered from state.
+let touched = 0;
+const target = {
+  set textContent(value) {
+    touched += 1;
+    void value;
+  },
+};
+replaceTranslationResultText(target, "", root);
+assert.equal(touched, 0, 'an empty message is a no-op, not "clear the card"');
+replaceTranslationResultText(target, "loading...", root);
+assert.equal(touched, 1, 'a real message still replaces the body');
+
+console.log("translation action layout tests passed (4 assertions)");

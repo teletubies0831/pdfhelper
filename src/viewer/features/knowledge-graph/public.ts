@@ -18,7 +18,6 @@ export {
   exportGraph,
   extractEntitiesForAllPapers,
   extractEntitiesForCurrentPaper,
-  importGraph,
   openConflictReview,
   openGraphMetrics,
   openPaperManager,

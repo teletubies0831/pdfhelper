@@ -337,19 +337,12 @@ export {
 } from './application/conflict-service.ts';
 
 export {
-  createGraphSnapshot,
-  describeImportPlan,
-  parseGraphSnapshot,
-  planGraphImport,
-  suggestSnapshotFileName,
-  GRAPH_SNAPSHOT_FORMAT,
-  GRAPH_SNAPSHOT_VERSION,
-  type GraphImportPlan,
-  type GraphSnapshotDocument,
-  type GraphSnapshotParseResult,
-  type GraphSnapshotSources,
-  type ImportStrategy,
-} from './application/graph-transfer.ts';
+  planGraphImage,
+  suggestGraphImageFileName,
+  type GraphImagePlan,
+  type GraphImagePlanOptions,
+  type GraphImagePoint,
+} from './domain/graph-image-plan.ts';
 
 export {
   describeBridgeDrops,

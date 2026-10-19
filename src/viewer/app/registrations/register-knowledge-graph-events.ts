@@ -39,7 +39,6 @@ import {
   knowledgeGraphSearchInput,
   knowledgeGraphExtractButton,
   knowledgeGraphExportButton,
-  knowledgeGraphImportButton,
   knowledgeGraphBatchButton,
   knowledgeGraphZoomInButton,
   knowledgeGraphZoomOutButton,
@@ -48,7 +47,6 @@ import {
   analyzePaperRelations,
   closeKnowledgeGraphPage,
   exportGraph,
-  importGraph,
   extractEntitiesForAllPapers,
   extractEntitiesForCurrentPaper,
   fitKnowledgeGraph,
@@ -140,10 +138,6 @@ export function registerKnowledgeGraphEvents(): void {
   // token-spending buttons and carries its own badge.
   knowledgeGraphConflictsButton.addEventListener("click", () => {
     void openConflictReview();
-  });
-
-  knowledgeGraphImportButton.addEventListener("click", () => {
-    void importGraph();
   });
 
   registerEntityReviewEvents();

@@ -626,6 +626,14 @@ function installGraphActions(): void {
     ensureReady: () => {
       ensureRenderer();
     },
+    // The image is rendered from the *current* model, so what the user sees (filters applied, layout settled) is
+    // what gets exported — but at a size fitted to the whole graph instead of the window.
+    renderExportImage: () => {
+      ensureRenderer();
+      const canvas = renderer?.renderWholeGraphImage() ?? null;
+      if (!canvas) return null;
+      return { canvas, papers: snapshot.papers.length, entities: snapshot.entities.length };
+    },
   });
   // The explanation actions keep their own context: one live stream, a button that must be disabled
   // while it runs, and failures that stay visible next to that button.

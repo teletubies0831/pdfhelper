@@ -400,7 +400,37 @@ export function parseSentenceLearningResult(
   const value = parseAiJson(content);
   const translation = readLearningString(value.translation);
   if (!translation) throw new Error("模型没有返回原句翻译。");
-  const keywords = readLearningArray(value.keywords)
+  return {
+    kind: "sentence",
+    sourceText: readLearningString(value.sourceTextLatex)
+      || readLearningString(value.sourceText)
+      || sourceText,
+    translation,
+    keywords: readSentenceKeywords(value),
+  };
+}
+
+/**
+ * Reads the keyword half of a sentence card.
+ *
+ * Separate from `parseSentenceLearningResult` because the two halves now arrive as two independent streams: the
+ * translation is plain text and this one is JSON, and a failure in either must leave the other on screen.
+ */
+export function parseSentenceKeywords(
+  content: string,
+  sourceText: string,
+): { sourceText: string; keywords: SentenceKeyword[] } {
+  const value = parseAiJson(content);
+  return {
+    sourceText: readLearningString(value.sourceTextLatex)
+      || readLearningString(value.sourceText)
+      || sourceText,
+    keywords: readSentenceKeywords(value),
+  };
+}
+
+function readSentenceKeywords(value: Record<string, unknown>): SentenceKeyword[] {
+  return readLearningArray(value.keywords)
     .map((item): SentenceKeyword | null => {
       if (!item || typeof item !== "object") return null;
       const record = item as Record<string, unknown>;
@@ -419,14 +449,6 @@ export function parseSentenceLearningResult(
     })
     .filter((item): item is SentenceKeyword => Boolean(item))
     .slice(0, 8);
-  return {
-    kind: "sentence",
-    sourceText: readLearningString(value.sourceTextLatex)
-      || readLearningString(value.sourceText)
-      || sourceText,
-    translation,
-    keywords,
-  };
 }
 
 
@@ -528,80 +550,6 @@ export function renderVocabularyLearningResult(result: VocabularyLearningResult)
 }
 
 
-
-export function renderSentenceLearningResult(result: SentenceLearningResult): void {
-  translationResultElement.closest("[data-ai-panel='translate']")
-    ?.classList.remove("word-learning-mode");
-  const selectionTitle = document.querySelector<HTMLElement>(
-    ".translation-selection-section h3",
-  );
-  if (selectionTitle) selectionTitle.textContent = "1. 选中英文";
-  setTranslationLearningTitle("原句翻译");
-  translationLearningHintElement.textContent =
-    "已给出当前选中原句的完整译文，并仅挑选值得学习的术语、学术表达或较难词汇。";
-  // 原文预览只应由本地真实选区驱动。模型可能会重组原文，不能用其结果
-  // 覆盖或清空用户实际选中的英文。
-  const localSourceText = normalizeLearningInlineText(
-    currentEnglishLearningSourceSentence.value ||
-      selectedSnippetElement.value ||
-      result.sourceText,
-  );
-  if (localSourceText) {
-    selectedSnippetElement.value = localSourceText;
-    selectedSnippetElement.removeAttribute("title");
-    autoResizeTranslationTextarea(selectedSnippetElement);
-  }
-  setSelectedSnippetDisplayMode("preview");
-  const card = createLearningElement("article", "english-learning-card sentence-card");
-  const translation = createLearningElement("section", "english-learning-block");
-  translation.append(createLearningElement("h4", "english-learning-label", "原句翻译"));
-  translation.append(
-    renderLearningRichText(
-      createLearningElement("div", "english-sentence-translation"),
-      result.translation,
-    ),
-  );
-  card.append(translation);
-  const primaryActions = getTranslationPrimaryActions();
-  if (primaryActions) card.append(primaryActions);
-
-  const keywords = createLearningElement("section", "english-learning-block");
-  keywords.append(
-    createLearningElement(
-      "h4",
-      "english-learning-label",
-      "重点单词",
-    ),
-  );
-  if (!result.keywords.length) {
-    keywords.append(
-      createLearningElement("p", "english-learning-empty", "这句话以常用词为主，暂时没有需要额外记忆的难词。"),
-    );
-  } else {
-    const list = createLearningElement("div", "english-keyword-list");
-    result.keywords.forEach((keyword) => {
-      const item = createLearningElement("article", "english-keyword-card");
-      const title = createLearningElement("div", "english-keyword-title");
-      title.append(
-        createLearningElement("strong", "english-keyword-word", keyword.word),
-        createLearningElement("span", "english-pos-tag", keyword.partOfSpeech),
-      );
-      item.append(title);
-      item.append(
-        renderLearningRichText(
-          createLearningElement("div", "english-keyword-meaning"),
-          keyword.meaningInSentence,
-        ),
-      );
-      list.append(item);
-    });
-    keywords.append(list);
-  }
-  card.append(keywords);
-  translationResultElement.replaceChildren(card);
-  translationResultElement.classList.remove("error");
-  setMoreExamplesButtonVisible(false);
-}
 
 
 

@@ -13,6 +13,44 @@ export const AI_STREAM_PORT_NAME = 'pdf-helper:ai-stream-v1';
  */
 export const AI_EXPLANATION_STREAM_PORT_NAME = 'pdf-helper:ai-explain-stream-v1';
 
+/**
+ * Dedicated port for the translation card.
+ *
+ * Two things make it its own port rather than a `sendMessage` round trip. It **streams**, because the sentence has to
+ * appear while it is being written — waiting for a finished JSON blob is what made a one-sentence translation feel
+ * like seven seconds of nothing. And it carries a **task**, because the card is produced in two independent halves:
+ * the translation first, the vocabulary afterwards, so the reader never waits for the words they did not ask for.
+ */
+export const AI_TRANSLATION_STREAM_PORT_NAME = 'pdf-helper:ai-translate-stream-v1';
+
+/** Which half of a learning card one stream produces. */
+export type AiTranslationStreamTask = 'translation' | 'keywords';
+
+export interface AiTranslationStreamStartMessage {
+  type: 'start';
+  requestId: string;
+  task: AiTranslationStreamTask;
+  /** The English sentence (or word) to work on, already normalised by the viewer. */
+  text: string;
+  /** The sentence a word sits in; omitted for the sentence task. */
+  sentence?: string;
+  /** True when the sentence carries maths, so the keyword pass should also re-emit it as LaTeX. */
+  wantsSourceLatex?: boolean;
+  /** The user's own learning preferences, passed through verbatim. */
+  preferenceBlock?: string;
+}
+
+export type AiTranslationStreamServerMessage =
+  | { type: 'started'; requestId: string; model: string }
+  | { type: 'delta'; requestId: string; content: string }
+  /**
+   * `finishReason` travels with `done` because `length` means the answer was cut off: on models where thinking cannot
+   * be disabled the reasoning shares the output budget, and a truncated sentence must not be presented (or cached) as
+   * a complete translation.
+   */
+  | { type: 'done'; requestId: string; model: string; finishReason?: string }
+  | { type: 'error'; requestId: string; error: string };
+
 export type AiProviderId = 'deepseek' | 'openai-compatible' | 'anthropic' | 'gemini';
 export type AiReasoningMode = 'disabled' | 'enabled';
 

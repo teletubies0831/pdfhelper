@@ -30,6 +30,7 @@ import {
 import { getSafeProviderErrorDetails as getSafeErrorDetails } from "../modules/ai/public";
 import { withAiRequestLifetime } from "./ai/request-lifetime";
 import { registerExplanationStreamPort } from "./ai/explanation-stream";
+import { registerTranslationStreamPort } from "./ai/translation-stream";
 
 async function configureActionBehavior(): Promise<void> {
   if (!browser.sidePanel?.setPanelBehavior) return;
@@ -57,6 +58,8 @@ export function bootstrapBackground(): void {
 
   // The one-line entity explanation has its own port: it streams a sentence, not a conversation.
   registerExplanationStreamPort();
+  // The translation card does too, and asks for its two halves in parallel.
+  registerTranslationStreamPort();
 
   browser.action.onClicked.addListener(() => {
     void handleActionClick().catch(() => undefined);

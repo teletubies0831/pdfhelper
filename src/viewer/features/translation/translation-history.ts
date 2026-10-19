@@ -29,7 +29,8 @@ import { TRANSLATION_HISTORY_STORAGE_KEY, currentEnglishLearningResult, currentE
 
 
 
-import { renderSentenceLearningResult, renderVocabularyLearningResult, setTranslationSelectionEditor } from './learning-view';
+import { renderVocabularyLearningResult, setTranslationSelectionEditor } from './learning-view';
+import { renderSentenceLearningResult } from './sentence-card-view';
 import { createLearningElement } from './selection-context';
 
 
@@ -109,6 +110,11 @@ export function readTranslationHistoryEntries(value: unknown): TranslationHistor
               ? storedResult.keywords
               : [],
           };
+      // A sentence saved without its translation is not a cache hit, it is a hole: restoring it paints an empty
+      // 「原句翻译」 and, because the cache short-circuits the request, the reader never gets a translation at all.
+      // (Entries written by the two-stream card before this guard could be in that state.) Dropping them here means the
+      // next selection translates the sentence properly.
+      if (result.kind === "sentence" && !result.translation.trim()) return null;
       return {
         id: entry.id,
         sourceText: entry.sourceText,

@@ -385,6 +385,37 @@
   line-height: 1.65;
 }
 
+/* The streaming card: a muted status line for "正在翻译…" and a caret while text is arriving, so the panel never looks
+   like nothing happened. The caret is part of the translation element, so it disappears with the last chunk. */
+
+.english-stream-note {
+  margin: 6px 0 0;
+  color: #7a879b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.english-stream-note:empty {
+  display: none;
+}
+
+.english-stream-note.is-error {
+  color: #b42318;
+}
+
+.english-sentence-translation.is-streaming::after {
+  content: "▍";
+  margin-left: 1px;
+  color: #2f5aa8;
+  animation: english-stream-caret 1s steps(2, start) infinite;
+}
+
+@keyframes english-stream-caret {
+  to {
+    visibility: hidden;
+  }
+}
+
 .english-keyword-list {
   display: grid;
   gap: 7px;

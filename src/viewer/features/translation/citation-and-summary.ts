@@ -24,6 +24,7 @@ import { navigateToPdfPageWhenVisible, normalizeCopiedText } from "../../core/pd
 import { createPdfCitationPattern } from "../../shared-ui/markdown/markdown-renderer";
 
 import { pdfDocument, pdfViewer } from "../../app/viewer-state";
+import { releaseFocusBeforeHiding } from "../../app/focus-release";
 
 
 
@@ -510,6 +511,9 @@ export async function jumpToPdfCitations(
     citedQuotes: normalizedQuotes,
   });
   citationReturnButton.classList.remove("visible");
+  // The button the user just pressed is about to be withdrawn from the accessibility tree; blur it first, because
+  // `aria-hidden` on an element that still holds the focus is exactly what browsers refuse.
+  releaseFocusBeforeHiding(citationReturnButton);
   citationReturnButton.setAttribute("aria-hidden", "true");
   citationReturnButton.tabIndex = -1;
   citationReturnPosition.textContent = "";
