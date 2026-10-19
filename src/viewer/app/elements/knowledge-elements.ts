@@ -108,10 +108,6 @@ export const knowledgeSearchInput = requiredElement<HTMLInputElement>(
   "knowledge-search-input",
 );
 
-export const knowledgeSortSelect = requiredElement<HTMLSelectElement>(
-  "knowledge-sort-select",
-);
-
 export const knowledgeGroupSelect = requiredElement<HTMLSelectElement>(
   "knowledge-group-select",
 );
@@ -198,69 +194,107 @@ export const knowledgeLibraryView = requiredElement<HTMLElement>(
   "knowledge-library-view",
 );
 
+/** 列表 / 卡片 视图切换。 */
+export const knowledgeViewListButton =
+  requiredElement<HTMLButtonElement>("knowledge-view-list");
+export const knowledgeViewGridButton =
+  requiredElement<HTMLButtonElement>("knowledge-view-grid");
+
+export const knowledgeTableWrapElement =
+  requiredElement<HTMLElement>("knowledge-table-wrap");
+export const knowledgeTableBodyElement =
+  requiredElement<HTMLElement>("knowledge-table-body");
+export const knowledgeTableEmptyElement =
+  requiredElement<HTMLElement>("knowledge-table-empty");
+export const knowledgeTableSortButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-knowledge-sort]"),
+);
+export const knowledgeListSummaryElement =
+  requiredElement<HTMLElement>("knowledge-list-summary");
+
+/** 批量操作：多选与批量栏. */
+export const knowledgeSelectAllCheckbox =
+  requiredElement<HTMLInputElement>("knowledge-select-all");
+export const knowledgeBatchBarElement =
+  requiredElement<HTMLElement>("knowledge-batch-bar");
+export const knowledgeBatchCountElement =
+  requiredElement<HTMLElement>("knowledge-batch-count");
+export const knowledgeBatchFolderSelect =
+  requiredElement<HTMLSelectElement>("knowledge-batch-folder");
+export const knowledgeBatchMoveButton =
+  requiredElement<HTMLButtonElement>("knowledge-batch-move");
+export const knowledgeBatchRelatedButton =
+  requiredElement<HTMLButtonElement>("knowledge-batch-related");
+export const knowledgeBatchRemoveButton =
+  requiredElement<HTMLButtonElement>("knowledge-batch-remove");
+export const knowledgeBatchClearButton =
+  requiredElement<HTMLButtonElement>("knowledge-batch-clear");
+
+/** 阅读状态筛选（侧栏三档）。 */
+export const knowledgeReadingFilterButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-reading-filter]"),
+);
+export const knowledgeReadingCountElements = {
+  todo: requiredElement<HTMLElement>("knowledge-reading-count-todo"),
+  reading: requiredElement<HTMLElement>("knowledge-reading-count-reading"),
+  done: requiredElement<HTMLElement>("knowledge-reading-count-done"),
+};
+
+/** 右侧文献面板。 */
+export const knowledgeDetailPanelElement =
+  requiredElement<HTMLElement>("knowledge-detail-panel");
 export const knowledgeDetailCloseButton = requiredElement<HTMLButtonElement>(
   "knowledge-detail-close",
 );
-
-export const knowledgeDetailEmptyElement = requiredElement<HTMLElement>(
-  "knowledge-detail-empty",
-);
-
-export const knowledgeDetailContentElement = requiredElement<HTMLElement>(
-  "knowledge-detail-content",
-);
-
-export const knowledgeDetailTypeElement = requiredElement<HTMLElement>(
-  "knowledge-detail-type",
-);
-
-export const knowledgeDetailTimeElement = requiredElement<HTMLElement>(
-  "knowledge-detail-time",
-);
-
-export const knowledgeDetailTitleElement = requiredElement<HTMLElement>(
-  "knowledge-detail-title",
-);
-
-export const knowledgeDetailTagsElement = requiredElement<HTMLElement>(
-  "knowledge-detail-tags",
-);
-
-export const knowledgeDetailDocumentElement = requiredElement<HTMLElement>(
-  "knowledge-detail-document",
-);
-
-export const knowledgeDetailPositionElement = requiredElement<HTMLElement>(
-  "knowledge-detail-position",
-);
-
-export const knowledgeDetailCreatedElement = requiredElement<HTMLElement>(
-  "knowledge-detail-created",
-);
-
-export const knowledgeDetailUpdatedElement = requiredElement<HTMLElement>(
-  "knowledge-detail-updated",
-);
-
-export const knowledgeDetailBodyElement = requiredElement<HTMLElement>(
-  "knowledge-detail-body",
-);
-
-export const knowledgeRelatedSummaryElement = requiredElement<HTMLElement>(
-  "knowledge-related-summary",
-);
-
-export const knowledgeOpenSourceButton = requiredElement<HTMLButtonElement>(
-  "knowledge-open-source",
-);
-
-export const knowledgeEditItemButton = requiredElement<HTMLButtonElement>(
-  "knowledge-edit-item",
-);
-
-export const knowledgeDeleteItemButton = requiredElement<HTMLButtonElement>(
-  "knowledge-delete-item",
-);
+export const knowledgeDocTitleElement =
+  requiredElement<HTMLElement>("knowledge-doc-title");
+export const knowledgeDocFolderSelect =
+  requiredElement<HTMLSelectElement>("knowledge-doc-folder");
+export const knowledgeDocReadingSelect =
+  requiredElement<HTMLSelectElement>("knowledge-doc-reading");
+export const knowledgeDocPagesElement =
+  requiredElement<HTMLElement>("knowledge-doc-pages");
+export const knowledgeDocAddedElement =
+  requiredElement<HTMLElement>("knowledge-doc-added");
+export const knowledgeDocUpdatedElement =
+  requiredElement<HTMLElement>("knowledge-doc-updated");
+export const knowledgeDocChunksElement =
+  requiredElement<HTMLElement>("knowledge-doc-chunks");
+export const knowledgeDocIndexStateElement =
+  requiredElement<HTMLElement>("knowledge-doc-index-state");
+export const knowledgeDocOverviewStateElement =
+  requiredElement<HTMLElement>("knowledge-doc-overview-state");
+export const knowledgeDocRelatedStateElement =
+  requiredElement<HTMLElement>("knowledge-doc-related-state");
+export const knowledgeDocIssueElement =
+  requiredElement<HTMLElement>("knowledge-doc-issue");
+export const knowledgeDocRelatedNoteElement =
+  requiredElement<HTMLElement>("knowledge-doc-related-note");
+export const knowledgeDocSearchRelatedButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-search-related");
+export const knowledgeDocOverviewButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-overview");
+export const knowledgeDocOpenButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-open");
+export const knowledgeDocGraphButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-graph");
+export const knowledgeDocRemoveButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-remove");
+/** 文献信息：作者 / 出版日期 / 语言 / DOI / 链接. */
+export const knowledgeDocAuthorsElement =
+  requiredElement<HTMLElement>("knowledge-doc-authors");
+export const knowledgeDocDateElement =
+  requiredElement<HTMLElement>("knowledge-doc-publish-date");
+export const knowledgeDocLanguageElement =
+  requiredElement<HTMLElement>("knowledge-doc-language");
+export const knowledgeDocDoiElement =
+  requiredElement<HTMLElement>("knowledge-doc-doi");
+export const knowledgeDocUrlElement =
+  requiredElement<HTMLElement>("knowledge-doc-url");
+export const knowledgeDocMetadataNoteElement =
+  requiredElement<HTMLElement>("knowledge-doc-metadata-note");
+export const knowledgeDocMetadataButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-metadata");
 
 export const knowledgeEditorDialog = requiredElement<HTMLElement>(
   "knowledge-editor-dialog",

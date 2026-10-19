@@ -93,34 +93,33 @@ export function bootstrapBackground(): void {
       signal: AbortSignal,
     ): Promise<AiStreamToolResult[]> =>
       new Promise((resolve) => {
-        const timeoutId = setTimeout(() => {
-          if (pendingToolResults?.requestId !== requestId) return;
-          pendingToolResults = undefined;
+        let settled = false;
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        // Each call settles itself, once, whatever happens first: the tool results arriving, the 45 s ceiling, or an
+        // abort. The listener is removed as well — a leftover listener from round 1 used to consume round 2's abort and
+        // leave its promise unresolved, which pinned the service worker through `withAiRequestLifetime` forever.
+        const finish = (results: AiStreamToolResult[]): void => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeoutId);
+          signal.removeEventListener("abort", onAbort);
+          if (pendingToolResults?.requestId === requestId) pendingToolResults = undefined;
+          resolve(results);
+        };
+        const onAbort = (): void => finish([]);
+        timeoutId = setTimeout(() => {
           console.error("[PDFPal AI] 工具结果等待超时", {
             requestId,
             timeoutMs: 45_000,
           });
-          resolve([]);
+          finish([]);
         }, 45_000);
-        const finish = (results: AiStreamToolResult[]): void => {
-          clearTimeout(timeoutId);
-          resolve(results);
-        };
         if (signal.aborted) {
           finish([]);
           return;
         }
         pendingToolResults = { requestId, resolve: finish };
-        signal.addEventListener(
-          "abort",
-          () => {
-            if (pendingToolResults?.requestId === requestId) {
-              pendingToolResults = undefined;
-              finish([]);
-            }
-          },
-          { once: true },
-        );
+        signal.addEventListener("abort", onAbort, { once: true });
       });
     port.onMessage.addListener((message) => {
       if (isAiStreamToolResultsMessage(message)) {

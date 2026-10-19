@@ -15,10 +15,10 @@
 
 
 
-import { knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeDeleteItemButton, knowledgeDetailCloseButton, knowledgeEditItemButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeEditorOpenSourceButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeMainElement, knowledgeNewNoteButton, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgeOpenSourceButton, knowledgePriorityFilterSelect, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeSearchInput, knowledgeSortSelect, knowledgeVenueFilterSelect, knowledgeYearFilterSelect } from "../viewer-elements";
+import { knowledgeBaseBackButton, knowledgeBaseEntryButton, knowledgeBatchOrganizeButton, knowledgeClearFiltersButton, knowledgeEditorBodyInput, knowledgeEditorCancelButton, knowledgeEditorCategoryInput, knowledgeEditorCloseButton, knowledgeEditorDeleteButton, knowledgeEditorDialog, knowledgeEditorForm, knowledgeEditorModeToggleButton, knowledgeEditorOpenSourceButton, knowledgeFilterButtons, knowledgeFocusButtons, knowledgeGroupSelect, knowledgeImportButton, knowledgeImportInput, knowledgeMainElement, knowledgeNewNoteButton, knowledgeOriginButtons, knowledgeOriginFilterButtons, knowledgePriorityFilterSelect, knowledgeReadingStatusFilterSelect, knowledgeRefreshButton, knowledgeSearchInput, knowledgeVenueFilterSelect, knowledgeYearFilterSelect } from "../viewer-elements";
 
 
-import { addCurrentPdfToLibrary, closeKnowledgeBasePage, closeKnowledgeEditor, collectKnowledgeItems, deleteKnowledgeItem, deleteSelectedKnowledgeItem, getSelectedKnowledgeItem, importKnowledgeNotes, knowledgeEditorBodyMode, normalizeKnowledgeCategory, openKnowledgeBasePage, openKnowledgeEditor, openSelectedKnowledgeSource, refreshKnowledgeBaseIfOpen, registerKnowledgeCorpusEvents, renderKnowledgeBase, renderKnowledgeDetail, saveKnowledgeEditor, scheduleKnowledgeEditorPreview, setKnowledgeEditorBodyMode, resetKnowledgeOriginFilter, setKnowledgeFilter, setKnowledgeOrigin, setKnowledgeOriginContent, setKnowledgePageStatus } from "../../features/knowledge-base/public";
+import { addCurrentPdfToLibrary, closeKnowledgeBasePage, closeKnowledgeEditor, collectKnowledgeItems, deleteKnowledgeItem, deleteSelectedKnowledgeItem, getSelectedKnowledgeItem, importKnowledgeNotes, knowledgeEditorBodyMode, normalizeKnowledgeCategory, openKnowledgeBasePage, openKnowledgeEditor, openSelectedKnowledgeSource, refreshKnowledgeBaseIfOpen, registerKnowledgeCorpusEvents, renderKnowledgeBase, saveKnowledgeEditor, scheduleKnowledgeEditorPreview, setKnowledgeEditorBodyMode, resetKnowledgeOriginFilter, setKnowledgeFilter, setKnowledgeOrigin, setKnowledgeOriginContent, setKnowledgePageStatus } from "../../features/knowledge-base/public";
 import type { KnowledgeFilter, KnowledgeFocus } from "../../core/pdf-reader/public";
 import type { KnowledgeOriginContentFilter, KnowledgeOriginFilter } from "../../features/knowledge-base/public";
 import { activeKnowledgeCategory, activeKnowledgePriority, activeKnowledgeReadingStatus, activeKnowledgeTag, activeKnowledgeVenue, activeKnowledgeYear, knowledgeEditorTargetKey, selectedKnowledgeRecordKey } from "../public";
@@ -66,8 +66,6 @@ export function registerKnowledgeEvents(): void {
     });
   
   knowledgeSearchInput.addEventListener("input", renderKnowledgeBase);
-  
-  knowledgeSortSelect.addEventListener("change", renderKnowledgeBase);
   
   knowledgeMainElement?.addEventListener("scroll", scheduleAppViewStateSave, {
       passive: true,
@@ -158,27 +156,9 @@ export function registerKnowledgeEvents(): void {
       });
     }
   
-  knowledgeDetailCloseButton.addEventListener("click", () => {
-      selectedKnowledgeRecordKey.value = "";
-      renderKnowledgeDetail([], undefined);
-    });
-  
-  knowledgeOpenSourceButton.addEventListener(
-      "click",
-      openSelectedKnowledgeSource,
-    );
-  
-  knowledgeEditItemButton.addEventListener("click", () => {
-      const item = getSelectedKnowledgeItem();
-      if (!item) return;
-      openKnowledgeEditor(item);
-    });
-  
-  knowledgeDeleteItemButton.addEventListener(
-      "click",
-      deleteSelectedKnowledgeItem,
-    );
-  
+  // The old 「内容详情」 panel belonged to the retired notes/cards model; the right pane is the document inspector now,
+  // and it is wired by `knowledge-base-controller` (which owns the selection).
+
   knowledgeEditorCloseButton.addEventListener("click", closeKnowledgeEditor);
   
   knowledgeEditorCancelButton.addEventListener("click", () => {

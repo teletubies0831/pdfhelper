@@ -15,7 +15,6 @@ export interface PersistedAppViewState {
   knowledgeReadingStatus: string;
   knowledgePriority: string;
   knowledgeSearch: string;
-  knowledgeSort: string;
   knowledgeGroup: string;
   selectedKnowledgeRecordKey: string;
   knowledgeScrollTop: number;

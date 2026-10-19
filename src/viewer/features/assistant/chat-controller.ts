@@ -385,6 +385,13 @@ export async function sendChatMessage(): Promise<void> {
           : "模型流已结束，但没有返回正文或思考内容。",
       );
     }
+    // The document identity was checked before the call; the stream can run for a minute, and a tab switch in the
+    // meantime replaces the shared chat history with the *other* document's conversation. Writing this answer now would
+    // append it to that conversation and then persist that conversation under this document's id — so stop here.
+    if (pdfDocument.value !== documentAtRequestStart) {
+      if (renderFrame) window.cancelAnimationFrame(renderFrame);
+      return;
+    }
     updateChatReasoning(assistantMessage, streamedReasoningContent, false);
     updateChatMessage(assistantMessage, streamedContent, { streaming: false });
     chatHistory.value.push({

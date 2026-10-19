@@ -17,7 +17,7 @@
 
 
 
-import { aiPanelToggleButton, knowledgeBaseEntryButton, knowledgeBasePageElement, knowledgeDocumentCountElement, knowledgeGroupSelect, knowledgeListElement, knowledgePageSubtitleElement, knowledgePageTitleElement, knowledgeSearchInput, knowledgeSortSelect, knowledgeTotalCountElement } from "../../app/viewer-elements";
+import { aiPanelToggleButton, knowledgeBaseEntryButton, knowledgeBasePageElement, knowledgeBatchBarElement, knowledgeBatchClearButton, knowledgeBatchCountElement, knowledgeBatchFolderSelect, knowledgeBatchMoveButton, knowledgeBatchRelatedButton, knowledgeBatchRemoveButton, knowledgeDetailCloseButton, knowledgeDocumentCountElement, knowledgeGroupSelect, knowledgeListElement, knowledgeListSummaryElement, knowledgePageStatusElement, knowledgePageSubtitleElement, knowledgePageTitleElement, knowledgeSearchInput, knowledgeSelectAllCheckbox, knowledgeTableSortButtons, knowledgeTotalCountElement, knowledgeViewGridButton, knowledgeViewListButton } from "../../app/viewer-elements";
 import {
   getActiveWorkspaceView,
   transitionWorkspaceView,
@@ -34,16 +34,42 @@ import {
   deleteKnowledgeFolder,
   listKnowledgeDocuments,
   listKnowledgeFolders,
-  removeKnowledgeDocument,
-  updateKnowledgeDocument,
 } from "./knowledge-corpus-repository";
-import { syncCurrentPdfLibraryButton } from "./current-pdf-add-to-library";
-import { openKnowledgePdfOverview, registerKnowledgePdfOverviewEvents } from "./knowledge-pdf-overview";
+import { registerKnowledgePdfOverviewEvents } from "./knowledge-pdf-overview";
 import {
   isRelatedPapersSearchRunning,
   relatedPapersAvailability,
   searchRelatedPapers,
 } from "./knowledge-related-papers";
+import {
+  readLibrarySort,
+  renderLibrarySortIndicators,
+  renderLibraryTable,
+  type LibraryTableHandlers,
+} from "./library-table";
+import {
+  describeLibrarySummary,
+  sortLibraryDocuments,
+  type LibrarySortKey,
+} from "./library-table-model";
+import { renderDocumentPanel, renderReadingStatusCounts } from "./library-doc-panel";
+import { applyLibraryViewMode, persistLibraryViewMode, readLibraryViewMode } from "./library-view-mode";
+import { isKnowledgeIndexRunning } from "./current-pdf-add-to-library";
+import { listKnowledgeDocumentsForDisplay } from "./interrupted-work-recovery";
+import { buildCorpusFolderOptions, renderCorpusDocuments } from "./library-card-view";
+import { createLibraryActions } from "./library-actions";
+import {
+  EMPTY_SELECTION,
+  describeSelection,
+  pruneDocumentSelection,
+  selectVisibleDocuments,
+  toggleDocumentSelection,
+} from "./library-selection";
+import {
+  readReadingStatus,
+  READING_STATUS_LABELS,
+  type KnowledgeDocumentReadingStatus,
+} from "../../../modules/knowledge/public";
 import { persistCurrentAppViewState, resolvedReadingMode, selectedKnowledgeRecordKey, SavedKnowledgeNote } from "../../app/public";
 import { KnowledgeItem } from "../../app/public";
 
@@ -57,35 +83,117 @@ let knowledgeOpenToken = 0;
 
 export function renderKnowledgeBase(): void {
   const folders = listKnowledgeFolders();
-  const documents = listKnowledgeDocuments();
+  // Interrupted background work is repaired here, because this is the only place that reads the whole corpus anyway:
+  // a record still claiming `indexing`/`extracting` with no live task behind it would otherwise keep the toolbar and
+  // the inspector's buttons disabled forever after a page reload.
+  const documents = listKnowledgeDocumentsForDisplay(isKnowledgeIndexRunning);
   const query = knowledgeSearchInput.value.trim().toLocaleLowerCase();
-  let filtered = documents.filter((document) =>
+  // A folder shows everything filed in it **and below it** — the sidebar badge counts the subtree, so the list has to
+  // as well, or clicking a parent folder looks like it lost the documents in its subfolders.
+  const folderScopes = activeCorpusFolder !== "all" && activeCorpusFolder !== "unfiled"
+    ? getCorpusDescendantIds(folders, activeCorpusFolder)
+    : null;
+  const filtered = documents.filter((document) =>
     (!query || document.documentName.toLocaleLowerCase().includes(query))
     && (activeCorpusFolder === "all"
       || (activeCorpusFolder === "unfiled" && !document.folderId)
-      || document.folderId === activeCorpusFolder),
+      || (folderScopes ? Boolean(document.folderId && folderScopes.has(document.folderId)) : false))
+    && (activeReadingFilter === "all" || readReadingStatus(document) === activeReadingFilter),
   );
-  filtered.sort((left, right) => {
-    if (knowledgeSortSelect.value === "title") return left.documentName.localeCompare(right.documentName);
-    if (knowledgeSortSelect.value === "oldest") return left.addedAt.localeCompare(right.addedAt);
-    return right.addedAt.localeCompare(left.addedAt);
-  });
+
+  // The batch may only ever contain documents the user can see: narrowing the filter or the search drops the rest,
+  // which is why this happens before anything is drawn from the selection.
+  visibleDocumentIds = filtered.map((document) => document.documentId);
+  selectedDocumentIds = pruneDocumentSelection(selectedDocumentIds, visibleDocumentIds);
 
   knowledgeGroupSelect.value = "none";
-  knowledgePageTitleElement.textContent = activeCorpusFolder === "all"
-    ? "知识库"
-    : activeCorpusFolder === "unfiled"
-      ? "未分类"
-      : folders.find((folder) => folder.id === activeCorpusFolder)?.name || "知识库";
+  knowledgePageTitleElement.textContent = activeReadingFilter !== "all"
+    ? `${READING_FILTER_LABELS[activeReadingFilter]}（${activeCorpusFolder === "all"
+      ? "全部"
+      : folders.find((folder) => folder.id === activeCorpusFolder)?.name || "未分类"}）`
+    : activeCorpusFolder === "all"
+      ? "知识库"
+      : activeCorpusFolder === "unfiled"
+        ? "未分类"
+        : folders.find((folder) => folder.id === activeCorpusFolder)?.name || "知识库";
   if (knowledgePageSubtitleElement) knowledgePageSubtitleElement.textContent = "管理你主动添加的 PDF，并为跨文献问答提供全文检索。";
   knowledgeTotalCountElement.textContent = String(filtered.length);
   knowledgeDocumentCountElement.textContent = String(documents.length);
   renderCorpusSidebar(folders, documents);
-  renderCorpusDocuments(filtered, folders);
+  renderReadingStatusCounts(documents);
+
+  // Both views are rendered from the same filtered list; only one is visible, and the choice is remembered. Sorting is
+  // the table headers' (the only sort control there is): the card view has no headers, so it follows the same state
+  // rather than carrying a second, invisible order.
+  const mode = readLibraryViewMode();
+  applyLibraryViewMode(mode);
+  const sort = readLibrarySort();
+  renderLibrarySortIndicators(sort);
+  renderCorpusDocuments(sortLibraryDocuments(filtered, sort), folders, {
+    libraryDocumentCount: documents.length,
+    selectedId: selectedDocumentId,
+    selection: selectedDocumentIds,
+  });
+  if (mode === "list") {
+    renderLibraryTable(
+      sortLibraryDocuments(filtered, sort),
+      { selectedId: selectedDocumentId, selection: selectedDocumentIds },
+      tableHandlers,
+    );
+    knowledgeListSummaryElement.textContent = describeLibrarySummary(filtered.length, documents.length);
+  } else {
+    knowledgeListSummaryElement.textContent = "";
+  }
+
+  renderBatchBar(folders, documents);
+
+  // The inspector follows the selection and disappears when the selected row is filtered out.
+  const selected = filtered.find((item) => item.documentId === selectedDocumentId) ?? null;
+  selectedDocumentId = selected?.documentId ?? null;
+  renderDocumentPanel(selected, folders, panelHandlers);
   persistCurrentAppViewState();
 }
 
+/**
+ * 批量栏: the count, the destination folder, and the three things a batch can do.
+ *
+ * Hidden when nothing is selected rather than disabled: a permanently visible row of inert buttons above the list is
+ * exactly the clutter this redesign was meant to remove.
+ */
+function renderBatchBar(
+  folders: ReturnType<typeof listKnowledgeFolders>,
+  documents: ReturnType<typeof listKnowledgeDocuments>,
+): void {
+  const selected = selectedDocumentIds.size;
+  knowledgeBatchBarElement.hidden = selected === 0;
+  knowledgeSelectAllCheckbox.checked = selected > 0 && selected === visibleDocumentIds.length;
+  knowledgeSelectAllCheckbox.indeterminate = selected > 0 && selected < visibleDocumentIds.length;
+  if (!selected) return;
+  knowledgeBatchCountElement.textContent = describeSelection(selectedDocumentIds);
+  const currentFolder = knowledgeBatchFolderSelect.value;
+  knowledgeBatchFolderSelect.replaceChildren(
+    new Option('移动到未分类', ''),
+    ...folders.map((folder) => new Option(folder.name, folder.id)),
+  );
+  knowledgeBatchFolderSelect.value = folders.some((folder) => folder.id === currentFolder)
+    ? currentFolder
+    : '';
+  knowledgeBatchFolderSelect.disabled = documents.length === 0;
+}
+
+const READING_FILTER_LABELS: Record<KnowledgeDocumentReadingStatus, string> = {
+  todo: "待读",
+  reading: "在读",
+  done: "已读",
+};
+
 let activeCorpusFolder = "all";
+let activeReadingFilter: "all" | KnowledgeDocumentReadingStatus = "all";
+let selectedDocumentId: string | null = null;
+/** 多选 for the batch bar; independent of `selectedDocumentId`, which drives the inspector. */
+let selectedDocumentIds: ReadonlySet<string> = EMPTY_SELECTION;
+/** The ids the current filter shows, so 全选 means "everything on screen" and nothing else. */
+let visibleDocumentIds: readonly string[] = [];
 const expandedCorpusFolders = new Set<string>();
 const knownCorpusFolders = new Set<string>();
 
@@ -179,21 +287,6 @@ function buildCorpusFolderRows(
   return rows;
 }
 
-function buildCorpusFolderOptions(
-  folders: ReturnType<typeof listKnowledgeFolders>,
-  selectedId: string | null,
-  parentId: string | null = null,
-  depth = 0,
-): string {
-  return folders
-    .filter((folder) => folder.parentId === parentId)
-    .sort((left, right) => left.name.localeCompare(right.name))
-    .map((folder) => {
-      const prefix = depth ? `${"　".repeat(depth)}↳ ` : "";
-      return `<option value="${folder.id}"${selectedId === folder.id ? " selected" : ""}>${prefix}${escapeCorpusHtml(folder.name)}</option>${buildCorpusFolderOptions(folders, selectedId, folder.id, depth + 1)}`;
-    })
-    .join("");
-}
 
 function openCreateCorpusFolderDialog(parentId: string | null): void {
   const dialog = document.getElementById("knowledge-folder-dialog") as HTMLDialogElement | null;
@@ -226,65 +319,55 @@ function renderCorpusSidebar(
   list.replaceChildren(...buildCorpusFolderRows(folders, documents, null));
 }
 
-function escapeCorpusHtml(value: string): string {
-  const element = document.createElement("span");
-  element.textContent = value;
-  return element.innerHTML;
+
+function findDocument(documentId: string) {
+  return listKnowledgeDocuments().find((item) => item.documentId === documentId) ?? null;
 }
 
-function renderCorpusDocuments(
-  documents: ReturnType<typeof listKnowledgeDocuments>,
-  folders: ReturnType<typeof listKnowledgeFolders>,
-): void {
-  if (!documents.length) {
-    knowledgeListElement.innerHTML = `<div class="knowledge-list-empty"><img src="/resources/no-data.svg" alt="" /><strong>这里还没有 PDF</strong><p>打开一份 PDF，点击顶部“添加到知识库”即可建立全文索引。</p></div>`;
-    return;
-  }
-  knowledgeListElement.innerHTML = documents.map((item) => {
-    const status = item.indexStatus === "ready"
-      ? `已索引 · ${item.chunkCount} 个片段`
-      : item.indexStatus === "indexing" ? "正在建立全文索引…"
-        : item.indexStatus === "error" ? "索引失败" : "等待建立索引";
-    const hasOverview = Boolean(item.overviewMarkdown?.trim());
-    const overviewStatus = hasOverview
-      ? "PDF 概览已生成"
-      : item.overviewStatus === "generating"
-        ? "PDF 概览处理中…"
-        : item.overviewStatus === "error"
-          ? "PDF 概览生成失败"
-          : "PDF 概览待生成";
-    const overviewButtonText = hasOverview
-      ? "查看概览"
-      : item.overviewStatus === "generating"
-        ? "处理中…"
-        : "生成概览";
-    // 「检索相关论文」 sits between 查看概览 and 移出知识库: it belongs with the two things the user already does
-    // with a document here, and it keeps the money-spending action out of the overview dialog.
-    const related = relatedPapersAvailability(item);
-    const relatedRunning = isRelatedPapersSearchRunning(item.documentId);
-    const relatedLabel = relatedRunning
-      ? "检索中…"
-      : item.relatedLiteratureMarkdown?.trim()
-        ? "重新检索"
-        : "检索相关论文";
-    return `<article class="knowledge-pdf-card" data-document-id="${escapeCorpusHtml(item.documentId)}">
-      <div class="knowledge-pdf-icon">PDF</div>
-      <div class="knowledge-pdf-body">
-        <h2><button type="button" class="knowledge-pdf-title-button" data-introduce-document="${escapeCorpusHtml(item.documentId)}" title="查看这份 PDF 的智能概览">${escapeCorpusHtml(item.documentName)}</button></h2>
-        <p>${item.pageCount} 页 · ${new Date(item.addedAt).toLocaleDateString()} · <span class="index-${item.indexStatus}">${status}</span> · <span>${overviewStatus}</span></p>
-        <label>文件夹 <select data-move-document="${escapeCorpusHtml(item.documentId)}">
-          <option value="">未分类</option>
-          ${buildCorpusFolderOptions(folders, item.folderId)}
-        </select></label>
-      </div>
-      <div class="knowledge-pdf-actions">
-        <button type="button" class="knowledge-ai-intro-button" data-introduce-document="${escapeCorpusHtml(item.documentId)}">${overviewButtonText}</button>
-        <button type="button" class="knowledge-related-button" data-search-related="${escapeCorpusHtml(item.documentId)}"${related.available && !relatedRunning ? "" : ' aria-disabled="true"'} title="${escapeCorpusHtml(related.reason)}">${relatedLabel}</button>
-        <button type="button" class="danger-button" data-remove-document="${escapeCorpusHtml(item.documentId)}">移出知识库</button>
-      </div>
-    </article>`;
-  }).join("");
+function setLibraryStatus(message: string, isError = false): void {
+  knowledgePageStatusElement.textContent = message;
+  knowledgePageStatusElement.classList.toggle("error", isError);
+  knowledgePageStatusElement.hidden = !message;
 }
+
+function selectLibraryDocument(documentId: string | null): void {
+  selectedDocumentId = documentId;
+  renderKnowledgeBase();
+}
+
+/**
+ * What the library can *do* to a document lives in `library-actions.ts`; this controller only decides what to draw.
+ *
+ * The four ports are the things only the page knows: how to re-render, what is selected, where to report, and how to
+ * step aside when the reader opens a PDF. `select` re-renders, so removing a document (which clears the selection)
+ * never leaves the inspector pointing at a row that is gone.
+ */
+const libraryActions = createLibraryActions({
+  refresh: renderKnowledgeBase,
+  select: selectLibraryDocument,
+  status: setLibraryStatus,
+  leavePage: closeKnowledgeBasePage,
+});
+
+/**
+ * Redraws after a selection change; every 多选 path goes through here so the bar and the rows cannot disagree.
+ *
+ * The checkbox toggle is the one handler the action layer does not own: it is pure view state, so it lives here and is
+ * merged into the table's handlers.
+ */
+function updateSelection(next: ReadonlySet<string>): void {
+  selectedDocumentIds = next;
+  renderKnowledgeBase();
+}
+
+/** The list's handlers, shared with the grid so a card click selects the same document. */
+const tableHandlers: LibraryTableHandlers = {
+  ...libraryActions.table,
+  toggleSelect: (documentId: string) => {
+    updateSelection(toggleDocumentSelection(selectedDocumentIds, documentId));
+  },
+};
+const panelHandlers = libraryActions.panel;
 
 export function registerKnowledgeCorpusEvents(): void {
   registerKnowledgePdfOverviewEvents();
@@ -346,49 +429,121 @@ export function registerKnowledgeCorpusEvents(): void {
     if (button?.dataset.folderId) { activeCorpusFolder = button.dataset.folderId; renderKnowledgeBase(); }
   });
   knowledgeListElement.addEventListener("change", (event) => {
-    const select = (event.target as HTMLElement).closest<HTMLSelectElement>("[data-move-document]");
+    const target = event.target as HTMLElement;
+    const check = target.closest<HTMLInputElement>("[data-select-document]");
+    if (check?.dataset.selectDocument) {
+      updateSelection(toggleDocumentSelection(selectedDocumentIds, check.dataset.selectDocument));
+      return;
+    }
+    const select = target.closest<HTMLSelectElement>("[data-move-document]");
     if (!select?.dataset.moveDocument) return;
-    updateKnowledgeDocument(select.dataset.moveDocument, { folderId: select.value || null });
-    renderKnowledgeBase();
+    panelHandlers.moveToFolder(select.dataset.moveDocument, select.value || null);
   });
   knowledgeListElement.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
+    // The card's checkbox only changes the batch; it must not also move the inspector.
+    if (target.closest("[data-select-document]")) return;
+    const cycle = target.closest<HTMLButtonElement>("[data-cycle-reading]");
+    if (cycle?.dataset.cycleReading) {
+      event.stopPropagation();
+      tableHandlers.cycleReading(cycle.dataset.cycleReading);
+      return;
+    }
     const related = target.closest<HTMLButtonElement>("[data-search-related]");
     if (related?.dataset.searchRelated) {
-      const item = listKnowledgeDocuments()
-        .find((document) => document.documentId === related.dataset.searchRelated);
+      const item = findDocument(related.dataset.searchRelated);
       // `aria-disabled` rather than `disabled`: a disabled button cannot be hovered, and its tooltip is the only
       // thing that explains what to do first.
-      if (item && !related.getAttribute("aria-disabled")) void searchRelatedPapers(item);
+      if (item && !related.getAttribute("aria-disabled")) panelHandlers.searchRelated(item.documentId);
       else if (item) related.title = relatedPapersAvailability(item).reason;
       return;
     }
     const remove = target.closest<HTMLButtonElement>("[data-remove-document]");
     if (remove?.dataset.removeDocument) {
-      if (!window.confirm("将这份 PDF 移出知识库吗？它将不再参与跨文献检索。")) return;
-      const removedDocumentId = remove.dataset.removeDocument;
-      removeKnowledgeDocument(removedDocumentId);
-      // Also drop it from the knowledge graph. Left behind, its entities, edges
-      // and extraction jobs would outlive the document: the graph would claim
-      // relationships to a paper the user removed, and a later re-add would
-      // silently skip extraction because a stale `done` job was still recorded.
-      void import("./graph-removal-bridge")
-        .then((bridge) => bridge.removeDocumentFromGraph(removedDocumentId))
-        .catch(() => undefined);
-      syncCurrentPdfLibraryButton();
-      renderKnowledgeBase();
+      panelHandlers.remove(remove.dataset.removeDocument);
       return;
     }
     const introduce = target.closest<HTMLButtonElement>("[data-introduce-document]");
     if (introduce?.dataset.introduceDocument) {
-      const item = listKnowledgeDocuments().find((document) => document.documentId === introduce.dataset.introduceDocument);
-      if (item) openKnowledgePdfOverview(item);
+      panelHandlers.openOverview(introduce.dataset.introduceDocument);
       return;
     }
+    // A plain click anywhere else on the card selects it, so the inspector follows in both views.
+    const card = target.closest<HTMLElement>(".knowledge-pdf-card");
+    if (card?.dataset.documentId && card.dataset.documentId !== selectedDocumentId) {
+      selectLibraryDocument(card.dataset.documentId);
+    }
+  });
+
+  // 视图切换 + 阅读状态筛选 + 表头排序：三个控件都只影响"怎么显示"，落地方式统一为重渲染。
+  knowledgeViewListButton.addEventListener("click", () => {
+    persistLibraryViewMode("list");
+    renderKnowledgeBase();
+  });
+  knowledgeViewGridButton.addEventListener("click", () => {
+    persistLibraryViewMode("grid");
+    renderKnowledgeBase();
+  });
+  for (const button of readingFilterButtons()) {
+    button.addEventListener("click", () => {
+      const value = button.dataset.readingFilter;
+      if (value !== "todo" && value !== "reading" && value !== "done") return;
+      activeReadingFilter = activeReadingFilter === value ? "all" : value;
+      for (const other of readingFilterButtons()) {
+        other.classList.toggle("active", other.dataset.readingFilter === activeReadingFilter);
+      }
+      renderKnowledgeBase();
+    });
+  }
+  for (const button of knowledgeTableSortButtons) {
+    button.addEventListener("click", () => {
+      const key = button.dataset.knowledgeSort as LibrarySortKey | undefined;
+      if (!key) return;
+      const current = readLibrarySort();
+      // Same column toggles the direction; a new column starts in the direction that shows the interesting end first.
+      const descending = current.key === key
+        ? !current.descending
+        : key === "date" || key === "pages";
+      button.dataset.sortDirection = descending ? "desc" : "asc";
+      for (const other of knowledgeTableSortButtons) {
+        if (other !== button) delete other.dataset.sortDirection;
+      }
+      renderKnowledgeBase();
+    });
+  }
+  knowledgeDetailCloseButton.addEventListener("click", () => {
+    selectLibraryDocument(null);
+  });
+
+  // 全选只针对当前筛选出来的列表：筛选之外的文献用户看不见，也就不该被批量操作带上。
+  knowledgeSelectAllCheckbox.addEventListener("change", () => {
+    updateSelection(knowledgeSelectAllCheckbox.checked
+      ? selectVisibleDocuments(visibleDocumentIds)
+      : EMPTY_SELECTION);
+  });
+  knowledgeBatchClearButton.addEventListener("click", () => updateSelection(EMPTY_SELECTION));
+  knowledgeBatchMoveButton.addEventListener("click", () => {
+    libraryActions.batch.moveToFolder([...selectedDocumentIds], knowledgeBatchFolderSelect.value || null);
+    updateSelection(EMPTY_SELECTION);
+  });
+  knowledgeBatchRelatedButton.addEventListener("click", () => {
+    // `runRelated` shows the cost/skip confirmation itself and reports progress in the page status line. The selection
+    // is only dropped when a run actually started — cancelling the confirmation must not clear what the user picked.
+    void libraryActions.batch.runRelated([...selectedDocumentIds]).then((started) => {
+      if (started) updateSelection(EMPTY_SELECTION);
+    });
+  });
+  knowledgeBatchRemoveButton.addEventListener("click", () => {
+    if (libraryActions.batch.remove([...selectedDocumentIds])) updateSelection(EMPTY_SELECTION);
   });
   window.addEventListener("pdf-helper:knowledge-corpus-change", () => {
     if (getActiveWorkspaceView() === "knowledge") renderKnowledgeBase();
   });
+}
+
+/** The three sidebar reading filters, read from the DOM so the markup stays the single source of truth. */
+function readingFilterButtons(): HTMLButtonElement[] {
+  return Array.from(document.querySelectorAll<HTMLButtonElement>("[data-reading-filter]"));
 }
 
 

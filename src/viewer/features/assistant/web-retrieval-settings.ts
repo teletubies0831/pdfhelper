@@ -24,8 +24,11 @@ import { getSettingsConnectionCatalog, showSettingsStatus } from './settings-nav
  */
 
 /** Mirrors the stored settings into the form. A no-op until the catalog has been loaded once. */
-export function populateWebRetrievalForm(): void {
-  const settings = getSettingsConnectionCatalog()?.webRetrieval;
+export function populateWebRetrievalForm(state?: AiConnectionCatalogState): void {
+  // `state` is the freshly saved catalog when a save just happened. Reading the module-level catalog instead would
+  // refill the form from the *previous* state — which wiped the API key the user had just typed, because the next
+  // field change then saved that empty value over it.
+  const settings = (state ?? getSettingsConnectionCatalog())?.webRetrieval;
   if (!settings) return;
   webRetrievalBaseUrlInput.value = settings.baseUrl;
   webRetrievalApiKeyInput.value = settings.apiKey;
@@ -55,6 +58,6 @@ export async function saveWebRetrievalSettings(): Promise<AiConnectionCatalogSta
     maxFetches: normalizeWebRetrievalMaxFetches(webRetrievalMaxFetchesInput.value),
   };
   const state = await aiConnectionCatalog.saveWebRetrieval(settings);
-  populateWebRetrievalForm();
+  populateWebRetrievalForm(state);
   return state;
 }

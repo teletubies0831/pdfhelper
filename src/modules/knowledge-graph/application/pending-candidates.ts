@@ -208,12 +208,14 @@ export function planPendingCandidateUpsert(
     const knownNames = working.map((entity) => entity.name);
     const baseName = variantBaseOf(verdict.cleaned, knownNames);
     if (baseName) {
-      collapsedVariants += 1;
       const base = findMatchingEntity(
         { ...candidate, name: baseName, aliases: [] },
         working,
       );
       if (base) {
+        // Counted only when the merge actually happens: the base may be rejected on type mismatch, in which case
+        // this candidate goes on to become a new entity and the "N 个编号副本已并入" line would have been wrong.
+        collapsedVariants += 1;
         const merged = normalizeEntityAliases([...base.aliases, verdict.cleaned]);
         if (merged.length !== base.aliases.length) {
           const updated: GraphEntity = {

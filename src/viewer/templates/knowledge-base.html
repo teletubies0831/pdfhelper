@@ -25,6 +25,18 @@
                 <span><img src="/resources/unfiled.svg" alt="" />未分类</span><strong id="knowledge-unfiled-count">0</strong>
               </button>
               <div class="knowledge-folder-heading">
+                <span>阅读状态</span>
+              </div>
+              <button id="knowledge-filter-todo" type="button" data-reading-filter="todo">
+                <span>待读</span><strong id="knowledge-reading-count-todo">0</strong>
+              </button>
+              <button id="knowledge-filter-reading" type="button" data-reading-filter="reading">
+                <span>在读</span><strong id="knowledge-reading-count-reading">0</strong>
+              </button>
+              <button id="knowledge-filter-done" type="button" data-reading-filter="done">
+                <span>已读</span><strong id="knowledge-reading-count-done">0</strong>
+              </button>
+              <div class="knowledge-folder-heading">
                 <span>文件夹</span>
                 <button id="knowledge-create-folder" type="button"><img src="/resources/new-window.svg" alt="" />新建</button>
               </div>
@@ -84,14 +96,13 @@
 
             <div class="knowledge-search-row research-search-row">
               <label class="knowledge-search-box">
-                <span aria-hidden="true">⌕</span>
+                <svg class="knowledge-search-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-search" /></svg>
                 <input id="knowledge-search-input" type="search" placeholder="搜索知识库中的 PDF…" />
               </label>
-              <select id="knowledge-sort-select" aria-label="排序方式">
-                <option value="newest">最近更新</option>
-                <option value="oldest">最早保存</option>
-                <option value="title">按标题</option>
-              </select>
+              <div class="knowledge-view-toggle" role="group" aria-label="视图">
+                <button id="knowledge-view-list" class="active" type="button" aria-pressed="true">列表</button>
+                <button id="knowledge-view-grid" type="button" aria-pressed="false">卡片</button>
+              </div>
               <select id="knowledge-year-filter" aria-label="年份筛选" hidden>
                 <option value="all">年份</option>
               </select>
@@ -119,9 +130,40 @@
               <button data-knowledge-filter="paper-card" type="button">论文卡片</button>
             </div>
 
+            <div id="knowledge-batch-bar" class="knowledge-batch-bar" aria-label="批量操作" hidden>
+              <strong id="knowledge-batch-count">已选 0 篇</strong>
+              <select id="knowledge-batch-folder" aria-label="目标文件夹"></select>
+              <button id="knowledge-batch-move" type="button">移动到文件夹</button>
+              <button id="knowledge-batch-related" type="button">检索相关论文</button>
+              <button id="knowledge-batch-remove" class="danger-button" type="button">移出知识库</button>
+              <button id="knowledge-batch-clear" type="button">取消选择</button>
+            </div>
+
             <div id="knowledge-dashboard-metrics" class="knowledge-dashboard-metrics" aria-label="研究统计" hidden></div>
             <div id="knowledge-page-status" class="knowledge-page-status" hidden aria-live="polite"></div>
             <div id="knowledge-list" class="knowledge-card-grid" aria-live="polite"></div>
+            <div id="knowledge-table-wrap" class="knowledge-table-wrap" hidden>
+              <table class="knowledge-table">
+                <thead>
+                  <tr>
+                    <th class="knowledge-col-select" scope="col">
+                      <input id="knowledge-select-all" type="checkbox" aria-label="全选当前列表" />
+                    </th>
+                    <th class="knowledge-col-title" scope="col"><button type="button" data-knowledge-sort="title">标题</button></th>
+                    <th class="knowledge-col-reading" scope="col"><button type="button" data-knowledge-sort="reading">阅读</button></th>
+                    <th class="knowledge-col-pages" scope="col"><button type="button" data-knowledge-sort="pages">页数</button></th>
+                    <th class="knowledge-col-date" scope="col"><button type="button" data-knowledge-sort="date">入库日期</button></th>
+                    <th class="knowledge-col-published" scope="col"><button type="button" data-knowledge-sort="published">发表日期</button></th>
+                    <th class="knowledge-col-state" scope="col"><button type="button" data-knowledge-sort="index">索引</button></th>
+                    <th class="knowledge-col-state" scope="col"><button type="button" data-knowledge-sort="overview">概览</button></th>
+                    <th class="knowledge-col-state" scope="col"><button type="button" data-knowledge-sort="related">相关</button></th>
+                  </tr>
+                </thead>
+                <tbody id="knowledge-table-body"></tbody>
+              </table>
+              <p id="knowledge-table-empty" class="knowledge-table-empty" hidden>这个筛选下还没有 PDF。</p>
+            </div>
+            <p id="knowledge-list-summary" class="knowledge-list-summary"></p>
 
             <div class="knowledge-student-panels" hidden>
               <section class="knowledge-student-panel">
@@ -143,52 +185,71 @@
 
           </main>
 
-          <aside class="knowledge-detail-panel" aria-label="知识条目详情" hidden>
+          <aside id="knowledge-detail-panel" class="knowledge-detail-panel knowledge-doc-panel" aria-label="文献详情" hidden>
             <header class="knowledge-detail-header">
-              <strong>内容详情</strong>
+              <strong id="knowledge-doc-title">选择一篇文献</strong>
               <button id="knowledge-detail-close" type="button" aria-label="关闭详情">×</button>
             </header>
 
-            <div id="knowledge-detail-empty" class="knowledge-detail-empty">
-              <span aria-hidden="true">▧</span>
-              <strong>选择一条内容查看详情</strong>
-              <p>这里会显示来源、正文、标签及相关内容。</p>
-            </div>
-
-            <article id="knowledge-detail-content" class="knowledge-detail-content" hidden>
-              <div class="knowledge-detail-title-row">
-                <span id="knowledge-detail-type" class="knowledge-kind-badge"></span>
-                <span id="knowledge-detail-time" class="knowledge-detail-time"></span>
+            <div class="knowledge-doc-scroll">
+              <div class="knowledge-doc-fields">
+                <label class="knowledge-doc-field">
+                  <span>文件夹</span>
+                  <select id="knowledge-doc-folder"><option value="">未分类</option></select>
+                </label>
+                <label class="knowledge-doc-field">
+                  <span>阅读状态</span>
+                  <select id="knowledge-doc-reading">
+                    <option value="todo">待读</option>
+                    <option value="reading">在读</option>
+                    <option value="done">已读</option>
+                  </select>
+                </label>
               </div>
-              <h2 id="knowledge-detail-title"></h2>
-              <div id="knowledge-detail-tags" class="knowledge-detail-tags"></div>
 
-              <section class="knowledge-detail-section">
-                <h3>来源信息</h3>
-                <dl class="knowledge-source-grid">
-                  <div><dt>PDF 文件</dt><dd id="knowledge-detail-document">—</dd></div>
-                  <div><dt>位置</dt><dd id="knowledge-detail-position">—</dd></div>
-                  <div><dt>创建时间</dt><dd id="knowledge-detail-created">—</dd></div>
-                  <div><dt>最后更新</dt><dd id="knowledge-detail-updated">—</dd></div>
+              <dl class="knowledge-doc-meta">
+                <div><dt>页数</dt><dd id="knowledge-doc-pages">—</dd></div>
+                <div><dt>入库时间</dt><dd id="knowledge-doc-added">—</dd></div>
+                <div><dt>更新时间</dt><dd id="knowledge-doc-updated">—</dd></div>
+                <div><dt>片段数量</dt><dd id="knowledge-doc-chunks">—</dd></div>
+              </dl>
+
+              <section class="knowledge-doc-section">
+                <h3>文献信息</h3>
+                <dl class="knowledge-doc-biblio">
+                  <div><dt>作者</dt><dd id="knowledge-doc-authors">—</dd></div>
+                  <div><dt>出版日期</dt><dd id="knowledge-doc-publish-date">—</dd></div>
+                  <div><dt>语言</dt><dd id="knowledge-doc-language">—</dd></div>
+                  <div><dt>DOI</dt><dd id="knowledge-doc-doi">—</dd></div>
+                  <div><dt>链接</dt><dd id="knowledge-doc-url">—</dd></div>
                 </dl>
+                <p id="knowledge-doc-metadata-note" class="knowledge-doc-note"></p>
+                <button id="knowledge-doc-metadata" type="button">提取元数据</button>
               </section>
 
-              <section class="knowledge-detail-section knowledge-content-preview-section">
-                <h3>内容预览</h3>
-                <div id="knowledge-detail-body" class="knowledge-detail-body"></div>
+              <section class="knowledge-doc-section">
+                <h3>处理状态</h3>
+                <ul class="knowledge-doc-states">
+                  <li><span>索引</span><strong id="knowledge-doc-index-state">—</strong></li>
+                  <li><span>概览</span><strong id="knowledge-doc-overview-state">—</strong></li>
+                  <li><span>相关论文</span><strong id="knowledge-doc-related-state">—</strong></li>
+                </ul>
+                <p id="knowledge-doc-issue" class="knowledge-doc-issue" hidden></p>
               </section>
 
-              <section class="knowledge-detail-section">
-                <h3>关联内容</h3>
-                <div id="knowledge-related-summary" class="knowledge-related-summary">暂无关联内容</div>
+              <section class="knowledge-doc-section">
+                <h3>相关论文</h3>
+                <p id="knowledge-doc-related-note" class="knowledge-doc-note"></p>
+                <button id="knowledge-doc-search-related" type="button">检索相关论文</button>
               </section>
 
-              <footer class="knowledge-detail-actions">
-                <button id="knowledge-open-source" type="button">打开原文</button>
-                <button id="knowledge-edit-item" class="primary-button" type="button">编辑内容</button>
-                <button id="knowledge-delete-item" class="danger-button" type="button">删除</button>
+              <footer class="knowledge-doc-actions">
+                <button id="knowledge-doc-overview" type="button">查看概览</button>
+                <button id="knowledge-doc-open" type="button">打开原文</button>
+                <button id="knowledge-doc-graph" type="button">在图谱中查看</button>
+                <button id="knowledge-doc-remove" class="danger-button" type="button">移出知识库</button>
               </footer>
-            </article>
+            </div>
           </aside>
         </div>
       </section>

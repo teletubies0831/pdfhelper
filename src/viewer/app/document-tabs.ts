@@ -132,6 +132,17 @@ export async function openPdfInTab(
     if (existing?.documentProxy) {
       await destroyPdfDocument(documentProxy);
       isOpeningDocument.value = false;
+      if (existing.id === activeTabId) {
+        // Re-opening the document that is already on screen. Parsing installed the duplicate proxy as the live
+        // document (`parsePdfIntoViewer` → `installPdfDocument`), so simply activating the tab would return early and
+        // leave the viewer holding the destroyed duplicate: its annotation storage is empty, which made the next save
+        // write an empty pdfhelper payload over the real one. Put the tab's own, still-alive proxy back instead.
+        installPdfDocument(existing.documentProxy, existing.name, existing.fileHandle, existing.bytes);
+        currentRecentEntryId.value = existing.recentEntryId;
+        markSavedChanges();
+        syncCurrentPdfLibraryButton();
+        return existing;
+      }
       await activateDocumentTab(existing.id);
       return existing;
     }

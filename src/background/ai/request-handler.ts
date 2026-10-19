@@ -9,6 +9,7 @@ import { getAiConfig, getVisionAiConfig } from './ai-config-repository';
 import { getProviderAdapter } from "./provider-runtime";
 import { buildConversation } from "./conversation-builder";
 import { generateDocumentOverview } from "./document-overview-service";
+import { extractDocumentMetadata } from "./document-metadata-service";
 import { generateRelatedLiterature, probeWebRetrieval, searchForChat } from "./web-retrieval-service";
 import { extractEntities } from "./entity-extraction-service";
 import { explainEntities } from "./entity-explanation-service";
@@ -196,7 +197,9 @@ export async function handleAiRequest(message: AiRuntimeRequest, onOverviewProgr
       // without it is still an answer.
       const found = await searchForChat({
         query: message.query,
-        oriQuestion: message.query,
+        // The caller sends the user's own question separately; falling back to `query` (which may be a short question
+        // plus the document name) is only for callers that do not.
+        oriQuestion: message.oriQuestion?.trim() || message.query,
       });
       if (!found) {
         return { ok: false, error: '联网搜索还没有配置 DeepSeek API Key。' };
@@ -270,6 +273,14 @@ export async function handleAiRequest(message: AiRuntimeRequest, onOverviewProgr
       }
       const result = await explainEntities(adapter, config, message);
       return { ok: true, content: result.content, model: config.model };
+    }
+
+    if (message.type === 'pdf-helper:ai-document-metadata') {
+      const metadata = await extractDocumentMetadata(adapter, config, {
+        documentName: message.documentName,
+        text: message.text,
+      });
+      return { ok: true, content: '', model: config.model, documentMetadata: metadata };
     }
 
     if (message.type === 'pdf-helper:ai-detect-reading-mode') {

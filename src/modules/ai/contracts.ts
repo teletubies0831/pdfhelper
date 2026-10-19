@@ -1,4 +1,25 @@
 import type { ResolvedReadingMode } from '../reading-mode/public';
+import type {
+  AiEntityExtractionChunk,
+  AiEntityExplainItem,
+  AiExplainEntitiesRequest,
+  AiExtractEntitiesRequest,
+  AiJudgeRelationsRequest,
+  AiRelationCandidate,
+  AiRelationPaperExcerpt,
+} from './knowledge-tool-contracts';
+
+/** 知识图谱的三个 AI 请求契约在 `knowledge-tool-contracts.ts` 里，这里重新导出以保持 `AiRuntimeRequest` 完整。 */
+export type {
+  AiEntityExtractionChunk,
+  AiEntityExplainItem,
+  AiExplainEntitiesRequest,
+  AiExtractEntitiesRequest,
+  AiJudgeRelationsRequest,
+  AiRelationCandidate,
+  AiRelationPaperExcerpt,
+} from './knowledge-tool-contracts';
+
 
 export const AI_CONFIG_STORAGE_KEY = 'pdf-helper-ai-config-v1';
 export const VISION_AI_CONFIG_STORAGE_KEY = 'pdf-helper-vision-ai-config-v1';
@@ -271,6 +292,32 @@ export interface AiDetectReadingModeRequest {
   outlineTitles?: string[];
 }
 
+/**
+ * Bibliographic metadata for one saved document: authors, date, language, URL, DOI.
+ *
+ * One short call over the first pages, run right after a document is added. It is a *model* call rather than a
+ * lookup (no DOI service is contacted), so the answer is what the first page says — which is exactly why every
+ * field may come back empty and the caller must treat empty as a valid result.
+ */
+export interface AiDocumentMetadataRequest {
+  type: 'pdf-helper:ai-document-metadata';
+  requestId: string;
+  documentName: string;
+  /** Text of the first pages, already extracted by the viewer. */
+  text: string;
+}
+
+/** What the model managed to read; every field is optional and may legitimately be empty. */
+export interface AiDocumentMetadata {
+  authors: string[];
+  publishDate: string;
+  language: string;
+  documentUrl: string;
+  doi: string;
+  /** Set when the answer could not be read as JSON, so the panel can offer a retry instead of pretending it is empty. */
+  degraded?: string;
+}
+
 export interface AiGenerateDocumentOverviewRequest {
   type: 'pdf-helper:ai-generate-document-overview';
   requestId: string;
@@ -283,112 +330,6 @@ export interface AiDocumentOverviewProgress {
   content: string;
   message: string;
   complete: boolean;
-}
-
-/** One chunk of a paper, as handed to the entity extractor. */
-export interface AiEntityExtractionChunk {
-  chunkId: string;
-  heading?: string;
-  startPage: number;
-  endPage: number;
-  text: string;
-}
-
-/**
- * Knowledge-graph candidate entity extraction for one paper.
- *
- * Sent as a single request carrying every chunk, rather than one request per
- * chunk: the service worker is the caller and it can be torn down between
- * messages, so fewer round trips means fewer orphaned jobs. The response is plain
- * text (there is no provider JSON mode) that the caller parses defensively.
- */
-export interface AiExtractEntitiesRequest {
-  type: 'pdf-helper:ai-extract-entities';
-  requestId: string;
-  paperId: string;
-  paperTitle: string;
-  documentName: string;
-  /**
-   * The paper's abstract, when one is known.
-   *
-   * Sent ahead of the chunks because each call only sees three of them: without it the model reads
-   * a background paragraph in the Introduction as if it were the paper's own contribution. The
-   * abstract is the cheapest available statement of what the paper actually does.
-   */
-  abstract?: string;
-  chunks: AiEntityExtractionChunk[];
-  /** Hard cap on candidates kept per response; the main token-cost lever. */
-  maxCandidatesPerChunk: number;
-  /** Injected for testability; defaults to the built-in extraction prompt. */
-  promptOverride?: string;
-}
-
-/**
- * One paper, as the relation judge sees it: title plus a verbatim excerpt.
- *
- * The excerpt is sent **once per paper** rather than per pair, because a bridge concept has to be
- * supported by a quote from each side and the quote is verified against exactly this text afterwards.
- * Sending it per pair would multiply the input by the number of pairs for no extra information.
- */
-export interface AiRelationPaperExcerpt {
-  paperId: string;
-  title: string;
-  /** Abstract, else the knowledge base overview lead. Empty when neither exists. */
-  excerpt: string;
-}
-
-/** One paper pair to judge, with the context the model needs. */
-export interface AiRelationCandidate {
-  /** Deterministic key; echoed back by the model so answers can be matched. */
-  pairKey: string;
-  leftPaperId: string;
-  rightPaperId: string;
-  leftTitle: string;
-  rightTitle: string;
-  sharedEntities: string[];
-  recallReasons: string[];
-}
-
-/**
- * Knowledge-graph paper-to-paper relationship judgement, plus bridge concepts.
- *
- * The candidate list is already bounded by the caller's selection or recall funnel, so this request is
- * small by construction — the token ceiling was decided before the message was built, not here.
- */
-export interface AiJudgeRelationsRequest {
-  type: 'pdf-helper:ai-judge-relations';
-  requestId: string;
-  /** Excerpts for every paper mentioned by `pairs`. */
-  papers: AiRelationPaperExcerpt[];
-  pairs: AiRelationCandidate[];
-  /** Injected for testability; defaults to the built-in judgement prompt. */
-  promptOverride?: string;
-}
-
-/** One entity the model is asked to explain, with the context it may ground the answer in. */
-export interface AiEntityExplainItem {
-  name: string;
-  type: string;
-  aliases?: string[];
-  paperTitle: string;
-  /** Abstract lead, when one is known: the cheapest statement of what the paper does. */
-  abstract?: string;
-  /** Verbatim sentences where the entity appears, already stored on the entity as evidence. */
-  quotes: string[];
-}
-
-/**
- * Short per-entity glosses for entities the user just confirmed into the graph.
- *
- * Sent as one request for the whole confirmation rather than one per entity: the answers are a few
- * dozen characters each, and a round trip per name would cost more than the content.
- */
-export interface AiExplainEntitiesRequest {
-  type: 'pdf-helper:ai-explain-entities';
-  requestId: string;
-  items: AiEntityExplainItem[];
-  /** Injected for testability; defaults to the built-in explanation prompt. */
-  promptOverride?: string;
 }
 
 export interface AiCompressConversationRequest {
@@ -514,6 +455,7 @@ export type AiRuntimeRequest =
   | AiRelatedLiteratureRequest
   | AiWebSearchRequest
   | AiDetectReadingModeRequest
+  | AiDocumentMetadataRequest
   | AiGenerateDocumentOverviewRequest
   | AiExtractEntitiesRequest
   | AiJudgeRelationsRequest
@@ -565,6 +507,11 @@ export interface AiRuntimeResponse {
     hits: Array<{ title: string; url: string; summary: string }>;
     searchCalls: number;
   };
+  /**
+   * Present on `pdf-helper:ai-document-metadata` responses. Fields the model could not read are empty strings —
+   * that is a successful run with nothing found, not an error.
+   */
+  documentMetadata?: AiDocumentMetadata;
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -629,6 +576,7 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
     || type === 'pdf-helper:ai-related-literature'
     || type === 'pdf-helper:ai-web-search'
     || type === 'pdf-helper:ai-detect-reading-mode'
+    || type === 'pdf-helper:ai-document-metadata'
     || type === 'pdf-helper:ai-generate-document-overview'
     || type === 'pdf-helper:ai-extract-entities'
     || type === 'pdf-helper:ai-judge-relations'
@@ -683,6 +631,9 @@ export function normalizeWebRetrievalMaxFetches(value: unknown): number {
 }
 
 export function normalizeAiMaxOutputTokens(value: unknown): number {
+  // An empty field is "unset", not "zero": `Number('')` is 0 and finite, which used to clamp the budget down to the
+  // 256 floor — a typo in the settings box then truncated every answer without saying so.
+  if (value === '' || value === null || value === undefined) return DEFAULT_AI_CONFIG.maxOutputTokens;
   const parsed = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(parsed)) return DEFAULT_AI_CONFIG.maxOutputTokens;
   return Math.min(65536, Math.max(256, Math.trunc(parsed)));

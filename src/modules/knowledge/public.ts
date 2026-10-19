@@ -1,6 +1,37 @@
 import { KnowledgeLibrary } from './application/knowledge-library';
 export * from './adapters/browser-document-corpus';
 export { saveDocumentOverview, saveRelatedLiterature, getDocumentOverviewMarkdown } from './application/document-overview';
+export {
+  READING_STATUS_LABELS,
+  READING_STATUS_ORDER,
+  countReadingStatuses,
+  markDocumentOpened,
+  nextReadingStatus,
+  normalizeReadingStatus,
+  readReadingStatus,
+  setDocumentReadingStatus,
+} from './application/document-reading-status';
+export {
+  EMPTY_DOCUMENT_METADATA,
+  doiUrl,
+  hasDocumentMetadata,
+  markDocumentMetadataExtracting,
+  markDocumentMetadataFailed,
+  normalizeAuthors,
+  normalizeDocumentMetadata,
+  normalizeDoi,
+  normalizeDocumentUrl,
+  normalizeLanguage,
+  normalizePublishDate,
+  readDocumentMetadata,
+  setDocumentMetadata,
+} from './application/document-metadata';
+export type { KnowledgeDocumentMetadata } from './application/document-metadata';
+export {
+  findSamePaperDocument,
+  paperNameKey,
+} from './application/document-identity-match';
+export type { PaperIdentityCandidate } from './application/document-identity-match';
 import { BrowserStorageKnowledgeRepository } from './adapters/browser-storage-knowledge-repository';
 import { HuggingFaceEmbeddingProvider } from './adapters/hugging-face-embedding-provider';
 import { IndexedDbKnowledgeVectorRepository } from './adapters/indexed-db/indexed-db-knowledge-vector-repository';

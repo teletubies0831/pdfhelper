@@ -112,7 +112,7 @@ const MAX_ALIASES = 6;
  * list in it" is exactly where models improvise. Blank entries and the candidate's own name are
  * dropped — an alias equal to the name carries no information and would only inflate the record.
  */
-function parseAliases(value: unknown, nameKey: string): string[] {
+function parseAliases(value: unknown, nameKey: string, normalizeKey: (name: string) => string): string[] {
   const items = Array.isArray(value)
     ? value
     : typeof value === 'string'
@@ -123,7 +123,9 @@ function parseAliases(value: unknown, nameKey: string): string[] {
   for (const item of items) {
     const alias = normalizeName(item);
     if (!alias) continue;
-    const key = alias.toLocaleLowerCase();
+    // The same key function the candidate's own name went through: comparing a normalized key with a lower-cased
+    // string never matches, so an alias that *is* the name (or a spacing/case variant) used to be stored as an alias.
+    const key = normalizeKey(alias) || alias.toLocaleLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     aliases.push(alias);
@@ -285,6 +287,7 @@ export function parseEntityCandidates(
     const aliases = parseAliases(
       entry.aliases ?? entry.alias ?? entry.abbreviations ?? entry.otherNames,
       key,
+      entityKeyOf,
     );
 
     const existing = byKey.get(key);
