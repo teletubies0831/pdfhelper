@@ -140,15 +140,26 @@ function truncate(value: string, limit: number): string {
  * Everything else is excluded on purpose. A shared-entity link is not a judged
  * relationship — it is the very signal that motivates asking — and personal or
  * keyword edges belong to other layers entirely.
+ *
+ * One exception, and it is deliberate: a `CITES` / `EXTENDS` / `IMPROVES` conclusion recorded **without a direction**
+ * predates `relation-judgement-3`. Its endpoints were the pair's database ordering, so its arrow was right about half the
+ * time — asking again once is the only way to fix it, and the re-ask is bounded to those pairs (a re-judged pair drops
+ * its old edge, so it cannot be asked twice).
  */
 export function collectJudgedPairKeys(edges: readonly GraphEdge[]): Set<string> {
   const judged = new Set<string>();
   for (const edge of edges) {
     if (edge.sourceKind !== 'paper' || edge.targetKind !== 'paper') continue;
     if (!isPaperPaperConclusion(edge.type)) continue;
+    if (isDirectionalVerdict(edge.type) && !edge.direction) continue;
     judged.add(relationPairKey(edge.source, edge.target));
   }
   return judged;
+}
+
+/** Paper-paper conclusion types whose meaning depends on which way the arrow points. */
+export function isDirectionalVerdict(type: string): boolean {
+  return type === 'CITES' || type === 'EXTENDS' || type === 'IMPROVES';
 }
 
 /**

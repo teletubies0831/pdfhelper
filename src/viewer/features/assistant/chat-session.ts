@@ -47,6 +47,8 @@ export function requestAiStream(
   content: string;
   reasoningContent: string;
   requestId: string;
+  /** `finishReason` from the provider: `'length'` means the answer was cut off by the output budget. */
+  finishReason?: string;
 }> {
   const requestId = crypto.randomUUID();
   const port = browser.runtime.connect({ name: AI_STREAM_PORT_NAME });
@@ -111,6 +113,9 @@ export function requestAiStream(
             content,
             reasoningContent,
             requestId,
+            // Carried through so the caller can tell a complete answer from one the output budget cut short. Dropping
+            // it here is what made a truncated answer look like a finished one.
+            finishReason: message.completion?.finishReason,
           }),
         );
         return;

@@ -46,6 +46,8 @@ const { handleAiRequest } = evaluate(await compile('src/background/ai/request-ha
   './document-overview-service': {},
   // Bibliographic metadata extraction is exercised by the library workbench test; here it only has to exist.
   './document-metadata-service': {},
+  // The Crossref/OpenAlex lookup is exercised by the library workbench test too.
+  './bibliographic-lookup-service': {},
   // Knowledge-graph entity extraction, relation judgement and entity explanations are exercised by
   // their own contract tests; here they only need to exist so the handler module can be loaded.
   './entity-extraction-service': {},
@@ -161,6 +163,9 @@ test('every knowledge-graph AI request type is accepted by the whitelist and ans
       }),
       searchForChat: async () => ({ hits: [], searchCalls: 1 }),
     },
+    './bibliographic-lookup-service': {
+      lookupBibliographicRecords: async () => ({ candidates: [], errors: [] }),
+    },
   });
 
   const messages = [
@@ -188,6 +193,8 @@ test('every knowledge-graph AI request type is accepted by the whitelist and ans
       documentName: 'd.pdf', overviewMarkdown: '# T',
     },
     { type: 'pdf-helper:ai-web-search', requestId: 'r-web', query: 'attention' },
+    // The bibliographic lookup: free databases, no model call, and the same two gates as everything else.
+    { type: 'pdf-helper:lookup-bibliographic-metadata', requestId: 'r-lookup', title: 'Attention Is All You Need' },
   ];
 
   for (const message of messages) {

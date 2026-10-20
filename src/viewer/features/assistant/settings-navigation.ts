@@ -441,6 +441,10 @@ function populateRouteSelect(
   capability: AiConnectionCapability,
   route: AiModelRoute | undefined,
 ): void {
+  // Captured before the options are rebuilt: these selects only persist on 「保存配置」, and this function runs on every
+  // unrelated refresh (settings tab switches, retrieval-setting saves), which used to silently reset a choice the user
+  // had made but not saved yet.
+  const previous = select.value;
   select.replaceChildren();
   const connections = (catalogState?.connections ?? [])
     .filter((connection) => connection.capabilities.includes(capability));
@@ -468,10 +472,13 @@ function populateRouteSelect(
     return;
   }
   select.disabled = false;
-  const selected = route ? routeValue(route) : '';
-  select.value = Array.from(select.options).some((option) => option.value === selected)
-    ? selected
-    : select.options.item(0)?.value ?? '';
+  const available = new Set(Array.from(select.options).map((option) => option.value));
+  const stored = route ? routeValue(route) : '';
+  select.value = available.has(previous)
+    ? previous
+    : available.has(stored)
+      ? stored
+      : select.options.item(0)?.value ?? '';
 }
 
 function renderTaskRoutes(): void {

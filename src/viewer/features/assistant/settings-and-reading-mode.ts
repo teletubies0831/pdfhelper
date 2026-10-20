@@ -181,7 +181,10 @@ export async function syncAiConfigsFromConnectionCatalog(): Promise<void> {
 export async function refreshWebRetrievalConfig(): Promise<void> {
   webRetrievalConfig.value = await aiConnectionCatalog.resolveWebRetrievalConfig();
   syncChatWebSearchToggle();
-  populateDeepSeekConfigForm(aiConfig.value);
+  // Deliberately *not* `populateDeepSeekConfigForm`: that rewrites the 最大输出 Token field (and every other control)
+  // from the saved config, so changing a retrieval setting would silently discard an edit the user had not saved yet.
+  // Only the connection summaries depend on this change.
+  updateSettingsConnectionSummaries();
 }
 
 

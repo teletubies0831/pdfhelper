@@ -22,6 +22,13 @@ export interface DocumentTab {
   /** Snapshot of the reading position captured when the tab lost focus. */
   readingPosition: ReadingPosition | null;
   hasUnsavedChanges: boolean;
+  /**
+   * The annotation snapshot last written into this tab's file.
+   *
+   * Per tab because "unsaved" is a comparison: switching tabs used to re-stamp the current state as saved, so an edit
+   * made before the switch lost both its marker and its close-tab prompt.
+   */
+  savedSnapshot: string;
 }
 
 export function createDocumentTabId(): string {

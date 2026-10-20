@@ -40,7 +40,10 @@ apply-*.ps1
 .DS_Store
 Thumbs.db
 
-# 忽略不需要上传的本地文档
+# pnpm store
+.pnpm-store/
+
+# design document
 docs/knowledge-graph-plan.md
 docs/knowledge-library.md
 docs/logic-audit-followups.md

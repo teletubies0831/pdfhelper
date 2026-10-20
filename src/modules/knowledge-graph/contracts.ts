@@ -232,6 +232,19 @@ export interface GraphEdge {
   confidence: number;
   evidence: GraphEvidence[];
   sourcePaperId: string | null;
+  /**
+   * Which way a judged `CITES` / `EXTENDS` / `IMPROVES` conclusion points.
+   *
+   * `source`/`target` come from the candidate pair's ordering, which is just the database's primary-key order — it says
+   * nothing about who cites whom. So the direction the model actually judged is stored here:
+   * - `leftToRight`: the source paper cites / extends / improves on the target;
+   * - `rightToLeft`: the other way round;
+   * - absent: unknown (older edges, or the model did not say). The canvas draws those without an arrow head, because a
+   *   guessed arrow is worse than no arrow.
+   *
+   * Undirected types (`SIMILAR_TO`, `COMPARES_WITH`, `RELATED_TO`) never carry it.
+   */
+  direction?: 'leftToRight' | 'rightToLeft';
   origin: EdgeOrigin;
   /**
    * Deterministic idempotency key. A unique index on this field is what stops a

@@ -216,7 +216,7 @@ assert.ok(Array.isArray(request.pairs[0].sharedEntities));
 // ---------------------------------------------------------------------------
 const cachedEdge = {
   edgeId: 'cached', source: 'p1', sourceKind: 'paper', target: 'p2', targetKind: 'paper',
-  type: 'EXTENDS', confidence: 0.9, evidence: [], sourcePaperId: 'p1',
+  type: 'EXTENDS', confidence: 0.9, evidence: [], sourcePaperId: 'p1', direction: 'leftToRight',
   origin: 'ai', originKey: 'EXTENDS|p1|p2', provenance: {}, createdAt: 1, updatedAt: 1,
 };
 const cachedPorts = createPorts({ edges: [...sharedEntityEdges, cachedEdge] });
@@ -487,11 +487,27 @@ const withRejects = runWithReview('accept-all', {
 });
 await withRejects.run();
 assert.equal(withRejects.reviews[0].rejectedCount, 1, 'unparseable verdicts are reported to the review');
+assert.match(
+  withRejects.reviews[0].rejectedReasons[0],
+  /未知的关系类型/,
+  'the review gets the reason, not just the count — 「1 条无法解析」 tells the user nothing to act on',
+);
 assert.equal(
   withRejects.reviews[0].model,
   'deepseek-chat',
   'the review can say which model produced the verdicts',
 );
+
+// An answer with no readable JSON at all: every pair stays unanswered, nothing is cached, and the reason says why.
+const unreadableAnswer = runWithReview('accept-all', {
+  ok: true,
+  content: '这两篇论文都研究深度约束下的电路优化，看不出直接引用关系。',
+  model: 'deepseek-chat',
+});
+await unreadableAnswer.run();
+assert.equal(unreadableAnswer.reviews[0].rows.length, 0);
+assert.equal(unreadableAnswer.reviews[0].rejectedCount, 1);
+assert.match(unreadableAnswer.reviews[0].rejectedReasons[0], /可解析/);
 
 // The review must not change how unanswered pairs are treated: they were never
 // judged, so they are neither shown nor cached, and a retry re-asks them.

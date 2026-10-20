@@ -28,6 +28,7 @@ export function restoreHelperNoteIndexes(notes: unknown) {
 
 export function restoreEmbeddedHelperPayload(
   payload: EmbeddedHelperAnnotations | null,
+  documentProxy: PDFDocumentProxy | null = pdfDocument.value,
 ): number {
   if (!payload) return 0;
 
@@ -36,7 +37,11 @@ export function restoreEmbeddedHelperPayload(
   // restoring data that is already inside the currently opened PDF.
 
   let restoredCount = 0;
-  const annotationStorage = (pdfDocument.value as any)?.annotationStorage;
+  // The payload belongs to `documentProxy`; reading it is asynchronous, so by now the viewer may be showing another
+  // document. Writing into `pdfDocument.value` unconditionally put A's annotations on B — and B's next save wrote them
+  // into B's file.
+  if (!documentProxy || pdfDocument.value !== documentProxy) return 0;
+  const annotationStorage = (documentProxy as any)?.annotationStorage;
   if (!annotationStorage) return 0;
   restoreHelperNoteIndexes(payload.notes);
 
@@ -95,5 +100,5 @@ export async function restoreHelperAnnotations(
   documentProxy: PDFDocumentProxy,
 ): Promise<number> {
   const payload = await readEmbeddedHelperPayload(documentProxy);
-  return restoreEmbeddedHelperPayload(payload);
+  return restoreEmbeddedHelperPayload(payload, documentProxy);
 }

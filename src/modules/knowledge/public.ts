@@ -1,5 +1,11 @@
 import { KnowledgeLibrary } from './application/knowledge-library';
 export * from './adapters/browser-document-corpus';
+export {
+  deleteDocumentFileHandle,
+  getDocumentFileHandle,
+  putDocumentFileHandle,
+} from './adapters/browser-file-handle-store';
+export type { StoredFileHandle } from './adapters/browser-file-handle-store';
 export { saveDocumentOverview, saveRelatedLiterature, getDocumentOverviewMarkdown } from './application/document-overview';
 export {
   READING_STATUS_LABELS,
@@ -13,8 +19,11 @@ export {
 } from './application/document-reading-status';
 export {
   EMPTY_DOCUMENT_METADATA,
+  METADATA_FIELDS,
+  applyExtractedMetadata,
   doiUrl,
   hasDocumentMetadata,
+  isMetadataMissing,
   markDocumentMetadataExtracting,
   markDocumentMetadataFailed,
   normalizeAuthors,
@@ -24,9 +33,29 @@ export {
   normalizeLanguage,
   normalizePublishDate,
   readDocumentMetadata,
+  readMetadataSources,
+  resumeDocumentMetadata,
+  saveManualDocumentMetadata,
   setDocumentMetadata,
+  skipDocumentMetadata,
 } from './application/document-metadata';
-export type { KnowledgeDocumentMetadata } from './application/document-metadata';
+export type {
+  KnowledgeDocumentMetadata,
+  KnowledgeMetadataSource,
+  KnowledgeMetadataSources,
+} from './application/document-metadata';
+export { extractOfflineDocumentMetadata } from './application/document-metadata-heuristics';
+export type { OfflineMetadataHints, OfflineMetadataResult } from './application/document-metadata-heuristics';
+export {
+  TITLE_SIMILARITY_THRESHOLD,
+  buildLookupTitle,
+  evaluateMetadataCandidates,
+  normalizeMatchTitle,
+  surnameKey,
+  titleSimilarity,
+  yearOf,
+} from './application/bibliographic-match';
+export type { MetadataCandidate, MetadataSuggestion } from './application/bibliographic-match';
 export {
   findSamePaperDocument,
   paperNameKey,

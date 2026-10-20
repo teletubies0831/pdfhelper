@@ -37,6 +37,12 @@
                 <span>已读</span><strong id="knowledge-reading-count-done">0</strong>
               </button>
               <div class="knowledge-folder-heading">
+                <span>元数据</span>
+              </div>
+              <button id="knowledge-filter-missing" type="button" data-metadata-filter="missing">
+                <span>缺元数据</span><strong id="knowledge-missing-count">0</strong>
+              </button>
+              <div class="knowledge-folder-heading">
                 <span>文件夹</span>
                 <button id="knowledge-create-folder" type="button"><img src="/resources/new-window.svg" alt="" />新建</button>
               </div>
@@ -216,15 +222,56 @@
 
               <section class="knowledge-doc-section">
                 <h3>文献信息</h3>
-                <dl class="knowledge-doc-biblio">
+                <dl id="knowledge-doc-biblio-view" class="knowledge-doc-biblio">
                   <div><dt>作者</dt><dd id="knowledge-doc-authors">—</dd></div>
                   <div><dt>出版日期</dt><dd id="knowledge-doc-publish-date">—</dd></div>
                   <div><dt>语言</dt><dd id="knowledge-doc-language">—</dd></div>
                   <div><dt>DOI</dt><dd id="knowledge-doc-doi">—</dd></div>
                   <div><dt>链接</dt><dd id="knowledge-doc-url">—</dd></div>
                 </dl>
+
+                <div id="knowledge-doc-biblio-edit" class="knowledge-doc-biblio-edit" hidden>
+                  <label class="knowledge-doc-field">
+                    <span>作者（多位用「、」或「;」分隔）</span>
+                    <input id="knowledge-doc-authors-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>出版日期（2024 / 2024-05 / 2024-05-18）</span>
+                    <input id="knowledge-doc-publish-date-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>语言（en / zh）</span>
+                    <input id="knowledge-doc-language-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>DOI（10.xxxx/yyyy）</span>
+                    <input id="knowledge-doc-doi-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>链接</span>
+                    <input id="knowledge-doc-url-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>快速填入：粘贴 DOI 或 arXiv 链接/编号</span>
+                    <input id="knowledge-doc-identifier-input" type="text" autocomplete="off" placeholder="10.1145/… 或 arXiv:2401.01234" />
+                  </label>
+                  <div class="knowledge-doc-biblio-buttons">
+                    <button id="knowledge-doc-metadata-save" type="button">保存</button>
+                    <button id="knowledge-doc-metadata-cancel" type="button">取消</button>
+                  </div>
+                </div>
+
                 <p id="knowledge-doc-metadata-note" class="knowledge-doc-note"></p>
-                <button id="knowledge-doc-metadata" type="button">提取元数据</button>
+                <div id="knowledge-doc-metadata-actions" class="knowledge-doc-biblio-buttons">
+                  <button id="knowledge-doc-metadata" type="button">提取元数据</button>
+                  <button id="knowledge-doc-metadata-edit" type="button">手动填写</button>
+                  <button id="knowledge-doc-metadata-online" type="button">联网查找</button>
+                  <button id="knowledge-doc-metadata-skip" type="button">标记为无需补全</button>
+                </div>
+                <div id="knowledge-doc-metadata-suggestions" class="knowledge-doc-suggestions" hidden>
+                  <p id="knowledge-doc-metadata-suggestions-note" class="knowledge-doc-note"></p>
+                  <ul id="knowledge-doc-metadata-suggestion-list" class="knowledge-doc-suggestion-list"></ul>
+                </div>
               </section>
 
               <section class="knowledge-doc-section">
@@ -240,6 +287,7 @@
               <section class="knowledge-doc-section">
                 <h3>相关论文</h3>
                 <p id="knowledge-doc-related-note" class="knowledge-doc-note"></p>
+                <div id="knowledge-doc-related-content" class="knowledge-doc-related-content" hidden></div>
                 <button id="knowledge-doc-search-related" type="button">检索相关论文</button>
               </section>
 

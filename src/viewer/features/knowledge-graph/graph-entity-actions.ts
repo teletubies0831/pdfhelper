@@ -136,12 +136,21 @@ export { setExtractionProgress };
  * instead of failing after the user has already committed to a click — and the
  * check is cheap because it reads the same store the extraction would.
  */
-async function hasFullTextIndex(documentId: string): Promise<boolean> {
+/**
+ * Whether the paper's full-text index is usable, and *why not* when it is not.
+ *
+ * The three cases must stay separate: "no chunks yet" is fixed by indexing, "chunks unreadable" is a storage problem, and
+ * collapsing them into one boolean turned a readable IndexedDB failure into 「请先在知识库中建立索引」 — advice that
+ * cannot work, because the index may well exist.
+ */
+async function probeFullTextIndex(documentId: string): Promise<{ ready: boolean; reason: 'empty' | 'unreadable' | '' ; error: string }> {
   try {
     const chunks = await getDocumentChunks(documentId);
-    return chunks.some((chunk) => chunk.text.trim().length > 0);
-  } catch {
-    return false;
+    return chunks.some((chunk) => chunk.text.trim().length > 0)
+      ? { ready: true, reason: '', error: '' }
+      : { ready: false, reason: 'empty', error: '' };
+  } catch (error) {
+    return { ready: false, reason: 'unreadable', error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -157,11 +166,13 @@ export async function refreshExtractionAvailability(): Promise<void> {
     knowledgeGraphExtractButton.disabled = true;
     knowledgeGraphExtractButton.title = '当前 PDF 尚未进入图谱，请先让文献进入知识库。';
   } else {
-    const indexed = await hasFullTextIndex(paperId);
-    knowledgeGraphExtractButton.disabled = !indexed;
-    knowledgeGraphExtractButton.title = indexed
+    const probe = await probeFullTextIndex(paperId);
+    knowledgeGraphExtractButton.disabled = !probe.ready;
+    knowledgeGraphExtractButton.title = probe.ready
       ? '对当前打开的文献全文抽取候选实体'
-      : '这篇文献还没有全文索引：请先在知识库中为它建立索引，抽取需要正文内容。';
+      : probe.reason === 'unreadable'
+        ? `读取本地全文索引失败（${probe.error}）：这是存储问题，不是缺少索引。可以在知识库「打开原文」一次，让它重建索引。`
+        : '这篇文献还没有全文索引：请先在知识库中为它建立索引，抽取需要正文内容。';
   }
 
   // The batch button only needs *some* paper to be indexed; individual papers
@@ -240,15 +251,22 @@ export async function extractEntitiesForAllPapers(): Promise<void> {
   knowledgeGraphBatchButton.disabled = true;
   try {
     const indexed = new Set<string>();
+    const unreadable: string[] = [];
     for (const paper of papers) {
-      if (await hasFullTextIndex(paper.paperId)) indexed.add(paper.paperId);
+      const probe = await probeFullTextIndex(paper.paperId);
+      if (probe.ready) indexed.add(paper.paperId);
+      else if (probe.reason === 'unreadable') unreadable.push(probe.error);
     }
     const titles = new Map(papers.map((paper) => [paper.paperId, paper.title]));
     const { targets, skippedForIndex } = selectBatchTargets(papers, indexed);
 
     if (!targets.length) {
+      // A storage failure and a missing index need different actions, so they get different sentences.
       setStatus(
-        `这 ${skippedForIndex.length} 篇文献都还没有全文索引，请先在知识库中建立索引。`,
+        unreadable.length === skippedForIndex.length
+          ? `读取本地全文索引失败：${unreadable[0] ?? '未知错误'}。这不是「没有索引」，是存储读取出了问题；对这几篇各点一次「打开原文」可以触发重建。`
+          : `这 ${skippedForIndex.length} 篇文献都还没有全文索引，请先在知识库中建立索引。`
+            + (unreadable.length ? `（其中 ${unreadable.length} 篇是索引读取失败：${unreadable[0]}）` : ''),
         true,
       );
       return;

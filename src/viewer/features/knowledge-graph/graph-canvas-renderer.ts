@@ -5,6 +5,7 @@ import {
   dashPatternForOrigin,
   distanceToSegment,
   isDirectedEdgeType,
+  showsArrowHead,
   nodeWithinBounds,
   segmentCrossesBounds,
   shouldDrawLabel,
@@ -407,8 +408,9 @@ export class GraphCanvasRenderer {
       context.stroke();
       context.restore();
 
-      // Undirected types (SIMILAR_TO, RELATED_TO) get no arrow head.
-      if (isDirectedEdgeType(item.edge.type)) {
+      // Undirected types (SIMILAR_TO, RELATED_TO) get no arrow head — and neither does a directed verdict the model
+      // never oriented: its endpoints are a database ordering, not a direction.
+      if (showsArrowHead(item.edge)) {
         context.save();
         context.globalAlpha = dimmed
           ? 0.08

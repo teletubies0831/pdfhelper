@@ -15,6 +15,7 @@ import {
 import {
   buildJudgementReviewRows,
   filterAcceptedJudgements,
+  parseRelationJudgementBatches,
   parseRelationJudgements,
   planRelationJudgementWrites,
   RELATION_PROMPT_VERSION,
@@ -110,6 +111,8 @@ export interface RelationJudgementReview {
   model?: string;
   /** Verdicts that could not be parsed, for honesty about what was dropped. */
   rejectedCount: number;
+  /** Why they were dropped, in the parser's words (`未知的关系类型：CONTRASTS`). */
+  rejectedReasons?: string[];
   /** Bridge suggestions the local checks refused, so the dialog can say how many. */
   bridgeDrops: BridgeDropStats;
 }
@@ -376,7 +379,12 @@ export async function runRelationAnalysis(
     };
   }
 
-  const parsedRaw = parseRelationJudgements(response.content ?? '', preview.selected, {
+  // One answer per batch: parsing the concatenation of two JSON documents fails, which made every selection above five
+  // pairs look like an unreadable model answer. `content` remains the fallback for a single-answer transport.
+  const contents = response.relationJudgement?.contents?.length
+    ? response.relationJudgement.contents
+    : [response.content ?? ''];
+  const parsedRaw = parseRelationJudgementBatches(contents, preview.selected, {
     model: options.model ?? response.model,
     excerpts,
   });
@@ -515,6 +523,8 @@ async function reviewJudgements(
     rows,
     ...(model ? { model } : {}),
     rejectedCount: parsed.rejected.length,
+    // The parser's reasons travel with the count: a bare number is unactionable.
+    rejectedReasons: parsed.rejected.map((entry) => entry.reason).filter(Boolean),
     bridgeDrops: parsed.bridgeDrops,
   });
   if (decision === 'accept-all') {

@@ -8,6 +8,9 @@ import type {
 import { isUndirectedEdgeType } from '../contracts.ts';
 import { buildNodeRoleIndex } from './paper-degree.ts';
 
+/** Paper-paper verdicts whose meaning depends on which way the arrow points. */
+const DIRECTIONAL_VERDICT_TYPES = ['CITES', 'EXTENDS', 'IMPROVES'] as const;
+
 /**
  * Pure geometry and visual-encoding rules for the graph canvas.
  *
@@ -86,6 +89,19 @@ export function dashPatternForOrigin(origin: EdgeOrigin): number[] {
  */
 export function isDirectedEdgeType(type: GraphEdge['type']): boolean {
   return !isUndirectedEdgeType(type);
+}
+
+/**
+ * Whether the canvas should draw an arrow head on this edge.
+ *
+ * A `CITES` / `EXTENDS` / `IMPROVES` conclusion only has a direction when the model judged one; the endpoints by
+ * themselves are just a database ordering (see `GraphEdge.direction`). An edge with a directed type but no recorded
+ * direction is therefore drawn as a plain line — an arrow that is right half the time is worse than no arrow at all.
+ */
+export function showsArrowHead(edge: GraphEdge): boolean {
+  if (!isDirectedEdgeType(edge.type)) return false;
+  if (!DIRECTIONAL_VERDICT_TYPES.includes(edge.type as (typeof DIRECTIONAL_VERDICT_TYPES)[number])) return true;
+  return Boolean(edge.direction);
 }
 
 /**

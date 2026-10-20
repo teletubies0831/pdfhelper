@@ -22,18 +22,23 @@ import {
 import type { LibraryTableHandlers } from './library-table';
 import type { DocumentPanelHandlers } from './library-doc-panel';
 import {
+  applyExtractedMetadata,
   getDocumentOverviewMarkdown,
   markDocumentMetadataFailed,
   markDocumentOpened,
   nextReadingStatus,
   readReadingStatus,
+  resumeDocumentMetadata,
+  saveManualDocumentMetadata,
   setDocumentReadingStatus,
+  skipDocumentMetadata,
   type KnowledgeLibraryDocument,
 } from '../../../modules/knowledge/public';
+import { clearMetadataLookup, lookupDocumentMetadata } from './metadata-lookup';
 import { getDocumentChatId } from '../../app/document-identity';
 import { webRetrievalConfig } from '../../app/public';
 import { pdfDocument } from '../../app/viewer-state';
-import { openSourcePdfFromKnowledge } from '../../shared-ui/navigation/source-pdf-navigation';
+import { openSourcePdfFromKnowledge, relinkSourcePdfFromPicker } from '../../shared-ui/navigation/source-pdf-navigation';
 import { extractDocumentMetadataFor } from './document-metadata-extraction';
 import { readPdfHeadText } from './pdf-text-extraction';
 
@@ -98,9 +103,24 @@ export function createLibraryActions(ports: LibraryActionPorts): LibraryActions 
     markDocumentOpened(item.documentId);
     const hadOpenPdf = Boolean(pdfDocument.value);
     ports.status(`正在打开「${item.documentName}」…`);
-    void openSourcePdfFromKnowledge(item.documentName, item.recentEntryId).then((opened) => {
+    void openSourcePdfFromKnowledge(item.documentName, item.recentEntryId, 1, item.documentId).then(async (opened) => {
       if (!opened) {
-        ports.status(`未找到「${item.documentName}」对应的本地文件，可能已被移动或删除。`, true);
+        // The link rotted (the 12-entry 最近打开 list rotated it out) or the file really is gone. Say which one we can
+        // actually know — we cannot know — and offer the one action that fixes it either way.
+        const linkBroken = !window.confirm(
+          `找不到「${item.documentName}」的本地文件关联。「最近打开」只保留 12 项，时间久了的记录会被挤出这张表——文件通常还在原处。\n\n现在选择这份 PDF 文件恢复关联吗？（选定后会重新建立索引）`,
+        );
+        if (linkBroken) {
+          ports.status('已取消。下次可以在「最近打开」里重新打开这份 PDF，再添加到知识库。', false);
+          ports.refresh();
+          return;
+        }
+        const relinked = await relinkSourcePdfFromPicker(item.documentId, item.documentName);
+        ports.status(
+          relinked ? '已重新关联，正在重建索引…' : '没有重新关联：选择被取消，或文件打不开。',
+          !relinked,
+        );
+        if (relinked && !hadOpenPdf) ports.leavePage();
         ports.refresh();
         return;
       }
@@ -293,6 +313,38 @@ export function createLibraryActions(ports: LibraryActionPorts): LibraryActions 
       searchRelated,
       extractMetadata: (documentId) => {
         void extractMetadata(documentId);
+      },
+      saveMetadata: (documentId, metadata) => {
+        // The user's own words: every field this touches is labelled `manual`, which no automatic pass may overwrite.
+        saveManualDocumentMetadata(documentId, metadata);
+        ports.refresh();
+      },
+      toggleMetadataSkip: (documentId, skipped) => {
+        if (skipped) skipDocumentMetadata(documentId);
+        else resumeDocumentMetadata(documentId);
+        ports.refresh();
+      },
+      lookupMetadata: (documentId) => {
+        const item = getKnowledgeDocument(documentId);
+        if (!item) return;
+        void lookupDocumentMetadata(item).then(() => ports.refresh());
+      },
+      applyMetadataSuggestion: (documentId, candidate) => {
+        // Only reached through an 「填入」 click on an accepted candidate — the gate already refused everything else, and
+        // nothing here runs automatically. `manual` fields keep their lock, so a value the user typed is never replaced.
+        applyExtractedMetadata(documentId, {
+          authors: candidate.authors,
+          publishDate: candidate.publishDate,
+          language: '',
+          documentUrl: candidate.documentUrl,
+          doi: candidate.doi,
+        }, 'online');
+        clearMetadataLookup(documentId);
+        ports.refresh();
+      },
+      dismissMetadataSuggestions: (documentId) => {
+        clearMetadataLookup(documentId);
+        ports.refresh();
       },
       changeReading: (documentId, status) => {
         if (!status) return;
