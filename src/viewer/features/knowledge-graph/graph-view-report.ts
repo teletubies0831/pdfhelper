@@ -47,6 +47,21 @@ export function formatGraphCounts(input: GraphViewCountsInput): string {
   ].filter(Boolean).join(' · ');
 }
 
+/**
+ * Why the graph page is loading.
+ *
+ * Only a load the user asked for announces itself with the floating plate: entering the page and coming back to it both
+ * project the knowledge base, and a 「已同步：写入 0 篇文献」 plate on every visit is noise over the canvas. Kept as a
+ * named rule (rather than a boolean at each call site) because "which loads are silent" is a product decision, and one
+ * this suite can pin.
+ */
+export type GraphLoadReason = 'entry' | 'refresh' | 'resync' | 'action';
+
+/** True only for the explicit 「重新同步」 click. */
+export function shouldAnnounceGraphLoad(reason: GraphLoadReason): boolean {
+  return reason === 'resync';
+}
+
 export interface GraphViewReport {
   /** Text for the counts line above the canvas. */
   countsText: string;

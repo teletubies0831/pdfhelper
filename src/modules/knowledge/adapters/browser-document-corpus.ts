@@ -92,10 +92,26 @@ export interface KnowledgeLibraryDocument {
   documentUrl?: string;
   /** Bare DOI (`10.xxxx/yyy`), without the `https://doi.org/` prefix. */
   doi?: string;
-  /** Whether the metadata pass has run, so the panel can say "尚未提取" instead of showing five dashes. */
-  metadataStatus?: "pending" | "extracting" | "ready" | "error";
+  /**
+   * Whether the metadata pass has run, so the panel can say "尚未提取" instead of showing five dashes.
+   *
+   * `skipped` is the user's own decision that this document needs no bibliographic data (a handout, an internal report,
+   * a journal that issues no DOIs). It is terminal on purpose: the library stops offering to extract, and the 缺元数据
+   * filter stops listing it.
+   */
+  metadataStatus?: "pending" | "extracting" | "ready" | "error" | "skipped";
   metadataError?: string;
   metadataAt?: string;
+  /**
+   * Per-field provenance: which pass produced the value now stored.
+   *
+   * The panel shows it ("DOI · 手动"), and the write policy reads it: an automatic pass may fill a blank field, but never
+   * replaces one the user typed by hand.
+   */
+  metadataSources?: Partial<Record<
+    "authors" | "publishDate" | "language" | "documentUrl" | "doi",
+    "pdf" | "text" | "ai" | "online" | "manual"
+  >>;
 }
 
 interface KnowledgeCorpusState {

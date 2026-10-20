@@ -14,10 +14,13 @@ import {
   buildJudgementReviewRows,
   buildRelationJudgementPrompt,
   filterAcceptedJudgements,
+  normalizeRelationDirection,
+  parseRelationJudgementBatches,
   parseRelationJudgements,
   planRelationJudgementWrites,
   RELATION_PROMPT_VERSION,
 } from '../src/modules/knowledge-graph/application/relation-judgement.ts';
+import { showsArrowHead } from '../src/modules/knowledge-graph/domain/graph-render-model.ts';
 import {
   nameSupportedByQuotes,
   parseBridgeSuggestions,
@@ -124,7 +127,7 @@ assert.equal(
 // ---------------------------------------------------------------------------
 const judgedEdge = {
   edgeId: 'judged', source: 'p1', sourceKind: 'paper', target: 'p2', targetKind: 'paper',
-  type: 'EXTENDS', confidence: 0.8, evidence: [], sourcePaperId: 'p1',
+  type: 'EXTENDS', confidence: 0.8, evidence: [], sourcePaperId: 'p1', direction: 'leftToRight',
   origin: 'ai', originKey: 'EXTENDS|p1|p2', provenance: {}, createdAt: 1, updatedAt: 1,
 };
 assert.ok(collectJudgedPairKeys([judgedEdge]).has(relationPairKey('p1', 'p2')));
@@ -149,6 +152,72 @@ assert.equal(
   1,
   'SIMILAR_TO is a paper-paper type, so it counts; HAS_KEYWORD does not',
 );
+// A directed verdict recorded before direction existed is NOT a finished answer: its arrow was the pair's database
+// ordering, so the pair has to be asked once more. An undirected verdict needs no direction, so it still counts.
+assert.equal(
+  collectJudgedPairKeys([{ ...judgedEdge, direction: undefined }]).size,
+  0,
+  'a direction-less CITES/EXTENDS/IMPROVES is re-asked — its arrow was a guess',
+);
+assert.equal(
+  collectJudgedPairKeys([{ ...judgedEdge, type: 'SIMILAR_TO', direction: undefined }]).size,
+  1,
+  'an undirected verdict needs no direction',
+);
+
+// ---------------------------------------------------------------------------
+// Direction: the model says which way a directed verdict points.
+// ---------------------------------------------------------------------------
+assert.equal(normalizeRelationDirection('leftToRight'), 'leftToRight');
+assert.equal(normalizeRelationDirection('RIGHT_TO_LEFT'), 'rightToLeft');
+assert.equal(normalizeRelationDirection('right'), 'rightToLeft');
+assert.equal(normalizeRelationDirection('none'), 'none');
+assert.equal(normalizeRelationDirection(''), 'none', 'a missing direction reads as unknown, never as a guess');
+assert.equal(normalizeRelationDirection(undefined), 'none');
+
+const directionPairs = [{
+  pairKey: relationPairKey('pa', 'pb'),
+  leftPaperId: 'pa',
+  rightPaperId: 'pb',
+  sharedEntities: [],
+  recallReasons: [],
+}];
+const directed = parseRelationJudgements(
+  JSON.stringify({
+    relations: [{
+      pairKey: directionPairs[0].pairKey, relation: 'CITES', confidence: 0.9,
+      direction: 'rightToLeft', evidence: 'pb-cites-pa',
+    }],
+  }),
+  directionPairs,
+).relations[0].edge;
+assert.equal(directed.source, 'pb', 'rightToLeft means the right paper is the citing one, i.e. the source');
+assert.equal(directed.target, 'pa');
+assert.equal(directed.direction, 'rightToLeft');
+assert.equal(
+  directed.evidence[0].paperId,
+  'pb',
+  'the quote is filed under the paper it came from, which is the upstream side',
+);
+
+const unoriented = parseRelationJudgements(
+  JSON.stringify({ relations: [{ pairKey: directionPairs[0].pairKey, relation: 'CITES', confidence: 0.9, evidence: 'q' }] }),
+  directionPairs,
+).relations[0].edge;
+assert.equal(unoriented.type, 'CITES', 'the verdict itself is kept');
+assert.equal(unoriented.direction, undefined, 'but no direction is invented');
+assert.equal(unoriented.source, 'pa', 'so the endpoints keep their (meaningless) documented order');
+assert.equal(showsArrowHead(unoriented), false, 'and the canvas draws a plain line instead of a guessed arrow');
+assert.equal(showsArrowHead(directed), true, 'a judged direction is drawn');
+assert.equal(
+  showsArrowHead(parseRelationJudgements(
+    JSON.stringify({ relations: [{ pairKey: directionPairs[0].pairKey, relation: 'SIMILAR_TO', confidence: 0.9 }] }),
+    directionPairs,
+  ).relations[0].edge),
+  false,
+  'undirected types never get an arrow',
+);
+assert.ok(buildRelationJudgementPrompt().includes('direction'), 'the prompt has to ask for the direction it relies on');
 
 // ---------------------------------------------------------------------------
 // Secondary signals.
@@ -468,6 +537,75 @@ const emptyParse = parseRelationJudgements('{"relations":[]}', []);
 assert.deepEqual(emptyParse.relations, []);
 assert.deepEqual(emptyParse.unansweredPairKeys, []);
 
+// An unreadable answer must not become a cached "no relation", and the reason has to survive — the count alone leaves the
+// user with nothing to act on, which is exactly what the review dialog used to show.
+const unreadable = parseRelationJudgements(
+  '这两篇论文都研究深度约束下的电路优化，看不出直接引用关系。',
+  candidatePairs,
+);
+assert.equal(unreadable.relations.length, 0);
+assert.equal(unreadable.explicitNone.length, 0, 'nothing is cached from an answer we could not read');
+assert.equal(unreadable.rejected.length, 1);
+assert.match(unreadable.rejected[0].reason, /可解析/, 'the reason says what went wrong');
+assert.deepEqual(
+  unreadable.unansweredPairKeys,
+  candidatePairs.map((pair) => pair.pairKey),
+  'every pair stays unanswered, so a retry asks about all of them again',
+);
+
+// ---------------------------------------------------------------------------
+// Batched judgement: the regression behind 「选四篇不行、选两篇可以」.
+//
+// Judgement is split at five pairs per call, so four papers (six pairs) is two calls. The transport used to join the two
+// answers with "\n"; the parser then saw `{"pairs":[…]} {"pairs":[…]}`, which is not JSON, and reported 「模型没有返回
+// 可解析的关系判断 JSON」. Two papers (one pair, one call) worked — which is exactly what the user saw.
+// ---------------------------------------------------------------------------
+const batchPair = (leftPaperId, rightPaperId) => ({
+  pairKey: relationPairKey(leftPaperId, rightPaperId),
+  leftPaperId,
+  rightPaperId,
+  leftTitle: leftPaperId,
+  rightTitle: rightPaperId,
+  sharedEntities: [],
+  recallReasons: [],
+});
+const batchPairs = [
+  batchPair('b1', 'b2'),
+  batchPair('b1', 'b3'),
+  batchPair('b2', 'b3'),
+];
+const batchAnswer = (pairKey, relation) => JSON.stringify({
+  pairs: [{ pairKey, relation, confidence: 0.8, direction: 'leftToRight', evidence: 'q' }],
+});
+const firstBatch = batchAnswer(batchPairs[0].pairKey, 'CITES');
+const secondBatch = batchAnswer(batchPairs[1].pairKey, 'EXTENDS');
+const thirdBatch = batchAnswer(batchPairs[2].pairKey, 'NONE');
+
+// What the transport used to send: unparseable, and it must stay visibly unparseable rather than silently half-apply.
+const joined = parseRelationJudgements(`${firstBatch}\n${secondBatch}`, batchPairs);
+assert.equal(joined.relations.length, 0, 'a concatenation of two JSON documents is not JSON');
+assert.match(joined.rejected[0]?.reason ?? '', /可解析/);
+
+// What it sends now: one entry per batch, parsed separately and merged.
+const merged = parseRelationJudgementBatches([firstBatch, secondBatch], batchPairs);
+assert.deepEqual(
+  merged.relations.map((relation) => relation.verdict).sort(),
+  ['CITES', 'EXTENDS'],
+  'both batches contribute their conclusions',
+);
+assert.deepEqual(merged.unansweredPairKeys, [batchPairs[2].pairKey], 'a pair no batch mentioned stays unanswered');
+assert.equal(merged.rejected.length, 0);
+
+// A failed batch contributes nothing but must not erase the other batch's answers.
+const partiallyReadable = parseRelationJudgementBatches([firstBatch, '抱歉，这条我无法判断。'], batchPairs);
+assert.deepEqual(partiallyReadable.relations.map((relation) => relation.verdict), ['CITES']);
+assert.equal(partiallyReadable.rejected.length, 1, 'the unreadable batch is reported');
+assert.ok(partiallyReadable.unansweredPairKeys.includes(batchPairs[1].pairKey));
+
+// A single batch is the old path, and still works.
+assert.equal(parseRelationJudgementBatches([firstBatch], batchPairs).relations.length, 1);
+assert.equal(parseRelationJudgementBatches([], batchPairs).relations.length, 0, 'no answers is not a crash');
+
 // The prompt must constrain the model in the ways the parser relies on.
 const prompt = buildRelationJudgementPrompt();
 assert.ok(prompt.includes('NONE'), 'the prompt must offer an explicit NONE verdict');
@@ -587,7 +725,7 @@ assert.equal(
 // A pair with a recorded conclusion is not paid for twice unless the caller insists.
 const judgedEdges = [{
   edgeId: 'j1', source: 'd1', sourceKind: 'paper', target: 'd2', targetKind: 'paper',
-  type: 'EXTENDS', confidence: 0.9, evidence: [], sourcePaperId: 'd1', origin: 'ai',
+  type: 'EXTENDS', confidence: 0.9, evidence: [], sourcePaperId: 'd1', direction: 'leftToRight', origin: 'ai',
   originKey: 'EXTENDS|d1|d2', provenance: {}, createdAt: 1, updatedAt: 1,
 }];
 assert.equal(

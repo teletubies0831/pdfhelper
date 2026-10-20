@@ -5,16 +5,21 @@ import { currentFileHandle, pdfDocument, sourceName, sourcePdfBytes } from "../.
 
 import type { FileHandleLike, FileHandlePermissionDescriptor } from "../../app/viewer-types";
 import { createEmbeddedHelperPayload } from "./embedded-helper-payload";
+import { getCurrentAnnotationSnapshot } from "./unsaved-changes-controller";
 import { PDF_HELPER_ATTACHMENT_DESCRIPTION, PDF_HELPER_ATTACHMENT_NAME } from "./annotation-value-codec";
 import { safeDecodeURIComponent } from "./annotation-ui-state";
 
 export async function embedHelperAnnotationsIntoPdf(): Promise<{
   bytes: Uint8Array;
   count: number;
+  /** The annotation snapshot that went into the file, so the caller can use it as the "saved" baseline. */
+  snapshot: string;
 }> {
   if (!pdfDocument.value || !sourcePdfBytes.value)
     throw new Error("PDF 尚未打开，无法保存批注。");
   const payload = createEmbeddedHelperPayload();
+  // Taken before the awaits below: this is the state the file will contain, whatever is edited meanwhile.
+  const snapshot = getCurrentAnnotationSnapshot();
   const jsonBytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
   const { PDFDocument: PdfLibDocument } = await import("pdf-lib");
   const pdfDoc = await PdfLibDocument.load(sourcePdfBytes.value, {
@@ -31,7 +36,7 @@ export async function embedHelperAnnotationsIntoPdf(): Promise<{
 
   const bytes = await pdfDoc.save();
   (pdfDocument.value as any).annotationStorage?.resetModified?.();
-  return { bytes, count: payload.entries.length };
+  return { bytes, count: payload.entries.length, snapshot };
 }
 
 export async function requestFileWritePermission(

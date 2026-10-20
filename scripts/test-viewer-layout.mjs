@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { after, before, test } from 'node:test';
 import { chromium } from '@playwright/test';
 import { loadModule } from './support/module-closure.mjs';
-import { describeGraphView } from '../src/viewer/features/knowledge-graph/graph-view-report.ts';
+import { describeGraphView, shouldAnnounceGraphLoad } from '../src/viewer/features/knowledge-graph/graph-view-report.ts';
 import {
   collectMatchedNodeIds,
   filterVisibleEdges,
@@ -53,6 +53,13 @@ const baseReport = {
 const unconnected = describeGraphView({ ...baseReport, unconnectedNodes: 10, totalPapers: 10 });
 assert.match(unconnected.countsText, /未连接 10/);
 assert.doesNotMatch(unconnected.countsText, /过滤隐藏/);
+
+// Only the explicit 「重新同步」 announces itself. Entering the page and coming back to it both project the knowledge base,
+// and a 「已同步：写入 0 篇文献」 plate on every visit is noise over the canvas — while the sync itself must still run.
+assert.equal(shouldAnnounceGraphLoad('resync'), true, 'the button reports what it did');
+assert.equal(shouldAnnounceGraphLoad('entry'), false, 'opening the page is silent');
+assert.equal(shouldAnnounceGraphLoad('refresh'), false, 'coming back to the page is silent');
+assert.equal(shouldAnnounceGraphLoad('action'), false, 'a reload after an action is silent');
 
 // And the hint names the real reason: nothing connects them yet.
 assert.equal(unconnected.empty, true);

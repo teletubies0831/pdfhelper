@@ -235,6 +235,7 @@ async function runRelationPass(target?: {
           existingEntityNames: existing,
           ...(review.model ? { model: review.model } : {}),
           rejectedCount: review.rejectedCount,
+          ...(review.rejectedReasons?.length ? { rejectedReasons: review.rejectedReasons } : {}),
         });
         // `null` means the review was dismissed: decline to write rather than accepting claims on the
         // user's behalf.
@@ -250,7 +251,15 @@ async function runRelationPass(target?: {
       // both stale after a run that wrote any.
       if (result.bridgesCreated || result.manualNodes) await refreshAvailability();
     }
+  } catch (error) {
+    // The runner reports an unusable provider answer by returning `status: 'failed'`, but a *thrown* error (network,
+    // provider 5xx, aborted request) used to escape as an unhandled rejection: no message, no way to tell what happened.
+    setStatus(`关系分析失败：${error instanceof Error ? error.message : String(error)}`, true);
   } finally {
+    // This button has no availability refresh of its own (unlike the extract buttons, whose enabled state is decided by
+    // whether an index exists). Without this line it stayed disabled for the rest of the session after one run — which is
+    // exactly the 「点一次就不能再点了」 report.
+    knowledgeGraphRelationButton.disabled = false;
     await refreshAvailability();
   }
 }

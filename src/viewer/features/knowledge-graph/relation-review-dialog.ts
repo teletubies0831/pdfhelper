@@ -50,6 +50,13 @@ export interface RelationReviewDialogInput {
   model?: string;
   /** Verdicts the parser could not read, reported so the count adds up. */
   rejectedCount?: number;
+  /**
+   * Why those verdicts were refused, in the parser's own words.
+   *
+   * A bare count is unactionable: 「另有 1 条无法解析」 tells the reader neither whether the model answered badly nor
+   * what to do about it. The reasons ("未知的关系类型：CONTRASTS") are what make the next step obvious.
+   */
+  rejectedReasons?: readonly string[];
   /** Bridge suggestions the local checks refused, so the report is not silently dropped. */
   bridgeDrops?: BridgeDropStats;
   /** Normalized names already in the graph, so a bridge can say it will reuse one. */
@@ -428,8 +435,9 @@ export function openRelationReviewDialog(
     paperTitles = input.paperTitles;
     existingEntityNames = input.existingEntityNames ?? new Set();
     const model = input.model ? `，模型 ${input.model}` : '';
+    const reasons = (input.rejectedReasons ?? []).filter(Boolean);
     const rejected = input.rejectedCount
-      ? `，另有 ${input.rejectedCount} 条无法解析（不会写入）`
+      ? `，另有 ${input.rejectedCount} 条无法解析（不会写入）${reasons.length ? `：${reasons.slice(0, 2).join('；')}` : ''}`
       : '';
     const relations = rows.filter((row) => row.verdict !== 'NONE').length;
     const dropped = input.bridgeDrops && totalBridgeDrops(input.bridgeDrops)
@@ -437,7 +445,12 @@ export function openRelationReviewDialog(
       : '';
     knowledgeGraphRelationSummaryElement.textContent =
       `${rows.length} 条结论待确认（${relations} 条关系、${rows.length - relations} 对无关）`
-      + `${bridgeCount() ? `，另有 ${bridgeCount()} 个桥接实体` : ''}${model}${rejected}。${dropped}`;
+      + `${bridgeCount() ? `，另有 ${bridgeCount()} 个桥接实体` : ''}${model}${rejected}。${dropped}`
+      // Nothing readable at all: the one thing the user needs to know is that this cost a call but cached nothing, so a
+      // retry is free of consequences. Silently showing an empty review reads like the pairs were judged unrelated.
+      + (!rows.length && input.rejectedCount
+        ? '这次没有写入任何结论，也没有把任何论文对标记为「已判断」，可以直接重试。'
+        : '');
     render();
     showAnimatedDialog(knowledgeGraphRelationDialog);
   });

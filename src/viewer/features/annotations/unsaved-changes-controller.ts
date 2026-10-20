@@ -50,14 +50,45 @@ export function scheduleUnsavedChangesCheck() {
   }, 0);
 }
 
-export function markSavedChanges() {
+/**
+ * Records that the current annotations are now in the file.
+ *
+ * `snapshot` is what was actually embedded, captured at that moment. Re-reading the storage here instead (the previous
+ * behaviour) meant edits made while the file was being written — pdf-lib load/save plus a possible permission prompt,
+ * hundreds of milliseconds to seconds — were stamped as saved even though the file did not contain them: no unsaved
+ * marker, no close-tab prompt, and the work was lost silently.
+ */
+export function markSavedChanges(snapshot: string = getCurrentAnnotationSnapshot()) {
   if (unsavedChangesCheckHandle.value !== null) {
     window.clearTimeout(unsavedChangesCheckHandle.value);
     unsavedChangesCheckHandle.value = null;
   }
 
-  savedAnnotationSnapshot.value = getCurrentAnnotationSnapshot();
-  hasUnsavedChanges.value = false;
+  savedAnnotationSnapshot.value = snapshot;
+  // Anything newer than the write stays unsaved, so the marker, the close prompt and auto-save all keep working.
+  hasUnsavedChanges.value = getCurrentAnnotationSnapshot() !== snapshot;
   cancelScheduledAnnotationAutoSave();
+  if (hasUnsavedChanges.value) scheduleAnnotationAutoSave();
+  updateControls();
+}
+
+/**
+ * Re-establishes "saved vs unsaved" after the viewer switches to another tab.
+ *
+ * Each tab keeps its own baseline: an edit made in tab A before the switch must still be unsaved when A comes back, and
+ * stamping the current state as saved (the previous behaviour) both hid the change and silenced the close prompt while
+ * the tab strip kept showing ●.
+ */
+export function restoreAnnotationSaveState(
+  savedSnapshot: string,
+  hasUnsaved: boolean,
+): void {
+  if (unsavedChangesCheckHandle.value !== null) {
+    window.clearTimeout(unsavedChangesCheckHandle.value);
+    unsavedChangesCheckHandle.value = null;
+  }
+  savedAnnotationSnapshot.value = savedSnapshot;
+  hasUnsavedChanges.value = hasUnsaved;
+  if (hasUnsaved) scheduleAnnotationAutoSave();
   updateControls();
 }

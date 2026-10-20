@@ -10,6 +10,7 @@ import { getProviderAdapter } from "./provider-runtime";
 import { buildConversation } from "./conversation-builder";
 import { generateDocumentOverview } from "./document-overview-service";
 import { extractDocumentMetadata } from "./document-metadata-service";
+import { lookupBibliographicRecords } from "./bibliographic-lookup-service";
 import { generateRelatedLiterature, probeWebRetrieval, searchForChat } from "./web-retrieval-service";
 import { extractEntities } from "./entity-extraction-service";
 import { explainEntities } from "./entity-explanation-service";
@@ -258,9 +259,10 @@ export async function handleAiRequest(message: AiRuntimeRequest, onOverviewProgr
         ok: true,
         content: result.content,
         model: config.model,
-        // Batch metadata travels back so the caller can report partial results
-        // rather than presenting an incomplete run as complete.
+        // One entry per batch: the caller parses each answer separately. Joined JSON is not JSON, which is exactly how a
+        // six-pair run used to look like an unparseable model response.
         relationJudgement: {
+          contents: result.contents,
           batchCount: result.batchCount,
           failedBatches: result.failedBatches,
         },
@@ -281,6 +283,19 @@ export async function handleAiRequest(message: AiRuntimeRequest, onOverviewProgr
         text: message.text,
       });
       return { ok: true, content: '', model: config.model, documentMetadata: metadata };
+    }
+
+    if (message.type === 'pdf-helper:lookup-bibliographic-metadata') {
+      // Free reference databases only — no model call, no money. Whether any candidate is this paper is decided by the
+      // viewer's gate, and written only after the user confirms.
+      const result = await lookupBibliographicRecords({ title: message.title });
+      return {
+        ok: true,
+        content: '',
+        model: config.model,
+        bibliographicCandidates: result.candidates,
+        bibliographicLookupErrors: result.errors,
+      };
     }
 
     if (message.type === 'pdf-helper:ai-detect-reading-mode') {

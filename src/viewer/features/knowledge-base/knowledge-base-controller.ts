@@ -17,7 +17,7 @@
 
 
 
-import { aiPanelToggleButton, knowledgeBaseEntryButton, knowledgeBasePageElement, knowledgeBatchBarElement, knowledgeBatchClearButton, knowledgeBatchCountElement, knowledgeBatchFolderSelect, knowledgeBatchMoveButton, knowledgeBatchRelatedButton, knowledgeBatchRemoveButton, knowledgeDetailCloseButton, knowledgeDocumentCountElement, knowledgeGroupSelect, knowledgeListElement, knowledgeListSummaryElement, knowledgePageStatusElement, knowledgePageSubtitleElement, knowledgePageTitleElement, knowledgeSearchInput, knowledgeSelectAllCheckbox, knowledgeTableSortButtons, knowledgeTotalCountElement, knowledgeViewGridButton, knowledgeViewListButton } from "../../app/viewer-elements";
+import { aiPanelToggleButton, knowledgeBaseEntryButton, knowledgeBasePageElement, knowledgeBatchBarElement, knowledgeBatchClearButton, knowledgeBatchCountElement, knowledgeBatchFolderSelect, knowledgeBatchMoveButton, knowledgeBatchRelatedButton, knowledgeBatchRemoveButton, knowledgeDetailCloseButton, knowledgeDocumentCountElement, knowledgeGroupSelect, knowledgeListElement, knowledgeListSummaryElement, knowledgePageStatusElement, knowledgePageSubtitleElement, knowledgePageTitleElement, knowledgeSearchInput, knowledgeSelectAllCheckbox, knowledgeTableSortButtons, knowledgeMetadataFilterButtons, knowledgeTotalCountElement, knowledgeViewGridButton, knowledgeViewListButton } from "../../app/viewer-elements";
 import {
   getActiveWorkspaceView,
   transitionWorkspaceView,
@@ -52,7 +52,7 @@ import {
   sortLibraryDocuments,
   type LibrarySortKey,
 } from "./library-table-model";
-import { renderDocumentPanel, renderReadingStatusCounts } from "./library-doc-panel";
+import { renderDocumentPanel, renderMetadataMissingCount, renderReadingStatusCounts } from "./library-doc-panel";
 import { applyLibraryViewMode, persistLibraryViewMode, readLibraryViewMode } from "./library-view-mode";
 import { isKnowledgeIndexRunning } from "./current-pdf-add-to-library";
 import { listKnowledgeDocumentsForDisplay } from "./interrupted-work-recovery";
@@ -66,6 +66,7 @@ import {
   toggleDocumentSelection,
 } from "./library-selection";
 import {
+  isMetadataMissing,
   readReadingStatus,
   READING_STATUS_LABELS,
   type KnowledgeDocumentReadingStatus,
@@ -98,7 +99,10 @@ export function renderKnowledgeBase(): void {
     && (activeCorpusFolder === "all"
       || (activeCorpusFolder === "unfiled" && !document.folderId)
       || (folderScopes ? Boolean(document.folderId && folderScopes.has(document.folderId)) : false))
-    && (activeReadingFilter === "all" || readReadingStatus(document) === activeReadingFilter),
+    && (activeReadingFilter === "all" || readReadingStatus(document) === activeReadingFilter)
+    // The 缺元数据 view is a filter of its own, not a reading state: it answers "what still needs a DOI/date/author",
+    // and documents the user marked 无需补全 never appear here.
+    && (!activeMetadataFilter || isMetadataMissing(document)),
   );
 
   // The batch may only ever contain documents the user can see: narrowing the filter or the search drops the rest,
@@ -107,20 +111,26 @@ export function renderKnowledgeBase(): void {
   selectedDocumentIds = pruneDocumentSelection(selectedDocumentIds, visibleDocumentIds);
 
   knowledgeGroupSelect.value = "none";
-  knowledgePageTitleElement.textContent = activeReadingFilter !== "all"
-    ? `${READING_FILTER_LABELS[activeReadingFilter]}（${activeCorpusFolder === "all"
+  const metadataScopeLabel = activeMetadataFilter ? "缺元数据" : "";
+  knowledgePageTitleElement.textContent = activeMetadataFilter
+    ? `${metadataScopeLabel}（${activeCorpusFolder === "all"
       ? "全部"
       : folders.find((folder) => folder.id === activeCorpusFolder)?.name || "未分类"}）`
-    : activeCorpusFolder === "all"
-      ? "知识库"
-      : activeCorpusFolder === "unfiled"
-        ? "未分类"
-        : folders.find((folder) => folder.id === activeCorpusFolder)?.name || "知识库";
+    : activeReadingFilter !== "all"
+      ? `${READING_FILTER_LABELS[activeReadingFilter]}（${activeCorpusFolder === "all"
+        ? "全部"
+        : folders.find((folder) => folder.id === activeCorpusFolder)?.name || "未分类"}）`
+      : activeCorpusFolder === "all"
+        ? "知识库"
+        : activeCorpusFolder === "unfiled"
+          ? "未分类"
+          : folders.find((folder) => folder.id === activeCorpusFolder)?.name || "知识库";
   if (knowledgePageSubtitleElement) knowledgePageSubtitleElement.textContent = "管理你主动添加的 PDF，并为跨文献问答提供全文检索。";
   knowledgeTotalCountElement.textContent = String(filtered.length);
   knowledgeDocumentCountElement.textContent = String(documents.length);
   renderCorpusSidebar(folders, documents);
   renderReadingStatusCounts(documents);
+  renderMetadataMissingCount(documents);
 
   // Both views are rendered from the same filtered list; only one is visible, and the choice is remembered. Sorting is
   // the table headers' (the only sort control there is): the card view has no headers, so it follows the same state
@@ -189,6 +199,8 @@ const READING_FILTER_LABELS: Record<KnowledgeDocumentReadingStatus, string> = {
 
 let activeCorpusFolder = "all";
 let activeReadingFilter: "all" | KnowledgeDocumentReadingStatus = "all";
+/** 缺元数据 view: `true` while it is on. Exclusive with the reading filter — one nav, one active filter. */
+let activeMetadataFilter = false;
 let selectedDocumentId: string | null = null;
 /** 多选 for the batch bar; independent of `selectedDocumentId`, which drives the inspector. */
 let selectedDocumentIds: ReadonlySet<string> = EMPTY_SELECTION;
@@ -489,9 +501,25 @@ export function registerKnowledgeCorpusEvents(): void {
       const value = button.dataset.readingFilter;
       if (value !== "todo" && value !== "reading" && value !== "done") return;
       activeReadingFilter = activeReadingFilter === value ? "all" : value;
+      // One nav group is active at a time, or the title would have to describe two filters at once.
+      if (activeReadingFilter !== "all" && activeMetadataFilter) {
+        activeMetadataFilter = false;
+        syncMetadataFilterButtons();
+      }
       for (const other of readingFilterButtons()) {
         other.classList.toggle("active", other.dataset.readingFilter === activeReadingFilter);
       }
+      renderKnowledgeBase();
+    });
+  }
+  for (const button of knowledgeMetadataFilterButtons) {
+    button.addEventListener("click", () => {
+      activeMetadataFilter = !activeMetadataFilter;
+      if (activeMetadataFilter) {
+        activeReadingFilter = "all";
+        for (const other of readingFilterButtons()) other.classList.remove("active");
+      }
+      syncMetadataFilterButtons();
       renderKnowledgeBase();
     });
   }
@@ -539,6 +567,19 @@ export function registerKnowledgeCorpusEvents(): void {
   window.addEventListener("pdf-helper:knowledge-corpus-change", () => {
     if (getActiveWorkspaceView() === "knowledge") renderKnowledgeBase();
   });
+  // A metadata lookup writes nothing, so it must not go through the corpus change event (which rebuilds the table).
+  // Only the inspector's suggestion block changes, and the panel is re-rendered from the current records.
+  window.addEventListener("pdf-helper:knowledge-metadata-lookup", () => {
+    if (getActiveWorkspaceView() !== "knowledge") return;
+    renderKnowledgeBase();
+  });
+}
+
+/** Keeps the 缺元数据 nav button's active state in sync with the flag (also used when a reading filter takes over). */
+function syncMetadataFilterButtons(): void {
+  for (const button of knowledgeMetadataFilterButtons) {
+    button.classList.toggle("active", activeMetadataFilter);
+  }
 }
 
 /** The three sidebar reading filters, read from the DOM so the markup stays the single source of truth. */

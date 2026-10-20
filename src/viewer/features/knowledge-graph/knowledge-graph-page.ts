@@ -94,7 +94,12 @@ import { hideGraphTaskNotice } from './graph-task-notice';
 import { setPageStatus, updateEmptyState } from './graph-page-status';
 import { syncFilterControls } from './graph-filter-controls';
 import { registerGraphCanvasInteraction } from './graph-canvas-interaction';
-import { describeGraphView, type GraphViewReport } from './graph-view-report';
+import {
+  describeGraphView,
+  shouldAnnounceGraphLoad,
+  type GraphLoadReason,
+  type GraphViewReport,
+} from './graph-view-report';
 import {
   collectMatchedNodeIds,
   filterVisibleEdges,
@@ -167,6 +172,8 @@ let visibleEdgeIds = new Set<string>();
 let openToken = 0;
 let loaded = false;
 let loading: Promise<void> | null = null;
+/** The last projection's summary, so an explicit 重新同步 can report it even when it piggy-backed on a silent load. */
+let lastSyncSummary = '';
 
 /** Layout pass + viewport framing; see `graph-layout-runner.ts` for why it is its own file. */
 const layoutRunner = createGraphLayoutRunner({
@@ -442,32 +449,42 @@ export function rerenderKnowledgeGraph(): void {
   redrawInspector();
 }
 
-async function loadAndRender(force: boolean): Promise<void> {
+/**
+ * Loads the graph and redraws.
+ *
+ * `reason` decides whether the floating status plate appears: automatic loads are silent (they run on every entry, and a
+ * plate saying 「已同步：写入 0 篇文献」 on every visit is noise over the canvas), only 「重新同步」 announces. Errors are
+ * always reported, whatever the mode.
+ */
+async function loadAndRender(force: boolean, options: { reason?: GraphLoadReason } = {}): Promise<void> {
   if (loading) return loading;
+  const announce = shouldAnnounceGraphLoad(options.reason ?? 'action');
   loading = (async () => {
-    setPageStatus(force ? '正在重新同步文献库…' : '正在读取图谱…', false, 'active');
+    if (announce) setPageStatus(force ? '正在重新同步文献库…' : '正在读取图谱…', false, 'active');
     try {
       if (force) {
         const overview = await openKnowledgeGraph(buildPersonalProvider());
         snapshot = overview.snapshot;
-        setPageStatus(
-          `已同步：写入 ${overview.refresh.papersWritten} 篇文献`
+        lastSyncSummary = `已同步：写入 ${overview.refresh.papersWritten} 篇文献`
           + `，关键词边 +${overview.refresh.keywordEdgesWritten}`
-          + `，共 ${overview.snapshot.papers.length} 篇`,
-        );
+          + `，共 ${overview.snapshot.papers.length} 篇`;
+        if (announce) setPageStatus(lastSyncSummary);
       } else {
-        // A plain load must not show papers the knowledge base no longer has: the stored
-        // projection used to be trusted as-is, so emptying the knowledge base left the graph
-        // reporting papers that no longer exist anywhere. This runs on **every** entry to the
-        // page, not just on 重新同步 — a document removed (or added) in the knowledge base while
-        // this page was hidden would otherwise stay wrong until the user re-synced by hand.
+        // A plain load must not show papers the knowledge base no longer has (the projection used to be trusted as-is,
+        // so emptying the knowledge base left the graph reporting papers that exist nowhere), and it prunes on every
+        // entry — a document removed while this page was hidden would otherwise stay wrong until a manual sync.
         const pruned = await pruneRemovedGraphPapers();
         snapshot = await readGraphSnapshot(buildPersonalProvider());
-        setPageStatus(
-          pruned.length
-            ? `已载入 ${snapshot.papers.length} 篇文献（清理了 ${pruned.length} 篇不在知识库中的记录）`
-            : `已载入 ${snapshot.papers.length} 篇文献`,
-        );
+        // Pruning is not routine: the user cannot see it any other way, so it is announced even in silent mode.
+        if (announce) {
+          setPageStatus(
+            pruned.length
+              ? `已载入 ${snapshot.papers.length} 篇文献（清理了 ${pruned.length} 篇不在知识库中的记录）`
+              : `已载入 ${snapshot.papers.length} 篇文献`,
+          );
+        } else if (pruned.length) {
+          setPageStatus(`已清理 ${pruned.length} 篇不在知识库中的图谱记录。`);
+        }
       }
       loaded = true;
     } catch (error) {
@@ -501,23 +518,16 @@ async function loadAndRender(force: boolean): Promise<void> {
 /**
  * Shows the graph page.
  *
- * Every entry runs a **full projection**, not just a re-read. The cheaper plain load was wrong in
- * both directions: it could only remove papers, so a document added to the knowledge base never
- * appeared until the user pressed 重新同步 — which is what made the extract buttons sit there
- * disabled after adding a PDF. The projection is incremental (`shouldWriteProjection`), so an
- * unchanged knowledge base still writes nothing.
+ * Every entry runs a **full projection**, not just a re-read: the cheaper plain load could only remove papers, so a
+ * document added to the knowledge base never appeared until 重新同步 — which also left the extract buttons disabled. The
+ * projection is incremental (`shouldWriteProjection`), so an unchanged knowledge base still writes nothing.
  */
 export function renderKnowledgeGraph(): void {
   ensureRenderer();
-  void loadAndRender(true);
+  void loadAndRender(true, { reason: 'entry' });
 }
 
-/**
- * What a click on the canvas means: one selection, one funnel.
- *
- * A click that hits nothing clears both selections; `redrawInspector` then empties the
- * inspector, so the four click outcomes stay one code path.
- */
+/** One selection through one funnel: a click that hits nothing clears both, and the inspector empties with it. */
 function applyCanvasSelection(nodeId: string | null, edgeId: string | null): void {
   graphSelectedNodeId.value = nodeId ?? '';
   graphSelectedEdgeId.value = edgeId ?? '';
@@ -569,11 +579,19 @@ export function closeKnowledgeGraphPage(): void {
 }
 
 export function refreshKnowledgeGraphIfOpen(): void {
-  if (getActiveWorkspaceView() === 'graph') void loadAndRender(true);
+  if (getActiveWorkspaceView() === 'graph') void loadAndRender(true, { reason: 'refresh' });
 }
 
-export function resyncKnowledgeGraph(): Promise<void> {
-  return loadAndRender(true);
+export async function resyncKnowledgeGraph(): Promise<void> {
+  // An automatic sync may already be in flight (the page was just opened). The button must still report something rather
+  // than look dead, so it waits for that run and announces its summary.
+  if (loading) {
+    await loading;
+    if (lastSyncSummary) setPageStatus(lastSyncSummary);
+    return;
+  }
+  // The one place the status plate is wanted: an explicit sync answers "did it do anything?".
+  return loadAndRender(true, { reason: 'resync' });
 }
 
 export function isKnowledgeGraphLoaded(): boolean {

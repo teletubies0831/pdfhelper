@@ -110,6 +110,129 @@
   letter-spacing: 0.02em;
 }
 
+/*
+ * 相关论文正文 in a 320px column.
+ *
+ * A bounded scroll region rather than letting it grow: the list is a document (eight candidates, each with a title, a
+ * link and two lines of Chinese), and unbounded it pushes 「重新检索相关论文」 several screens down. The panel itself
+ * still scrolls; this is the one block that has more content than the panel is tall.
+ */
+.knowledge-doc-related-content {
+  max-height: 380px;
+  overflow-y: auto;
+  margin: 0 0 8px;
+  padding: 9px 10px;
+  border: 1px solid #eef2f8;
+  border-radius: 9px;
+  background: #fbfcfe;
+  color: #34445c;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* A visible thumb, because a region that scrolls silently reads as truncated content. */
+.knowledge-doc-related-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.knowledge-doc-related-content::-webkit-scrollbar-thumb {
+  border: 2px solid #fbfcfe;
+  border-radius: 6px;
+  background: #dbe4f2;
+}
+
+.knowledge-doc-related-content::-webkit-scrollbar-thumb:hover {
+  background: #c8d6ea;
+}
+
+.knowledge-doc-related-content[hidden] {
+  display: none;
+}
+
+.knowledge-doc-related-content h1,
+.knowledge-doc-related-content h2,
+.knowledge-doc-related-content h3,
+.knowledge-doc-related-content h4 {
+  margin: 10px 0 4px;
+  color: #34445c;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.knowledge-doc-related-content h1:first-child,
+.knowledge-doc-related-content h2:first-child,
+.knowledge-doc-related-content h3:first-child,
+.knowledge-doc-related-content > p:first-child {
+  margin-top: 0;
+}
+
+/*
+ * One rule between candidates.
+ *
+ * The model is told to give every paper a third-level heading, so "a heading that is not the first element" is exactly
+ * "the start of a paper other than the first". A top border on that heading separates the entries without touching the
+ * stored markdown, and it keeps working for the `##`/`####` variants older sections may contain.
+ */
+.knowledge-doc-related-content > h1:not(:first-child),
+.knowledge-doc-related-content > h2:not(:first-child),
+.knowledge-doc-related-content > h3:not(:first-child),
+.knowledge-doc-related-content > h4:not(:first-child) {
+  margin-top: 12px;
+  padding-top: 10px;
+  /* Same border colour as the panel's own dividers: at 1px on #fbfcfe anything lighter is invisible. */
+  border-top: 1px solid #dbe4f2;
+}
+
+.knowledge-doc-related-content p {
+  margin: 4px 0 6px;
+}
+
+.knowledge-doc-related-content ul,
+.knowledge-doc-related-content ol {
+  margin: 4px 0 6px;
+  padding-left: 16px;
+}
+
+.knowledge-doc-related-content li {
+  margin: 2px 0;
+}
+
+.knowledge-doc-related-content a {
+  color: #2a6fd6;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-doc-related-content a:hover {
+  text-decoration: underline;
+}
+
+.knowledge-doc-related-content strong {
+  font-weight: 600;
+}
+
+.knowledge-doc-related-content blockquote {
+  margin: 4px 0 6px;
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid #dbe4f2;
+  color: #8494a9;
+}
+
+.knowledge-doc-related-content code {
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: #eef2f8;
+  font-size: 11px;
+}
+
+.knowledge-doc-related-content hr {
+  margin: 8px 0;
+  border: 0;
+  border-top: 1px solid #eef2f8;
+}
+
 .knowledge-doc-states {
   display: grid;
   gap: 6px;
@@ -196,6 +319,163 @@
   text-decoration: underline;
 }
 
+/* Where a value came from — "手动" means the next automatic pass will not touch it. */
+.knowledge-doc-source {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #eef2f8;
+  color: #8494a9;
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+.knowledge-doc-source:only-child {
+  margin-left: 4px;
+}
+
+/* 手动填写：the same five fields as a form, plus the paste-an-identifier shortcut. */
+.knowledge-doc-biblio-edit {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.knowledge-doc-field {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: #8a97aa;
+}
+
+.knowledge-doc-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 7px;
+  border: 1px solid #d5dfec;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #34445c;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.knowledge-doc-field input:focus {
+  outline: none;
+  border-color: #7fa9e4;
+  box-shadow: 0 0 0 2px rgba(127, 169, 228, 0.25);
+}
+
+.knowledge-doc-biblio-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Two per row: the three controls share a 320px panel, and "标记为无需补全" needs its own full-width line. */
+.knowledge-doc-biblio-buttons button {
+  flex: 1 1 calc(50% - 3px);
+  min-width: 0;
+  width: auto;
+  white-space: nowrap;
+}
+
+/* `[hidden]` from the UA sheet loses to any class selector that sets `display`, so both halves say it explicitly. */
+.knowledge-doc-biblio-edit[hidden],
+.knowledge-doc-biblio[hidden],
+.knowledge-doc-biblio-buttons[hidden] {
+  display: none;
+}
+
+/* 联网查找的候选：accepted 的有「填入」，refused 的只说为什么不能填。 */
+.knowledge-doc-suggestions {
+  margin: 8px 0 0;
+  padding: 8px;
+  border: 1px solid #e3ebf6;
+  border-radius: 8px;
+  background: #f8fafd;
+}
+
+.knowledge-doc-suggestions .knowledge-doc-note {
+  margin-bottom: 6px;
+}
+
+.knowledge-doc-suggestion-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-doc-suggestion {
+  display: grid;
+  gap: 2px;
+  padding: 6px 7px;
+  border: 1px solid #e6edf7;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.knowledge-doc-suggestion[data-accepted="false"] {
+  border-style: dashed;
+  background: #fbfcfe;
+}
+
+.knowledge-doc-suggestion-title {
+  color: #34445c;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-doc-suggestion-meta {
+  color: #8494a9;
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-doc-suggestion-reason {
+  color: #b0742a;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.knowledge-doc-suggestion-apply {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 2px 10px;
+  border: 1px solid #c3d6ef;
+  border-radius: 6px;
+  background: #f2f7fd;
+  color: #2a6fd6;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.knowledge-doc-suggestion-apply:hover {
+  background: #e8f1fd;
+}
+
+.knowledge-doc-suggestion-dismiss {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8494a9;
+  font-size: 10px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+#knowledge-doc-metadata-skip[data-skipped="true"] {
+  color: #2a6fd6;
+  border-color: #c3d6ef;
+  background: #f2f7fd;
+}
+
 .knowledge-doc-panel #knowledge-doc-search-related,
 .knowledge-doc-panel #knowledge-doc-metadata {
   width: 100%;
@@ -207,6 +487,11 @@
   font-size: 12px;
 }
 
+/* Inside the shared row the extract button is a peer, not a full-width banner. */
+.knowledge-doc-panel .knowledge-doc-biblio-buttons #knowledge-doc-metadata {
+  width: auto;
+}
+
 .knowledge-doc-panel #knowledge-doc-search-related:disabled,
 .knowledge-doc-panel #knowledge-doc-metadata:disabled {
   border-color: #e8edf5;
@@ -214,8 +499,10 @@
   cursor: not-allowed;
 }
 
+/* Two per row: four stacked buttons pushed every other section off the panel, and each label is short. */
 .knowledge-doc-actions {
   display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   border-top: 1px solid #eef2f8;
   padding-top: 12px;
@@ -223,12 +510,17 @@
 
 .knowledge-doc-actions button {
   width: 100%;
+  min-width: 0;
   min-height: 34px;
+  padding: 0 6px;
   border: 1px solid #dbe4f2;
   border-radius: 9px;
   background: #fff;
   color: #34445c;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .knowledge-doc-actions button:hover {

@@ -270,6 +270,9 @@ export const knowledgeDocIssueElement =
   requiredElement<HTMLElement>("knowledge-doc-issue");
 export const knowledgeDocRelatedNoteElement =
   requiredElement<HTMLElement>("knowledge-doc-related-note");
+/** 相关论文正文：以前只能在「查看概览」的末尾读到，现在直接渲染在右栏。 */
+export const knowledgeDocRelatedContentElement =
+  requiredElement<HTMLElement>("knowledge-doc-related-content");
 export const knowledgeDocSearchRelatedButton =
   requiredElement<HTMLButtonElement>("knowledge-doc-search-related");
 export const knowledgeDocOverviewButton =
@@ -295,6 +298,50 @@ export const knowledgeDocMetadataNoteElement =
   requiredElement<HTMLElement>("knowledge-doc-metadata-note");
 export const knowledgeDocMetadataButton =
   requiredElement<HTMLButtonElement>("knowledge-doc-metadata");
+
+/** 文献信息的手动编辑：只读视图与表单互斥显示。 */
+export const knowledgeDocBiblioViewElement =
+  requiredElement<HTMLElement>("knowledge-doc-biblio-view");
+export const knowledgeDocBiblioEditElement =
+  requiredElement<HTMLElement>("knowledge-doc-biblio-edit");
+export const knowledgeDocAuthorsInput =
+  requiredElement<HTMLInputElement>("knowledge-doc-authors-input");
+export const knowledgeDocDateInput =
+  requiredElement<HTMLInputElement>("knowledge-doc-publish-date-input");
+export const knowledgeDocLanguageInput =
+  requiredElement<HTMLInputElement>("knowledge-doc-language-input");
+export const knowledgeDocDoiInput =
+  requiredElement<HTMLInputElement>("knowledge-doc-doi-input");
+export const knowledgeDocUrlInput =
+  requiredElement<HTMLInputElement>("knowledge-doc-url-input");
+export const knowledgeDocIdentifierInput =
+  requiredElement<HTMLInputElement>("knowledge-doc-identifier-input");
+export const knowledgeDocMetadataSaveButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-metadata-save");
+export const knowledgeDocMetadataCancelButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-metadata-cancel");
+export const knowledgeDocMetadataEditButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-metadata-edit");
+export const knowledgeDocMetadataSkipButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-metadata-skip");
+/** The three metadata buttons, hidden while the edit form is open. */
+export const knowledgeDocMetadataActionsElement =
+  requiredElement<HTMLElement>("knowledge-doc-metadata-actions");
+/** 联网查找及其候选列表：在线结果只能作为建议出现，永远不自动写入。 */
+export const knowledgeDocMetadataOnlineButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-metadata-online");
+export const knowledgeDocMetadataSuggestionsElement =
+  requiredElement<HTMLElement>("knowledge-doc-metadata-suggestions");
+export const knowledgeDocMetadataSuggestionsNoteElement =
+  requiredElement<HTMLElement>("knowledge-doc-metadata-suggestions-note");
+export const knowledgeDocMetadataSuggestionListElement =
+  requiredElement<HTMLElement>("knowledge-doc-metadata-suggestion-list");
+/** 侧栏「缺元数据」筛选与计数. */
+export const knowledgeMissingCountElement =
+  requiredElement<HTMLElement>("knowledge-missing-count");
+export const knowledgeMetadataFilterButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>("[data-metadata-filter]"),
+);
 
 export const knowledgeEditorDialog = requiredElement<HTMLElement>(
   "knowledge-editor-dialog",

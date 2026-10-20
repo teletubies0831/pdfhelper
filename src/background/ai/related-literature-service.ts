@@ -231,6 +231,37 @@ function candidateForPrompt(candidate: RelatedLiteratureCandidate, closeRead: bo
   };
 }
 
+/**
+ * A plain Markdown list of the candidates, used when the model call fails after the retrieval succeeded.
+ *
+ * The search is the part that costs calls and cannot be re-derived cheaply; the model only writes it up. So when the
+ * write-up times out, the user still gets what was found instead of nothing.
+ */
+function formatCandidateFallback(candidates: readonly RelatedLiteratureCandidate[]): string {
+  const lines = candidates.slice(0, 8).map((candidate) => {
+    const meta = [candidate.authors, candidate.year].filter(Boolean).join(' · ');
+    const link = candidate.url ? ` — ${candidate.url}` : '';
+    return `- **${candidate.title}**${meta ? `（${meta}）` : ''}${link}`;
+  });
+  return [
+    '## 相关论文',
+    '',
+    '> 检索已完成，但整理这段结果时超时/失败，下面是原始候选（可点开原文，稍后重试可以拿到整理版）。',
+    '',
+    ...lines,
+  ].join('\n');
+}
+
+/** Turns an abort/timeout into a Chinese explanation instead of `signal timed out`. */
+function describeGenerationError(error: unknown): string {
+  const name = error instanceof Error ? error.name : '';
+  const message = error instanceof Error ? error.message : String(error);
+  if (name === 'TimeoutError' || name === 'AbortError' || /timed? ?out|abort/i.test(message)) {
+    return '检索已完成，但生成整理结果超时，下面给的是原始候选。';
+  }
+  return `检索已完成，但生成整理结果失败：${message}`;
+}
+
 export async function buildRelatedLiteratureSection(
   adapter: AiProviderAdapter,
   config: AiConfig,
@@ -247,8 +278,9 @@ export async function buildRelatedLiteratureSection(
     };
   }
 
-  // Optional enrichment must not hold an already finished overview indefinitely.
-  const signal = AbortSignal.timeout(30_000);
+  // The retrieval phase gets its own budget: it is a handful of HTTP calls and must not keep an already finished
+  // overview waiting indefinitely.
+  const searchSignal = AbortSignal.timeout(30_000);
   let usage = emptyUsage;
   let degraded = '';
   const sources: Array<'deepseek' | 'openalex'> = [];
@@ -265,7 +297,7 @@ export async function buildRelatedLiteratureSection(
         count: input.webRetrieval.count,
         needContent: true,
         oriQuestion: `查找与《${metadata.title}》相关的其他学术论文`,
-        signal,
+        signal: searchSignal,
       });
       usage = addUsage(usage, 'searchCalls');
       webHitCount += hits.length;
@@ -276,7 +308,7 @@ export async function buildRelatedLiteratureSection(
   })();
   const openAlexTask = (async () => {
     try {
-      openAlexWorks = await searchOpenAlex(metadata.title, signal);
+      openAlexWorks = await searchOpenAlex(metadata.title, searchSignal);
     } catch {
       // OpenAlex is the fallback, so its own failure only matters when web retrieval failed too.
       openAlexWorks = [];
@@ -293,7 +325,7 @@ export async function buildRelatedLiteratureSection(
         query: `"${metadata.title}" 相关工作 综述`,
         count: input.webRetrieval.count,
         needContent: true,
-        signal,
+        signal: searchSignal,
       });
       usage = addUsage(usage, 'searchCalls');
       if (wider.length) {
@@ -321,7 +353,7 @@ export async function buildRelatedLiteratureSection(
       if (fetches >= 2) break;
       fetches += 1;
       try {
-        const page = await fetchPage(input.webRetrieval, candidate.url, signal);
+        const page = await fetchPage(input.webRetrieval, candidate.url, searchSignal);
         usage = addUsage(usage, 'fetchCalls');
         candidate.content = page.content;
       } catch {
@@ -335,26 +367,41 @@ export async function buildRelatedLiteratureSection(
     return { markdown: `## 相关论文\n\n${UNAVAILABLE_NOTE}`, usage, sources, degraded };
   }
 
-  const result = await requestOverviewCompletion(adapter, config, [{
-    role: "system",
-    content: SECTION_INSTRUCTIONS,
-  }, {
-    role: "user",
-    content: [
-      `当前论文标题：${metadata.title}`,
-      "当前论文概览：",
-      input.overviewMarkdown.slice(0, 12_000),
-      "候选论文：",
-      JSON.stringify(ranked.map((candidate, index) => candidateForPrompt(candidate, index < 2))),
-    ].join("\n\n"),
-  }], signal);
-  const section = result.content.trim();
-  if (!/^##\s+相关论文/m.test(section)) {
+  // The write-up gets its own, much longer budget. It shares nothing with the retrieval timeout above: a model that
+  // thinks before answering, or one queued behind a rate-limit back-off, would otherwise be killed at 30 s — after the
+  // searches had already been paid for. 180 s clears the provider's own 120 s ceiling.
+  let section = '';
+  try {
+    const result = await requestOverviewCompletion(adapter, config, [{
+      role: "system",
+      content: SECTION_INSTRUCTIONS,
+    }, {
+      role: "user",
+      content: [
+        `当前论文标题：${metadata.title}`,
+        "当前论文概览：",
+        input.overviewMarkdown.slice(0, 12_000),
+        "候选论文：",
+        JSON.stringify(ranked.map((candidate, index) => candidateForPrompt(candidate, index < 2))),
+      ].join("\n\n"),
+    }], AbortSignal.timeout(180_000));
+    section = result.content.trim();
+  } catch (error) {
+    // Retrieval already succeeded and cost calls; hand the raw candidates over rather than throwing the whole thing
+    // away, and say in Chinese what happened instead of surfacing `signal timed out`.
     return {
-      markdown: `## 相关论文\n\n${UNAVAILABLE_NOTE}`,
+      markdown: formatCandidateFallback(ranked),
       usage,
       sources,
-      degraded: degraded || '模型没有按要求返回「相关论文」章节。',
+      degraded: describeGenerationError(error),
+    };
+  }
+  if (!/^##\s+相关论文/m.test(section)) {
+    return {
+      markdown: formatCandidateFallback(ranked),
+      usage,
+      sources,
+      degraded: degraded || '模型没有按要求返回「相关论文」章节，下面是原始候选。',
     };
   }
   return { markdown: section, usage, sources, degraded };

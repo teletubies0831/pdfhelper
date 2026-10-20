@@ -3,11 +3,12 @@ import { browser } from "wxt/browser";
 import { aiConfig } from "../../app/public";
 import type { AiRuntimeResponse } from "../../../modules/ai/public";
 import {
+  applyExtractedMetadata,
   hasDocumentMetadata,
   markDocumentMetadataExtracting,
   markDocumentMetadataFailed,
   normalizeDocumentMetadata,
-  setDocumentMetadata,
+  resumeDocumentMetadata,
   type KnowledgeDocumentMetadata,
 } from "../../../modules/knowledge/public";
 import { getKnowledgeDocument } from "./knowledge-corpus-repository";
@@ -64,6 +65,8 @@ export async function extractDocumentMetadataFor(
   if (extracting.has(documentId)) return null;
   const item = getKnowledgeDocument(documentId);
   if (!item) return null;
+  // Pressing the button on a document the user had marked 「无需补全」 is an explicit retraction of that decision.
+  if (item.metadataStatus === 'skipped') resumeDocumentMetadata(documentId);
   const availability = metadataExtractionAvailability();
   if (!availability.available) {
     markDocumentMetadataFailed(documentId, availability.reason);
@@ -89,7 +92,9 @@ export async function extractDocumentMetadataFor(
     if (raw.degraded && !hasDocumentMetadata(metadata)) {
       markDocumentMetadataFailed(documentId, raw.degraded);
     } else {
-      setDocumentMetadata(documentId, metadata);
+      // `onlyEmpty` + the module's manual-value protection: this pass fills what the free offline layer left blank, and
+      // never replaces a DOI the user typed or a value already found in the file.
+      applyExtractedMetadata(documentId, metadata, 'ai', { onlyEmpty: true });
     }
     return metadata;
   } catch (error) {

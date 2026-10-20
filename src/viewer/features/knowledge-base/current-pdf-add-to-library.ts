@@ -1,7 +1,14 @@
 import { knowledgeRetrievalService } from "../../../modules/knowledge/public";
-import { findSamePaperDocument } from "../../../modules/knowledge/public";
+import {
+  applyExtractedMetadata,
+  extractOfflineDocumentMetadata,
+  findSamePaperDocument,
+  hasDocumentMetadata,
+  putDocumentFileHandle,
+  type StoredFileHandle,
+} from "../../../modules/knowledge/public";
 import { getDocument } from "pdfjs-dist";
-import { currentRecentEntryId, pdfDocument, sourceName, sourcePdfBytes } from "../../app/viewer-state";
+import { currentFileHandle, currentRecentEntryId, pdfDocument, sourceName, sourcePdfBytes } from "../../app/viewer-state";
 import { getDisplayFileName, buildPdfAssetOptions } from "../../core/pdf-reader/public";
 import { getDocumentChatId } from "../../app/document-identity";
 import {
@@ -137,6 +144,8 @@ export function addCurrentPdfToLibrary(): void {
       sourceDocumentId: documentId,
       recentEntryId: currentRecentEntryId.value || undefined,
     });
+    // The record's durable link to the file on disk, so 「打开原文」 does not depend on the 12-entry 最近打开 list.
+    void putDocumentFileHandle(samePaper.documentId, currentFileHandle.value as unknown as StoredFileHandle | null);
     targetDocumentId = samePaper.documentId;
     linkedToExisting = true;
     const linked = getKnowledgeDocument(targetDocumentId);
@@ -161,6 +170,7 @@ export function addCurrentPdfToLibrary(): void {
       pageCount: documentProxy.numPages,
       recentEntryId: currentRecentEntryId.value || undefined,
     });
+    void putDocumentFileHandle(targetDocumentId, currentFileHandle.value as unknown as StoredFileHandle | null);
   }
   updateKnowledgeDocument(targetDocumentId, { indexStatus: "indexing" });
   syncCurrentPdfLibraryButton();
@@ -215,11 +225,30 @@ async function startBackgroundKnowledgeIndex(input: {
       const content = await page.getTextContent();
       pages.push({ pageNumber, text: extractTextItems(content.items) });
     }
+    // Read before the proxy is destroyed: the PDF's own document-information dictionary is the cheapest source there is
+    // (its `Author` is often filled in even when the page text says nothing).
+    const pdfInfo = await backgroundPdf
+      .getMetadata()
+      .then((value) => (value?.info ?? null) as Parameters<typeof extractOfflineDocumentMetadata>[0]["pdfInfo"])
+      .catch(() => null);
     await backgroundPdf.destroy();
     backgroundPdf = null;
 
-    // 元数据与索引并行：索引要跑分类/嵌入，几百页要几十秒；元数据只是首页一次短调用，让作者和 DOI 先到位，
-    // 用户不必盯着「已添加到库」等概览才看到有用的信息。
+    // 第一层：免费离线。DOI / arXiv 编号 / 版权行 / 中文日期行 / PDF 属性，全部读文件本身，不花钱、不联网，
+    // 而且不可能张冠李戴——找到的东西就印在这份文件里。它先跑，模型只补它没找到的字段。
+    const offline = extractOfflineDocumentMetadata({
+      documentName: input.documentName,
+      headText: pages.slice(0, 4).map((page) => page.text).join("\n\n"),
+      pdfInfo,
+    });
+    if (hasDocumentMetadata(offline.fromPdf)) {
+      applyExtractedMetadata(documentId, offline.fromPdf, "pdf", { onlyEmpty: true });
+    }
+    if (hasDocumentMetadata(offline.fromText)) {
+      applyExtractedMetadata(documentId, offline.fromText, "text", { onlyEmpty: true });
+    }
+
+    // 第二层：模型读首页，只补前面没找到的字段（`onlyEmpty`），绝不覆盖用户手填的值。
     void extractDocumentMetadataFor(documentId, {
       documentName: input.documentName,
       text: pages.slice(0, 2).map((page) => page.text).join("\n\n").slice(0, 6_000),

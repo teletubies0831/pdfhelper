@@ -24,12 +24,15 @@ import {
   pdfDocument,
   pendingReadingPosition,
   restoredAnnotationWarmUpPending,
+  savedAnnotationSnapshot,
   sourceName,
   sourcePdfBytes,
 } from "./viewer-state";
 import {
   confirmDiscardUnsavedChanges,
+  getSerializableAnnotationEntries,
   markSavedChanges,
+  restoreAnnotationSaveState,
   restoreHelperAnnotations,
 } from "../features/annotations/public";
 import {
@@ -86,6 +89,7 @@ function snapshotActiveTab(): void {
   if (!tab || !pdfDocument.value) return;
   tab.readingPosition = getCurrentReadingPosition();
   tab.hasUnsavedChanges = hasUnsavedChanges.value;
+  tab.savedSnapshot = savedAnnotationSnapshot.value;
   tab.bytes = sourcePdfBytes.value ?? tab.bytes;
   cancelReadingPositionSave();
   void persistCurrentReadingPosition();
@@ -139,7 +143,8 @@ export async function openPdfInTab(
         // write an empty pdfhelper payload over the real one. Put the tab's own, still-alive proxy back instead.
         installPdfDocument(existing.documentProxy, existing.name, existing.fileHandle, existing.bytes);
         currentRecentEntryId.value = existing.recentEntryId;
-        markSavedChanges();
+        // Its baseline is unchanged, so restore it instead of stamping the current state as saved.
+        restoreAnnotationSaveState(existing.savedSnapshot, existing.hasUnsavedChanges);
         syncCurrentPdfLibraryButton();
         return existing;
       }
@@ -190,6 +195,7 @@ export async function openPdfInTab(
       recentEntryId: recentEntry?.id ?? null,
       readingPosition: recentEntry?.readingPosition ?? null,
       hasUnsavedChanges: false,
+      savedSnapshot: "",
     };
     tabs.push(tab);
     activeTabId = tab.id;
@@ -202,9 +208,15 @@ export async function openPdfInTab(
     void renderDocumentOutline(documentProxy);
     syncCurrentPdfLibraryButton();
     markSavedChanges();
+    tab.savedSnapshot = savedAnnotationSnapshot.value;
     window.setTimeout(() => {
       if (pdfDocument.value !== documentProxy) return;
-      markSavedChanges();
+      // Settling after the annotation editor warms up: only re-baseline while nothing is unsaved, otherwise a real edit
+      // made in this window would be swallowed as "already in the file".
+      if (!hasUnsavedChanges.value) {
+        markSavedChanges();
+        tab.savedSnapshot = savedAnnotationSnapshot.value;
+      }
       isOpeningDocument.value = false;
       updateControls();
     }, 500);
@@ -276,7 +288,13 @@ export async function activateDocumentTab(
     pendingReadingPosition.value = target.readingPosition;
     lastReadingPosition.value = target.readingPosition;
 
-    const restoredAnnotations = await restoreHelperAnnotations(target.documentProxy);
+    // A tab keeps its proxy — and with it its annotation storage — alive while another tab is shown, so re-running the
+    // restore here would overwrite unsaved edits with the last version written into the file. Only restore when the
+    // storage is empty (a first activation whose open-time restore was interrupted).
+    const alreadyHasAnnotations = getSerializableAnnotationEntries().length > 0;
+    const restoredAnnotations = alreadyHasAnnotations
+      ? 0
+      : await restoreHelperAnnotations(target.documentProxy);
     restoredAnnotationWarmUpPending.value = restoredAnnotations > 0;
     activeTabId = tabId;
 
@@ -284,7 +302,9 @@ export async function activateDocumentTab(
     await runAfterDocumentOpenResets(target.documentProxy);
     void renderDocumentOutline(target.documentProxy);
     syncCurrentPdfLibraryButton();
-    markSavedChanges();
+    // This tab's own baseline, not "whatever is on screen is saved": an edit made before the switch has to come back
+    // still unsaved, or its marker disappears and closing the tab stops asking.
+    restoreAnnotationSaveState(target.savedSnapshot, target.hasUnsavedChanges);
     updateControls();
     isOpeningDocument.value = false;
     const displayName = getDisplayFileName(target.name);

@@ -179,23 +179,140 @@ export function hasDocumentMetadata(metadata: KnowledgeDocumentMetadata): boolea
 }
 
 /**
- * Stores the result of one extraction.
+ * Where one field's value came from.
  *
- * Empty results are written too: without the record the panel could not tell "the model found nothing" from "this
- * document was never processed", and would keep offering to spend another call on it.
+ * Recorded per field because the sources have wildly different reliability — a DOI printed on the page beats a model's
+ * guess, the user's own typing beats both, and a reference-database record the user confirmed beats everything automatic
+ * — and because the write policy depends on it: an automatic pass may fill a blank, but it must never overwrite something
+ * the user typed.
+ *
+ * - `pdf` — the PDF's own document-information dictionary.
+ * - `text` — regular expressions over the file's first pages.
+ * - `ai` — the model reading the first page.
+ * - `online` — a Crossref/OpenAlex record the user explicitly confirmed (never written without that click).
+ * - `manual` — typed by the user; no automatic pass may replace it.
+ */
+export type KnowledgeMetadataSource = 'pdf' | 'text' | 'ai' | 'online' | 'manual';
+
+export type KnowledgeMetadataSources = Partial<Record<keyof KnowledgeDocumentMetadata, KnowledgeMetadataSource>>;
+
+/** Fields this module manages, in the order the inspector shows them. */
+export const METADATA_FIELDS: Array<keyof KnowledgeDocumentMetadata> = [
+  'authors',
+  'publishDate',
+  'language',
+  'documentUrl',
+  'doi',
+];
+
+export function readMetadataSources(item: KnowledgeLibraryDocument): KnowledgeMetadataSources {
+  return item.metadataSources ?? {};
+}
+
+/** Merges the sources of the fields that actually carry a value now. */
+function mergeMetadataSources(
+  current: KnowledgeMetadataSources | undefined,
+  metadata: KnowledgeDocumentMetadata,
+  source: KnowledgeMetadataSource,
+): KnowledgeMetadataSources {
+  const next: KnowledgeMetadataSources = { ...(current ?? {}) };
+  for (const field of METADATA_FIELDS) {
+    const value = metadata[field];
+    const filled = Array.isArray(value) ? value.length > 0 : Boolean(value);
+    if (filled) next[field] = source;
+    else delete next[field];
+  }
+  return next;
+}
+
+/**
+ * Replaces the whole record.
+ *
+ * Used when the record is known outright (tests, imports, a future bibliographic paste that carries every field). Any
+ * partial pass — the offline layer, the model, a re-extract — must go through `applyExtractedMetadata` instead, or it
+ * will silently drop fields it did not know about and overwrite values the user typed.
+ *
+ * `source` labels the fields it filled. Empty results are written too (with `ready`): without that record the panel could
+ * not tell "we looked and the document states nothing" from "nobody has looked yet", and would keep offering to spend
+ * another call on it.
  */
 export function setDocumentMetadata(
   documentId: string,
   metadata: KnowledgeDocumentMetadata,
+  source: KnowledgeMetadataSource = 'ai',
 ): void {
-  if (!getKnowledgeDocument(documentId)) return;
+  const item = getKnowledgeDocument(documentId);
+  if (!item) return;
   const normalized = normalizeDocumentMetadata(metadata);
   updateKnowledgeDocument(documentId, {
-    authors: normalized.authors.length ? normalized.authors : undefined,
-    publishDate: normalized.publishDate || undefined,
-    language: normalized.language || undefined,
-    documentUrl: normalized.documentUrl || undefined,
-    doi: normalized.doi || undefined,
+    ...metadataFieldsPatch(normalized),
+    metadataSources: mergeMetadataSources(item.metadataSources, normalized, source),
+    metadataStatus: 'ready',
+    metadataError: undefined,
+    metadataAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * Applies an automatic pass (offline heuristics, or the model) without destroying better data.
+ *
+ * Two rules, both from user reports about "what I typed disappeared":
+ * 1. a field whose current source is `manual` is never touched;
+ * 2. with `onlyEmpty`, a field that already has a value is kept as-is — so a later pass can add an author the first pass
+ *    missed without replacing the DOI the first pass found.
+ */
+export function applyExtractedMetadata(
+  documentId: string,
+  incoming: KnowledgeDocumentMetadata,
+  source: KnowledgeMetadataSource,
+  options: { onlyEmpty?: boolean } = {},
+): KnowledgeDocumentMetadata | null {
+  const item = getKnowledgeDocument(documentId);
+  if (!item) return null;
+  const normalized = normalizeDocumentMetadata(incoming);
+  const current = readDocumentMetadata(item);
+  const sources: KnowledgeMetadataSources = { ...readMetadataSources(item) };
+  const merged: KnowledgeDocumentMetadata = { ...current };
+  for (const field of METADATA_FIELDS) {
+    const value = normalized[field];
+    const filled = Array.isArray(value) ? value.length > 0 : Boolean(value);
+    if (!filled) continue;
+    if (sources[field] === 'manual') continue;
+    const existing = current[field];
+    const hasExisting = Array.isArray(existing) ? existing.length > 0 : Boolean(existing);
+    if (options.onlyEmpty && hasExisting) continue;
+    // `authors` is an array on both sides; the cast is local to this one assignment.
+    (merged[field] as unknown) = value;
+    // Only the fields this pass actually wrote get its label — a refused value must not relabel the value it left alone.
+    sources[field] = source;
+  }
+  for (const field of METADATA_FIELDS) {
+    const value = merged[field];
+    const filled = Array.isArray(value) ? value.length > 0 : Boolean(value);
+    if (!filled) delete sources[field];
+  }
+  updateKnowledgeDocument(documentId, {
+    ...metadataFieldsPatch(merged),
+    metadataSources: sources,
+    metadataStatus: 'ready',
+    metadataError: undefined,
+    metadataAt: new Date().toISOString(),
+  });
+  return merged;
+}
+
+/** Writes what the user typed. Every field it touches is labelled `manual`, which no automatic pass may overwrite. */
+export function saveManualDocumentMetadata(
+  documentId: string,
+  metadata: KnowledgeDocumentMetadata,
+): void {
+  const item = getKnowledgeDocument(documentId);
+  if (!item) return;
+  const normalized = normalizeDocumentMetadata(metadata);
+  updateKnowledgeDocument(documentId, {
+    ...metadataFieldsPatch(normalized),
+    // Only the fields the user actually has a value for become manual; clearing a field clears its label too.
+    metadataSources: mergeMetadataSources(item.metadataSources, normalized, 'manual'),
     metadataStatus: 'ready',
     metadataError: undefined,
     metadataAt: new Date().toISOString(),
@@ -210,6 +327,51 @@ export function markDocumentMetadataExtracting(documentId: string): void {
 export function markDocumentMetadataFailed(documentId: string, message: string): void {
   if (!getKnowledgeDocument(documentId)) return;
   updateKnowledgeDocument(documentId, { metadataStatus: 'error', metadataError: message });
+}
+
+/**
+ * The user says this document needs no bibliographic metadata (a handout, an internal report, a journal without DOIs).
+ *
+ * A terminal state, not a failure: the library stops offering to extract, and the 缺元数据 filter stops listing it.
+ */
+export function skipDocumentMetadata(documentId: string): void {
+  if (!getKnowledgeDocument(documentId)) return;
+  updateKnowledgeDocument(documentId, {
+    metadataStatus: 'skipped',
+    metadataError: undefined,
+    metadataAt: new Date().toISOString(),
+  });
+}
+
+export function resumeDocumentMetadata(documentId: string): void {
+  const item = getKnowledgeDocument(documentId);
+  if (!item || item.metadataStatus !== 'skipped') return;
+  updateKnowledgeDocument(documentId, { metadataStatus: 'pending', metadataAt: undefined });
+}
+
+/**
+ * Whether this document still wants attention in the 缺元数据 view.
+ *
+ * `skipped` is excluded on purpose: the user told us it needs nothing, and a filter that keeps listing it would nag.
+ * A document with a DOI but no authors still counts as missing — the point is citable records, not a filled-in form.
+ */
+export function isMetadataMissing(item: KnowledgeLibraryDocument): boolean {
+  if (item.metadataStatus === 'skipped') return false;
+  const metadata = readDocumentMetadata(item);
+  return !metadata.publishDate || !metadata.doi || metadata.authors.length === 0;
+}
+
+/** Wraps a plain record into the patch shape the corpus expects (empty values are dropped, not stored as ""). */
+export function metadataFieldsPatch(
+  metadata: KnowledgeDocumentMetadata,
+): Pick<Partial<KnowledgeLibraryDocument>, 'authors' | 'publishDate' | 'language' | 'documentUrl' | 'doi'> {
+  return {
+    authors: metadata.authors.length ? metadata.authors : undefined,
+    publishDate: metadata.publishDate || undefined,
+    language: metadata.language || undefined,
+    documentUrl: metadata.documentUrl || undefined,
+    doi: metadata.doi || undefined,
+  };
 }
 
 /** The DOI's canonical link, for the anchor the panel renders. */

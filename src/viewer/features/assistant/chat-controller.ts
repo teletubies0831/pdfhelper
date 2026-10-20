@@ -365,11 +365,12 @@ export async function sendChatMessage(): Promise<void> {
     );
 
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
+    const truncated = response.finishReason === "length";
     updateChatActivity(
       assistantMessage,
       "model",
-      "回答生成完成",
-      "done",
+      truncated ? "回答被输出上限截断" : "回答生成完成",
+      truncated ? "error" : "done",
       aiConfig.value.model,
     );
     const rawModelContent = response.content;
@@ -392,14 +393,21 @@ export async function sendChatMessage(): Promise<void> {
       if (renderFrame) window.cancelAnimationFrame(renderFrame);
       return;
     }
+    // Truncated answers are shown — the user can see what did arrive — but they say so, and they are not stored as the
+    // document's conversation: a half sentence that looks finished is worse than an obvious failure.
+    if (truncated) {
+      streamedContent = `${streamedContent}\n\n> 这次回答被输出上限截断，内容并不完整（思考与正文共用同一份额度）。提高「最大输出 Token」，或改用支持关闭思考的模型后重试。`;
+    }
     updateChatReasoning(assistantMessage, streamedReasoningContent, false);
     updateChatMessage(assistantMessage, streamedContent, { streaming: false });
-    chatHistory.value.push({
-      role: "assistant",
-      content: streamedContent,
-      evidenceSources,
-    });
-    void queueChatConversationPersistence(documentAtRequestStart);
+    if (!truncated) {
+      chatHistory.value.push({
+        role: "assistant",
+        content: streamedContent,
+        evidenceSources,
+      });
+      void queueChatConversationPersistence(documentAtRequestStart);
+    }
   } catch (error) {
     if (renderFrame) window.cancelAnimationFrame(renderFrame);
     const failureMessage =

@@ -17,6 +17,14 @@ import { requestOverviewCompletion } from "./overview-completion";
 
 export interface JudgeRelationsResult {
   content: string;
+  /**
+   * One entry per batch, in send order.
+   *
+   * The caller must parse these **individually**: two concatenated JSON documents are not JSON, and joining them into
+   * `content` is what made every selection above five pairs come back as an unparseable answer. `content` stays for
+   * single-batch callers and for logs.
+   */
+  contents: string[];
   /** Pairs the provider answered for, in the order they were sent. */
   batchCount: number;
   failedBatches: Array<{ pairKeys: string[]; error: string }>;
@@ -103,6 +111,8 @@ export async function judgeRelations(
 
   return {
     content: contents.join("\n"),
+    // The per-batch answers, unjoined: the viewer parses each one against the same pair list and merges.
+    contents,
     batchCount: batches.length,
     failedBatches,
   };

@@ -327,6 +327,46 @@ test('the "PDF 阅读" tab leaves the knowledge graph workspace', async () => {
   );
 });
 
+test('switching between the library and the graph throws nothing', async () => {
+  // Reported from real use as two errors on the extension's own error page — `Unexpected end of input` and
+  // `Cannot read properties of undefined (reading 'pdfPage')`. Both were collected while a rebuild was rewriting
+  // `.output/edge-mv3` under a loaded extension, but the page-switching path is the one the user blamed, and it had no
+  // packaged-build coverage at all: every other suite drives one workspace in isolation.
+  pageErrors.length = 0;
+  consoleErrors.length = 0;
+
+  const tourSkip = page.locator('#onboarding-tour-skip');
+  if (await tourSkip.count()) {
+    await tourSkip.click({ timeout: 5_000 }).catch(() => undefined);
+    await page.waitForTimeout(200);
+  }
+
+  const openLibrary = async () => {
+    await page.locator('#knowledge-base-entry').click();
+    await page.waitForFunction(
+      () => !document.getElementById('knowledge-base-page').hasAttribute('hidden'),
+      { timeout: 10_000 },
+    );
+  };
+  const openGraph = async () => {
+    await page.locator('#knowledge-graph-entry').click();
+    await page.waitForFunction(
+      () => !document.getElementById('knowledge-graph-page').hasAttribute('hidden')
+        && document.getElementById('knowledge-base-page').hasAttribute('hidden'),
+      { timeout: 10_000 },
+    );
+  };
+
+  // Two round trips: the first mounts each page, the second re-enters from the other — the report was about returning.
+  for (const round of [1, 2]) {
+    await openLibrary();
+    await openGraph();
+    assert.deepEqual(pageErrors, [], `round ${round}: switching pages must not throw`);
+  }
+
+  assert.deepEqual(consoleErrors, [], 'and it must not log console errors either');
+});
+
 test('the packaged page created its own database', async () => {
   // Opening the graph page runs the paper projection, which opens the graph database.
   // This is the only assertion in the repo that exercises the real storage code path

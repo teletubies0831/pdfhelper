@@ -318,6 +318,33 @@ export interface AiDocumentMetadata {
   degraded?: string;
 }
 
+/**
+ * A lookup against the free reference databases (Crossref, then OpenAlex).
+ *
+ * Only the user's explicit 「联网查找」 sends this: opening a PDF never discloses its title to a third party. The
+ * response is a list of candidates, not a decision — whether any of them is this paper is decided by
+ * `evaluateMetadataCandidates` in the knowledge module, and written only after the user confirms.
+ */
+export interface AiBibliographicLookupRequest {
+  type: 'pdf-helper:lookup-bibliographic-metadata';
+  requestId: string;
+  /** Title as we know it: the overview's title when there is one, else the cleaned file name. */
+  title: string;
+}
+
+/** One record as a reference database returned it. Plain data so it survives the message boundary unchanged. */
+export interface AiBibliographicCandidate {
+  source: 'crossref' | 'openalex';
+  title: string;
+  authors: string[];
+  /** `2024` / `2024-01` / `2024-01-18`. */
+  publishDate: string;
+  doi: string;
+  documentUrl: string;
+  containerTitle: string;
+  kind: string;
+}
+
 export interface AiGenerateDocumentOverviewRequest {
   type: 'pdf-helper:ai-generate-document-overview';
   requestId: string;
@@ -456,6 +483,7 @@ export type AiRuntimeRequest =
   | AiWebSearchRequest
   | AiDetectReadingModeRequest
   | AiDocumentMetadataRequest
+  | AiBibliographicLookupRequest
   | AiGenerateDocumentOverviewRequest
   | AiExtractEntitiesRequest
   | AiJudgeRelationsRequest
@@ -488,6 +516,13 @@ export interface AiRuntimeResponse {
    * ran and which pairs failed, so a partial run is reported as partial.
    */
   relationJudgement?: {
+    /**
+     * One raw answer per batch, in send order.
+     *
+     * Batches are separate completions, so the caller must parse them individually. Concatenating them yields invalid
+     * JSON — which is why any selection above five pairs used to read as 「模型没有返回可解析的关系判断 JSON」.
+     */
+    contents?: string[];
     batchCount: number;
     failedBatches: Array<{ pairKeys: string[]; error: string }>;
   };
@@ -512,6 +547,12 @@ export interface AiRuntimeResponse {
    * that is a successful run with nothing found, not an error.
    */
   documentMetadata?: AiDocumentMetadata;
+  /**
+   * Present on `pdf-helper:lookup-bibliographic-metadata` responses: what the free databases returned, plus any
+   * per-source failure worth telling the user about ("Crossref timed out" is not "this paper does not exist").
+   */
+  bibliographicCandidates?: AiBibliographicCandidate[];
+  bibliographicLookupErrors?: string[];
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -577,6 +618,7 @@ export function isAiRuntimeRequest(value: unknown): value is AiRuntimeRequest {
     || type === 'pdf-helper:ai-web-search'
     || type === 'pdf-helper:ai-detect-reading-mode'
     || type === 'pdf-helper:ai-document-metadata'
+    || type === 'pdf-helper:lookup-bibliographic-metadata'
     || type === 'pdf-helper:ai-generate-document-overview'
     || type === 'pdf-helper:ai-extract-entities'
     || type === 'pdf-helper:ai-judge-relations'
