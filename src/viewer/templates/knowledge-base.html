@@ -70,6 +70,12 @@
                 <p id="knowledge-recent-summary">还没有保存内容</p>
               </div>
             </section>
+
+            <!-- 数据体检：记录与实际数据不一致时才需要点它。计数为 0 时不显示徽标。 -->
+            <button id="knowledge-data-health-entry" class="knowledge-data-health-entry" type="button">
+              <span>数据体检</span>
+              <strong id="knowledge-data-health-count" hidden>0</strong>
+            </button>
           </aside>
 
           <main class="knowledge-main">
@@ -221,16 +227,30 @@
               </dl>
 
               <section class="knowledge-doc-section">
-                <h3>文献信息</h3>
+                <div class="knowledge-doc-section-heading">
+                  <h3>文献信息</h3>
+                  <button id="knowledge-doc-citation" class="knowledge-doc-citation-button" type="button" title="生成 BibTeX / RIS / GB·T 7714 / Markdown 引文">复制引用</button>
+                </div>
                 <dl id="knowledge-doc-biblio-view" class="knowledge-doc-biblio">
+                  <div><dt>标题</dt><dd id="knowledge-doc-biblio-title">—</dd></div>
                   <div><dt>作者</dt><dd id="knowledge-doc-authors">—</dd></div>
                   <div><dt>出版日期</dt><dd id="knowledge-doc-publish-date">—</dd></div>
                   <div><dt>语言</dt><dd id="knowledge-doc-language">—</dd></div>
                   <div><dt>DOI</dt><dd id="knowledge-doc-doi">—</dd></div>
                   <div><dt>链接</dt><dd id="knowledge-doc-url">—</dd></div>
+                  <!-- 出版信息：GB/T 7714 里 [J]/[C] 之后的那几段，来自 Crossref，也可手填。 -->
+                  <div><dt>期刊/会议</dt><dd id="knowledge-doc-container">—</dd></div>
+                  <div><dt>卷(期)</dt><dd id="knowledge-doc-volume">—</dd></div>
+                  <div><dt>页码</dt><dd id="knowledge-doc-biblio-pages">—</dd></div>
+                  <div><dt>出版者</dt><dd id="knowledge-doc-publisher">—</dd></div>
+                  <div><dt>ISSN/ISBN</dt><dd id="knowledge-doc-identifiers">—</dd></div>
                 </dl>
 
                 <div id="knowledge-doc-biblio-edit" class="knowledge-doc-biblio-edit" hidden>
+                  <label class="knowledge-doc-field">
+                    <span>标题（文献自己的标题，不是文件名）</span>
+                    <input id="knowledge-doc-biblio-title-input" type="text" autocomplete="off" />
+                  </label>
                   <label class="knowledge-doc-field">
                     <span>作者（多位用「、」或「;」分隔）</span>
                     <input id="knowledge-doc-authors-input" type="text" autocomplete="off" />
@@ -250,6 +270,30 @@
                   <label class="knowledge-doc-field">
                     <span>链接</span>
                     <input id="knowledge-doc-url-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>期刊或会议论文集名</span>
+                    <input id="knowledge-doc-container-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>卷</span>
+                    <input id="knowledge-doc-volume-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>期</span>
+                    <input id="knowledge-doc-issue-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>页码（45-56）</span>
+                    <input id="knowledge-doc-page-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>出版者</span>
+                    <input id="knowledge-doc-publisher-input" type="text" autocomplete="off" />
+                  </label>
+                  <label class="knowledge-doc-field">
+                    <span>出版地</span>
+                    <input id="knowledge-doc-publisher-place-input" type="text" autocomplete="off" />
                   </label>
                   <label class="knowledge-doc-field">
                     <span>快速填入：粘贴 DOI 或 arXiv 链接/编号</span>

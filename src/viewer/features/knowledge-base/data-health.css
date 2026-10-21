@@ -1,0 +1,249 @@
+/* 数据体检：侧栏入口 + 对话框. */
+
+.knowledge-data-health-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e6edf7;
+  border-radius: 9px;
+  background: #fff;
+  color: #34445c;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.knowledge-data-health-entry:hover {
+  border-color: #d5e0ef;
+  background: #f8fafd;
+}
+
+.knowledge-data-health-entry strong {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #eef2f8;
+  color: #8494a9;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* A problem that makes a feature unusable is worth a different colour than a cosmetic mismatch. */
+.knowledge-data-health-entry strong.is-broken {
+  background: #fdecea;
+  color: #c0392b;
+}
+
+.knowledge-data-health-dialog {
+  /* The UA sheet gives `<dialog>` a 2px black border; every dialog in this app resets it, and forgetting it looks like a
+     debug outline rather than a window. */
+  border: 1px solid #dce5f2;
+  border-radius: 18px;
+  padding: 0;
+  width: min(720px, 92vw);
+  background: #fff;
+  box-shadow: 0 28px 90px rgb(15 35 68 / 28%);
+  color: #243248;
+}
+
+.knowledge-data-health-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.knowledge-data-health-shell > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.knowledge-data-health-shell > header span {
+  color: #8494a9;
+  font-size: 11px;
+}
+
+.knowledge-data-health-shell > header h2 {
+  margin: 2px 0 4px;
+  font-size: 18px;
+}
+
+.knowledge-data-health-shell > header p {
+  margin: 0;
+  color: #6b7a90;
+  font-size: 12px;
+}
+
+.knowledge-data-health-shell > header button {
+  border: 0;
+  background: transparent;
+  color: #8494a9;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* Modal dialogs focus their first button on open; the UA ring reads as a stray black box, so the app's blue ring wins. */
+.knowledge-data-health-shell > header button:focus-visible,
+.knowledge-data-health-fix:focus-visible,
+.knowledge-data-health-shell > footer button:focus-visible {
+  outline: 2px solid #9bbcff;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.knowledge-data-health-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 56vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.knowledge-data-health-empty {
+  margin: 12px 0;
+  color: #6b7a90;
+  font-size: 13px;
+}
+
+.knowledge-data-health-group > h3 {
+  margin: 0 0 6px;
+  color: #34445c;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.knowledge-data-health-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid #eef2f8;
+  border-radius: 9px;
+  background: #fbfcfe;
+}
+
+.knowledge-data-health-row + .knowledge-data-health-row {
+  margin-top: 6px;
+}
+
+.knowledge-data-health-row.is-broken {
+  border-color: #f6ddd9;
+  background: #fdf8f7;
+}
+
+.knowledge-data-health-badge {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #eef2f8;
+  color: #6b7a90;
+  font-size: 10px;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.knowledge-data-health-row.is-broken .knowledge-data-health-badge {
+  background: #fdecea;
+  color: #c0392b;
+}
+
+.knowledge-data-health-text p {
+  margin: 0;
+  color: #34445c;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.knowledge-data-health-result {
+  margin-top: 4px !important;
+  color: #1f7a4d !important;
+}
+
+.knowledge-data-health-hint {
+  align-self: center;
+  max-width: 220px;
+  color: #8494a9;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.knowledge-data-health-fix {
+  align-self: center;
+  padding: 5px 12px;
+  border: 1px solid #c3d6ef;
+  border-radius: 8px;
+  background: #f2f7fd;
+  color: #2a6fd6;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.knowledge-data-health-fix:hover:not(:disabled) {
+  background: #e6f0fd;
+}
+
+.knowledge-data-health-fix:disabled {
+  border-color: #e8edf5;
+  background: #f6f8fb;
+  color: #9aa7ba;
+  cursor: default;
+}
+
+.knowledge-data-health-status {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f2f7fd;
+  color: #2a6fd6;
+  font-size: 12px;
+}
+
+.knowledge-data-health-status.is-error {
+  background: #fdecea;
+  color: #c0392b;
+}
+
+/* Right-aligned like every other dialog in the app: the action sits at the end of the row, not under the text. */
+.knowledge-data-health-shell > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.knowledge-data-health-shell > footer button {
+  min-width: 84px;
+  min-height: 34px;
+  padding: 0 16px;
+  border: 1px solid #dbe4f2;
+  border-radius: 9px;
+  background: #fff;
+  color: #34445c;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.knowledge-data-health-shell > footer button:hover {
+  border-color: #c9d8ee;
+  background: #f8fafd;
+}
+
+.knowledge-data-health-shell > footer .primary-button {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.knowledge-data-health-shell > footer .primary-button:hover {
+  border-color: #1458d4;
+  background: #1458d4;
+}

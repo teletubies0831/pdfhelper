@@ -28,6 +28,31 @@ interface CrossrefWork {
   "container-title"?: unknown;
   type?: unknown;
   URL?: unknown;
+  volume?: unknown;
+  issue?: unknown;
+  page?: unknown;
+  publisher?: unknown;
+  "publisher-location"?: unknown;
+  "publisher-place"?: unknown;
+  "ISSN"?: unknown;
+  "ISBN"?: unknown;
+}
+
+/**
+ * Crossref's list fields are either an array or a scalar depending on the work; read either.
+ *
+ * `subtitle` is deliberately not appended: GB/T separates it with a colon, and a wrong punctuation is worse than a
+ * shorter title — the model's own first-page extraction can still supply the full one.
+ */
+function crossrefText(value: unknown): string {
+  if (Array.isArray(value)) return String(value[0] ?? "").trim();
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** `ISSN`/`ISBN` arrive as a list (a journal has print and electronic ids); keep the first, which Crossref orders. */
+function crossrefIdentifier(value: unknown): string {
+  const first = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" ? first.trim() : "";
 }
 
 /** Crossref dates are `[[2020, 6, 19]]`; a missing month/day stays missing rather than becoming January. */
@@ -48,14 +73,10 @@ function crossrefDate(work: CrossrefWork): string {
 }
 
 function crossrefCandidate(work: CrossrefWork): AiBibliographicCandidate | null {
-  const title = Array.isArray(work.title)
-    ? String(work.title[0] ?? "").trim()
-    : typeof work.title === "string" ? work.title.trim() : "";
+  const title = crossrefText(work.title);
   if (!title) return null;
   const doi = typeof work.DOI === "string" ? work.DOI.trim() : "";
-  const containerTitle = Array.isArray(work["container-title"])
-    ? String(work["container-title"][0] ?? "").trim()
-    : "";
+  const containerTitle = crossrefText(work["container-title"]);
   const authors = (work.author ?? [])
     .map((item) => {
       if (typeof item.name === "string" && item.name.trim()) return item.name.trim();
@@ -74,6 +95,14 @@ function crossrefCandidate(work: CrossrefWork): AiBibliographicCandidate | null 
     documentUrl: doi ? `https://doi.org/${doi}` : (typeof work.URL === "string" ? work.URL : ""),
     containerTitle,
     kind: typeof work.type === "string" ? work.type : "",
+    volume: crossrefText(work.volume),
+    issue: crossrefText(work.issue),
+    page: crossrefText(work.page),
+    publisher: crossrefText(work.publisher),
+    // Crossref has used both keys over time; `publisher-location` is the one in the current schema.
+    publisherPlace: crossrefText(work["publisher-location"]) || crossrefText(work["publisher-place"]),
+    issn: crossrefIdentifier(work["ISSN"]),
+    isbn: crossrefIdentifier(work["ISBN"]),
   };
 }
 
@@ -81,7 +110,12 @@ async function lookupCrossref(title: string, signal: AbortSignal): Promise<AiBib
   const url = new URL("https://api.crossref.org/works");
   url.searchParams.set("query.bibliographic", title);
   url.searchParams.set("rows", String(MAX_ROWS));
-  url.searchParams.set("select", "DOI,title,author,issued,container-title,type,URL");
+  // `select` keeps the response small, so it has to list every field the citation needs — a missing name here is a
+  // silently missing 卷/期/页码 later, with no error to point at.
+  url.searchParams.set(
+    "select",
+    "DOI,title,author,issued,container-title,type,URL,volume,issue,page,publisher,publisher-location,ISSN,ISBN",
+  );
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
     signal: AbortSignal.any([signal, AbortSignal.timeout(LOOKUP_TIMEOUT_MS)]),
@@ -105,6 +139,14 @@ async function lookupOpenAlex(title: string, signal: AbortSignal): Promise<AiBib
     documentUrl: work.url,
     containerTitle: work.siteName || "",
     kind: "",
+    // OpenAlex's search response has no volume/issue/page/publisher; empty means "this source does not know".
+    volume: "",
+    issue: "",
+    page: "",
+    publisher: "",
+    publisherPlace: "",
+    issn: "",
+    isbn: "",
   }));
 }
 

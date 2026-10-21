@@ -1,0 +1,196 @@
+/* 复制引用：右栏按钮 + 对话框. */
+
+.knowledge-doc-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.knowledge-doc-section-heading h3 {
+  margin: 0;
+}
+
+.knowledge-doc-citation-button {
+  padding: 3px 9px;
+  border: 1px solid #dbe4f2;
+  border-radius: 7px;
+  background: #f8fafd;
+  color: #2a6fd6;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.knowledge-doc-citation-button:hover {
+  border-color: #c3d6ef;
+  background: #eef4fd;
+}
+
+.knowledge-citation-dialog {
+  /* The UA sheet's 2px black border is why every dialog here resets it. */
+  border: 1px solid #dce5f2;
+  border-radius: 18px;
+  padding: 0;
+  width: min(680px, 92vw);
+  background: #fff;
+  box-shadow: 0 28px 90px rgb(15 35 68 / 28%);
+  color: #243248;
+}
+
+.knowledge-citation-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.knowledge-citation-shell > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.knowledge-citation-shell > header span {
+  color: #8494a9;
+  font-size: 11px;
+}
+
+.knowledge-citation-shell > header h2 {
+  margin: 2px 0 4px;
+  font-size: 18px;
+}
+
+.knowledge-citation-shell > header p {
+  margin: 0;
+  color: #6b7a90;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 520px;
+}
+
+.knowledge-citation-shell > header button {
+  border: 0;
+  background: transparent;
+  color: #8494a9;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.knowledge-citation-shell > header button:focus-visible,
+.knowledge-citation-styles button:focus-visible,
+.knowledge-citation-actions button:focus-visible {
+  outline: 2px solid #9bbcff;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.knowledge-citation-styles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.knowledge-citation-styles button {
+  padding: 5px 12px;
+  border: 1px solid #e2e9f4;
+  border-radius: 8px;
+  background: #f8fafd;
+  color: #5a6b83;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.knowledge-citation-styles button.active {
+  border-color: #9bbcff;
+  background: #eef4ff;
+  color: #1257d8;
+  font-weight: 600;
+}
+
+.knowledge-citation-text {
+  margin: 0;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid #e8eef7;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: #243248;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  /* Selectable on purpose: when the clipboard is refused, this text is the fallback. */
+  user-select: text;
+}
+
+.knowledge-citation-warnings {
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: #fff8ec;
+  color: #8a5a10;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.knowledge-citation-warnings p {
+  margin: 0;
+}
+
+.knowledge-citation-warnings p + p {
+  margin-top: 2px;
+}
+
+.knowledge-citation-shell > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.knowledge-citation-status {
+  color: #1f7a4d;
+  font-size: 12px;
+}
+
+.knowledge-citation-status.is-error {
+  color: #c0392b;
+}
+
+.knowledge-citation-actions {
+  display: flex;
+  gap: 9px;
+}
+
+.knowledge-citation-actions button {
+  min-width: 84px;
+  min-height: 34px;
+  padding: 0 16px;
+  border: 1px solid #dbe4f2;
+  border-radius: 9px;
+  background: #fff;
+  color: #34445c;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.knowledge-citation-actions button:hover {
+  border-color: #c9d8ee;
+  background: #f8fafd;
+}
+
+.knowledge-citation-actions .primary-button {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.knowledge-citation-actions .primary-button:hover {
+  border-color: #1458d4;
+  background: #1458d4;
+}

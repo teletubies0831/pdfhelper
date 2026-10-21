@@ -20,21 +20,23 @@ import type { AiProviderAdapter } from "./provider-runtime";
 const METADATA_INSTRUCTIONS = [
   "你是文献元数据抽取器。阅读给出的一段 PDF 首页/前几页正文，抽取书目光标字段。",
   "只输出一个 JSON 对象，不要输出解释、Markdown 或代码围栏之外的任何文字。",
-  "字段：authors（字符串数组，按原文顺序，逐个人名；单字母缩写保留原文写法）、publishDate（出版或发布日期的原文写法，尽量写成 2026 或 2026-10 或 2026-10-18）、language（正文语言，两字母语言码，如 en、zh）、documentUrl（正文中出现的本文链接，通常是 arXiv、出版社或项目页；没有就不填）、doi（形如 10.xxxx/yyyy 的 DOI，去掉 https://doi.org/ 前缀；没有就不填）。",
+  "字段：title（这篇文档自己的标题，按首页原文写法，不要包含作者与年份，也不要用文件名）、authors（字符串数组，按原文顺序，逐个人名；单字母缩写保留原文写法）、publishDate（出版或发布日期的原文写法，尽量写成 2026 或 2026-10 或 2026-10-18）、language（正文语言，两字母语言码，如 en、zh）、documentUrl（正文中出现的本文链接，通常是 arXiv、出版社或项目页；没有就不填）、doi（形如 10.xxxx/yyyy 的 DOI，去掉 https://doi.org/ 前缀；没有就不填）。",
   "规则：",
   "1. 文档里明确写出的才填；没有就填空字符串或空数组，绝对不要猜测、不要编造、不要把参考文献里的作者或 DOI 当成这篇文档的。",
   "2. 作者只取本文作者（标题下方、摘要上方），不要取参考文献、致谢或编辑。",
   "3. 如果这是书籍、报告、说明书、合同等非论文文档，同样按封面/首页信息填写；确实没有作者就留空。",
   "4. 不确定的字段一律留空，宁可少填也不要写“unknown”“N/A”“未知”。",
+  "5. title 只取首页那个标题本身，不要拼接期刊名、会议名或页眉页脚。",
 ].join("\n");
 
 /** The fields the prompt asks for; used to tell "the model answered in an unreadable shape" from "nothing found". */
 const METADATA_KEYS = [
-  "authors", "author", "publishDate", "publish_date", "date",
+  "title", "authors", "author", "publishDate", "publish_date", "date",
   "language", "documentUrl", "url", "link", "doi", "DOI",
 ];
 
 const EMPTY: AiDocumentMetadata = {
+  title: "",
   authors: [],
   publishDate: "",
   language: "",
@@ -114,6 +116,7 @@ export function parseDocumentMetadataJson(content: string): AiDocumentMetadata |
       ? [authorText(record.authors)]
       : [];
   const parsed: AiDocumentMetadata = {
+    title: text(record.title),
     authors,
     publishDate: text(record.publishDate) || text(record.date) || text(record.publish_date),
     language: text(record.language),
@@ -131,7 +134,7 @@ export function parseDocumentMetadataJson(content: string): AiDocumentMetadata |
     return true;
   };
   const answeredSomething = METADATA_KEYS.some((key) => hasValue(record[key]));
-  const readSomething = authors.length > 0 || Boolean(parsed.publishDate || parsed.language
+  const readSomething = Boolean(parsed.title) || authors.length > 0 || Boolean(parsed.publishDate || parsed.language
     || parsed.documentUrl || parsed.doi);
   if (answeredSomething && !readSomething) {
     return { ...parsed, degraded: "模型返回的元数据字段无法识别，可以重试。" };

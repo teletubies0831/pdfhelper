@@ -107,6 +107,7 @@ import {
   testVisionAiConnection,
   toggleSettingsSecret,
 } from "../../features/assistant/public";
+import { isSettingsPrimaryPanelName } from "../../features/assistant/settings-primary-transition";
 
 import { closeKnowledgeBasePage, getKnowledgeDocument, listKnowledgeDocuments } from "../../features/knowledge-base/public";
 import { closeKnowledgeGraphPage } from "../../features/knowledge-graph/public";
@@ -276,12 +277,7 @@ export function registerAssistantEvents(): void {
   for (const button of settingsPrimaryTabButtons) {
     button.addEventListener("click", () => {
       const tab = button.dataset.settingsTab;
-      if (
-        tab === "general" ||
-        tab === "models" ||
-        tab === "tools" ||
-        tab === "memory"
-      ) {
+      if (isSettingsPrimaryPanelName(tab)) {
         activateSettingsTab(tab);
       }
     });

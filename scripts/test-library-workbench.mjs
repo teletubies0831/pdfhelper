@@ -52,8 +52,13 @@ before(async () => {
     identityMatch: await readSource('src/modules/knowledge/application/document-identity-match.ts'),
     heuristics: await readSource('src/modules/knowledge/application/document-metadata-heuristics.ts'),
     bibliographicMatch: await readSource('src/modules/knowledge/application/bibliographic-match.ts'),
+    citationFormat: await readSource('src/modules/knowledge/application/citation-format.ts'),
+    citationDialog: await readSource('src/viewer/features/knowledge-base/citation-dialog.ts'),
+    biblioForm: await readSource('src/viewer/features/knowledge-base/library-biblio-form.ts'),
+    suggestionsList: await readSource('src/viewer/features/knowledge-base/library-metadata-suggestions.ts'),
     lookupService: await readSource('src/background/ai/bibliographic-lookup-service.ts'),
     metadataLookupClient: await readSource('src/viewer/features/knowledge-base/metadata-lookup.ts'),
+    dataHealthDialog: await readSource('src/viewer/features/knowledge-base/data-health-dialog.ts'),
     corpusAdapter: await readSource('src/modules/knowledge/adapters/browser-document-corpus.ts'),
     fileHandleStore: await readSource('src/modules/knowledge/adapters/browser-file-handle-store.ts'),
     customSelect: await readSource('src/viewer/shared-ui/select/custom-select.ts'),
@@ -66,7 +71,11 @@ before(async () => {
   page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   // A real origin, not `about:blank`: the corpus adapter stores into `localStorage`, which a `setContent` page refuses to
   // expose. Serving the template from a routed origin is the smallest way to get a storage-backed document.
-  const template = await readFile(new URL('../src/viewer/templates/knowledge-base.html', import.meta.url), 'utf8');
+  const template = [
+    await readFile(new URL('../src/viewer/templates/knowledge-base.html', import.meta.url), 'utf8'),
+    // The dialogs live in their own partial; the health dialog is exercised here, so it has to be in the page.
+    await readFile(new URL('../src/viewer/templates/knowledge-base-overlays.html', import.meta.url), 'utf8'),
+  ].join('\n');
   await page.route('https://pdfpal.test/**', (route) => route.fulfill({
     status: 200,
     contentType: 'text/html; charset=utf-8',
@@ -109,6 +118,21 @@ before(async () => {
       knowledgeDocOpenButton: byId('knowledge-doc-open'),
       knowledgeDocGraphButton: byId('knowledge-doc-graph'),
       knowledgeDocRemoveButton: byId('knowledge-doc-remove'),
+      knowledgeDocCitationButton: byId('knowledge-doc-citation'),
+      knowledgeDocBiblioContainerElement: byId('knowledge-doc-container'),
+      knowledgeDocBiblioVolumeElement: byId('knowledge-doc-volume'),
+      knowledgeDocBiblioPagesElement: byId('knowledge-doc-biblio-pages'),
+      knowledgeDocBiblioPublisherElement: byId('knowledge-doc-publisher'),
+      knowledgeDocBiblioIdentifiersElement: byId('knowledge-doc-identifiers'),
+      knowledgeDocTitleElement: byId('knowledge-doc-biblio-title'),
+      knowledgeDocNameElement: byId('knowledge-doc-title'),
+      knowledgeDocTitleInput: byId('knowledge-doc-biblio-title-input'),
+      knowledgeDocBiblioContainerInput: byId('knowledge-doc-container-input'),
+      knowledgeDocBiblioVolumeInput: byId('knowledge-doc-volume-input'),
+      knowledgeDocBiblioIssueInput: byId('knowledge-doc-issue-input'),
+      knowledgeDocBiblioPagesInput: byId('knowledge-doc-page-input'),
+      knowledgeDocBiblioPublisherInput: byId('knowledge-doc-publisher-input'),
+      knowledgeDocBiblioPublisherPlaceInput: byId('knowledge-doc-publisher-place-input'),
       knowledgeDocAuthorsElement: byId('knowledge-doc-authors'),
       knowledgeDocDateElement: byId('knowledge-doc-publish-date'),
       knowledgeDocLanguageElement: byId('knowledge-doc-language'),
@@ -134,8 +158,9 @@ before(async () => {
       knowledgeDocMetadataSuggestionsNoteElement: byId('knowledge-doc-metadata-suggestions-note'),
       knowledgeDocMetadataSuggestionListElement: byId('knowledge-doc-metadata-suggestion-list'),
       knowledgeMissingCountElement: byId('knowledge-missing-count'),
-      knowledgeMetadataFilterButtons: Array.from(document.querySelectorAll('[data-metadata-filter]')),
-      knowledgeReadingCountElements: {
+      knowledgeDataHealthCountElement: byId('knowledge-data-health-count'),
+      knowledgeDataHealthEntryButton: byId('knowledge-data-health-entry'),
+      knowledgeMetadataFilterButtons: Array.from(document.querySelectorAll('[data-metadata-filter]')),      knowledgeReadingCountElements: {
         todo: byId('knowledge-reading-count-todo'),
         reading: byId('knowledge-reading-count-reading'),
         done: byId('knowledge-reading-count-done'),
@@ -201,6 +226,17 @@ before(async () => {
     const bibliographicMatch = load(code.bibliographicMatch, fail);
     for (const [key, value] of Object.entries(bibliographicMatch)) knowledge[key] = value;
 
+    // 引文格式与它的小对话框：格式是纯函数，对话框只负责展示与复制。
+    const citationFormat = load(code.citationFormat, fail);
+    for (const [key, value] of Object.entries(citationFormat)) knowledge[key] = value;
+    const citationDialog = load(code.citationDialog, (name) => {
+      if (name === '../../../modules/knowledge/public') return knowledge;
+      if (name === '../../shared-ui/dialog/dialog-motion') {
+        return { showAnimatedDialog: (dialog) => { if (!dialog.open) dialog.showModal(); } };
+      }
+      return fail(name);
+    });
+
     // The viewer's lookup client: the messenger is stubbed so the test can answer like the worker would.
     const lookupClientCalls = [];
     let lookupResponse = { ok: true, bibliographicCandidates: [] };
@@ -233,8 +269,7 @@ before(async () => {
 
     // Availability/running are read from the viewer's live state, which this harness has no opinion about.
     const metadataExtraction = {
-      isMetadataExtractionRunning: () => false,
-      metadataExtractionAvailability: () => ({ available: true, reason: '调用一次模型读取首页信息' }),
+      isMetadataExtractionRunning: () => false,      metadataExtractionAvailability: () => ({ available: true, reason: '调用一次模型读取首页信息' }),
     };
 
     // The lookup's session state is set by the tests; the panel only reads it.
@@ -273,17 +308,49 @@ before(async () => {
         chunkOverrides.set(documentId, Array.from({ length: count }, () => ({ text: 'chunk text' })));
       },
     };
+    // The biblio editor is its own module: loaded for real, wired through the panel's `registerBiblioFormEvents` call.
+    const biblioForm = (() => {
+      try {
+        return load(code.biblioForm, (name) => {
+          if (name === '../../app/elements/knowledge-elements') return elements;
+          if (name === '../../../modules/knowledge/public') return knowledge;
+          return fail(name);
+        });
+      } catch {
+        return null;
+      }
+    })();
+    const suggestionsList = load(code.suggestionsList, (name) => {
+      if (name === '../../app/elements/knowledge-elements') return elements;
+      if (name === '../../../modules/knowledge/public') return knowledge;
+      if (name === './metadata-lookup') return lookupModule;
+      return fail(name);
+    });
     const panel = load(code.panel, (name) => {
       if (name === '../../app/viewer-elements') return elements;
       if (name === '../../../modules/knowledge/public') return knowledge;
       if (name === './knowledge-related-papers') return related;
       if (name === './document-metadata-extraction') return metadataExtraction;
       if (name === './metadata-lookup') return lookupModule;
+      if (name === './library-biblio-form') {
+        return biblioForm ?? { closeBiblioEditor: () => {}, registerBiblioFormEvents: () => {} };
+      }
+      // 联网结果列表：它自己的渲染逻辑有断言覆盖（候选、理由、填入按钮），这里给它真实的模块。
+      if (name === './library-metadata-suggestions') return suggestionsList;
       if (name === '../../shared-ui/markdown/markdown-renderer') return markdownRenderer;
       if (name === '../../../modules/document-agent/public') return documentAgent;
       return fail(name);
     });
     const selection = load(code.selection, fail);
+    // The 数据体检 dialog: it renders rows from a report and hands each fix to the injected handler. The motion helper is
+    // stubbed to plain `showModal`, which is all the tests need.
+    const dataHealthDialog = load(code.dataHealthDialog, (name) => {
+      if (name === '../../app/viewer-elements') return { knowledgeDataHealthCountElement: elements.knowledgeDataHealthCountElement };
+      if (name === '../../shared-ui/dialog/dialog-motion') {
+        return { showAnimatedDialog: (dialog) => { if (!dialog.open) dialog.showModal(); } };
+      }
+      return fail(name);
+    });
     const batchActions = load(code.batchActions, (name) => (
       name === '../../../modules/knowledge/public' ? knowledge : fail(name)
     ));
@@ -332,6 +399,8 @@ before(async () => {
       lookupService,
       lookupClient,
       lookupModule,
+      dataHealthDialog,
+      citationDialog,
       setLookupResponse(next) {
         lookupResponse = next;
       },
@@ -652,7 +721,7 @@ test('the inspector describes the selected paper, and its buttons act on that pa
 
     const snapshot = () => ({
       hidden: elements.knowledgeDetailPanelElement.hidden,
-      title: elements.knowledgeDocTitleElement.textContent,
+      title: elements.knowledgeDocNameElement.textContent,
       reading: elements.knowledgeDocReadingSelect.value,
       pages: elements.knowledgeDocPagesElement.textContent,
       chunks: elements.knowledgeDocChunksElement.textContent,
@@ -986,10 +1055,64 @@ test('元数据规范化：空着就是答案，编造不是', async () => {
   assert.equal(normalized.languageWord, 'English');
   assert.equal(normalized.dateIso, '2026-03-07', 'a slash date becomes the sortable form');
   assert.equal(normalized.dateYear, '2026');
-  assert.deepEqual(normalized.empty, { authors: [], publishDate: '', language: '', documentUrl: '', doi: '' });
+  assert.deepEqual(normalized.empty, {
+    title: '', authors: [], publishDate: '', language: '', documentUrl: '', doi: '',
+    containerTitle: '', volume: '', issue: '', page: '', publisher: '', publisherPlace: '',
+    issn: '', isbn: '', publicationKind: '',
+  });
   assert.deepEqual(normalized.blanks.authors, [], 'placeholders count as empty');
   assert.equal(normalized.hasEmpty, false);
   assert.equal(normalized.hasSome, true);
+});
+
+test('联网候选能写进出版信息：卷期、页码、出版者、ISSN 都落到记录上', async () => {
+  const result = await page.evaluate(() => {
+    const { metadata, corpus } = window.lib;
+    corpus.set('online-1', {
+      documentId: 'online-1',
+      metadataStatus: 'ready',
+      // 手填的 DOI 必须保留：在线候选不能覆盖用户自己写的值。
+      doi: '10.9999/manual',
+      metadataSources: { doi: 'manual' },
+    });
+    // This is exactly what the panel's 「填入」 click sends: the gated candidate, field by field.
+    metadata.applyExtractedMetadata('online-1', {
+      title: 'Fast correlation attacks on stream ciphers',
+      authors: ['Anne Canteaut'],
+      publishDate: '2008',
+      language: '',
+      documentUrl: '',
+      doi: '10.1007/3-540-45539-6_7',
+      containerTitle: 'Advances in Cryptology — EUROCRYPT 2008',
+      volume: '4965',
+      issue: '2',
+      page: '31-46',
+      publisher: 'Springer',
+      publisherPlace: 'Berlin, Heidelberg',
+      issn: '0302-9743',
+      isbn: '978-3-540-45539-4',
+      publicationKind: 'proceedings-article',
+    }, 'online');
+    const stored = { ...corpus.get('online-1') };
+    return {
+      stored,
+      sources: metadata.readMetadataSources(corpus.get('online-1')),
+    };
+  });
+
+  assert.equal(result.stored.containerTitle, 'Advances in Cryptology — EUROCRYPT 2008');
+  assert.equal(result.stored.volume, '4965');
+  assert.equal(result.stored.issue, '2');
+  assert.equal(result.stored.page, '31-46');
+  assert.equal(result.stored.publisher, 'Springer');
+  assert.equal(result.stored.publisherPlace, 'Berlin, Heidelberg');
+  assert.equal(result.stored.issn, '0302-9743');
+  assert.equal(result.stored.isbn, '978-3-540-45539-4');
+  assert.equal(result.stored.publicationKind, 'proceedings-article');
+  assert.equal(result.stored.doi, '10.9999/manual', 'a hand-typed DOI is never replaced');
+  assert.equal(result.sources.doi, 'manual');
+  assert.equal(result.sources.containerTitle, 'online', 'and every field says where it came from');
+  assert.equal(result.sources.page, 'online');
 });
 
 test('元数据写回只写读到的字段，并把状态记下来', async () => {
@@ -1106,6 +1229,31 @@ test('离线元数据：PDF 属性里的作者可用，生成软件的名字不�
   assert.deepEqual(authors.single, [], 'a bare login name is not an author');
   assert.deepEqual(authors.chinese, ['张三', '李四']);
   assert.deepEqual(authors.none, []);
+});
+
+test('离线元数据：PDF 属性里的标题可用，占位标题与文件名不算', async () => {
+  const titles = await page.evaluate(() => {
+    const { heuristics } = window.lib;
+    const run = (Title, documentName = 'paper.pdf') => (
+      heuristics.extractOfflineDocumentMetadata({ documentName, headText: 'A paper.', pdfInfo: { Title } }).fromPdf.title
+    );
+    return {
+      real: run('A new combinational logic minimization technique'),
+      chinese: run('面向图神经网络的高效推理方法'),
+      word: run('Microsoft Word - 文稿1.docx'),
+      untitled: run('Untitled'),
+      empty: run(''),
+      sameAsFile: run('paper', 'paper.pdf'),
+      wordCount: run('Slide 3'),
+    };
+  });
+  assert.equal(titles.real, 'A new combinational logic minimization technique');
+  assert.equal(titles.chinese, '面向图神经网络的高效推理方法');
+  assert.equal(titles.word, '', 'the producer placeholder is not a title');
+  assert.equal(titles.untitled, '');
+  assert.equal(titles.empty, '');
+  assert.equal(titles.sameAsFile, '', 'a Title that is just the file name adds nothing');
+  assert.equal(titles.wordCount, '');
 });
 
 test('自动流程只填空字段，手填的值不被覆盖', async () => {
@@ -1804,6 +1952,166 @@ test('文献与本地文件的关联存在独立存储里，不随「最近打�
   assert.equal(outcome.afterDelete, null, 'deleting the link really removes it');
 });
 
+test('复制引用：四种格式可切换，缺项写在下面，复制走剪贴板', async () => {
+  const outcome = await page.evaluate(async () => {
+    const { citationDialog } = window.lib;
+    const copied = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (text) => { copied.push(text); } },
+    });
+    citationDialog.registerCitationDialogEvents();
+    citationDialog.openCitationDialog({
+      documentId: 'pdf:one',
+      documentName: '2010-Boyar-…-technique.pdf',
+      pageCount: 12,
+      title: 'A new combinational logic minimization technique',
+      authors: ['Joan Boyar', 'René Peralta'],
+      publishDate: '2010',
+      doi: '10.1007/978-3-642-16342-5_6',
+      documentUrl: '',
+      language: 'en',
+    });
+    const styles = [...document.querySelectorAll('[data-citation-style]')].map((button) => ({
+      id: button.dataset.citationStyle,
+      label: button.textContent,
+      active: button.classList.contains('active'),
+    }));
+    const initial = document.getElementById('knowledge-citation-text').textContent;
+    // Switch to each format and record what it shows.
+    const shown = {};
+    for (const style of ['ris', 'gbt7714', 'markdown', 'bibtex']) {
+      document.querySelector(`[data-citation-style="${style}"]`).click();
+      shown[style] = document.getElementById('knowledge-citation-text').textContent;
+    }
+    document.getElementById('knowledge-citation-copy').click();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const status = document.getElementById('knowledge-citation-status').textContent;
+    const warnings = [...document.querySelectorAll('#knowledge-citation-warnings p')].map((line) => line.textContent);
+
+    // A record with nothing but a file name: the dialog must say what is missing instead of quietly emitting it.
+    citationDialog.openCitationDialog({
+      documentId: 'pdf:two',
+      documentName: 'Some Scan.pdf',
+      pageCount: 3,
+    });
+    const sparseWarnings = [...document.querySelectorAll('#knowledge-citation-warnings p')].map((line) => line.textContent);
+    const sparseText = document.getElementById('knowledge-citation-text').textContent;
+    document.getElementById('knowledge-citation-done').click();
+    const closed = !document.getElementById('knowledge-citation-dialog').open;
+    return { styles, initial, shown, copied, status, warnings, sparseWarnings, sparseText, closed };
+  });
+
+  assert.deepEqual(outcome.styles.map((style) => style.id), ['bibtex', 'ris', 'gbt7714', 'markdown']);
+  assert.deepEqual(outcome.styles.filter((style) => style.active).map((style) => style.id), ['bibtex'],
+    'BibTeX is the default: most of this library ends up in LaTeX or a reference manager');
+  assert.match(outcome.initial, /^@misc\{Boyar2010,/);
+  assert.match(outcome.shown.ris, /^TY  - GEN/);
+  assert.match(outcome.shown.gbt7714, /\[EB\/OL\]/);
+  assert.match(outcome.shown.markdown, /^\[A new combinational logic minimization technique\]\(https:\/\/doi\.org\//);
+
+  assert.equal(outcome.copied.length, 1, 'the copy button copies exactly once');
+  assert.equal(outcome.copied[0], outcome.shown.bibtex, 'and what it copies is what the dialog shows');
+  assert.match(outcome.status, /已复制 BibTeX/);
+  assert.deepEqual(outcome.warnings, [], 'a complete record has nothing to warn about');
+
+  // The sparse record: title falls back to the file name, and every missing field is spelled out.
+  assert.equal(outcome.sparseWarnings.length, 4, JSON.stringify(outcome.sparseWarnings));
+  assert.match(outcome.sparseText, /title = \{Some Scan\}/, 'the file name is used, but only as a last resort');
+  assert.equal(outcome.closed, true);
+});
+
+test('数据体检：每条问题一个动作，人工的那条没有按钮，徽标只在有问题时出现', async () => {
+  const outcome = await page.evaluate(async () => {
+    const { dataHealthDialog } = window.lib;
+    const fixed = [];
+    const report = {
+      total: 3,
+      broken: 1,
+      findings: [
+        {
+          kind: 'chunks-missing', severity: 'broken', documentId: 'd1', documentName: 'Lost Index.pdf',
+          message: '记录显示已索引 5 个片段，但本地分块数据是 0 段。', fix: 'rebuild-index',
+          fixLabel: '重建索引', costsMoney: false,
+        },
+        {
+          kind: 'metadata-missing', severity: 'warn', documentId: 'd1', documentName: 'Lost Index.pdf',
+          message: '作者、发表日期、DOI 都还空着。', fix: 'complete-metadata',
+          fixLabel: '补全元数据', costsMoney: true,
+        },
+        {
+          kind: 'duplicate', severity: 'warn', documentId: 'd2', documentName: 'Same Paper.pdf',
+          message: '知识库里还有 1 条同名同页数的记录。', fix: 'manual',
+          fixLabel: '确认保留哪一条后再删掉其余记录。', costsMoney: false,
+        },
+      ],
+    };
+    dataHealthDialog.configureDataHealthDialog({
+      fix: async (finding) => {
+        fixed.push(finding.kind);
+        return '已处理。';
+      },
+      rescan: async () => ({ total: 0, broken: 0, findings: [] }),
+    });
+    // The dialog's own buttons (close/done/rescan) are bound by this call — normally `installDataHealth()` does it.
+    dataHealthDialog.registerDataHealthDialogEvents(() => {});
+    dataHealthDialog.renderDataHealth(report);
+    const badge = document.getElementById('knowledge-data-health-count');
+    const beforeOpen = {
+      badgeText: badge.textContent,
+      badgeHidden: badge.hidden,
+      badgeBroken: badge.classList.contains('is-broken'),
+    };
+
+    dataHealthDialog.openDataHealthDialog(report);
+    const rows = [...document.querySelectorAll('.knowledge-data-health-row')].map((row) => ({
+      kind: row.dataset.kind,
+      severity: row.classList.contains('is-broken') ? 'broken' : 'warn',
+      fixLabel: row.querySelector('.knowledge-data-health-fix')?.textContent ?? null,
+      hint: row.querySelector('.knowledge-data-health-hint')?.textContent ?? null,
+      badge: row.querySelector('.knowledge-data-health-badge')?.textContent ?? '',
+    }));
+    const dialogElement = document.getElementById('knowledge-data-health-dialog');
+    const dialogOpen = Boolean(dialogElement?.open);
+    const diagnostic = {
+      hasDialog: Boolean(dialogElement),
+      openAttr: dialogElement?.getAttribute('open'),
+    };
+    const groupCount = document.querySelectorAll('.knowledge-data-health-group').length;
+
+    // The paid action says so on the button; the manual one has no button at all.
+    document.querySelector('.knowledge-data-health-fix').click();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const afterFix = {
+      fixed,
+      rowsLeft: document.querySelectorAll('.knowledge-data-health-row').length,
+      badgeHidden: badge.hidden,
+    };
+    document.getElementById('knowledge-data-health-done').click();
+    return { beforeOpen, rows, dialogOpen, groupCount, afterFix, diagnostic, closed: !document.getElementById('knowledge-data-health-dialog').open };
+  });
+
+  assert.equal(outcome.beforeOpen.badgeText, '3');
+  assert.equal(outcome.beforeOpen.badgeHidden, false);
+  assert.equal(outcome.beforeOpen.badgeBroken, true, 'a broken finding is not painted like a cosmetic one');
+  assert.equal(outcome.diagnostic.hasDialog, true, 'the dialog partial is part of the page');
+  assert.equal(outcome.dialogOpen, true, JSON.stringify(outcome.diagnostic));
+  assert.equal(outcome.groupCount, 2, 'rows are grouped by document');
+
+  assert.deepEqual(outcome.rows.map((row) => row.kind), ['chunks-missing', 'metadata-missing', 'duplicate']);
+  assert.deepEqual(outcome.rows.map((row) => row.severity), ['broken', 'warn', 'warn']);
+  assert.equal(outcome.rows[0].fixLabel, '重建索引', 'a free action has no price tag');
+  assert.equal(outcome.rows[1].fixLabel, '补全元数据（计费）', 'a paid action says so on the button');
+  assert.equal(outcome.rows[2].fixLabel, null, 'the duplicate finding has no automatic fix in v1');
+  assert.match(outcome.rows[2].hint, /确认保留/, 'it explains what to do instead');
+  assert.deepEqual(outcome.rows.map((row) => row.badge), ['不可用', '不一致', '不一致']);
+
+  assert.deepEqual(outcome.afterFix.fixed, ['chunks-missing'], 'one click fixes exactly one finding');
+  assert.equal(outcome.afterFix.rowsLeft, 0, 'and the list is re-derived from the rescan, not patched locally');
+  assert.equal(outcome.afterFix.badgeHidden, true, 'the badge goes away with the last finding');
+  assert.equal(outcome.closed, true);
+});
+
 test('侧栏「缺元数据」计数与筛选一致', async () => {
   const counts = await page.evaluate(() => {
     const { panel, corpus, metadata } = window.lib;
@@ -1855,7 +2163,7 @@ test('后台能从模型的各种回答里读出元数据', async () => {
   assert.equal(parsed.prose.documentUrl, 'https://x.test/a', 'the `url` alias is accepted');
   assert.deepEqual(parsed.nested.authors, ['A {B} One'], 'braces inside strings do not confuse the scanner');
   assert.deepEqual(parsed.missing, {
-    authors: [], publishDate: '', language: '', documentUrl: '', doi: '',
+    title: '', authors: [], publishDate: '', language: '', documentUrl: '', doi: '',
   }, 'an all-empty answer is a valid result');
   assert.equal(parsed.broken, null, 'a truncated object is not silently reported as empty');
   assert.equal(parsed.chatter, null);

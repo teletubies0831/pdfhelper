@@ -13,6 +13,7 @@ import {
   searchRelatedPapers,
 } from './knowledge-related-papers';
 import { openLibraryContextMenu } from './library-context-menu';
+import { openCitationDialog } from './citation-dialog';
 import {
   describeBatchRelatedPlan,
   formatBatchCost,
@@ -311,6 +312,11 @@ export function createLibraryActions(ports: LibraryActionPorts): LibraryActions 
       openGraph,
       remove: (documentId) => remove(documentId),
       searchRelated,
+      // 引文只读当前那条记录；对话框自己负责格式切换与复制。
+      openCitation: (documentId) => {
+        const item = getKnowledgeDocument(documentId);
+        if (item) openCitationDialog(item);
+      },
       extractMetadata: (documentId) => {
         void extractMetadata(documentId);
       },
@@ -333,11 +339,24 @@ export function createLibraryActions(ports: LibraryActionPorts): LibraryActions 
         // Only reached through an 「填入」 click on an accepted candidate — the gate already refused everything else, and
         // nothing here runs automatically. `manual` fields keep their lock, so a value the user typed is never replaced.
         applyExtractedMetadata(documentId, {
+          // The online candidate carries a subtitle-qualified title from Crossref/OpenAlex; it may be better than what the
+          // first page said, and `applyExtractedMetadata` keeps any value the user typed by hand.
+          title: candidate.title ?? '',
           authors: candidate.authors,
           publishDate: candidate.publishDate,
           language: '',
           documentUrl: candidate.documentUrl,
           doi: candidate.doi,
+          // 出版信息: without these the GB/T citation cannot say 刊名/卷(期)/页码, which is most of what makes it a citation.
+          containerTitle: candidate.containerTitle ?? '',
+          volume: candidate.volume ?? '',
+          issue: candidate.issue ?? '',
+          page: candidate.page ?? '',
+          publisher: candidate.publisher ?? '',
+          publisherPlace: candidate.publisherPlace ?? '',
+          issn: candidate.issn ?? '',
+          isbn: candidate.isbn ?? '',
+          publicationKind: candidate.kind ?? '',
         }, 'online');
         clearMetadataLookup(documentId);
         ports.refresh();

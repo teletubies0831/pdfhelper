@@ -24,6 +24,14 @@ export interface MetadataCandidate {
   containerTitle: string;
   /** The source's own type (`journal-article`, `posted-content`, …), for the small print. */
   kind: string;
+  /** 出版信息：卷、期、页码、出版者、出版地、ISSN/ISBN。缺的项保持空字符串，表单与引文按「不知道」处理。 */
+  volume?: string;
+  issue?: string;
+  page?: string;
+  publisher?: string;
+  publisherPlace?: string;
+  issn?: string;
+  isbn?: string;
 }
 
 /** A candidate plus the gate's verdict. */

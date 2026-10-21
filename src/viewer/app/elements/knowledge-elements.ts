@@ -246,7 +246,10 @@ export const knowledgeDetailPanelElement =
 export const knowledgeDetailCloseButton = requiredElement<HTMLButtonElement>(
   "knowledge-detail-close",
 );
-export const knowledgeDocTitleElement =
+/** 右栏顶部的文献标题（就是文件名去掉 .pdf）——与「文献信息」里的书目标题不是一回事。 */
+export const knowledgeDocCitationButton =
+  requiredElement<HTMLButtonElement>("knowledge-doc-citation");
+export const knowledgeDocNameElement =
   requiredElement<HTMLElement>("knowledge-doc-title");
 export const knowledgeDocFolderSelect =
   requiredElement<HTMLSelectElement>("knowledge-doc-folder");
@@ -283,7 +286,9 @@ export const knowledgeDocGraphButton =
   requiredElement<HTMLButtonElement>("knowledge-doc-graph");
 export const knowledgeDocRemoveButton =
   requiredElement<HTMLButtonElement>("knowledge-doc-remove");
-/** 文献信息：作者 / 出版日期 / 语言 / DOI / 链接. */
+/** 文献信息：标题 / 作者 / 出版日期 / 语言 / DOI / 链接. */
+export const knowledgeDocTitleElement =
+  requiredElement<HTMLElement>("knowledge-doc-biblio-title");
 export const knowledgeDocAuthorsElement =
   requiredElement<HTMLElement>("knowledge-doc-authors");
 export const knowledgeDocDateElement =
@@ -304,6 +309,21 @@ export const knowledgeDocBiblioViewElement =
   requiredElement<HTMLElement>("knowledge-doc-biblio-view");
 export const knowledgeDocBiblioEditElement =
   requiredElement<HTMLElement>("knowledge-doc-biblio-edit");
+export const knowledgeDocTitleInput =
+  requiredElement<HTMLInputElement>("knowledge-doc-biblio-title-input");
+/** 出版信息：期刊/会议名、卷、期、页码、出版者、出版地. */
+/** 出版信息：期刊/会议名、卷、期、页码、出版者、出版地. */
+export const knowledgeDocBiblioContainerElement = requiredElement<HTMLElement>("knowledge-doc-container");
+export const knowledgeDocBiblioVolumeElement = requiredElement<HTMLElement>("knowledge-doc-volume");
+export const knowledgeDocBiblioPagesElement = requiredElement<HTMLElement>("knowledge-doc-biblio-pages");
+export const knowledgeDocBiblioPublisherElement = requiredElement<HTMLElement>("knowledge-doc-publisher");
+export const knowledgeDocBiblioIdentifiersElement = requiredElement<HTMLElement>("knowledge-doc-identifiers");
+export const knowledgeDocBiblioContainerInput = requiredElement<HTMLInputElement>("knowledge-doc-container-input");
+export const knowledgeDocBiblioVolumeInput = requiredElement<HTMLInputElement>("knowledge-doc-volume-input");
+export const knowledgeDocBiblioIssueInput = requiredElement<HTMLInputElement>("knowledge-doc-issue-input");
+export const knowledgeDocBiblioPagesInput = requiredElement<HTMLInputElement>("knowledge-doc-page-input");
+export const knowledgeDocBiblioPublisherInput = requiredElement<HTMLInputElement>("knowledge-doc-publisher-input");
+export const knowledgeDocBiblioPublisherPlaceInput = requiredElement<HTMLInputElement>("knowledge-doc-publisher-place-input");
 export const knowledgeDocAuthorsInput =
   requiredElement<HTMLInputElement>("knowledge-doc-authors-input");
 export const knowledgeDocDateInput =
@@ -342,6 +362,11 @@ export const knowledgeMissingCountElement =
 export const knowledgeMetadataFilterButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-metadata-filter]"),
 );
+/** 数据体检：侧栏入口与徽标. */
+export const knowledgeDataHealthEntryButton =
+  requiredElement<HTMLButtonElement>("knowledge-data-health-entry");
+export const knowledgeDataHealthCountElement =
+  requiredElement<HTMLElement>("knowledge-data-health-count");
 
 export const knowledgeEditorDialog = requiredElement<HTMLElement>(
   "knowledge-editor-dialog",

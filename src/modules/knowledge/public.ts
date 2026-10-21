@@ -56,6 +56,50 @@ export {
   yearOf,
 } from './application/bibliographic-match';
 export type { MetadataCandidate, MetadataSuggestion } from './application/bibliographic-match';
+export { describeDataHealth, planDataHealth } from './application/data-health';
+export {
+  BACKUP_FORMAT,
+  BACKUP_VERSION,
+  backupFileName,
+  buildBackupPayload,
+  describeRestorePlan,
+  parseBackup,
+  planRestore,
+  serializeBackup,
+} from './application/backup';
+export type {
+  BackupGraph,
+  BackupInput,
+  BackupParseResult,
+  BackupPayload,
+  RestoreExisting,
+  RestorePlan,
+} from './application/backup';
+export {
+  CITATION_STYLES,
+  buildCitationRecord,
+  citationAccessDate,
+  citationKey,
+  citationWarnings,
+  citationYear,
+  formatAuthors,
+  formatBibtex,
+  formatCitation,
+  formatGbT7714,
+  formatMarkdown,
+  formatRis,
+  getDocType,
+  resolveCitationTitle,
+} from './application/citation-format';
+export type { CitationRecord, CitationStyle, GbtDocumentType } from './application/citation-format';
+export type {
+  DataHealthFinding,
+  DataHealthFindingKind,
+  DataHealthFixKind,
+  DataHealthGraphPaper,
+  DataHealthInput,
+  DataHealthReport,
+} from './application/data-health';
 export {
   findSamePaperDocument,
   paperNameKey,

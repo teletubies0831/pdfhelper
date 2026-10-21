@@ -95,6 +95,16 @@
     <button id="redo-annotation" class="toolbar-nav-button" type="button" title="重做批注"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-redo" /></svg>重做</button>
     <button id="smart-copy" class="toolbar-nav-button" type="button" title="整理复制选中文本"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-copy" /></svg>整理复制</button>
     <button id="toggle-notes" class="toolbar-nav-button" type="button" title="隐藏/显示所有笔记标记"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-eye-off" /></svg><span data-toggle-notes-label>隐藏笔记</span></button>
+    <!--
+      The AI assistant belongs to the reader, not to the app shell: on 知识库 / 知识图谱 there is no assistant pane to
+      toggle. Living at the right end of the annotation bar says so, and it hides with the rest of that bar. The spacer is
+      what pushes it there — the toolbar's own button rules reset margins, so a flex spacer is the reliable way.
+    -->
+    <span class="annotation-tools-spacer" aria-hidden="true"></span>
+    <button id="assistant-panel-toggle" class="toolbar-nav-button assistant-entry assistant-entry-in-tools active" type="button" title="显示或隐藏右侧 AI 助手" aria-pressed="true">
+      <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
+      AI 助手
+    </button>
   </div>
 
   <button id="add-current-pdf-to-library" class="toolbar-pill toolbar-nav-button knowledge-add-current" type="button" disabled><span>添加到知识库</span></button>
@@ -110,10 +120,6 @@
     <button id="vocabulary-library-entry" class="toolbar-pill toolbar-nav-button" type="button"><svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-vocabulary" /></svg>单词库</button>
   </nav>
 
-  <button id="assistant-panel-toggle" class="toolbar-pill toolbar-nav-button assistant-entry active" type="button" title="显示或隐藏右侧 AI 助手">
-    <svg class="toolbar-action-icon" aria-hidden="true"><use href="/resources/icons.svg#toolbar-icon-ai" /></svg>
-    AI 助手
-  </button>
   <button
     id="ai-settings-button"
     class="toolbar-icon-button toolbar-settings-button toolbar-nav-button"
