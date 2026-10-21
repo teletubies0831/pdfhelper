@@ -322,6 +322,54 @@ input:disabled {
   flex: 0 0 auto;
 }
 
+/*
+ * The AI assistant toggle sits at the right end of the annotation bar.
+ *
+ * `margin-left: auto` pushes it there, which needs the bar to be a flex row that spans its line — hence the two flex
+ * rules below, one per breakpoint. The bar was content-sized, so the auto margin had nothing to absorb and the button
+ * sat right after the last tool. Everything else about the tools is untouched: they keep their own flex properties and
+ * the bar still scrolls sideways when the row is too narrow.
+ */
+.annotation-tools {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 1700px) {
+  .toolbar .annotation-tools.expanded-toolbar-group {
+    flex: 1 1 100%;
+  }
+}
+
+/*
+ * The AI assistant toggle sits at the right end of the annotation bar.
+ *
+ * The spacer carries the growing because the toolbar's own button rules reset margins on every `.toolbar-nav-button`,
+ * so `margin-left: auto` on the button is inert however specific the selector is. A zero-width flex item has no such
+ * competition. The bar spans its line (the flex rules above), and the tools keep their own properties untouched.
+ */
+.annotation-tools-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toolbar .annotation-tools.expanded-toolbar-group .assistant-entry-in-tools {
+  /* Sticky, not just last: when the row is too narrow the tools overflow and the spacer collapses, so the button would
+     sit beyond the scrollport. Pinning it to the right edge keeps the only "reopen the assistant" control reachable. */
+  position: sticky;
+  right: 0;
+  margin-right: 4px;
+  flex: 0 0 auto;
+  background: #f4f7fb;
+}
+
+.toolbar .annotation-tools.expanded-toolbar-group .assistant-entry-in-tools:hover {
+  background: #ffffff;
+}
+
+.toolbar .annotation-tools.expanded-toolbar-group .assistant-entry-in-tools.active {
+  background: #eaf2ff;
+}
+
 .annotation-tools button.active {
   border-color: var(--primary);
   background: #eaf1ff;

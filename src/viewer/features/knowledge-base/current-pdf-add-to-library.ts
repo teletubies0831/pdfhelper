@@ -21,6 +21,9 @@ import {
 import { generateAndSaveKnowledgeOverview } from "./knowledge-overview-background-task";
 import { extractDocumentMetadataFor } from "./document-metadata-extraction";
 import { extractTextItems } from "./pdf-text-extraction";
+import { decideIndexPrecheck } from "./index-precheck";
+import { getDocumentChunks } from "../../../modules/document-agent/public";
+import { setStatus } from "../../app/status-bar";
 
 interface KnowledgeIndexWorkerMessage {
   type: "progress" | "done" | "error";
@@ -113,8 +116,67 @@ export function syncCurrentPdfLibraryButton(): void {
     : "将当前 PDF 全文添加到知识库并建立检索索引";
 }
 
-export function addCurrentPdfToLibrary(): void {
+/** 这次会话里已经尝试修复过的记录，避免每次切回标签都重跑一遍。 */
+const repairedThisSession = new Set<string>();
+
+/**
+ * A2：打开文献时校验全文索引，缺了就在后台重建。
+ *
+ * The index lives in IndexedDB while the record lives in `localStorage`; when the two come apart (the record still says
+ * 「已索引 5 个片段」 and the chunk store is empty) every downstream feature breaks quietly — graph extraction reports
+ * 「还没有全文索引」, cross-document search returns nothing. Until now the only way out was to notice, open the health
+ * dialog and press 重建索引; opening the document does it on its own.
+ *
+ * Deliberately narrow: the decision is a pure function (`decideIndexPrecheck`), the rebuild reuses the normal index path,
+ * and it never spends a model call (`extractMetadata: false`) — repairing lost data must not cost money behind the user's
+ * back.
+ */
+export async function ensureKnowledgeIndexForOpenDocument(): Promise<void> {
   const documentProxy = pdfDocument.value;
+  const pdfBytes = sourcePdfBytes.value;
+  if (!documentProxy || !pdfBytes) return;
+  const fileId = getDocumentChatId(documentProxy);
+  const documentName = getDisplayFileName(sourceName.value) || "未命名 PDF";
+  // A record found by id, or by 「same paper」 for a re-saved file whose fingerprint changed.
+  const record = getKnowledgeDocument(fileId) ?? findSamePaperDocument(listKnowledgeDocuments(), {
+    documentId: fileId,
+    documentName,
+    pageCount: documentProxy.numPages,
+  });
+  let chunkCount: number | null = null;
+  if (record) {
+    try {
+      const chunks = await getDocumentChunks(record.documentId);
+      chunkCount = chunks.filter((chunk) => chunk.text.trim().length > 0).length;
+    } catch {
+      chunkCount = null;
+    }
+  }
+  const decision = decideIndexPrecheck({
+    record: record
+      ? { documentId: record.documentId, documentName: record.documentName, indexStatus: record.indexStatus }
+      : null,
+    chunkCount,
+    isIndexRunning: record ? isKnowledgeIndexRunning(record.documentId) : false,
+    alreadyAttempted: record ? repairedThisSession.has(record.documentId) : false,
+  });
+  if (decision.action === 'skip') return;
+  // Still on the same document? The rebuild below re-parses the file, and the user may have switched tabs already.
+  if (pdfDocument.value !== documentProxy) return;
+  repairedThisSession.add(decision.documentId);
+  setStatus(`「${record?.documentName ?? documentName}」的全文索引丢失了，正在后台重建…`);
+  await startBackgroundKnowledgeIndex({
+    documentId: decision.documentId,
+    documentName: record?.documentName ?? documentName,
+    fingerprint: documentProxy.fingerprints?.[0] ?? fileId.replace(/^pdf:/, ''),
+    pageCount: documentProxy.numPages,
+    pdfBytes,
+    recentEntryId: currentRecentEntryId.value || undefined,
+    extractMetadata: false,
+  });
+}
+
+export function addCurrentPdfToLibrary(): void {  const documentProxy = pdfDocument.value;
   if (!documentProxy) return;
   const documentId = getDocumentChatId(documentProxy);
   const documentName = getDisplayFileName(sourceName.value) || "未命名 PDF";
@@ -202,6 +264,13 @@ async function startBackgroundKnowledgeIndex(input: {
   pageCount: number;
   pdfBytes: Uint8Array;
   recentEntryId?: string;
+  /**
+   * Whether the (paid) metadata pass runs alongside the index.
+   *
+   * `false` for a silent repair: rebuilding a lost index must not spend a model call the user did not ask for. The offline
+   * layer still runs, because it costs nothing.
+   */
+  extractMetadata?: boolean;
 }): Promise<void> {
   const { documentId } = input;
   showBackgroundIndexNotice(documentId, "已转入后台，正在提取 PDF 全文…");
@@ -249,10 +318,12 @@ async function startBackgroundKnowledgeIndex(input: {
     }
 
     // 第二层：模型读首页，只补前面没找到的字段（`onlyEmpty`），绝不覆盖用户手填的值。
-    void extractDocumentMetadataFor(documentId, {
-      documentName: input.documentName,
-      text: pages.slice(0, 2).map((page) => page.text).join("\n\n").slice(0, 6_000),
-    });
+    if (input.extractMetadata !== false) {
+      void extractDocumentMetadataFor(documentId, {
+        documentName: input.documentName,
+        text: pages.slice(0, 2).map((page) => page.text).join("\n\n").slice(0, 6_000),
+      });
+    }
 
     const worker = new Worker(new URL("./knowledge-index.worker.ts", import.meta.url), {
     type: "module",

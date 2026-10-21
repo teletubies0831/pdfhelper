@@ -184,6 +184,7 @@
                 <button type="button" role="tab" aria-selected="false" data-settings-tab="models">模型与任务</button>
                 <button type="button" role="tab" aria-selected="false" data-settings-tab="tools">Agent 工具</button>
                 <button type="button" role="tab" aria-selected="false" data-settings-tab="memory">记忆</button>
+                <button type="button" role="tab" aria-selected="false" data-settings-tab="backup">备份与恢复</button>
               </div>
 
               <div id="settings-pages" class="settings-pages">
@@ -482,6 +483,26 @@
                     <div id="translation-preference-status" class="settings-status" aria-live="polite"></div>
                     <div id="translation-preference-list" class="settings-memory-list" aria-live="polite"></div>
                   </div>
+                </div>
+
+                <div class="settings-page" data-settings-panel="backup" hidden>
+                  <div class="settings-general-card">
+                    <div>
+                      <strong>导出备份</strong>
+                      <small>把文献记录、全文索引、概览、相关论文、知识图谱与笔记写成一个 JSON 文件。<b>不包含 PDF 文件本身</b>，换机器后打开原文需要重新选择文件。</small>
+                    </div>
+                    <button id="settings-backup-export" class="settings-outline-button" type="button">导出</button>
+                  </div>
+                  <div class="settings-general-card">
+                    <div>
+                      <strong>从备份恢复</strong>
+                      <small>只补当前库里没有的内容，不覆盖已有文献与图谱；导入前会先告诉你将导入多少、跳过多少。</small>
+                    </div>
+                    <button id="settings-backup-import" class="settings-outline-button" type="button">选择文件…</button>
+                    <input id="settings-backup-file" type="file" accept="application/json,.json" hidden />
+                  </div>
+                  <p id="settings-backup-summary" class="settings-section-copy">还没有导出或导入过。</p>
+                  <div id="settings-backup-status" class="settings-status" aria-live="polite"></div>
                 </div>
               </div>
 

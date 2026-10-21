@@ -149,3 +149,53 @@ test('narrow sidebars open through their original buttons and restore desktop la
   await page.evaluate(() => new Promise(requestAnimationFrame));
   assert.equal(await page.locator('.app-frame').getAttribute('class'), before);
 });
+
+test('settings has a 备份与恢复 tab whose actions are reachable', async () => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  const result = await page.evaluate(() => {
+    // Open the settings panel the way the app does (it becomes a body-level popover), otherwise its page has no size.
+    const settings = document.getElementById('assistant-settings-panel');
+    document.body.append(settings);
+    settings.hidden = false;
+    settings.classList.add('is-open');
+    const tabs = [...document.querySelectorAll('[data-settings-tab]')].map((button) => button.textContent.trim());
+    const backupPanel = document.querySelector('[data-settings-panel="backup"]');
+    for (const panel of document.querySelectorAll('[data-settings-panel]')) {
+      panel.hidden = panel !== backupPanel;
+    }
+    const box = (id) => {
+      const element = document.getElementById(id);
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return { width: Math.round(rect.width), height: Math.round(rect.height), display: getComputedStyle(element).display };
+    };
+    // The two cards must not touch: they stack with the same 14px gap the 常规 page uses.
+    const cards = [...backupPanel.querySelectorAll('.settings-general-card')].map((card) => {
+      const rect = card.getBoundingClientRect();
+      return { top: Math.round(rect.top), bottom: Math.round(rect.bottom) };
+    });
+    return {
+      tabs,
+      hasPanel: Boolean(backupPanel),
+      cards,
+      exportButton: box('settings-backup-export'),
+      importButton: box('settings-backup-import'),
+      fileInput: box('settings-backup-file'),
+      summary: Boolean(document.getElementById('settings-backup-summary')),
+      status: Boolean(document.getElementById('settings-backup-status')),
+    };
+  });
+  assert.equal(result.tabs.at(-1), '备份与恢复', 'the tab sits at the end of the row, after 记忆');
+  assert.equal(result.hasPanel, true);
+  assert.equal(result.cards.length, 2);
+  assert.ok(
+    result.cards[1].top - result.cards[0].bottom >= 8,
+    `the two cards need breathing room, got ${JSON.stringify(result.cards)}`,
+  );
+  for (const button of [result.exportButton, result.importButton]) {
+    assert.ok(button && button.width > 40 && button.height > 20, JSON.stringify(button));
+  }
+  assert.equal(result.fileInput?.display, 'none', 'the file input stays hidden behind the button');
+  assert.ok(result.summary && result.status);
+});

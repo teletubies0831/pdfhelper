@@ -83,6 +83,13 @@ export interface KnowledgeLibraryDocument {
    * has no authors the model can find. Empty means "not known", never "the model said there are none" — which is
    * why the panel shows a dash instead of hiding a row, and why nothing here is required for the library to work.
    */
+  /**
+   * 文献自己的标题（不是文件名）。
+   *
+   * The file name is how the user finds a paper on disk; the title is what a citation needs. Records written before this
+   * field existed leave it undefined, and the citation layer falls back to the file name and says so.
+   */
+  title?: string;
   authors?: string[];
   /** Publication date as the model read it (`2026`, `2026-10`, `2026-10-18`); kept verbatim rather than guessed. */
   publishDate?: string;
@@ -92,6 +99,22 @@ export interface KnowledgeLibraryDocument {
   documentUrl?: string;
   /** Bare DOI (`10.xxxx/yyy`), without the `https://doi.org/` prefix. */
   doi?: string;
+  /**
+   * 出版信息，来自 Crossref（也可手填）：刊名/论文集名、卷、期、页码、出版者、出版地、ISSN/ISBN。
+   *
+   * These are what a GB/T 7714 citation puts after `[J]`/`[C]`, so they are stored verbatim and never derived: an empty
+   * one means the source did not know, and the citation omits it instead of writing a placeholder.
+   */
+  containerTitle?: string;
+  volume?: string;
+  issue?: string;
+  page?: string;
+  publisher?: string;
+  publisherPlace?: string;
+  issn?: string;
+  isbn?: string;
+  /** Crossref's `type` (`journal-article`, `proceedings-article`, …): the only reliable input for `[J]` vs `[C]`. */
+  publicationKind?: string;
   /**
    * Whether the metadata pass has run, so the panel can say "尚未提取" instead of showing five dashes.
    *

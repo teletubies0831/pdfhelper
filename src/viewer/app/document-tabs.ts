@@ -43,7 +43,10 @@ import {
 } from "../features/recent-files/public";
 import { resetSummaryState } from "../features/translation/public";
 import { resetCardState } from "../features/paper-card/public";
-import { syncCurrentPdfLibraryButton } from "../features/knowledge-base/public";
+import {
+  ensureKnowledgeIndexForOpenDocument,
+  syncCurrentPdfLibraryButton,
+} from "../features/knowledge-base/public";
 import { updateCitationReturnButton } from "../features/assistant/public";
 import { setStatus } from "./status-bar";
 import { getDocumentChatId, getPdfFingerprint } from "./document-identity";
@@ -207,6 +210,9 @@ export async function openPdfInTab(
     await runAfterDocumentOpenResets(documentProxy);
     void renderDocumentOutline(documentProxy);
     syncCurrentPdfLibraryButton();
+    // A2: if this document is in the library and its full-text index has gone missing, rebuild it in the background. The
+    // decision, the once-per-session guard and the "no model call" rule all live in that module.
+    void ensureKnowledgeIndexForOpenDocument();
     markSavedChanges();
     tab.savedSnapshot = savedAnnotationSnapshot.value;
     window.setTimeout(() => {

@@ -438,6 +438,14 @@
   overflow-wrap: anywhere;
 }
 
+/* 出版信息：比来源行更重要一点，它是 GB/T 引用里最常缺的那几段。 */
+.knowledge-doc-suggestion-publication {
+  color: #4b5f7c;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .knowledge-doc-suggestion-reason {
   color: #b0742a;
   font-size: 10px;

@@ -108,6 +108,45 @@ for (const width of [2521, 1920, 1701, 1700, 1536, 1280, 1024, 800, 640]) {
   });
 }
 
+test('the AI assistant toggle belongs to the annotation row, at its right end', async () => {
+  await page.setViewportSize({ width: 1792, height: 900 });
+  await page.evaluate(() => {
+    document.getElementById('reader-workspace').hidden = false;
+    document.getElementById('knowledge-base-page').hidden = true;
+    document.getElementById('knowledge-graph-page').hidden = true;
+    document.getElementById('vocabulary-library-page').hidden = true;
+  });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  const placement = await page.evaluate(() => {
+    const button = document.getElementById('assistant-panel-toggle');
+    const bar = document.getElementById('annotation-tools-bar');
+    const barRect = bar.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    return {
+      insideBar: bar.contains(button),
+      // Right-aligned within the row, not left among the tools.
+      distanceToBarRight: Math.round(barRect.right - buttonRect.right),
+      barWidth: Math.round(barRect.width),
+      toolsRight: Math.round([...bar.querySelectorAll('button')]
+        .filter((element) => element !== button)
+        .reduce((right, element) => Math.max(right, element.getBoundingClientRect().right), 0)),
+    };
+  });
+  assert.equal(placement.insideBar, true, 'the assistant pane toggle lives in the annotation row');
+  assert.ok(placement.distanceToBarRight <= 12, `it sits at the right end (${placement.distanceToBarRight}px from the edge)`);
+
+  // The reader page is the only place it can be used, so it disappears with the row on the other workspaces.
+  const hiddenOnGraph = await page.evaluate(() => {
+    document.getElementById('reader-workspace').hidden = true;
+    document.getElementById('knowledge-graph-page').hidden = false;
+    document.getElementById('annotation-tools-bar').hidden = true;
+    const button = document.getElementById('assistant-panel-toggle');
+    return button.getBoundingClientRect().width === 0
+      || button.closest('[hidden]') !== null;
+  });
+  assert.equal(hiddenOnGraph, true, 'and it is hidden once the reader is not the workspace');
+});
+
 test('icon clicks, keyboard navigation and mode refresh keep stable button geometry', async () => {
   await page.setViewportSize({ width: 1920, height: 900 });
   const button = page.locator('#knowledge-base-entry');

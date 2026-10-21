@@ -53,6 +53,9 @@ import {
   type LibrarySortKey,
 } from "./library-table-model";
 import { renderDocumentPanel, renderMetadataMissingCount, renderReadingStatusCounts } from "./library-doc-panel";
+import { installDataHealth, refreshDataHealthBadge } from "./data-health-actions";
+import { installBackupSettings } from "./backup-actions";
+import { registerCitationDialogEvents } from "./citation-dialog";
 import { applyLibraryViewMode, persistLibraryViewMode, readLibraryViewMode } from "./library-view-mode";
 import { isKnowledgeIndexRunning } from "./current-pdf-add-to-library";
 import { listKnowledgeDocumentsForDisplay } from "./interrupted-work-recovery";
@@ -131,6 +134,8 @@ export function renderKnowledgeBase(): void {
   renderCorpusSidebar(folders, documents);
   renderReadingStatusCounts(documents);
   renderMetadataMissingCount(documents);
+  // The badge only — never the dialog. It says "there is something to look at", and opening it is the user's call.
+  void refreshDataHealthBadge();
 
   // Both views are rendered from the same filtered list; only one is visible, and the choice is remembered. Sorting is
   // the table headers' (the only sort control there is): the card view has no headers, so it follows the same state
@@ -383,6 +388,9 @@ const panelHandlers = libraryActions.panel;
 
 export function registerKnowledgeCorpusEvents(): void {
   registerKnowledgePdfOverviewEvents();
+  installDataHealth();
+  installBackupSettings();
+  registerCitationDialogEvents();
   document.getElementById("knowledge-folder-all")?.addEventListener("click", () => { activeCorpusFolder = "all"; renderKnowledgeBase(); });
   document.getElementById("knowledge-folder-unfiled")?.addEventListener("click", () => { activeCorpusFolder = "unfiled"; renderKnowledgeBase(); });
   document.getElementById("knowledge-create-folder")?.addEventListener("click", () => {

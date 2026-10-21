@@ -2,9 +2,12 @@
   margin-top: -2px;
 }
 
-.settings-page[data-settings-panel="general"] {
+/* 常规与备份与恢复都是「一叠卡片」，共同用这份网格间距；其它页自带各自的排版。 */
+.settings-page[data-settings-panel="general"],
+.settings-page[data-settings-panel="backup"] {
   display: grid;
   gap: 14px;
+  align-content: start;
 }
 
 .settings-page[hidden] {

@@ -16,21 +16,51 @@ import {
  * guessed or filled from the file name.
  */
 
-/** The five fields, as one record, so the panel can render them in a fixed order. */
+/** The bibliographic fields, as one record, so the panel can render them in a fixed order. */
 export interface KnowledgeDocumentMetadata {
+  /** 标题：文献自己的标题，不是文件名。 */
+  title: string;
   authors: string[];
   publishDate: string;
   language: string;
   documentUrl: string;
   doi: string;
+  /** 期刊名或论文集名（GB/T 里 `[J]` 与 `[C]` 后面那一段）。 */
+  containerTitle: string;
+  volume: string;
+  issue: string;
+  /** 起止页码，原文写法（`45-56` / `e1234`）。 */
+  page: string;
+  publisher: string;
+  /** 出版地，Crossref 的 `publisher-location`。 */
+  publisherPlace: string;
+  issn: string;
+  isbn: string;
+  /**
+   * 文献类型：Crossref 的 `type` 原值（`journal-article` / `proceedings-article` / `posted-content` / …）。
+   *
+   * Stored rather than inferred from the container title, because 「会议论文集」 and 「期刊」 look alike in text and the
+   * difference decides whether a citation says `[C]` or `[J]`.
+   */
+  publicationKind: string;
 }
 
 export const EMPTY_DOCUMENT_METADATA: KnowledgeDocumentMetadata = {
+  title: '',
   authors: [],
   publishDate: '',
   language: '',
   documentUrl: '',
   doi: '',
+  containerTitle: '',
+  volume: '',
+  issue: '',
+  page: '',
+  publisher: '',
+  publisherPlace: '',
+  issn: '',
+  isbn: '',
+  publicationKind: '',
 };
 
 /** A name is worth keeping only if it can be read; models occasionally return `[""]` or `["N/A"]`. */
@@ -154,18 +184,56 @@ export function normalizePublishDate(value: unknown): string {
   return text.slice(0, 40);
 }
 
+/**
+ * 标题的规范化.
+ *
+ * The one rule that matters: never fall back to the file name here. A title that is really a file name would be quoted
+ * in a bibliography as if the paper were called `2010-Boyar-…-technique.pdf`, and nothing downstream could tell. The
+ * citation layer decides separately what to show when this is empty.
+ */
+export function normalizeTitle(value: unknown): string {
+  const text = cleanText(value);
+  if (!text) return '';
+  if (PLACEHOLDER_NAMES.test(text)) return '';
+  // Trailing punctuation from a page header (`Title.`) and stray wrapping quotes are not part of the title.
+  return text.replace(/^["'“”「」]+|["'“”「」]+$/g, '').replace(/[.。,，;；:：]+$/g, '').trim();
+}
+
 /** Normalizes a whole record, so every writer produces the same shapes. */
 export function normalizeDocumentMetadata(
   input: Partial<Record<keyof KnowledgeDocumentMetadata, unknown>> | null | undefined,
 ): KnowledgeDocumentMetadata {
   const source = input ?? {};
   return {
+    title: normalizeTitle(source.title),
     authors: normalizeAuthors(source.authors),
     publishDate: normalizePublishDate(source.publishDate),
     language: normalizeLanguage(source.language),
     documentUrl: normalizeDocumentUrl(source.documentUrl),
     doi: normalizeDoi(source.doi),
+    containerTitle: normalizeBibliographyText(source.containerTitle),
+    volume: normalizeBibliographyText(source.volume),
+    issue: normalizeBibliographyText(source.issue),
+    page: normalizeBibliographyText(source.page),
+    publisher: normalizeBibliographyText(source.publisher),
+    publisherPlace: normalizeBibliographyText(source.publisherPlace),
+    issn: normalizeBibliographyText(source.issn),
+    isbn: normalizeBibliographyText(source.isbn),
+    publicationKind: normalizeBibliographyText(source.publicationKind).toLowerCase(),
   };
+}
+
+/**
+ * 出版信息字段的规范化.
+ *
+ * These arrive from Crossref or from a paste, and both produce the same two artefacts: stray whitespace and a trailing
+ * period (a 刊名 does not end in `.`, and GB/T puts its own punctuation between fields). Placeholders are dropped for the
+ * same reason they are dropped elsewhere — 「N/A」 in a citation is worse than an omitted field.
+ */
+export function normalizeBibliographyText(value: unknown): string {
+  const text = cleanText(value);
+  if (!text || PLACEHOLDER_NAMES.test(text)) return '';
+  return text.replace(/[.。,，;；]+$/g, '').trim();
 }
 
 export function readDocumentMetadata(item: KnowledgeLibraryDocument): KnowledgeDocumentMetadata {
@@ -198,11 +266,23 @@ export type KnowledgeMetadataSources = Partial<Record<keyof KnowledgeDocumentMet
 
 /** Fields this module manages, in the order the inspector shows them. */
 export const METADATA_FIELDS: Array<keyof KnowledgeDocumentMetadata> = [
+  // 标题在最前：它是引文里唯一必填的东西。注意「缺元数据」不按它判定——很多文献的首页就是没有可读标题。
+  'title',
   'authors',
   'publishDate',
   'language',
   'documentUrl',
   'doi',
+  // 出版信息：期刊/会议名、卷期、页码、出版者，以及 Crossref 带来的标识号。顺序即面板里的顺序。
+  'containerTitle',
+  'volume',
+  'issue',
+  'page',
+  'publisher',
+  'publisherPlace',
+  'issn',
+  'isbn',
+  'publicationKind',
 ];
 
 export function readMetadataSources(item: KnowledgeLibraryDocument): KnowledgeMetadataSources {
@@ -364,14 +444,18 @@ export function isMetadataMissing(item: KnowledgeLibraryDocument): boolean {
 /** Wraps a plain record into the patch shape the corpus expects (empty values are dropped, not stored as ""). */
 export function metadataFieldsPatch(
   metadata: KnowledgeDocumentMetadata,
-): Pick<Partial<KnowledgeLibraryDocument>, 'authors' | 'publishDate' | 'language' | 'documentUrl' | 'doi'> {
-  return {
-    authors: metadata.authors.length ? metadata.authors : undefined,
-    publishDate: metadata.publishDate || undefined,
-    language: metadata.language || undefined,
-    documentUrl: metadata.documentUrl || undefined,
-    doi: metadata.doi || undefined,
-  };
+): Pick<Partial<KnowledgeLibraryDocument>, keyof KnowledgeDocumentMetadata> {
+  // Derived from METADATA_FIELDS rather than listing the keys: the first version listed six fields, and when the
+  // bibliographic ones (卷/期/页码/出版者) were added they were silently dropped on the way to storage — the record showed
+  // them nowhere, and nothing failed. `METADATA_FIELDS` is the one list that cannot drift from the merge loop.
+  const patch: Partial<Record<keyof KnowledgeDocumentMetadata, unknown>> = {};
+  for (const field of METADATA_FIELDS) {
+    const value = metadata[field];
+    const filled = Array.isArray(value) ? value.length > 0 : Boolean(value);
+    // Empty values are dropped, not stored as `''`: "not known" and "known to be empty" are different records.
+    if (filled) patch[field] = value;
+  }
+  return patch as Pick<Partial<KnowledgeLibraryDocument>, keyof KnowledgeDocumentMetadata>;
 }
 
 /** The DOI's canonical link, for the anchor the panel renders. */

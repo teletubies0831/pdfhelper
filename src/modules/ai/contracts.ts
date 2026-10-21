@@ -309,6 +309,13 @@ export interface AiDocumentMetadataRequest {
 
 /** What the model managed to read; every field is optional and may legitimately be empty. */
 export interface AiDocumentMetadata {
+  /**
+   * The work's own title, as printed on the first page.
+   *
+   * Not the file name: 引文 needs the title, and `2010-Boyar-…-technique.pdf` is not it. Empty means the model could not
+   * find it, in which case the record keeps its file name and the citation UI says which one it used.
+   */
+  title: string;
   authors: string[];
   publishDate: string;
   language: string;
@@ -343,6 +350,14 @@ export interface AiBibliographicCandidate {
   documentUrl: string;
   containerTitle: string;
   kind: string;
+  /** 出版信息 for a GB/T 7714 citation: 卷、期、页码、出版者、出版地、ISSN/ISBN. Empty means the source did not know. */
+  volume: string;
+  issue: string;
+  page: string;
+  publisher: string;
+  publisherPlace: string;
+  issn: string;
+  isbn: string;
 }
 
 export interface AiGenerateDocumentOverviewRequest {

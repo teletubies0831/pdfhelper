@@ -1,4 +1,4 @@
-import {
+﻿import {
   countReadingStatuses,
   doiUrl,
   extractOfflineDocumentMetadata,
@@ -35,8 +35,20 @@ import {
   knowledgeDocIssueElement,
   knowledgeDocLanguageElement,
   knowledgeDocLanguageInput,
+  knowledgeDocBiblioContainerElement,
+  knowledgeDocBiblioContainerInput,
+  knowledgeDocBiblioIdentifiersElement,
+  knowledgeDocBiblioIssueInput,
+  knowledgeDocBiblioPagesElement,
+  knowledgeDocBiblioPagesInput,
+  knowledgeDocBiblioPublisherElement,
+  knowledgeDocBiblioPublisherInput,
+  knowledgeDocBiblioPublisherPlaceInput,
+  knowledgeDocBiblioVolumeElement,
+  knowledgeDocBiblioVolumeInput,
   knowledgeDocMetadataButton,
   knowledgeDocMetadataCancelButton,
+  knowledgeDocCitationButton,
   knowledgeDocMetadataEditButton,
   knowledgeDocMetadataActionsElement,
   knowledgeDocMetadataOnlineButton,
@@ -54,9 +66,11 @@ import {
   knowledgeDocRelatedNoteElement,
   knowledgeDocRelatedContentElement,
   knowledgeDocRelatedStateElement,
+  knowledgeDocNameElement,
   knowledgeDocRemoveButton,
   knowledgeDocSearchRelatedButton,
   knowledgeDocTitleElement,
+  knowledgeDocTitleInput,
   knowledgeDocUpdatedElement,
   knowledgeDocUrlElement,
   knowledgeDocUrlInput,
@@ -66,7 +80,8 @@ import {
 import { relatedPapersAvailability, isRelatedPapersSearchRunning } from './knowledge-related-papers';
 import { isMetadataExtractionRunning, metadataExtractionAvailability } from './document-metadata-extraction';
 import { getDocumentChunks } from '../../../modules/document-agent/public';
-import { readMetadataLookupState } from './metadata-lookup';
+import { renderMetadataSuggestions } from './library-metadata-suggestions';
+import { closeBiblioEditor, registerBiblioFormEvents } from './library-biblio-form';
 import { renderChatMarkdown } from '../../shared-ui/markdown/markdown-renderer';
 
 /**
@@ -84,6 +99,8 @@ export interface DocumentPanelHandlers {
   openGraph(documentId: string): void;
   remove(documentId: string): void;
   searchRelated(documentId: string): void;
+  /** 复制引用：打开引文对话框（BibTeX / RIS / GB·T 7714 / Markdown）。 */
+  openCitation(documentId: string): void;
   extractMetadata(documentId: string): void;
   /** Manual edits and the 「无需补全」 decision; both are the user's own statements about the record. */
   saveMetadata(documentId: string, metadata: KnowledgeDocumentMetadata): void;
@@ -204,6 +221,20 @@ function renderBiblio(item: KnowledgeLibraryDocument): void {
   const sources = readMetadataSources(item);
   const authors = metadata.authors;
   const hint = (field: keyof KnowledgeDocumentMetadata): KnowledgeMetadataSource | undefined => sources[field];
+  // The title row is honest about what it is showing: a real title, or a note that the file name is all we have.
+  setBiblioValue(
+    knowledgeDocTitleElement,
+    metadata.title || '',
+    undefined,
+    {
+      text: metadata.title ? (hint('title') ? SOURCE_LABELS[hint('title')!] : '') : '',
+      title: metadata.title ? '这一项的来源' : '',
+    },
+  );
+  if (!metadata.title) {
+    // `setBiblioValue` renders an empty value as a dash; the panel explains where citations would fall back to instead.
+    knowledgeDocTitleElement.title = `还没有标题，引用时会退回使用文件名「${item.documentName}」。`;
+  }
   setBiblioValue(
     knowledgeDocAuthorsElement,
     authors.length
@@ -242,6 +273,41 @@ function renderBiblio(item: KnowledgeLibraryDocument): void {
       : undefined,
     { text: hint('documentUrl') ? SOURCE_LABELS[hint('documentUrl')!] : '', title: '这一项的来源' },
   );
+  // 出版信息：引文里 [J]/[C] 之后的那几段，缺了就显示破折号，而不是「」或编一个。
+  setBiblioValue(
+    knowledgeDocBiblioContainerElement,
+    metadata.containerTitle,
+    undefined,
+    { text: hint('containerTitle') ? SOURCE_LABELS[hint('containerTitle')!] : '', title: '这一项的来源' },
+  );
+  setBiblioValue(
+    knowledgeDocBiblioVolumeElement,
+    metadata.volume && metadata.issue
+      ? `${metadata.volume}(${metadata.issue})`
+      : metadata.volume || (metadata.issue ? `(${metadata.issue})` : ''),
+    undefined,
+    { text: hint('volume') ? SOURCE_LABELS[hint('volume')!] : '', title: '这一项的来源' },
+  );
+  setBiblioValue(
+    knowledgeDocBiblioPagesElement,
+    metadata.page,
+    undefined,
+    { text: hint('page') ? SOURCE_LABELS[hint('page')!] : '', title: '这一项的来源' },
+  );
+  setBiblioValue(
+    knowledgeDocBiblioPublisherElement,
+    [metadata.publisherPlace, metadata.publisher].filter(Boolean).join(': '),
+    undefined,
+    { text: hint('publisher') ? SOURCE_LABELS[hint('publisher')!] : '', title: '这一项的来源' },
+  );
+  setBiblioValue(
+    knowledgeDocBiblioIdentifiersElement,
+    [metadata.issn ? `ISSN ${metadata.issn}` : '', metadata.isbn ? `ISBN ${metadata.isbn}` : '']
+      .filter(Boolean)
+      .join(' · '),
+    undefined,
+    { text: '', title: '' },
+  );
 
   const availability = metadataExtractionAvailability();
   const running = isMetadataExtractionRunning(item.documentId) || item.metadataStatus === 'extracting';
@@ -276,7 +342,10 @@ function renderBiblio(item: KnowledgeLibraryDocument): void {
     ? '取消「无需补全」'
     : '标记为无需补全';
   knowledgeDocMetadataSkipButton.dataset.skipped = item.metadataStatus === 'skipped' ? 'true' : 'false';
-  renderMetadataSuggestions(item);
+  renderMetadataSuggestions(item, {
+    apply: (documentId, candidate) => shown?.handlers.applyMetadataSuggestion(documentId, candidate),
+    dismiss: (documentId) => shown?.handlers.dismissMetadataSuggestions(documentId),
+  });
   // Any document switch closes the editor: it holds one document's values, and carrying them to the next would invite a
   // save that writes the wrong paper's data.
   closeBiblioEditor();
@@ -288,81 +357,6 @@ function renderBiblio(item: KnowledgeLibraryDocument): void {
  * Accepted suggestions get a 填入 button; refused ones are listed with the reason they were refused. Both are shown
  * because "we looked and this is what came back, but it is not your paper" is the answer that stops the user from
  * wondering — while the write only ever happens on an accepted one, and only after a click.
- */
-function renderMetadataSuggestions(item: KnowledgeLibraryDocument): void {
-  const state = readMetadataLookupState(item.documentId);
-  const accepting = state.suggestions.filter((suggestion) => suggestion.accepted).slice(0, MAX_SUGGESTIONS_SHOWN);
-  const refused = state.suggestions.filter((suggestion) => !suggestion.accepted).slice(0, 1);
-  const visible = [...accepting, ...refused];
-
-  knowledgeDocMetadataOnlineButton.textContent = state.running ? '查找中…' : '联网查找';
-  knowledgeDocMetadataOnlineButton.disabled = state.running;
-  knowledgeDocMetadataOnlineButton.title = state.running
-    ? '正在向 Crossref / OpenAlex 发送标题'
-    : '只在点击时联网：把标题发给 Crossref 与 OpenAlex（免费、不需要 Key）';
-
-  knowledgeDocMetadataSuggestionsElement.hidden = !state.running && !state.lookedUp && !visible.length;
-  if (knowledgeDocMetadataSuggestionsElement.hidden) {
-    knowledgeDocMetadataSuggestionListElement.replaceChildren();
-    return;
-  }
-  knowledgeDocMetadataSuggestionsNoteElement.textContent = state.running
-    ? '正在查找 Crossref / OpenAlex…'
-    : state.message;
-
-  knowledgeDocMetadataSuggestionListElement.replaceChildren(...visible.map((suggestion) => {
-    const row = document.createElement('li');
-    row.className = 'knowledge-doc-suggestion';
-    row.dataset.accepted = suggestion.accepted ? 'true' : 'false';
-
-    const title = document.createElement('span');
-    title.className = 'knowledge-doc-suggestion-title';
-    title.textContent = suggestion.candidate.title;
-    row.append(title);
-
-    const meta = document.createElement('span');
-    meta.className = 'knowledge-doc-suggestion-meta';
-    meta.textContent = [
-      suggestion.candidate.publishDate,
-      suggestion.candidate.authors.slice(0, 2).join('、'),
-      suggestion.candidate.source === 'crossref' ? 'Crossref' : 'OpenAlex',
-      suggestion.candidate.doi,
-    ].filter(Boolean).join(' · ');
-    row.append(meta);
-
-    if (!suggestion.accepted) {
-      const reason = document.createElement('span');
-      reason.className = 'knowledge-doc-suggestion-reason';
-      reason.textContent = suggestion.reason || '无法确认是同一篇';
-      row.append(reason);
-      return row;
-    }
-
-    const apply = document.createElement('button');
-    apply.type = 'button';
-    apply.className = 'knowledge-doc-suggestion-apply';
-    apply.textContent = '填入';
-    apply.title = '把这条记录的 DOI、日期、作者填进文献信息（会保留你手填的字段）';
-    apply.addEventListener('click', () => {
-      shown?.handlers.applyMetadataSuggestion(shown.item.documentId, suggestion.candidate);
-    });
-    row.append(apply);
-    return row;
-  }));
-
-  if (state.suggestions.length) {
-    const dismiss = document.createElement('button');
-    dismiss.type = 'button';
-    dismiss.className = 'knowledge-doc-suggestion-dismiss';
-    dismiss.textContent = '都不对';
-    dismiss.addEventListener('click', () => shown?.handlers.dismissMetadataSuggestions(shown.item.documentId));
-    knowledgeDocMetadataSuggestionListElement.append(dismiss);
-  }
-}
-
-/** How many rows the panel shows. More than three and it stops being a panel. */
-const MAX_SUGGESTIONS_SHOWN = 3;
-
 /**
  * Checks the cached 片段数量 against the chunks that actually exist.
  *
@@ -398,42 +392,6 @@ async function verifyStoredChunkCount(item: KnowledgeLibraryDocument): Promise<v
   );
 }
 
-/** Swaps the read-only list for the form, pre-filled from what is stored. */
-function openBiblioEditor(): void {
-  if (!shown) return;
-  const metadata = readDocumentMetadata(shown.item);
-  knowledgeDocAuthorsInput.value = metadata.authors.join('、');
-  knowledgeDocDateInput.value = metadata.publishDate;
-  knowledgeDocLanguageInput.value = metadata.language;
-  knowledgeDocDoiInput.value = metadata.doi;
-  knowledgeDocUrlInput.value = metadata.documentUrl;
-  knowledgeDocIdentifierInput.value = '';
-  knowledgeDocIdentifierInput.removeAttribute('title');
-  knowledgeDocBiblioViewElement.hidden = true;
-  knowledgeDocBiblioEditElement.hidden = false;
-  // The form has its own 保存 / 取消 pair; leaving 重新提取 and 手动填写 next to them would be four buttons for two actions.
-  knowledgeDocMetadataActionsElement.hidden = true;
-  window.setTimeout(() => knowledgeDocAuthorsInput.focus(), 0);
-}
-
-function closeBiblioEditor(): void {
-  if (knowledgeDocBiblioEditElement.hidden) return;
-  knowledgeDocBiblioEditElement.hidden = true;
-  knowledgeDocBiblioViewElement.hidden = false;
-  knowledgeDocMetadataActionsElement.hidden = false;
-}
-
-/** Reads the form into a metadata record. The module normalises it, so a sloppy paste is still accepted. */
-function readBiblioEditor(): KnowledgeDocumentMetadata {
-  return {
-    authors: knowledgeDocAuthorsInput.value.split(/\s*(?:、|;|；|\band\b|&)\s*|\s*,\s*(?=[A-Z])/u).filter(Boolean),
-    publishDate: knowledgeDocDateInput.value,
-    language: knowledgeDocLanguageInput.value,
-    documentUrl: knowledgeDocUrlInput.value,
-    doi: knowledgeDocDoiInput.value,
-  };
-}
-
 
 /**
  * Attaches the panel's listeners exactly once.
@@ -461,17 +419,16 @@ function bindPanelActionsOnce(): void {
   knowledgeDocSearchRelatedButton.addEventListener('click', () => {
     shown?.handlers.searchRelated(shown.item.documentId);
   });
+  knowledgeDocCitationButton.addEventListener('click', () => {
+    shown?.handlers.openCitation(shown.item.documentId);
+  });
   knowledgeDocMetadataButton.addEventListener('click', () => {
     shown?.handlers.extractMetadata(shown.item.documentId);
   });
-  knowledgeDocMetadataEditButton.addEventListener('click', () => {
-    if (knowledgeDocBiblioEditElement.hidden) openBiblioEditor();
-    else closeBiblioEditor();
-  });
-  knowledgeDocMetadataCancelButton.addEventListener('click', () => closeBiblioEditor());
-  knowledgeDocMetadataSaveButton.addEventListener('click', () => {
-    if (!shown) return;
-    shown.handlers.saveMetadata(shown.item.documentId, readBiblioEditor());
+  // 文献信息的编辑表单在 `library-biblio-form` 里：另一个职责（收集数据而不是展示），也把这里从 700 行里救出来。
+  registerBiblioFormEvents({
+    current: () => shown?.item,
+    save: (documentId, metadata) => shown?.handlers.saveMetadata(documentId, metadata),
   });
   knowledgeDocMetadataSkipButton.addEventListener('click', () => {
     if (!shown) return;
@@ -529,8 +486,8 @@ export function renderDocumentPanel(
   shown = { item, handlers };
   bindPanelActionsOnce();
 
-  knowledgeDocTitleElement.textContent = item.documentName.replace(/\.pdf$/i, '');
-  knowledgeDocTitleElement.setAttribute('title', item.documentName);
+  knowledgeDocNameElement.textContent = item.documentName.replace(/\.pdf$/i, '');
+  knowledgeDocNameElement.setAttribute('title', item.documentName);
 
   knowledgeDocFolderSelect.replaceChildren(
     new Option('未分类', ''),

@@ -4,14 +4,26 @@ export type SettingsPrimaryPanelName =
   | 'general'
   | 'models'
   | 'tools'
-  | 'memory';
+  | 'memory'
+  | 'backup';
 
 const PANEL_ORDER: SettingsPrimaryPanelName[] = [
   'general',
   'models',
   'tools',
   'memory',
+  'backup',
 ];
+
+/**
+ * 一个字符串是不是设置页的标签名.
+ *
+ * The click handler used to list the four names inline, so adding a fifth tab meant adding it twice and forgetting once
+ * left a tab that silently did nothing. The list lives here, next to the union it describes.
+ */
+export function isSettingsPrimaryPanelName(value: string | undefined): value is SettingsPrimaryPanelName {
+  return value !== undefined && (PANEL_ORDER as string[]).includes(value);
+}
 
 let transitionToken = 0;
 let runningAnimations: Animation[] = [];

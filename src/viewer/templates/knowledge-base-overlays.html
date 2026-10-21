@@ -56,3 +56,53 @@
     </footer>
   </div>
 </dialog>
+
+<!--
+  数据体检：只读地找出「记录说一套、实际数据另一套」的地方，逐条给修复动作。没有「一键全修」——每一条修复都是
+  一个明确的操作，有的还会花模型调用，所以必须一条一条确认。
+-->
+<dialog id="knowledge-data-health-dialog" class="knowledge-data-health-dialog app-motion-dialog" aria-labelledby="knowledge-data-health-title">
+  <div class="knowledge-data-health-shell">
+    <header>
+      <div>
+        <span>只读体检 · 逐条修复</span>
+        <h2 id="knowledge-data-health-title">数据体检</h2>
+        <p id="knowledge-data-health-summary"></p>
+      </div>
+      <button id="knowledge-data-health-close" type="button" aria-label="关闭数据体检">×</button>
+    </header>
+    <div id="knowledge-data-health-list" class="knowledge-data-health-list"></div>
+    <div id="knowledge-data-health-status" class="knowledge-data-health-status" hidden></div>
+    <footer>
+      <button id="knowledge-data-health-rescan" type="button">重新体检</button>
+      <button id="knowledge-data-health-done" class="primary-button" type="button">完成</button>
+    </footer>
+  </div>
+</dialog>
+
+<!--
+  复制引用：四种格式都是纯函数生成的，这里只负责展示与复制。缺项写在文本下面而不是藏起来——一条没有作者和年份的引文
+  贴进论文就是事故，复制之前应当看得见。
+-->
+<dialog id="knowledge-citation-dialog" class="knowledge-citation-dialog app-motion-dialog" aria-labelledby="knowledge-citation-heading">
+  <div class="knowledge-citation-shell">
+    <header>
+      <div>
+        <span>引文 · 缺什么就空着什么</span>
+        <h2 id="knowledge-citation-heading">复制引用</h2>
+        <p id="knowledge-citation-document"></p>
+      </div>
+      <button id="knowledge-citation-close" type="button" aria-label="关闭引文">×</button>
+    </header>
+    <div id="knowledge-citation-styles" class="knowledge-citation-styles" role="tablist" aria-label="引文格式"></div>
+    <pre id="knowledge-citation-text" class="knowledge-citation-text"></pre>
+    <div id="knowledge-citation-warnings" class="knowledge-citation-warnings" hidden></div>
+    <footer>
+      <span id="knowledge-citation-status" class="knowledge-citation-status" aria-live="polite"></span>
+      <div class="knowledge-citation-actions">
+        <button id="knowledge-citation-done" type="button">完成</button>
+        <button id="knowledge-citation-copy" class="primary-button" type="button">复制</button>
+      </div>
+    </footer>
+  </div>
+</dialog>

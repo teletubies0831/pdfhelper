@@ -60,9 +60,30 @@ const FILENAME_YEAR = /(?:^|[^\d])((?:19|20)\d{2})(?:[^\d]|$)/;
 
 const SOFTWARE_AUTHOR = /^(?:microsoft|word|adobe|acrobat|latex|pdf(?:tex|jam|creator)?|ghostscript|indesign|canva|office|pages|wps|unknown|user|admin|author)\b/i;
 
-/** True when a string looks like a person list rather than the software that produced the file. */
-function plausibleAuthors(value: string): string[] {
+/** 生成器写进 Title 的占位文字：`Microsoft Word - 文稿1`、`Untitled`、`无标题`。 */
+const PLACEHOLDER_TITLE = /^(?:microsoft\s+word|untitled|无标题|未命名|document\d*|slide\s*\d+|powerpoint\s+presentation|book\s*\d+)\b/i;
+
+/**
+ * PDF 的 Title 值不值得当文献标题.
+ *
+ * The property is unreliable in a specific way: Word, PowerPoint and LaTeX all write their own placeholder, and some
+ * exporters copy the file name into it. Those are the cases this rejects — everything else (a sentence-length string with
+ * spaces, or a CJK title) is accepted, because a real title read from the document is worth more than a model call.
+ */
+function plausiblePdfTitle(value: string, documentName: string): string {
   const trimmed = value.trim();
+  if (trimmed.length < 6 || trimmed.length > 300) return '';
+  if (PLACEHOLDER_TITLE.test(trimmed)) return '';
+  if (SOFTWARE_AUTHOR.test(trimmed)) return '';
+  // 与文件名相同（去掉 .pdf）的 Title 没有提供任何新信息。
+  const stem = documentName.replace(/\.pdf$/i, '').trim().toLowerCase();
+  if (trimmed.toLowerCase() === stem) return '';
+  if (!/[A-Za-z\u4e00-\u9fff]/.test(trimmed)) return '';
+  return trimmed.replace(/\s+/g, ' ');
+}
+
+/** True when a string looks like a person list rather than the software that produced the file. */
+function plausibleAuthors(value: string): string[] {  const trimmed = value.trim();
   if (!trimmed || trimmed.length > 300) return [];
   if (SOFTWARE_AUTHOR.test(trimmed)) return [];
   if (!/[A-Za-z\u4e00-\u9fff]/.test(trimmed)) return [];
@@ -178,11 +199,18 @@ export function extractOfflineDocumentMetadata(hints: OfflineMetadataHints): Off
   const authors = typeof pdfInfo?.Author === 'string' ? plausibleAuthors(pdfInfo.Author) : [];
   if (authors.length) matchedRules.authors = 'PDF 文档属性中的作者';
 
+  // PDF 的 Title 属性常常是真正的大标题，但也常常是文件名或生成软件写的「Microsoft Word - 文稿1」。只接受看起来像标题的。
+  const title = plausiblePdfTitle(
+    typeof pdfInfo?.Title === 'string' ? pdfInfo.Title : '',
+    hints.documentName,
+  );
+  if (title) matchedRules.title = 'PDF 文档属性中的标题';
+
   const language = detectLanguage(headText);
   if (language) matchedRules.language = '正文语言（启发式）';
 
   return {
-    fromPdf: normalizeDocumentMetadata({ authors }),
+    fromPdf: normalizeDocumentMetadata({ title, authors }),
     fromText: normalizeDocumentMetadata({
       publishDate,
       language,

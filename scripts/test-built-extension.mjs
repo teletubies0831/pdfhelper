@@ -662,6 +662,32 @@ test('the packaged service worker answers the translation stream port', async ()
   }
 });
 
+test('the settings dialog switches to 备份与恢复', async () => {
+  // This is the check for a real report: the fifth tab was added to the markup but not to the click handler's list of
+  // accepted names, so pressing it did nothing at all. A tab that renders but cannot be opened is broken, and only
+  // driving the packaged page catches it.
+  await page.locator('#ai-settings-button').click();
+  await page.waitForFunction(
+    () => !document.getElementById('assistant-settings-panel').hasAttribute('hidden'),
+    { timeout: 10_000 },
+  );
+  await page.locator('[data-settings-tab="backup"]').click();
+  await page.waitForFunction(
+    () => !document.querySelector('[data-settings-panel="backup"]').hasAttribute('hidden'),
+    { timeout: 10_000 },
+  );
+  assert.equal(await page.locator('#settings-backup-export').isVisible(), true, '导出 must be reachable');
+  assert.equal(await page.locator('#settings-backup-import').isVisible(), true, '选择文件… must be reachable');
+
+  // Back to 常规, then close: the suite's later checks assume the reader page is showing.
+  await page.locator('[data-settings-tab="general"]').click();
+  await page.locator('#close-deepseek-settings').click();
+  await page.waitForFunction(
+    () => document.getElementById('assistant-settings-panel').hasAttribute('hidden'),
+    { timeout: 10_000 },
+  );
+});
+
 test('nothing was logged as an error while the extension booted and loaded', () => {
   assert.deepEqual(consoleErrors, [], 'the packaged page logged console errors');
   assert.deepEqual(pageErrors, [], 'the packaged page threw');

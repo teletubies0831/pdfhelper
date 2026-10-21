@@ -536,6 +536,8 @@ function updateSettingsFooter(): void {
     settingsFooterNote.textContent = '工具只会在回答需要时调用，执行结果会显示在对话中。';
   } else if (activeSettingsTab === 'memory') {
     settingsFooterNote.textContent = '长期记忆保存在当前浏览器中，可随时编辑或删除。';
+  } else if (activeSettingsTab === 'backup') {
+    settingsFooterNote.textContent = '备份文件由你保管：保存在本地磁盘上，不会上传到任何服务器。';
   } else {
     settingsFooterNote.textContent = '任务选择会引用上方已保存的供应商连接。';
   }
