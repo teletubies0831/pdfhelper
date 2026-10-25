@@ -646,9 +646,12 @@ export function startOnboardingTour(): void {
     window.setTimeout(startOnboardingTour, 380);
     return;
   }
-  const knowledgeBack = document.getElementById("knowledge-base-back") as HTMLButtonElement | null;
+  // The knowledge page has no back button any more; the workspace tabs are the navigation. Click the 阅读 tab, which is
+  // what the user would do, so the tour starts on the reader instead of behind an open library page.
+  if (!document.getElementById("knowledge-base-page")?.hidden) {
+    (document.getElementById("ai-panel-toggle") as HTMLButtonElement | null)?.click();
+  }
   const vocabularyBack = document.getElementById("vocabulary-library-back") as HTMLButtonElement | null;
-  if (knowledgeBack && !document.getElementById("knowledge-base-page")?.hidden) knowledgeBack.click();
   if (vocabularyBack && !document.getElementById("vocabulary-library-page")?.hidden) vocabularyBack.click();
   active = true;
   currentStepIndex = 0;

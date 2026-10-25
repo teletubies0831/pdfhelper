@@ -5,6 +5,7 @@ import {
 import { knowledgeListElement } from '../../app/viewer-elements';
 import { readReadingStatus, READING_STATUS_LABELS } from '../../../modules/knowledge/public';
 import type { KnowledgeFolder, KnowledgeLibraryDocument } from './knowledge-corpus-repository';
+import { resumeLabel, resumePointOf } from './resume-reading';
 
 /**
  * 卡片视图与文件夹下拉选项。
@@ -76,6 +77,7 @@ export function renderCorpusDocuments(
       <div class="knowledge-pdf-body">
         <h2><button type="button" class="knowledge-pdf-title-button" data-introduce-document="${escapeCorpusHtml(item.documentId)}" title="查看这份 PDF 的智能概览">${escapeCorpusHtml(item.documentName)}</button></h2>
         <p><button type="button" class="knowledge-reading-chip is-${readReadingStatus(item)}" data-cycle-reading="${escapeCorpusHtml(item.documentId)}" title="点击切换：待读 → 在读 → 已读">${READING_STATUS_LABELS[readReadingStatus(item)]}</button> · ${item.pageCount} 页 · ${new Date(item.addedAt).toLocaleDateString()} · <span class="index-${item.indexStatus}">${status}</span> · <span>${overviewStatus}</span></p>
+        ${resumePointOf(item) ? `<p class="knowledge-card-progress">↩ ${escapeCorpusHtml(resumeLabel(item))}</p>` : ''}
         <label>文件夹 <select data-move-document="${escapeCorpusHtml(item.documentId)}">
           <option value="">未分类</option>
           ${buildCorpusFolderOptions(folders, item.folderId)}

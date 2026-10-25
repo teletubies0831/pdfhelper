@@ -156,6 +156,8 @@
 }
 .knowledge-col-reading { width: 78px; }
 .knowledge-col-pages { width: 60px; }
+/* 进度：`第 12 页`，比页数多一个数字的宽度；没有进度时是破折号。 */
+.knowledge-col-progress { width: 72px; }
 /* Dates are `2026-10-18`; the column has to be wide enough that they never wrap onto two lines. */
 .knowledge-col-date { width: 104px; }
 .knowledge-col-published { width: 100px; }

@@ -24,6 +24,9 @@ import type { FileHandleLike } from "../../app/viewer-types";
 import { confirmDiscardUnsavedChanges } from '../annotations/public';
 import { RECENT_FILES_LIMIT, type ReadingPosition, type RecentPdfEntry } from './contracts';
 import { readRecentFiles, writeRecentFiles } from './recent-files-repository';
+// 续读（B3）：把「读到第几页」镜像到知识库记录上。只写入已有的记录，不在库里凭空创建条目。
+import { getDocumentChatId } from '../../app/document-identity';
+import { setDocumentReadingProgress } from '../../../modules/knowledge/public';
 
 let temporarySourceNavigationEntryId: string | null = null;
 let requestedSourcePageAfterOpen: number | null = null;
@@ -221,6 +224,16 @@ export async function persistCurrentReadingPosition() {
 
   try {
     await writeCurrentEntryReadingPosition(recentEntryId, readingPosition);
+    // Mirror onto the library record: 「最近打开」 keeps 12 entries, so a position stored only there disappears on its own.
+    // `setDocumentReadingProgress` deliberately leaves `updatedAt` alone (this runs while the user scrolls) and writes
+    // nothing when the page has not changed.
+    const openDocumentProxy = pdfDocument.value;
+    if (openDocumentProxy) {
+      setDocumentReadingProgress(getDocumentChatId(openDocumentProxy), {
+        page: readingPosition.pageNumber,
+        at: new Date(readingPosition.updatedAt).toISOString(),
+      });
+    }
   } catch (error) {
     console.warn("PDFPal failed to persist reading position.", error);
   }

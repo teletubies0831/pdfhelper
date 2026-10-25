@@ -57,6 +57,7 @@ import { installDataHealth, refreshDataHealthBadge } from "./data-health-actions
 import { installBackupSettings } from "./backup-actions";
 import { registerCitationDialogEvents } from "./citation-dialog";
 import { applyLibraryViewMode, persistLibraryViewMode, readLibraryViewMode } from "./library-view-mode";
+import { PENDING_QUEUE_NOTE, sortPendingQueue } from "./resume-reading";
 import { isKnowledgeIndexRunning } from "./current-pdf-add-to-library";
 import { listKnowledgeDocumentsForDisplay } from "./interrupted-work-recovery";
 import { buildCorpusFolderOptions, renderCorpusDocuments } from "./library-card-view";
@@ -97,7 +98,7 @@ export function renderKnowledgeBase(): void {
   const folderScopes = activeCorpusFolder !== "all" && activeCorpusFolder !== "unfiled"
     ? getCorpusDescendantIds(folders, activeCorpusFolder)
     : null;
-  const filtered = documents.filter((document) =>
+  const filteredDocuments = documents.filter((document) =>
     (!query || document.documentName.toLocaleLowerCase().includes(query))
     && (activeCorpusFolder === "all"
       || (activeCorpusFolder === "unfiled" && !document.folderId)
@@ -107,6 +108,10 @@ export function renderKnowledgeBase(): void {
     // and documents the user marked 无需补全 never appear here.
     && (!activeMetadataFilter || isMetadataMissing(document)),
   );
+  // 待读是一个队列，不是一个集合：按入库先后排，最早加进来的先读。其它视图沿用用户选的排序。
+  const filtered = activeReadingFilter === "todo"
+    ? sortPendingQueue(filteredDocuments)
+    : filteredDocuments;
 
   // The batch may only ever contain documents the user can see: narrowing the filter or the search drops the rest,
   // which is why this happens before anything is drawn from the selection.
@@ -128,7 +133,11 @@ export function renderKnowledgeBase(): void {
         : activeCorpusFolder === "unfiled"
           ? "未分类"
           : folders.find((folder) => folder.id === activeCorpusFolder)?.name || "知识库";
-  if (knowledgePageSubtitleElement) knowledgePageSubtitleElement.textContent = "管理你主动添加的 PDF，并为跨文献问答提供全文检索。";
+  if (knowledgePageSubtitleElement) {
+    knowledgePageSubtitleElement.textContent = activeReadingFilter === "todo"
+      ? PENDING_QUEUE_NOTE
+      : "管理你主动添加的 PDF，并为跨文献问答提供全文检索。";
+  }
   knowledgeTotalCountElement.textContent = String(filtered.length);
   knowledgeDocumentCountElement.textContent = String(documents.length);
   renderCorpusSidebar(folders, documents);
@@ -142,16 +151,19 @@ export function renderKnowledgeBase(): void {
   // rather than carrying a second, invisible order.
   const mode = readLibraryViewMode();
   applyLibraryViewMode(mode);
-  const sort = readLibrarySort();
+  // 待读是队列：顺序由入库先后决定，列排序在那个视图里不生效（否则副标题的说法就是假的）。其它视图沿用列排序。
+  const queued = activeReadingFilter === "todo";
+  const sort = queued ? null : readLibrarySort();
+  const ordered = sort ? sortLibraryDocuments(filtered, sort) : filtered;
   renderLibrarySortIndicators(sort);
-  renderCorpusDocuments(sortLibraryDocuments(filtered, sort), folders, {
+  renderCorpusDocuments(ordered, folders, {
     libraryDocumentCount: documents.length,
     selectedId: selectedDocumentId,
     selection: selectedDocumentIds,
   });
   if (mode === "list") {
     renderLibraryTable(
-      sortLibraryDocuments(filtered, sort),
+      ordered,
       { selectedId: selectedDocumentId, selection: selectedDocumentIds },
       tableHandlers,
     );

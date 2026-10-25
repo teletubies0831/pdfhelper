@@ -59,16 +59,6 @@
   font-size: 11px;
 }
 
-.knowledge-back-button {
-  min-width: 30px;
-  min-height: 30px;
-  border: 0;
-  background: transparent;
-  color: #52647e;
-  font-size: 20px;
-  padding: 0;
-}
-
 .knowledge-brand-mark {
   display: grid;
   width: 30px;

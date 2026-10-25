@@ -116,6 +116,15 @@ export interface KnowledgeLibraryDocument {
   /** Crossref's `type` (`journal-article`, `proceedings-article`, …): the only reliable input for `[J]` vs `[C]`. */
   publicationKind?: string;
   /**
+   * 上次读到第几页，以及那次阅读的时间.
+   *
+   * Mirrored from the reader's own reading position (which lives on the recent-files entry) because that list keeps only
+   * 12 entries: a paper read two weeks ago loses its position there, and 「继续阅读」 would silently start from page 1.
+   * Kept on the library record so it survives that rotation.
+   */
+  lastReadPage?: number;
+  lastReadAt?: string;
+  /**
    * Whether the metadata pass has run, so the panel can say "尚未提取" instead of showing five dashes.
    *
    * `skipped` is the user's own decision that this document needs no bibliographic data (a handout, an internal report,
@@ -272,6 +281,32 @@ export function updateKnowledgeDocument(
   if (!document) return;
   Object.assign(document, changes, { updatedAt: new Date().toISOString() });
   writeState(state);
+}
+
+/**
+ * Records where the reader stopped, without touching `updatedAt`.
+ *
+ * Called from the reader's own debounced position saver, which fires while the user scrolls. Two consequences shaped this
+ * function: (1) `updatedAt` must not move, or 「更新时间」 becomes "the last time you scrolled"; (2) nothing is written when
+ * the page has not changed, because every write serialises the whole library into `localStorage`.
+ *
+ * Returns whether anything was written, so the caller can skip the work entirely.
+ */
+export function setDocumentReadingProgress(
+  documentId: string,
+  progress: { page?: number; at?: string },
+): boolean {
+  const state = readState();
+  const document = resolveDocument(state.documents, documentId);
+  if (!document) return false;
+  const page = Number(progress.page);
+  if (!Number.isFinite(page) || page < 1) return false;
+  const rounded = Math.round(page);
+  if (document.lastReadPage === rounded) return false;
+  document.lastReadPage = rounded;
+  document.lastReadAt = progress.at ?? new Date().toISOString();
+  writeState(state);
+  return true;
 }
 
 export function removeKnowledgeDocument(documentId: string): void {

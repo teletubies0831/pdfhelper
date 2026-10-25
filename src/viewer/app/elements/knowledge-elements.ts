@@ -12,10 +12,6 @@ export const knowledgeMainElement = requiredElement<HTMLElement>(
   "knowledge-library-view",
 ).closest<HTMLElement>(".knowledge-main");
 
-export const knowledgeBaseBackButton = requiredElement<HTMLButtonElement>(
-  "knowledge-base-back",
-);
-
 export const knowledgeFilterButtons = Array.from(
   document.querySelectorAll<HTMLButtonElement>("[data-knowledge-filter]"),
 );
