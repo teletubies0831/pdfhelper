@@ -1,4 +1,4 @@
-import {
+﻿import {
   getKnowledgeDocument,
   listKnowledgeDocuments,
   listKnowledgeFolders,
@@ -14,6 +14,7 @@ import {
 } from './knowledge-related-papers';
 import { openLibraryContextMenu } from './library-context-menu';
 import { openCitationDialog } from './citation-dialog';
+import { resumePointOf } from './resume-reading';
 import {
   describeBatchRelatedPlan,
   formatBatchCost,
@@ -104,7 +105,9 @@ export function createLibraryActions(ports: LibraryActionPorts): LibraryActions 
     markDocumentOpened(item.documentId);
     const hadOpenPdf = Boolean(pdfDocument.value);
     ports.status(`正在打开「${item.documentName}」…`);
-    void openSourcePdfFromKnowledge(item.documentName, item.recentEntryId, 1, item.documentId).then(async (opened) => {
+    // 续读：从上次读到的页打开。夹在 1..pageCount 之间已经在 `resumePointOf` 里做过——文件可能比记录里少了页。
+    const resumePage = resumePointOf(item)?.pageNumber ?? 1;
+    void openSourcePdfFromKnowledge(item.documentName, item.recentEntryId, resumePage, item.documentId).then(async (opened) => {
       if (!opened) {
         // The link rotted (the 12-entry 最近打开 list rotated it out) or the file really is gone. Say which one we can
         // actually know — we cannot know — and offer the one action that fixes it either way.

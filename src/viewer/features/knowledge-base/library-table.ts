@@ -5,6 +5,7 @@ import {
 } from '../../app/viewer-elements';
 import { readReadingStatus, READING_STATUS_LABELS, readDocumentMetadata } from '../../../modules/knowledge/public';
 import type { KnowledgeLibraryDocument } from '../../../modules/knowledge/public';
+import { resumePointOf } from './resume-reading';
 import {
   DEFAULT_LIBRARY_SORT,
   indexState,
@@ -38,10 +39,12 @@ export function readLibrarySort(): LibrarySortState {
 }
 
 /** Marks the active column and its direction, so a second click on the same header reverses it. */
-export function renderLibrarySortIndicators(sort: LibrarySortState): void {
+export function renderLibrarySortIndicators(sort: LibrarySortState | null): void {
   for (const button of knowledgeTableSortButtons) {
-    const active = button.dataset.knowledgeSort === sort.key;
-    if (!active) {
+    // `null` means "no column order is in effect" — the 待读 queue uses its own order, and a highlighted header would claim
+    // otherwise.
+    const active = Boolean(sort) && button.dataset.knowledgeSort === sort?.key;
+    if (!active || !sort) {
       delete button.dataset.sortDirection;
       button.removeAttribute('aria-sort');
       button.classList.remove('is-sorted');
@@ -148,6 +151,15 @@ export function renderLibraryTable(
     pagesCell.className = 'knowledge-col-pages';
     pagesCell.textContent = String(item.pageCount);
     row.append(pagesCell);
+
+    // 进度：上次读到哪。没读过就是破折号——「还没开始」和「读到第 1 页」不是一回事。
+    const progressCell = document.createElement('td');
+    progressCell.className = 'knowledge-col-progress';
+    const progress = resumePointOf(item);
+    progressCell.textContent = progress ? `第 ${progress.pageNumber} 页` : '—';
+    if (!progress) progressCell.classList.add('is-empty');
+    else progressCell.title = progress.lastReadAt ? `上次阅读：${progress.lastReadAt.slice(0, 10)}` : '上次阅读的位置';
+    row.append(progressCell);
 
     const dateCell = document.createElement('td');
     dateCell.className = 'knowledge-col-date';

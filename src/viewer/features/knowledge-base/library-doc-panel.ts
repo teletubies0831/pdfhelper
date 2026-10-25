@@ -1,4 +1,4 @@
-﻿import {
+import {
   countReadingStatuses,
   doiUrl,
   extractOfflineDocumentMetadata,
@@ -82,6 +82,7 @@ import { isMetadataExtractionRunning, metadataExtractionAvailability } from './d
 import { getDocumentChunks } from '../../../modules/document-agent/public';
 import { renderMetadataSuggestions } from './library-metadata-suggestions';
 import { closeBiblioEditor, registerBiblioFormEvents } from './library-biblio-form';
+import { resumeActionLabel, resumePointOf } from './resume-reading';
 import { renderChatMarkdown } from '../../shared-ui/markdown/markdown-renderer';
 
 /**
@@ -507,6 +508,12 @@ export function renderDocumentPanel(
   knowledgeDocAddedElement.textContent = formatDate(item.addedAt);
   knowledgeDocUpdatedElement.textContent = formatDate(item.updatedAt);
   knowledgeDocChunksElement.textContent = String(item.chunkCount || 0);
+  // 续读：按钮上直接写「继续阅读（第 12 页）」，用户不必先点开再自己翻回去。
+  const resume = resumePointOf(item);
+  knowledgeDocOpenButton.textContent = resumeActionLabel(item);
+  knowledgeDocOpenButton.title = resume
+    ? `打开原文并从上次读到的位置继续${resume.clamped ? '（记录的页码超出总页数，已夹到最后一页）' : ''}`
+    : '打开原文';
 
   renderBiblio(item);
 

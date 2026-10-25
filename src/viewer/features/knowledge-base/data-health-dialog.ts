@@ -185,6 +185,17 @@ export function openDataHealthDialog(report: DataHealthReport): void {
   if (element) showAnimatedDialog(element);
 }
 
+/**
+ * Closes the dialog.
+ *
+ * Needed by the one fix that leaves the page (「重新抽取」 switches to the knowledge graph): a modal dialog left open would
+ * cover the page it just switched to, so the button would look like it did nothing.
+ */
+export function closeDataHealthDialog(): void {
+  const element = dialog();
+  if (element?.open) element.close();
+}
+
 export function registerDataHealthDialogEvents(onRescan: () => void): void {
   const element = dialog();
   if (!element) return;

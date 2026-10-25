@@ -24,16 +24,7 @@
   grid-template-columns: 250px minmax(0, 1fr);
 }
 
-.knowledge-sidebar-back-only {
-  width: fit-content;
-  min-height: 34px;
-  margin: 8px 14px 10px;
-  padding: 0 10px;
-  border: 0;
-  background: transparent;
-  color: #63748d;
-  font-size: 12px;
-}
+/* 「← 返回 PDF」 sidebar button removed: the workspace tabs are the navigation, so the sidebar starts with 全部 PDF. */
 
 .knowledge-folder-nav > button span,
 .knowledge-folder-heading button {
@@ -578,6 +569,13 @@
 
 .knowledge-pdf-body p {
   overflow-wrap: anywhere;
+}
+
+/* 续读提示：卡片上的「↩ 第 12 / 34 页」，比正文淡一点，不抢标题。 */
+.knowledge-pdf-body .knowledge-card-progress {
+  margin-top: 4px;
+  color: #2a6fd6;
+  font-size: 11px;
 }
 
 .knowledge-pdf-body label { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; }

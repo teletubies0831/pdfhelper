@@ -391,12 +391,40 @@ export function saveManualDocumentMetadata(
   const normalized = normalizeDocumentMetadata(metadata);
   updateKnowledgeDocument(documentId, {
     ...metadataFieldsPatch(normalized),
-    // Only the fields the user actually has a value for become manual; clearing a field clears its label too.
-    metadataSources: mergeMetadataSources(item.metadataSources, normalized, 'manual'),
+    // Only the fields the user actually filled in become manual. A field the form left blank keeps whatever label it had,
+    // because the form does not edit every field (ISSN/ISBN/出版类型 only ever come from Crossref) — relabelling those as
+    // "nothing" would lose the fact that an online lookup supplied them.
+    metadataSources: manualMetadataSources(item, normalized),
     metadataStatus: 'ready',
     metadataError: undefined,
     metadataAt: new Date().toISOString(),
   });
+}
+
+/**
+ * 手填之后的来源标记.
+ *
+ * `mergeMetadataSources` deletes the label of every empty field, which is right for a *pass* over a whole record and wrong
+ * here: the edit form sends `''` for ISSN/ISBN/出版类型 by design, so saving an author would have wiped their 「在线确认」
+ * badge while the values stayed in the record.
+ */
+function manualMetadataSources(
+  item: KnowledgeLibraryDocument,
+  normalized: KnowledgeDocumentMetadata,
+): KnowledgeMetadataSources {
+  const sources: KnowledgeMetadataSources = { ...readMetadataSources(item) };
+  for (const field of METADATA_FIELDS) {
+    const value = normalized[field];
+    if (Array.isArray(value) ? value.length > 0 : Boolean(value)) {
+      sources[field] = 'manual';
+      continue;
+    }
+    const stored = item[field];
+    const storedFilled = Array.isArray(stored) ? stored.length > 0 : Boolean(stored);
+    // 空着、但记录里有值：表单没编辑这个字段，保留它原来的来源。
+    if (!storedFilled) delete sources[field];
+  }
+  return sources;
 }
 
 export function markDocumentMetadataExtracting(documentId: string): void {

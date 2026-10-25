@@ -9,6 +9,7 @@ import {
   renderDataHealth,
   showDataHealthStatus,
   hideDataHealthStatus,
+  closeDataHealthDialog,
 } from './data-health-dialog';
 import {
   markDocumentUnindexed,
@@ -103,6 +104,8 @@ async function fixFinding(finding: DataHealthFinding, chunkCount: number | null)
     }
     case 'extract-graph': {
       // Extraction needs the graph page (progress and review live there). Say so rather than quietly doing half of it.
+      // The dialog closes first: it is modal, so leaving it open would cover the page this click just switched to.
+      closeDataHealthDialog();
       await import('./graph-navigation-bridge')
         .then((bridge) => bridge.openGraphForDocument(finding.documentId))
         .catch(() => undefined);

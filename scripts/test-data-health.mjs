@@ -113,6 +113,35 @@ const plan = (documents, options = {}) => planDataHealth({
 }
 
 // ---------------------------------------------------------------------------
+// 分块丢了，不等于元数据和文件关联也丢了：三件事各算一条，修好索引后不该再冒出两条新问题。
+// ---------------------------------------------------------------------------
+{
+  const documents = [document('multi', { authors: [], publishDate: '', doi: '' })];
+  const report = plan(documents, { chunkCounts: new Map([['multi', 0]]), linkedFileIds: new Set() });
+  assert.deepEqual(
+    report.findings.map((finding) => finding.kind).sort(),
+    ['chunks-missing', 'file-link-missing', 'metadata-missing'],
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 读不到分块时也一样：元数据与文件关联照报，依赖分块的图谱判断不报。
+// ---------------------------------------------------------------------------
+{
+  const documents = [document('unreadable-meta', { authors: [], publishDate: '', doi: '' })];
+  const report = plan(documents, {
+    chunkCounts: new Map([['unreadable-meta', null]]),
+    linkedFileIds: new Set(),
+    graphPapers: [{ paperId: 'unreadable-meta', title: 'x', extractionStatus: 'ready', hasEdges: false }],
+  });
+  assert.deepEqual(
+    report.findings.map((finding) => finding.kind).sort(),
+    ['chunks-missing', 'file-link-missing', 'metadata-missing'],
+    'no graph finding while the chunks cannot be read',
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 图谱侧：状态卡住 vs 有索引却没知识点。
 // ---------------------------------------------------------------------------
 {

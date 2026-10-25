@@ -39,7 +39,6 @@
 @media (max-width: 900px) {
   .knowledge-base-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(90px, 24%) minmax(0, 1fr); }
   .knowledge-sidebar { display: block; border-right: 0; border-bottom: 1px solid #e8edf5; padding: 6px 12px; }
-  .knowledge-sidebar-back-only { margin: 0 0 4px; }
   .knowledge-folder-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
   .knowledge-folder-heading, .knowledge-folder-list { grid-column: 1 / -1; }
   .knowledge-folder-nav .knowledge-folder-heading { margin-top: 4px; }

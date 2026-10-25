@@ -56,6 +56,7 @@ before(async () => {
     citationDialog: await readSource('src/viewer/features/knowledge-base/citation-dialog.ts'),
     biblioForm: await readSource('src/viewer/features/knowledge-base/library-biblio-form.ts'),
     suggestionsList: await readSource('src/viewer/features/knowledge-base/library-metadata-suggestions.ts'),
+    resumeReading: await readSource('src/viewer/features/knowledge-base/resume-reading.ts'),
     lookupService: await readSource('src/background/ai/bibliographic-lookup-service.ts'),
     metadataLookupClient: await readSource('src/viewer/features/knowledge-base/metadata-lookup.ts'),
     dataHealthDialog: await readSource('src/viewer/features/knowledge-base/data-health-dialog.ts'),
@@ -284,6 +285,7 @@ before(async () => {
       },
     };
 
+    const resumeReading = load(code.resumeReading, fail);
     const tableModel = load(code.tableModel, (name) => (
       name === '../../../modules/knowledge/public' ? knowledge : fail(name)
     ));
@@ -291,6 +293,7 @@ before(async () => {
       if (name === '../../app/viewer-elements') return elements;
       if (name === '../../../modules/knowledge/public') return knowledge;
       if (name === './library-table-model') return tableModel;
+      if (name === './resume-reading') return resumeReading;
       return fail(name);
     });
     // The panel verifies the cached 片段数量 against the real chunk store. The mock derives the store from the corpus so
@@ -337,6 +340,8 @@ before(async () => {
       }
       // 联网结果列表：它自己的渲染逻辑有断言覆盖（候选、理由、填入按钮），这里给它真实的模块。
       if (name === './library-metadata-suggestions') return suggestionsList;
+      // 续读：纯函数，没有依赖。
+      if (name === './resume-reading') return resumeReading;
       if (name === '../../shared-ui/markdown/markdown-renderer') return markdownRenderer;
       if (name === '../../../modules/document-agent/public') return documentAgent;
       return fail(name);
@@ -674,6 +679,68 @@ test('sorting puts the work that still needs doing first', async () => {
   assert.equal(result.summaryAll, '共 3 篇文献');
   assert.equal(result.summaryFiltered, '共 3 篇文献 · 当前显示 2 篇');
   assert.equal(result.summaryEmpty, '', 'nothing to say about an empty library');
+});
+
+test('续读：右栏按钮写上次读到的页，表格也列出进度', async () => {
+  const outcome = await page.evaluate(() => {
+    const { panel, table, elements } = window.lib;
+    const handlers = {
+      openOverview() {}, openSource() {}, openGraph() {}, remove() {}, searchRelated() {},
+      extractMetadata() {}, saveMetadata() {}, toggleMetadataSkip() {}, lookupMetadata() {},
+      applyMetadataSuggestion() {}, dismissMetadataSuggestions() {}, changeReading() {},
+      moveToFolder() {}, openCitation() {},
+    };
+    const base = {
+      documentId: 'resume-1',
+      documentName: 'Read Halfway.pdf',
+      pageCount: 40,
+      folderId: null,
+      addedAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+      indexStatus: 'ready',
+      chunkCount: 3,
+      metadataStatus: 'ready',
+      lastReadPage: 17,
+      lastReadAt: '2026-10-18T02:00:00.000Z',
+    };
+    panel.renderDocumentPanel(base, [], handlers);
+    const withProgress = {
+      button: elements.knowledgeDocOpenButton.textContent,
+      title: elements.knowledgeDocOpenButton.title,
+    };
+
+    // 页码超出当前文件：标签说「重读结尾」，提示也解释了夹取。
+    panel.renderDocumentPanel({ ...base, lastReadPage: 400 }, [], handlers);
+    const clamped = {
+      button: elements.knowledgeDocOpenButton.textContent,
+      title: elements.knowledgeDocOpenButton.title,
+    };
+
+    // 没读过：回到「打开原文」。
+    panel.renderDocumentPanel({ ...base, lastReadPage: undefined, lastReadAt: undefined }, [], handlers);
+    const fresh = { button: elements.knowledgeDocOpenButton.textContent, title: elements.knowledgeDocOpenButton.title };
+
+    // 表格：读到第 17 页的显示页数，没读过的显示破折号，两者不能混。
+    table.renderLibraryTable(
+      [base, { ...base, documentId: 'resume-2', documentName: 'Untouched.pdf', lastReadPage: undefined, lastReadAt: undefined }],
+      { selectedId: null, selection: new Set() },
+      { open() {}, cycleReading() {}, contextMenu() {}, toggleSelect() {} },
+    );
+    const progress = [...document.querySelectorAll('#knowledge-table-body .knowledge-col-progress')]
+      .map((cell) => ({ text: cell.textContent, empty: cell.classList.contains('is-empty') }));
+    return { withProgress, clamped, fresh, progress };
+  });
+
+  assert.equal(outcome.withProgress.button, '继续阅读（第 17 页）');
+  assert.match(outcome.withProgress.title, /上次读到的位置/);
+  assert.equal(outcome.clamped.button, '重读结尾（第 40 页）');
+  assert.match(outcome.clamped.title, /超出总页数/);
+  assert.equal(outcome.fresh.button, '打开原文');
+  assert.equal(outcome.fresh.title, '打开原文');
+  assert.deepEqual(outcome.progress, [
+    { text: '第 17 页', empty: false },
+    { text: '—', empty: true },
+  ]);
 });
 
 test('the inspector describes the selected paper, and its buttons act on that paper', async () => {
@@ -2344,6 +2411,70 @@ test('同一篇文献换了一份文件（批注保存后再打开）不会被�
   assert.equal(result.matches.unrelated, null);
   assert.ok(!result.remaining.includes('pdf:AAA'), 'removing through the alias removes the paper');
   assert.ok(result.remaining.includes('pdf:OTHER'), 'and leaves the rest alone');
+});
+
+test('续读位置的回写：只在页码变化时写，而且不动更新时间', async () => {
+  const result = await page.evaluate(() => {
+    const { corpusAdapter } = window.lib;
+    localStorage.removeItem('pdf-helper-knowledge-corpus-v1');
+    corpusAdapter.addKnowledgeDocument({
+      documentId: 'pdf:PROGRESS', documentName: 'Progress.pdf', pageCount: 30,
+    });
+    const before = { ...corpusAdapter.getKnowledgeDocument('pdf:PROGRESS') };
+
+    const first = corpusAdapter.setDocumentReadingProgress('pdf:PROGRESS', { page: 12, at: '2026-10-18T02:00:00.000Z' });
+    const afterFirst = { ...corpusAdapter.getKnowledgeDocument('pdf:PROGRESS') };
+    // 阅读器每 ~600ms 保存一次位置：同一页不该把整个库再序列化一遍。
+    const samePage = corpusAdapter.setDocumentReadingProgress('pdf:PROGRESS', { page: 12, at: '2026-10-18T02:05:00.000Z' });
+    const afterSame = { ...corpusAdapter.getKnowledgeDocument('pdf:PROGRESS') };
+    const nextPage = corpusAdapter.setDocumentReadingProgress('pdf:PROGRESS', { page: 13, at: '2026-10-18T02:06:00.000Z' });
+    const afterNext = { ...corpusAdapter.getKnowledgeDocument('pdf:PROGRESS') };
+    const missing = corpusAdapter.setDocumentReadingProgress('pdf:NOPE', { page: 5 });
+    const badPage = corpusAdapter.setDocumentReadingProgress('pdf:PROGRESS', { page: 0 });
+    return { before, first, afterFirst, samePage, afterSame, nextPage, afterNext, missing, badPage };
+  });
+
+  assert.equal(result.first, true);
+  assert.equal(result.afterFirst.lastReadPage, 12);
+  assert.equal(result.afterFirst.lastReadAt, '2026-10-18T02:00:00.000Z');
+  assert.equal(result.afterFirst.updatedAt, result.before.updatedAt, 'scrolling is not an edit: 更新时间 must not move');
+  assert.equal(result.samePage, false, 'an unchanged page is not written again');
+  assert.equal(result.afterSame.lastReadAt, '2026-10-18T02:00:00.000Z');
+  assert.equal(result.nextPage, true);
+  assert.equal(result.afterNext.lastReadPage, 13);
+  assert.equal(result.missing, false);
+  assert.equal(result.badPage, false);
+});
+
+test('手填一条元数据不会抹掉在线查来的 ISSN/出版类型的来源标记', async () => {
+  const result = await page.evaluate(() => {
+    const { metadata, corpus } = window.lib;
+    corpus.set('manual-keep', {
+      documentId: 'manual-keep',
+      metadataStatus: 'ready',
+    });
+    // 一次「在线确认」：ISSN/ISBN/出版类型只可能来自 Crossref。
+    metadata.applyExtractedMetadata('manual-keep', {
+      title: 'T', authors: ['A One'], publishDate: '2020', language: 'en', documentUrl: '', doi: '10.1/x',
+      containerTitle: 'Journal', volume: '1', issue: '2', page: '3-4',
+      publisher: 'Springer', publisherPlace: 'Berlin', issn: '1234-5678', isbn: '', publicationKind: 'journal-article',
+    }, 'online');
+    // 然后用户手填作者并保存：表单对 ISSN/出版类型一律发空字符串。
+    metadata.saveManualDocumentMetadata('manual-keep', {
+      title: '', authors: ['A One', 'B Two'], publishDate: '', language: '', documentUrl: '', doi: '',
+      containerTitle: '', volume: '', issue: '', page: '', publisher: '', publisherPlace: '',
+      issn: '', isbn: '', publicationKind: '',
+    });
+    const document = corpus.get('manual-keep');
+    return { sources: metadata.readMetadataSources(document), document };
+  });
+
+  assert.equal(result.document.authors.length, 2, 'the hand-typed value wins');
+  assert.equal(result.sources.authors, 'manual');
+  assert.equal(result.sources.issn, 'online', 'a field the form does not edit keeps the label it had');
+  assert.equal(result.sources.publicationKind, 'online');
+  assert.equal(result.sources.volume, 'online');
+  assert.equal(result.document.issn, '1234-5678', 'and the value is still there');
 });
 
 console.log('Knowledge library workbench tests passed.');

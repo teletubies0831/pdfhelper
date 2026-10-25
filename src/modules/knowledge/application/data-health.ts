@@ -124,7 +124,8 @@ function findingsForDocument(
       fixLabel: '可在扩展的「应用 → 存储」里检查，或先关闭其它标签页后重试体检。',
       costsMoney: false,
     });
-    return findings;
+    // 分块读不出来时不再判图谱——那条判断要依赖分块。但元数据与文件关联跟分块毫无关系，继续报。
+    return findings.concat(independentFindings(document, linkedFile));
   }
 
   if (claimsIndexed && recordedChunks > 0 && chunks === 0) {
@@ -137,7 +138,8 @@ function findingsForDocument(
       fixLabel: '重建索引',
       costsMoney: false,
     });
-    return findings;
+    // 只压掉依赖分块的图谱判断；元数据缺失、文件关联失效与索引无关，各自仍然算一条。
+    return findings.concat(independentFindings(document, linkedFile));
   }
 
   if (chunks > 0 && chunks !== recordedChunks) {
@@ -190,6 +192,22 @@ function findingsForDocument(
     }
   }
 
+  // 与分块无关的两条：索引丢了不代表元数据或文件关联也丢了，各算各的。
+  findings.push(...independentFindings(document, linkedFile));
+
+  return findings;
+}
+
+/** 不依赖正文分块的发现：元数据缺失、文件关联失效。分块读不出来时也照样成立。 */
+function independentFindings(
+  document: KnowledgeLibraryDocument,
+  linkedFile: boolean,
+): DataHealthFinding[] {
+  const findings: DataHealthFinding[] = [];
+  const base = {
+    documentId: document.documentId,
+    documentName: document.documentName,
+  };
   if (document.metadataStatus !== 'skipped' && !hasAnyMetadata(document)) {
     findings.push({
       ...base,
@@ -201,7 +219,6 @@ function findingsForDocument(
       costsMoney: true,
     });
   }
-
   if (!linkedFile) {
     findings.push({
       ...base,
@@ -213,7 +230,6 @@ function findingsForDocument(
       costsMoney: false,
     });
   }
-
   return findings;
 }
 

@@ -212,7 +212,10 @@ export async function importKnowledgeBackup(file: File): Promise<void> {
       // `addKnowledgeDocument` only knows the four identity fields; everything else (metadata, overview, reading state,
       // folder) is restored on top. `recentEntryId` is deliberately blank: the backup's entry ids belong to another
       // machine's 最近打开 list, and pointing at them would make 「打开原文」 fail instead of asking for the file.
-      const { documentId: _id, addedAt: _added, ...patch } = document;
+      //
+      // The index fields are restored *after* the chunks below, not here: a record that says 「已索引 40 个片段」 while the
+      // import is still running (or after it failed halfway) is exactly the lie 数据体检 exists to find.
+      const { documentId: _id, addedAt: _added, indexStatus: _status, chunkCount: _chunks, indexError: _error, ...patch } = document;
       updateKnowledgeDocument(document.documentId, {
         ...patch,
         recentEntryId: undefined,
@@ -220,13 +223,35 @@ export async function importKnowledgeBackup(file: File): Promise<void> {
       });
     }
     for (const entry of plan.chunks) await replaceDocumentChunks(entry.documentId, entry.chunks);
+    // Only now may a record claim its index: the chunks it describes are in place (or the backup had none for it, in which
+    // case the record stays 未索引 and 数据体检 will offer to rebuild).
+    for (const entry of plan.chunks) {
+      const source = plan.documents.find((document) => document.documentId === entry.documentId);
+      if (!source) continue;
+      updateKnowledgeDocument(entry.documentId, {
+        indexStatus: source.indexStatus ?? 'ready',
+        chunkCount: source.chunkCount ?? entry.chunks.length,
+        indexError: undefined,
+      });
+    }
     if (plan.papers.length) await knowledgeGraphRepository.putPapers(plan.papers as unknown as GraphPaper[]);
     if (plan.entities.length) await knowledgeGraphRepository.putEntities(plan.entities as unknown as GraphEntity[]);
     if (plan.edges.length) await knowledgeGraphRepository.putEdges(plan.edges as unknown as GraphEdge[]);
+    let droppedNotes = 0;
     if (plan.notes.length) {
-      writeSavedKnowledgeNotes([...readSavedKnowledgeNotes(), ...plan.notes as SavedKnowledgeNote[]]);
+      const existingNotes = readSavedKnowledgeNotes();
+      const merged = [...existingNotes, ...plan.notes as SavedKnowledgeNote[]];
+      // `writeSavedKnowledgeNotes` caps at 500; the imported notes are appended last, so a full library would drop exactly
+      // the notes this import was for. Count them and say so instead of finishing silently.
+      droppedNotes = Math.max(0, merged.length - 500);
+      writeSavedKnowledgeNotes(merged);
     }
-    setStatus(`导入完成。${description}`);
+    setStatus(
+      droppedNotes
+        ? `导入完成。${description}但笔记上限 500 条，有 ${droppedNotes} 条导出的笔记没有导入。`
+        : `导入完成。${description}`,
+      droppedNotes > 0,
+    );
     setSummary(`上次导入：${file.name}`);
     refreshKnowledgeBaseIfOpen();
   } catch (error) {
