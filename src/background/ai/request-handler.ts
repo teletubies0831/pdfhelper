@@ -25,6 +25,33 @@ function assertVisionTestMarker(content: string): void {
   }
 }
 
+/**
+ * 正在进行的 AI 请求，按 requestId 索引.
+ *
+ * The worker is the only place a provider call can actually be aborted, and it must keep the controller somewhere reachable
+ * from a later message — hence module state. Only the extraction path registers today; the map is keyed by the requestId the
+ * viewer already chose, so nothing else has to change.
+ */
+const activeAiRequests = new Map<string, AbortController>();
+
+/**
+ * 中止匹配前缀的请求.
+ *
+ * Prefix matching is deliberate: the viewer starts one request per batch (`extract:<paperId>:<chunkId>`), and it does not
+ * keep the ids. It sends `extract:<paperId>:` and every in-flight batch of that paper is aborted, which is exactly what
+ * 「停止」 means.
+ */
+export function cancelAiRequestsByPrefix(prefix: string): number {
+  let aborted = 0;
+  for (const [requestId, controller] of activeAiRequests) {
+    if (!requestId.startsWith(prefix)) continue;
+    controller.abort();
+    activeAiRequests.delete(requestId);
+    aborted += 1;
+  }
+  return aborted;
+}
+
 export function parseReadingModeDetection(content: string): {
   readingMode: ResolvedReadingMode;
   rationale: string;
@@ -235,19 +262,27 @@ export async function handleAiRequest(message: AiRuntimeRequest, onOverviewProgr
       if (!message.chunks.length) {
         return { ok: false, error: '没有可抽取的正文片段，请先建立全文索引。' };
       }
-      const result = await extractEntities(adapter, config, message);
-      return {
-        ok: true,
-        content: result.content,
-        model: config.model,
-        // Raw batch metadata travels back to the caller, which owns parsing and
-        // decides what to persist about a partially successful run.
-        entityExtraction: {
-          batchCount: result.batchCount,
-          failedBatches: result.failedBatches,
-          promptVersion: result.promptVersion,
-        },
-      };
+      // Registered so a 停止 press can abort the in-flight provider call. Without this the viewer could only stop *between*
+      // batches: the request itself is a plain `runtime.sendMessage`, which has no signal to cancel.
+      const controller = new AbortController();
+      activeAiRequests.set(message.requestId, controller);
+      try {
+        const result = await extractEntities(adapter, config, message, controller.signal);
+        return {
+          ok: true,
+          content: result.content,
+          model: config.model,
+          // Raw batch metadata travels back to the caller, which owns parsing and
+          // decides what to persist about a partially successful run.
+          entityExtraction: {
+            batchCount: result.batchCount,
+            failedBatches: result.failedBatches,
+            promptVersion: result.promptVersion,
+          },
+        };
+      } finally {
+        activeAiRequests.delete(message.requestId);
+      }
     }
 
     if (message.type === 'pdf-helper:ai-judge-relations') {

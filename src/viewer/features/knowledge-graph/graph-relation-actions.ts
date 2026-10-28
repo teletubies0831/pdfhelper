@@ -13,6 +13,7 @@ import {
 } from '../../../modules/knowledge-graph/public';
 import { knowledgeGraphRelationButton } from '../../app/viewer-elements';
 import { setStatus } from '../../app/status-bar';
+import { startTask } from '../../shared-ui/tasks/task-center';
 import { createRelationAnalysisPorts } from './graph-extraction-repository';
 import { openRelationPaperPicker, type RelationPickerPaper } from './relation-paper-picker';
 import { openRelationReviewDialog } from './relation-review-dialog';
@@ -199,6 +200,12 @@ async function runRelationPass(target?: {
   }
 
   knowledgeGraphRelationButton.disabled = true;
+  // 全局任务栏：关系判定同样会跑几分钟，切到阅读页后仍然要能看到进度。
+  const relationTask = startTask({
+    title: '判断论文关系',
+    detail: '正在准备候选论文对…',
+    cancelable: false,
+  });
   try {
     const settings = await knowledgeGraphRepository.readSettings();
     const paperTitles = new Map(getPapers().map((paper) => [paper.paperId, paper.title]));
@@ -241,10 +248,15 @@ async function runRelationPass(target?: {
         // user's behalf.
         return accepted ?? null;
       },
-      onProgress: (message) => setProgress({ message, done: false }),
+      onProgress: (message) => {
+        // 关系判定也是长任务：和抽取一样进全局任务栏，切页也能看见。它目前没有中止能力（runner 不接受 signal），所以不显示停止按钮。
+        relationTask?.update({ detail: message });
+        setProgress({ message, done: false });
+      },
     });
 
     setStatus(describeRelationResult(result), result.status === 'failed');
+    relationTask?.finish(result.status === 'failed' ? 'failed' : 'done', describeRelationResult(result));
     if (result.edgesWritten) {
       await reload();
       // Bridge entities are new nodes in the graph, so the pending badge and the conflict badge are
@@ -254,6 +266,7 @@ async function runRelationPass(target?: {
   } catch (error) {
     // The runner reports an unusable provider answer by returning `status: 'failed'`, but a *thrown* error (network,
     // provider 5xx, aborted request) used to escape as an unhandled rejection: no message, no way to tell what happened.
+    relationTask.finish('failed', `关系分析失败：${error instanceof Error ? error.message : String(error)}`);
     setStatus(`关系分析失败：${error instanceof Error ? error.message : String(error)}`, true);
   } finally {
     // This button has no availability refresh of its own (unlike the extract buttons, whose enabled state is decided by

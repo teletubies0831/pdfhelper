@@ -39,6 +39,21 @@ export function createGraphViewportController(options: {
 }): GraphViewportController {
   let viewport = options.initial;
   let fitted = false;
+  /**
+   * Coalesces redraws into one animation frame per viewport change set.
+   *
+   * A pan produces a `set` per pointermove and a wheel gesture several per second; rendering each one synchronously makes a
+   * large graph feel stuck ("can't drag it"). One frame is all the eye can see, and the last value wins — which is exactly
+   * the viewport that should be drawn.
+   */
+  let frame: number | null = null;
+  const applySoon = (): void => {
+    if (frame !== null) return;
+    frame = requestAnimationFrame(() => {
+      frame = null;
+      options.apply(viewport);
+    });
+  };
 
   const fitBounds = (points: ReadonlyArray<{ x: number; y: number; radius?: number }>) => {
     const { width, height } = options.measure();
@@ -51,7 +66,7 @@ export function createGraphViewportController(options: {
     },
     set(next) {
       viewport = next;
-      options.apply(viewport);
+      applySoon();
     },
     fitOnce(points) {
       if (fitted) return false;

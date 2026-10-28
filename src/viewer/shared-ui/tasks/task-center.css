@@ -1,0 +1,195 @@
+/* 全局任务栏（IDEA 风格的底部状态条）. */
+
+.task-center {
+  position: fixed;
+  left: 50%;
+  bottom: 42px;
+  z-index: 1000030;
+  width: min(720px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  border: 1px solid #dbe4f2;
+  border-radius: 12px;
+  background: #ffffffee;
+  box-shadow: 0 14px 40px rgb(15 35 68 / 16%);
+  color: #243248;
+  font-size: 12px;
+  backdrop-filter: blur(6px);
+}
+
+.task-center[hidden] {
+  display: none;
+}
+
+.task-center-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 120px auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.task-center-icon {
+  color: #1468ee;
+  font-size: 13px;
+}
+
+.task-center.is-done .task-center-icon {
+  color: #1f7a4d;
+}
+
+.task-center.is-failed .task-center-icon {
+  color: #c0392b;
+}
+
+.task-center-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.task-center-title {
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.task-center-detail {
+  color: #6b7a90;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-center-meter {
+  height: 4px;
+  border-radius: 999px;
+  background: #e8eef7;
+  overflow: hidden;
+}
+
+.task-center-fill {
+  display: block;
+  height: 100%;
+  width: 24%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1468ee, #4f8ef7);
+  transition: width 200ms ease-out;
+}
+
+.task-center-fill.is-indeterminate {
+  animation: task-center-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes task-center-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+.task-center-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-center-actions button {
+  padding: 3px 9px;
+  border: 1px solid #dbe4f2;
+  border-radius: 7px;
+  background: #fff;
+  color: #34445c;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.task-center-actions .task-center-cancel {
+  border-color: #f3c9c4;
+  background: #fdf4f3;
+  color: #b42318;
+}
+
+.task-center-actions .task-center-cancel[hidden] {
+  display: none;
+}
+
+.task-center-actions .task-center-close {
+  border: 0;
+  background: transparent;
+  color: #8494a9;
+  font-size: 15px;
+  padding: 0 4px;
+}
+
+.task-center-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 12px 10px;
+  list-style: none;
+}
+
+.task-center-list[hidden] {
+  display: none;
+}
+
+.task-center-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: #f8fafd;
+}
+
+.task-center-row.is-done {
+  background: #f2faf5;
+}
+
+.task-center-row.is-failed,
+.task-center-row.is-cancelled {
+  background: #fdf4f3;
+}
+
+.task-center-row-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-center-row-detail {
+  color: #6b7a90;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-center-row-stop {
+  padding: 2px 8px;
+  border: 1px solid #f3c9c4;
+  border-radius: 6px;
+  background: #fff;
+  color: #b42318;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .task-center {
+    width: calc(100vw - 16px);
+    bottom: 36px;
+  }
+
+  .task-center-head {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .task-center-meter {
+    display: none;
+  }
+}

@@ -70,6 +70,7 @@ import {
   explainAllMissingEntities,
   renderKnowledgeGraph,
   rerenderKnowledgeGraph,
+  resizeKnowledgeGraphCanvas,
   resyncKnowledgeGraph,
   zoomKnowledgeGraph,
 } from "../../features/knowledge-graph/public";
@@ -222,13 +223,17 @@ export function registerKnowledgeGraphEvents(): void {
 /**
  * Canvas sizing and data refresh on window changes.
  *
- * The canvas has no intrinsic size, so a resize or a workspace switch leaves the
- * backing store at the old dimensions until something redraws it.
+ * The canvas has no intrinsic size, so a resize or a workspace switch leaves the backing store at the old dimensions until
+ * something redraws it.
+ *
+ * Deliberately **does not fit on resize** any more: fitting re-frames the graph for the new canvas size, which read as "the
+ * graph rescales with the window" and threw away the pan/zoom the user had chosen. A resize now only re-measures the canvas
+ * and redraws; node positions live in world coordinates, so they do not move at all.
  */
 function registerKnowledgeGraphLayoutEvents(): void {
   window.addEventListener("resize", () => {
     if (!isGraphVisible()) return;
-    fitKnowledgeGraph();
+    resizeKnowledgeGraphCanvas();
   });
 
   document.addEventListener("visibilitychange", () => {

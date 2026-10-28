@@ -12,6 +12,7 @@ import {
   paperNameKey,
   putDocumentFileHandle,
 } from "../../../modules/knowledge/public";
+import { requestSourcePageAfterOpen } from "../../features/recent-files/public";
 import type { FileHandleLike, FilePickerWindow } from "../../app/viewer-types";
 
 function normalizePdfName(value: string): string {
@@ -160,14 +161,16 @@ async function resolveSourceRecentEntry(
 export async function openSourcePdfInNewTab(
   documentName: string,
   recentEntryId?: string,
-  pageNumber = 1,
+  pageNumber = 0,
 ): Promise<boolean> {
   const recentEntry = await resolveSourceRecentEntry(documentName, recentEntryId);
   if (!recentEntry) return false;
 
   const viewerUrl = new URL(browser.runtime.getURL("/viewer.html"));
   viewerUrl.searchParams.set("recentEntryId", recentEntry.id);
-  viewerUrl.searchParams.set("page", String(Math.max(1, Math.round(pageNumber))));
+  // Only an *explicit* page becomes a URL param. Writing `page=1` here was worse than useless: the reader treats a page
+  // param as "jump here", so it overrode the saved reading position and every reopen started at the first page.
+  if (pageNumber > 1) viewerUrl.searchParams.set("page", String(Math.round(pageNumber)));
   await browser.tabs.create({
     url: viewerUrl.toString(),
     active: true,
@@ -178,7 +181,7 @@ export async function openSourcePdfInNewTab(
 export async function openSourcePdfFromKnowledge(
   documentName: string,
   recentEntryId?: string,
-  pageNumber = 1,
+  pageNumber = 0,
   documentId?: string,
 ): Promise<boolean> {
   if (pdfDocument.value) {
@@ -188,5 +191,7 @@ export async function openSourcePdfFromKnowledge(
       return openSourcePdfInNewTab(documentName, recentEntryId, pageNumber);
     }
   }
+  // The same-tab path has no URL to carry a page, so the request is parked for the pages-init restore to consume.
+  requestSourcePageAfterOpen(pageNumber);
   return ensureSourcePdfOpen(documentName, recentEntryId, documentId);
 }

@@ -1,12 +1,16 @@
 import { getDocumentChunks } from '../../../modules/document-agent/public';
+import { browser } from 'wxt/browser';
 import {
   knowledgeGraphRepository,
   runBatchExtraction,
   runEntityExtraction,
   selectBatchTargets,
   summarizeBatchResult,
+  type ExtractionBatchDiagnostics,
   type ExtractionProgress,
 } from '../../../modules/knowledge-graph/public';
+import { startTask, type TaskHandle } from '../../shared-ui/tasks/task-center';
+import { isGraphDebugEnabled } from '../../app/debug-flags';
 import {
   knowledgeGraphBatchButton,
   knowledgeGraphConflictsButton,
@@ -107,7 +111,7 @@ function requireContext(): GraphActionContext {
  * Shown in the page header rather than as a modal: extraction takes minutes and
  * the user must be able to keep reading and panning the graph while it runs.
  */
-function setExtractionProgress(progress: ExtractionProgress): void {
+function setExtractionProgress(progress: ExtractionProgress, task?: TaskHandle): void {
   // The floating notice is the only progress surface now: the header's grey slot was easy to miss and
   // truncated the message. Extraction, relation analysis and explanation generation all report through
   // this one funnel, so one call here covers every long task on the page.
@@ -117,6 +121,13 @@ function setExtractionProgress(progress: ExtractionProgress): void {
     state: progress.phase === 'failed' ? 'error' : finished ? 'success' : 'active',
     ...(progress.totalBatches > 0
       ? { progress: Math.round((progress.completedBatches / progress.totalBatches) * 100) }
+      : {}),
+  });
+  // 分块级进度也进任务栏：批是 3 块一跳，长文档看批数几乎不动。
+  task?.update({
+    detail: progress.message,
+    ...(progress.totalChunks
+      ? { completed: progress.completedChunks ?? 0, total: progress.totalChunks }
       : {}),
   });
   // A *failure* also opens the readable dialog: the plate is narrow and disappears after a few seconds,
@@ -140,8 +151,8 @@ export { setExtractionProgress };
  * Whether the paper's full-text index is usable, and *why not* when it is not.
  *
  * The three cases must stay separate: "no chunks yet" is fixed by indexing, "chunks unreadable" is a storage problem, and
- * collapsing them into one boolean turned a readable IndexedDB failure into 「请先在知识库中建立索引」 — advice that
- * cannot work, because the index may well exist.
+ * collapsing them into one boolean turned a readable storage failure into 「请先在知识库中建立索引」 — advice that cannot
+ * work, because the index may well exist.
  */
 async function probeFullTextIndex(documentId: string): Promise<{ ready: boolean; reason: 'empty' | 'unreadable' | '' ; error: string }> {
   try {
@@ -186,7 +197,7 @@ export async function refreshExtractionAvailability(): Promise<void> {
 
 /** Runs extraction for the graph paper matching the open PDF. */
 export async function extractEntitiesForCurrentPaper(): Promise<void> {
-  const { currentPaperId, reload, ensureReady } = requireContext();
+  const { currentPaperId, reload, ensureReady, listPapers } = requireContext();
   ensureReady();
   // The graph must be loaded first: `currentPaperId` resolves against the
   // projected papers, and without the projection there is no id to extract for.
@@ -197,13 +208,33 @@ export async function extractEntitiesForCurrentPaper(): Promise<void> {
     setStatus('没有找到与当前 PDF 对应的图谱文献，请先让文献进入知识库。', true);
     return;
   }
+  const paperTitle = listPapers().find((paper) => paper.paperId === paperId)?.title ?? paperId;
 
   knowledgeGraphExtractButton.disabled = true;
+  const controller = new AbortController();
+  // The task bar outlives this page: extraction is async, and switching to the reader used to hide the only progress surface
+  // (and the only way to stop it).
+  const task = startTask({
+    title: `抽取候选实体：${paperTitle}`,
+    detail: '正在检查全文索引…',
+    cancelable: true,
+    onCancel: () => {
+      controller.abort();
+      void cancelExtractionRequests('extract:');
+      task.update({ detail: '正在停止…' });
+    },
+  });
   try {
     const result = await runEntityExtraction(createGraphExtractionPorts(), {
       paperId,
-      onProgress: setExtractionProgress,
+      signal: controller.signal,
+      onProgress: (progress) => setExtractionProgress(progress, task),
+      onBatch: (batch) => recordExtractionBatch(paperId, batch),
     });
+    task.finish(
+      result.status === 'failed' ? 'failed' : result.status === 'cancelled' ? 'cancelled' : 'done',
+      result.status === 'skipped' ? '正文未变化，已跳过' : `候选 ${result.candidatesFound} 个 · 新增 ${result.newEntityCount} 个`,
+    );
     if (result.status === 'busy' || result.status === 'cancelled') {
       setStatus(result.reason ?? '抽取未能进行。', true);
       return;
@@ -223,6 +254,66 @@ export async function extractEntitiesForCurrentPaper(): Promise<void> {
     // Availability, not a bare `false`: the paper may still have no index, and
     // re-enabling the button would invite a click that can only fail.
     await refreshExtractionAvailability();
+  }
+}
+
+/** 取消进行中的抽取请求（后台按前缀中止）. */
+async function cancelExtractionRequests(prefix: string): Promise<void> {
+  try {
+    await browser.runtime.sendMessage({ type: 'pdf-helper:ai-cancel-request', requestIdPrefix: prefix });
+  } catch {
+    // Nothing to abort is not an error: the batch may already have answered.
+  }
+}
+
+/**
+ * 每批抽取的明细，保留在内存里供排查.
+ *
+ * "The entities look wrong" has no single cause: it can be a chunk boundary cutting a sentence, a sampled long document, a
+ * model that ignored the prompt, or the gate dropping things. The numbers that separate those cases are per batch (pages,
+ * characters, parsed count, why things were dropped), so they are kept instead of being thrown away with the response.
+ * `localStorage['pdfpal-debug-graph'] = '1'` also prints them (see `app/debug-flags.ts`).
+ */
+const extractionDiagnostics = new Map<string, ExtractionBatchDiagnostics[]>();
+
+export function readExtractionDiagnostics(paperId: string): ExtractionBatchDiagnostics[] {
+  return extractionDiagnostics.get(paperId) ?? [];
+}
+
+/** 供控制台/测试访问：`__pdfpalExtraction()` 打印上一轮每批的明细. */
+export function installExtractionDiagnostics(): void {
+  const holder = window as unknown as { __pdfpalExtraction?: () => unknown };
+  if (holder.__pdfpalExtraction) return;
+  holder.__pdfpalExtraction = () => {
+    const rows = [...extractionDiagnostics.entries()].flatMap(([paperId, batches]) => batches.map((batch) => ({
+      paperId,
+      batch: batch.batchIndex,
+      pages: `${batch.firstPage}-${batch.lastPage}`,
+      chars: batch.characters,
+      candidates: batch.parsedCandidates,
+      dropped: batch.droppedLowQuality + batch.droppedLowConfidence + batch.demotedSuspect,
+    })));
+    console.table(rows);
+    return rows;
+  };
+}
+
+function recordExtractionBatch(paperId: string, batch: ExtractionBatchDiagnostics): void {
+  const list = extractionDiagnostics.get(paperId) ?? [];
+  list.push(batch);
+  extractionDiagnostics.set(paperId, list);
+  if (isGraphDebugEnabled()) {
+    console.info('[graph] 抽取批次', {
+      paperId,
+      batch: batch.batchIndex,
+      pages: `${batch.firstPage}-${batch.lastPage}`,
+      characters: batch.characters,
+      parsedCandidates: batch.parsedCandidates,
+      droppedLowConfidence: batch.droppedLowConfidence,
+      droppedLowQuality: batch.droppedLowQuality,
+      collapsedVariants: batch.collapsedVariants,
+      demotedSuspect: batch.demotedSuspect,
+    });
   }
 }
 
@@ -272,25 +363,56 @@ export async function extractEntitiesForAllPapers(): Promise<void> {
       return;
     }
 
+    const controller = new AbortController();
+    const batchTask = startTask({
+      title: '抽取候选实体：全部文献',
+      detail: `0/${targets.length} 篇`,
+      total: targets.length,
+      cancelable: true,
+      onCancel: () => {
+        controller.abort();
+        void cancelExtractionRequests('extract:');
+        batchTask.update({ detail: '正在停止…' });
+      },
+    });
+    let completedPapers = 0;
     const result = await runBatchExtraction(
       {
         runPaper: async (paperId) => runEntityExtraction(createGraphExtractionPorts(), {
           paperId,
+          signal: controller.signal,
           onProgress: (progress) => setExtractionProgress({
             ...progress,
             message: `${titles.get(paperId) ?? paperId}：${progress.message}`,
-          }),
+          }, batchTask),
+          onBatch: (batch) => recordExtractionBatch(paperId, batch),
         }),
       },
       {
         papers: targets,
-        onProgress: (progress) => setExtractionProgress({
-          phase: 'extracting',
-          message: progress.message,
-          completedBatches: progress.completedPapers,
-          totalBatches: progress.totalPapers,
-        }),
+        signal: controller.signal,
+        onProgress: (progress) => {
+          batchTask.update({
+            completed: progress.completedPapers,
+            total: progress.totalPapers,
+            detail: `${progress.completedPapers}/${progress.totalPapers} 篇 · ${progress.currentTitle}`,
+          });
+          completedPapers = progress.completedPapers;
+          setExtractionProgress({
+            phase: 'extracting',
+            message: progress.message,
+            completedBatches: progress.completedPapers,
+            totalBatches: progress.totalPapers,
+          });
+        },
       },
+    );
+
+    batchTask.finish(
+      result.papersFailed > 0 ? 'failed' : result.cancelled ? 'cancelled' : 'done',
+      result.cancelled
+        ? `已停止：完成 ${completedPapers}/${targets.length} 篇`
+        : `完成 ${result.papersProcessed} 篇 · 跳过 ${result.papersSkipped} 篇 · 候选 ${result.totalCandidatesFound} 个`,
     );
 
     setStatus(
