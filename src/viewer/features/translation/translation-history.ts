@@ -23,7 +23,12 @@ import { clearTranslationHistoryButton, openTranslationHistoryButton, translatio
 import { pdfDocument, pdfViewer, sourceName } from "../../app/viewer-state";
 import { getDocumentChatId } from "../../app/document-identity";
 import { setStatus } from "../recent-files/public";
-import { TRANSLATION_HISTORY_STORAGE_KEY, currentEnglishLearningResult, currentEnglishLearningSourceText, lastTranslatedText, selectedTextForAi, selectedTextPageNumber, translationHistoryDocumentKey, translationHistoryEntries, EnglishLearningResult, TranslationHistoryEntry, TranslationHistoryStore } from "../../app/public";
+import { currentEnglishLearningResult, currentEnglishLearningSourceText, lastTranslatedText, selectedTextForAi, selectedTextPageNumber, translationHistoryDocumentKey, translationHistoryEntries, EnglishLearningResult, TranslationHistoryEntry } from "../../app/public";
+import {
+  migrateLegacyHistory,
+  readDocumentHistory,
+  writeDocumentHistory,
+} from "./translation-history-repository";
 
 
 
@@ -262,27 +267,49 @@ export function renderTranslationHistory(): void {
 
 
 
-export async function persistTranslationHistoryEntries(): Promise<void> {
-  const stored = await browser.storage.local.get(TRANSLATION_HISTORY_STORAGE_KEY);
-  const store = { ...(stored[TRANSLATION_HISTORY_STORAGE_KEY] ?? {}) } as TranslationHistoryStore;
-  if (translationHistoryEntries.value.length) {
-    store[translationHistoryDocumentKey.value] = translationHistoryEntries.value;
-  } else {
-    delete store[translationHistoryDocumentKey.value];
+export async function persistTranslationHistoryEntries(
+  operationStartedAt = Date.now(),
+): Promise<void> {
+  try {
+    // 一篇文献一个键（存储细节在 `translation-history-repository.ts`）：另一个 Viewer 页面在写别的文献时，两边不再互相覆盖。
+    await writeDocumentHistory(
+      translationHistoryDocumentKey.value,
+      translationHistoryEntries.value,
+      undefined,
+      operationStartedAt,
+    );
+  } catch (error) {
+    console.warn("PDFPal 无法保存英语学习历史。", error);
+    throw error;
   }
-  await browser.storage.local.set({ [TRANSLATION_HISTORY_STORAGE_KEY]: store });
 }
 
 
 
 export async function deleteTranslationHistoryEntry(id: string): Promise<void> {
+  const operationStartedAt = Date.now();
+  if (!(await refreshTranslationHistoryBeforeMutation())) return;
   translationHistoryEntries.value = translationHistoryEntries.value.filter(
     (entry) => entry.id !== id,
   );
   rebuildTranslationHistoryIndex();
-  await persistTranslationHistoryEntries();
+  await persistTranslationHistoryEntries(operationStartedAt);
   renderTranslationHistory();
   if (!translationHistoryDialog.hidden) renderTranslationHistoryDialog();
+}
+
+/**
+ * A second Viewer can clear this document while this page is open. Mutation must never use the cached list blindly: a non-empty
+ * save is allowed to recreate a document after a clear, but it must contain only the user's new mutation, not stale entries.
+ */
+async function refreshTranslationHistoryBeforeMutation(): Promise<boolean> {
+  const documentKey = getTranslationHistoryDocumentKey();
+  const entries = await readHistoryForDocument(documentKey);
+  if (getTranslationHistoryDocumentKey() !== documentKey) return false;
+  translationHistoryDocumentKey.value = documentKey;
+  translationHistoryEntries.value = entries;
+  rebuildTranslationHistoryIndex();
+  return true;
 }
 
 
@@ -290,12 +317,35 @@ export async function deleteTranslationHistoryEntry(id: string): Promise<void> {
 export async function ensureTranslationHistoryLoaded(): Promise<void> {
   const documentKey = getTranslationHistoryDocumentKey();
   if (documentKey === translationHistoryDocumentKey.value) return;
-  const stored = await browser.storage.local.get(TRANSLATION_HISTORY_STORAGE_KEY);
-  const store = stored[TRANSLATION_HISTORY_STORAGE_KEY] as TranslationHistoryStore | undefined;
+  const entries = await readHistoryForDocument(documentKey);
+  // 读取期间用户可能已经切到别的 PDF：这一份结果属于旧文档，丢掉它，别让 key 与内容错位。
+  if (getTranslationHistoryDocumentKey() !== documentKey) return;
   translationHistoryDocumentKey.value = documentKey;
-  translationHistoryEntries.value = readTranslationHistoryEntries(store?.[documentKey]);
+  translationHistoryEntries.value = entries;
   rebuildTranslationHistoryIndex();
   renderTranslationHistory();
+}
+
+/**
+ * 读取一篇文献的历史，必要时从旧格式迁移.
+ *
+ * The legacy layout kept every document's list inside one object; the first read of a document that has no per-document key triggers
+ * the wholesale migration (see `migrateLegacyHistory`), so a user who upgrades keeps every document's history instead of only the one
+ * they happen to open.
+ *
+ * The value is **re-read after migrating** instead of taken from the legacy snapshot: if another page migrated first and then saved a
+ * newer entry for this document, that key is the truth — and the migration deliberately never overwrites it.
+ */
+async function readHistoryForDocument(documentKey: string): Promise<TranslationHistoryEntry[]> {
+  const stored = await readDocumentHistory(documentKey);
+  if (stored !== undefined) return readTranslationHistoryEntries(stored);
+  const migrated = await migrateLegacyHistory();
+  if (!migrated) return [];
+  const afterMigration = await readDocumentHistory(documentKey);
+  if (afterMigration !== undefined) return readTranslationHistoryEntries(afterMigration);
+  // Do not fall back to `migrated[documentKey]`: `undefined` can mean that another Viewer wrote a deletion tombstone while this
+  // page held the legacy snapshot. Returning that in-memory copy would render cleared history and a later save could resurrect it.
+  return [];
 }
 
 
@@ -375,7 +425,8 @@ export async function storeTranslationHistoryResult(
   sourceText: string,
   result: EnglishLearningResult,
 ): Promise<void> {
-  await ensureTranslationHistoryLoaded();
+  const operationStartedAt = Date.now();
+  if (!(await refreshTranslationHistoryBeforeMutation())) return;
   const normalizedSource = sourceText.replace(/\s+/g, " ").trim();
   if (!normalizedSource) return;
   const sourceSentence = result.kind === "word"
@@ -400,17 +451,18 @@ export async function storeTranslationHistoryResult(
     ),
   ];
   rebuildTranslationHistoryIndex();
-  await persistTranslationHistoryEntries();
+  await persistTranslationHistoryEntries(operationStartedAt);
   renderTranslationHistory();
 }
 
 
 
 export async function clearCurrentTranslationHistory(): Promise<void> {
-  await ensureTranslationHistoryLoaded();
+  const operationStartedAt = Date.now();
+  if (!(await refreshTranslationHistoryBeforeMutation())) return;
   translationHistoryEntries.value = [];
   translationHistoryIndex.clear();
-  await persistTranslationHistoryEntries();
+  await persistTranslationHistoryEntries(operationStartedAt);
   renderTranslationHistory();
   setStatus("已清空当前 PDF 的英语学习历史。");
 }

@@ -56,6 +56,15 @@ export type EnglishLearningResult = VocabularyLearningResult | SentenceLearningR
 
 export const TRANSLATION_HISTORY_STORAGE_KEY = "pdf-helper-translation-history-v1";
 
+/**
+ * 新格式：`pdf-helper-translation-history-v1::<documentKey>`，一篇文献一个键.
+ *
+ * The old layout kept every document's list in one object under the single key above, so two Viewer pages writing different
+ * documents still rewrote the same value — and the later write threw away both the other document's list and the other page's new
+ * entries. One key per document makes concurrent pages independent; only two pages editing the *same* document can still race.
+ */
+export const TRANSLATION_HISTORY_KEY_PREFIX = "pdf-helper-translation-history-v1::";
+
 export interface TranslationHistoryEntry {
   id: string;
   sourceText: string;

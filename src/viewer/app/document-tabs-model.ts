@@ -73,6 +73,27 @@ export function documentTabLabel(tab: DocumentTab): string {
   return tab.name.replace(/\.pdf$/i, "");
 }
 
+/**
+ * 关闭这个标签页前要不要确认，以及确认哪一种.
+ *
+ * - `active`: the active tab always asks (the confirmation is a no-op when there are no unsaved changes), because it is the one
+ *   the user is looking at and its flag is live.
+ * - `background`: **only** when that tab carries unsaved changes. Background tabs really can: switching away runs
+ *   `snapshotActiveTab()`, which copies the flag and the annotation state into the tab instead of saving or resolving it. The old
+ *   rule assumed a background tab could never be dirty, so closing one destroyed the user's annotations without a word.
+ * - `none`: nothing to ask.
+ */
+export type TabCloseGuard = "none" | "active" | "background";
+
+export function planTabCloseGuard(input: {
+  isActive: boolean;
+  hasActiveDocument: boolean;
+  tabHasUnsavedChanges: boolean;
+}): TabCloseGuard {
+  if (input.isActive) return input.hasActiveDocument ? "active" : "none";
+  return input.tabHasUnsavedChanges ? "background" : "none";
+}
+
 export interface TabClosePlan {
   /** Tabs that remain open after the close. */
   remainingTabs: DocumentTab[];

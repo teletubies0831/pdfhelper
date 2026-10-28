@@ -14,13 +14,13 @@ import {
 } from "../../../modules/knowledge/public";
 import { requestSourcePageAfterOpen } from "../../features/recent-files/public";
 import type { FileHandleLike, FilePickerWindow } from "../../app/viewer-types";
+import {
+  normalizePdfFileName,
+  sourcePdfMatchesOpenDocument,
+} from "./source-pdf-match";
 
 function normalizePdfName(value: string): string {
-  return getDisplayFileName(value)
-    .trim()
-    .replace(/\.pdf$/i, "")
-    .replace(/\s+/g, " ")
-    .toLowerCase();
+  return normalizePdfFileName(getDisplayFileName(value));
 }
 
 /**
@@ -50,21 +50,25 @@ function findRecentEntryFor<T extends { id: string; name: string }>(
   return entries.find((entry) => paperNameKey(entry.name) === targetKey);
 }
 
+/**
+ * 当前打开的 PDF 是否就是这份文献的源文件.
+ *
+ * 规则本身在 `source-pdf-match.ts`（纯函数，可单独测试）：给了条目 id 就以它为准，没给才退回文件名比较。
+ *
+ * `sourceName` may be a full URL for a remote PDF; it is converted to its display file name here, before the comparison, because the
+ * record's name is a file name. Skipping this step made an open remote PDF stop matching its own record.
+ */
 export function isSourcePdfCurrentlyOpen(
   documentName: string,
   recentEntryId?: string,
 ): boolean {
-  if (!pdfDocument.value) return false;
-
-  if (
-    recentEntryId
-    && currentRecentEntryId.value
-    && currentRecentEntryId.value === recentEntryId
-  ) {
-    return true;
-  }
-
-  return normalizePdfName(sourceName.value) === normalizePdfName(documentName);
+  return sourcePdfMatchesOpenDocument({
+    hasOpenDocument: Boolean(pdfDocument.value),
+    openEntryId: currentRecentEntryId.value,
+    requestedEntryId: recentEntryId,
+    openName: getDisplayFileName(sourceName.value),
+    targetName: documentName,
+  });
 }
 
 export async function ensureSourcePdfOpen(
@@ -187,7 +191,7 @@ export async function openSourcePdfFromKnowledge(
   if (pdfDocument.value) {
     // A new tab resolves the file by recent-entry id, so it can only work while the entry still exists. With a durable
     // handle and no entry, open in this tab instead — that path registers a fresh recent entry and re-links implicitly.
-    if (recentEntryId || (await resolveSourceRecentEntry(documentName, recentEntryId))) {
+    if (await resolveSourceRecentEntry(documentName, recentEntryId)) {
       return openSourcePdfInNewTab(documentName, recentEntryId, pageNumber);
     }
   }

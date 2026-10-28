@@ -253,6 +253,12 @@ test('a poisoned cache entry is ignored instead of painting an empty card', asyn
       './sentence-card-view': {},
       './selection-context': {},
       './translation-action-layout': {},
+      // 存储层已拆成独立模块：这里只关心解析函数，给一个什么都不做的端口就够。
+      './translation-history-repository': {
+        readDocumentHistory: async () => undefined,
+        writeDocumentHistory: async () => {},
+        migrateLegacyHistory: async () => null,
+      },
     }),
   );
   const read = entries.readTranslationHistoryEntries

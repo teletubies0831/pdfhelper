@@ -4,7 +4,8 @@
   position: fixed;
   left: 50%;
   bottom: 42px;
-  z-index: 1000030;
+  /* Status is useful above the workspace, but never above a modal that needs an answer. */
+  z-index: 999999;
   width: min(720px, calc(100vw - 32px));
   transform: translateX(-50%);
   border: 1px solid #dbe4f2;
