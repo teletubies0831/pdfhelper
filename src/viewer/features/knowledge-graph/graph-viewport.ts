@@ -63,6 +63,19 @@ export interface FitBounds {
   maxY: number;
 }
 
+/**
+ * 世界坐标尺寸.
+ *
+ * Grows with the node count so a 10-node graph is not squeezed into a corner and a 300-node graph is not one dense blob — but
+ * it deliberately **does not depend on the canvas**, because that dependency is what made resizing the window rearrange the
+ * graph. Lives here (not in the layout runner) so the rule is importable by tests without the layout runner's module barrel.
+ */
+export function layoutWorldSize(nodeCount: number): { width: number; height: number } {
+  const clamped = Math.max(1, Math.min(400, nodeCount));
+  const size = Math.round(760 + Math.sqrt(clamped) * 120);
+  return { width: size, height: Math.round(size * 0.72) };
+}
+
 export function boundsOfPoints(
   points: Array<{ x: number; y: number; radius?: number }>,
 ): FitBounds | null {

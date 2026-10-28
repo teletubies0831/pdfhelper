@@ -310,10 +310,8 @@ export interface AiDocumentMetadataRequest {
 /** What the model managed to read; every field is optional and may legitimately be empty. */
 export interface AiDocumentMetadata {
   /**
-   * The work's own title, as printed on the first page.
-   *
-   * Not the file name: 引文 needs the title, and `2010-Boyar-…-technique.pdf` is not it. Empty means the model could not
-   * find it, in which case the record keeps its file name and the citation UI says which one it used.
+   * The work's own title, as printed on the first page — not the file name. Empty means the model could not find it, in
+   * which case the record keeps its file name and the citation UI says so.
    */
   title: string;
   authors: string[];

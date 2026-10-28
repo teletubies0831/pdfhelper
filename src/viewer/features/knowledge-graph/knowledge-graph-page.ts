@@ -94,6 +94,7 @@ import { hideGraphTaskNotice } from './graph-task-notice';
 import { setPageStatus, updateEmptyState } from './graph-page-status';
 import { syncFilterControls } from './graph-filter-controls';
 import { registerGraphCanvasInteraction } from './graph-canvas-interaction';
+import { installExtractionDiagnostics } from './graph-entity-actions';
 import {
   describeGraphView,
   shouldAnnounceGraphLoad,
@@ -140,9 +141,8 @@ const LAYOUT_NODE_BUDGET = 320;
 /**
  * Above this node count, degree-1 leaves are folded before rendering.
  *
- * Higher than `LAYOUT_NODE_BUDGET`: condensation is a visible structural change, so
- * it happens only once the graph is genuinely too big to read, whereas the layout
- * budget is an internal performance knob.
+ * Higher than `LAYOUT_NODE_BUDGET`: condensation is a visible structural change, so it happens only once the graph is
+ * genuinely too big to read, whereas the layout budget is an internal performance knob.
  */
 const CONDENSE_THRESHOLD = 240;
 
@@ -150,12 +150,7 @@ const CONDENSE_THRESHOLD = 240;
 let condensationNote = '';
 
 let renderer: GraphCanvasRenderer | null = null;
-/**
- * Pan/zoom state and the "fit once after layout" rule.
- *
- * See `graph-viewport-controller.ts`: fitting on every reload snapped the canvas back
- * to the origin, which forced the user to drag it back after every action.
- */
+/** Pan/zoom state and the "fit once after layout" rule — see `graph-viewport-controller.ts`. */
 const viewportController = createGraphViewportController({
   initial: createViewport(),
   measure: () => ({
@@ -220,17 +215,14 @@ function currentFilterState(): GraphFilterState {
 }
 
 /**
- * Rebuilds the visible subgraph from the current filters and hands it to the
- * renderer. Single funnel for canvas, counts and selection bookkeeping so they
- * cannot disagree about what is on screen.
+ * Rebuilds the visible subgraph from the current filters. Single funnel for canvas, counts and selection bookkeeping, so the
+ * three cannot disagree about what is on screen.
  */
 function redraw(): void {
   if (!renderer) return;
 
-  // Condense *before* the subgraph, not after: truncation cuts whatever ordering
-  // happens to reach the cap, so running it first can hide papers behind keyword
-  // noise. Folding degree-1 leaves first keeps every paper and every real hub, and
-  // usually brings the graph under the cap so truncation never triggers at all.
+  // Condense before the subgraph, not after: truncation cuts whatever ordering reaches the cap, so running it first can hide
+  // papers behind keyword noise. Folding degree-1 leaves keeps every paper and every real hub.
   const condensed = condenseGraph(
     snapshot.papers,
     snapshot.entities,
@@ -346,6 +338,15 @@ export function zoomKnowledgeGraph(factor: number, anchorX?: number, anchorY?: n
 
 export function fitKnowledgeGraph(): void {
   layoutRunner.fit();
+}
+
+/**
+ * Re-measures the canvas after the window or the workspace changed.
+ *
+ * It does **not** fit: node positions live in world coordinates, so a resize only changes how much of the world is on screen.
+ */
+export function resizeKnowledgeGraphCanvas(): void {
+  layoutRunner.resize();
 }
 
 function buildInspectorActions(): InspectorActions {
@@ -543,6 +544,7 @@ export function registerKnowledgeGraphCanvasEvents(): void {
     zoom: zoomKnowledgeGraph,
     select: applyCanvasSelection,
   });
+  installExtractionDiagnostics();
 }
 
 export function openKnowledgeGraphPage(): void {

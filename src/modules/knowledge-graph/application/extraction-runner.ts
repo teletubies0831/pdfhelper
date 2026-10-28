@@ -10,6 +10,7 @@ import { suggestEntityMerges } from '../domain/entity-similarity.ts';
 import {
   EXTRACTION_PROMPT_VERSION,
   planExtractionBatches,
+  selectExtractionChunks,
   type ExtractionBatch,
 } from './extraction-plan.ts';
 import {
@@ -88,6 +89,31 @@ export interface ExtractionProgress {
   message: string;
   completedBatches: number;
   totalBatches: number;
+  /**
+   * 分块级别进度（可选：`skipped`/`failed` 早期阶段还没有分块数）.
+   *
+   * A batch is three chunks, so "3/17 批" moves once every few seconds and says nothing about how far into the document the
+   * run is. The chunk counters are what a 200-page document needs: `已处理 27/54 块`.
+   */
+  completedChunks?: number;
+  totalChunks?: number;
+  /** 长文档是否被抽样（上限见 `MAX_EXTRACTION_CHUNKS_PER_PAPER`）。 */
+  sampled?: boolean;
+}
+
+/** 一批抽取的明细，供诊断日志使用（不参与判断，只用于回答「为什么抽成这样」）。 */
+export interface ExtractionBatchDiagnostics {
+  batchIndex: number;
+  chunkIds: string[];
+  firstPage: number;
+  lastPage: number;
+  characters: number;
+  parsedCandidates: number;
+  droppedLowConfidence: number;
+  droppedLowQuality: number;
+  collapsedVariants: number;
+  demotedSuspect: number;
+  error?: string;
 }
 
 export interface ExtractionRunResult {
@@ -142,6 +168,8 @@ export interface RunExtractionOptions {
   paperId: string;
   signal?: AbortSignal;
   onProgress?: (progress: ExtractionProgress) => void;
+  /** 每批的明细（分块、页范围、候选数、丢弃原因），供诊断日志使用。 */
+  onBatch?: (batch: ExtractionBatchDiagnostics) => void;
   /** When true, ignore a completed job and extract again. */
   force?: boolean;
   now?: number;
@@ -218,10 +246,19 @@ export async function runEntityExtraction(
       };
     }
 
+    /**
+     * 长文档抽样.
+     *
+     * Runs before the fingerprint so the fingerprint describes what was actually sent: changing the budget (or the prompt
+     * version) changes the selected chunk ids and therefore re-runs, which is the behaviour we want.
+     */
+    const selection = selectExtractionChunks(chunks);
+    const selectedChunks = selection.chunks;
+
     const fingerprint = extractionInputFingerprint({
       paperId,
-      chunkIds: chunks.map((chunk) => chunk.chunkId),
-      chunkCharacterCounts: chunks.map((chunk) => chunk.text.length),
+      chunkIds: selectedChunks.map((chunk) => chunk.chunkId),
+      chunkCharacterCounts: selectedChunks.map((chunk) => chunk.text.length),
       promptVersion: EXTRACTION_PROMPT_VERSION,
       maxCandidatesPerChunk: settings.extractionMaxCandidatesPerChunk,
     });
@@ -288,7 +325,7 @@ export async function runEntityExtraction(
         now,
       });
 
-    const batches = planExtractionBatches(chunks);
+    const batches = planExtractionBatches(selectedChunks);
     // A cursor pointing past the end means the plan changed under us; restart
     // rather than silently producing an empty run.
     const startBatch = Math.min(job.cursor?.batchIndex ?? 0, batches.length);
@@ -347,9 +384,14 @@ export async function runEntityExtraction(
 
     report({
       phase: 'extracting',
-      message: `正在抽取候选实体：0/${batches.length} 批`,
+      message: selection.sampled
+        ? `正在抽取候选实体：0/${batches.length} 批（长文档，已从 ${selection.totalChunks} 块中取样 ${selection.usedChunks} 块）`
+        : `正在抽取候选实体：0/${batches.length} 批`,
       completedBatches: startBatch,
       totalBatches: batches.length,
+      completedChunks: 0,
+      totalChunks: selection.usedChunks,
+      sampled: selection.sampled,
     });
 
     const tasks = pendingBatches.map((batch: ExtractionBatch) => async () => {
@@ -363,7 +405,7 @@ export async function runEntityExtraction(
         // background method for the contribution. Absent for papers with neither an abstract nor a
         // document overview; the block is then simply omitted.
         ...(paperSummary.trim() ? { abstract: paperSummary.trim() } : {}),
-        chunks: batchChunks(chunks, batch),
+        chunks: batchChunks(selectedChunks, batch),
         maxCandidatesPerChunk: settings.extractionMaxCandidatesPerChunk,
       });
       if (!response.ok) throw new Error(response.error ?? '抽取请求失败。');
@@ -379,6 +421,8 @@ export async function runEntityExtraction(
     // order, but accumulating in plan order keeps ids and `updatedAt` stable
     // between runs, which is what makes a repeat run a no-op.
     let committedBatches = 0;
+    /** 已处理的分块数：批是 3 块一跳，分块才是用户看得懂的刻度。 */
+    let completedChunks = 0;
     for (let index = 0; index < outcomes.length; index += 1) {
       const outcome = outcomes[index]!;
       batchesRun += 1;
@@ -390,7 +434,7 @@ export async function runEntityExtraction(
       }
 
       const { response, batch } = outcome.value;
-      const firstChunk = chunks.find((chunk) => chunk.chunkId === batch.chunkIds[0]);
+      const firstChunk = selectedChunks.find((chunk) => chunk.chunkId === batch.chunkIds[0]);
       const parsed = parseEntityCandidates(
         response.content ?? '',
         {
@@ -429,6 +473,19 @@ export async function runEntityExtraction(
       }
 
       committedBatches += 1;
+      completedChunks += batch.chunkIds.length;
+      options.onBatch?.({
+        batchIndex: index,
+        chunkIds: [...batch.chunkIds],
+        firstPage: firstChunk?.startPage ?? 1,
+        lastPage: firstChunk?.endPage ?? firstChunk?.startPage ?? 1,
+        characters: batch.prompt.length,
+        parsedCandidates: parsed.candidates.length,
+        droppedLowConfidence: plan.droppedLowConfidence,
+        droppedLowQuality: plan.droppedLowQuality,
+        collapsedVariants: plan.collapsedVariants,
+        demotedSuspect: plan.demotedSuspect,
+      });
       // Advance only across contiguous successes: advancing over a failed batch
       // would mark it done and the retry would skip it, losing those entities.
       const contiguous = startBatch + contiguousCompletedCount(outcomes, 0);
@@ -437,9 +494,12 @@ export async function runEntityExtraction(
 
       report({
         phase: 'persisting',
-        message: `正在抽取候选实体：${contiguous}/${batches.length} 批`,
+        message: `正在抽取候选实体：${completedChunks}/${selection.usedChunks} 块 · 第 ${contiguous}/${batches.length} 批`,
         completedBatches: contiguous,
         totalBatches: batches.length,
+        completedChunks,
+        totalChunks: selection.usedChunks,
+        sampled: selection.sampled,
       });
     }
 

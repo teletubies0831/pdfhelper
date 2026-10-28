@@ -66,6 +66,18 @@ before(async () => {
       },
     };
     const statusBar = { setStatus: (message, error) => window.calls.push(['status', message, Boolean(error)]) };
+    // 全局任务栏：这里只记录调用，渲染行为由 test:task-center 覆盖。
+    const taskCenter = {
+      startTask: (input) => {
+        window.calls.push(['task-start', input.title]);
+        return {
+          id: 'task-test',
+          update: (patch) => window.calls.push(['task-update', patch.detail ?? '']),
+          advance: () => {},
+          finish: (status, detail) => window.calls.push(['task-finish', status, detail ?? '']),
+        };
+      },
+    };
     const elements = {
       knowledgeGraphRelationButton: document.getElementById('knowledge-graph-relation'),
     };
@@ -78,6 +90,7 @@ before(async () => {
       if (name === './graph-extraction-repository') return ports;
       if (name === './relation-paper-picker') return picker;
       if (name === './relation-review-dialog') return review;
+      if (name === '../../shared-ui/tasks/task-center') return taskCenter;
       throw new Error(`Unmocked dependency: ${name}`);
     }, moduleExports);
     window.relationActions = moduleExports;
@@ -127,13 +140,26 @@ test('一次运行结束后按钮重新可用，而且可以再点一次', async
   });
 
   assert.equal(result.afterRun.disabled, false, 'the button is usable again once the run finished');
+  // 任务栏调用是这一轮新加的：它穿插在流程里，但不改变 picker → judge → status 的顺序。
   assert.deepEqual(
-    result.afterRun.calls.map((call) => call[0]),
+    result.afterRun.calls.map((call) => call[0]).filter((kind) => !kind.startsWith('task-')),
     ['picker', 'run', 'status'],
     'and the run went through picker → judge → status',
   );
+  assert.equal(
+    result.afterRun.calls.some((call) => call[0] === 'task-start'),
+    true,
+    '关系判定也进全局任务栏',
+  );
+  assert.equal(
+    result.afterRun.calls.some((call) => call[0] === 'task-finish' && call[1] === 'done'),
+    true,
+  );
   assert.equal(result.afterSecondRun.disabled, false, 'a second analysis is possible in the same session');
-  assert.deepEqual(result.afterSecondRun.calls.map((call) => call[0]), ['picker', 'run', 'status']);
+  assert.deepEqual(
+    result.afterSecondRun.calls.map((call) => call[0]).filter((kind) => !kind.startsWith('task-')),
+    ['picker', 'run', 'status'],
+  );
 });
 
 test('运行失败也会恢复按钮，并且把失败说出来', async () => {

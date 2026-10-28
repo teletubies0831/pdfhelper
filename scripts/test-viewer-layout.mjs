@@ -281,7 +281,7 @@ before(async () => {
 after(async () => { await browser?.close(); });
 
 test('the first fit happens once and later reloads keep the user position', async () => {
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate(async () => {
     const applied = [];
     const controller = window.controllerModule.createGraphViewportController({
       initial: { scale: 1, offsetX: 0, offsetY: 0 },
@@ -292,12 +292,16 @@ test('the first fit happens once and later reloads keep the user position', asyn
       { x: 0, y: 0, radius: 10 },
       { x: 400, y: 300, radius: 10 },
     ];
+    // `set()` coalesces redraws into one animation frame (a pan produces one per pointermove; rendering each synchronously made
+    // a large graph feel undraggable), so the probe has to let that frame run before counting applications.
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
 
     const firstFit = controller.fitOnce(points);
     const afterFit = { ...controller.get(), appliedCount: applied.length };
 
     // The user pans and zooms somewhere deliberate.
     controller.set({ scale: 2.5, offsetX: -640, offsetY: -320 });
+    await frame();
     const panned = { ...controller.get() };
 
     // A reload (statistics / conflicts / a finished extraction) re-runs the layout and
@@ -312,6 +316,7 @@ test('the first fit happens once and later reloads keep the user position', asyn
 
     // A graph that emptied out is fitted again when it fills up.
     controller.set({ scale: 3, offsetX: -100, offsetY: -100 });
+    await frame();
     controller.invalidate();
     const fitAfterInvalidate = controller.fitOnce(points);
 

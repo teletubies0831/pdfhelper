@@ -409,7 +409,7 @@ export async function openRecentFile(entry: RecentPdfEntry) {
 
 export async function openRecentFileById(
   recentEntryId: string,
-  pageNumber = 1,
+  pageNumber = 0,
 ): Promise<boolean> {
   const entries = await readRecentFiles();
   const entry = entries.find((item) => item.id === recentEntryId);
@@ -417,13 +417,26 @@ export async function openRecentFileById(
     setStatus("找不到这份知识库 PDF 的文件记录，请在原窗口重新添加。", true);
     return false;
   }
-  requestedSourcePageAfterOpen = Math.max(1, Math.round(pageNumber));
+  // `pageNumber <= 1` means "no explicit page": the entry's own reading position is restored instead. Forcing page 1
+  // here is what made every reopen of a paper start at the first page.
+  requestedSourcePageAfterOpen = pageNumber > 1 ? Math.round(pageNumber) : null;
   await openRecentFile(entry);
   if (!pdfDocument.value || currentRecentEntryId.value !== entry.id) {
     requestedSourcePageAfterOpen = null;
     return false;
   }
   return true;
+}
+
+/**
+ * 让「打开原文」在文件打开后跳到指定页.
+ *
+ * The same-tab open path (a stored file handle) has no URL param to carry the page, so the request is parked here and
+ * consumed by `restoreStartupSourcePageAfterPagesInit` once the pages exist. `<= 1` clears it, so a later open does not
+ * inherit a stale jump.
+ */
+export function requestSourcePageAfterOpen(pageNumber: number): void {
+  requestedSourcePageAfterOpen = pageNumber > 1 ? Math.round(pageNumber) : null;
 }
 
 

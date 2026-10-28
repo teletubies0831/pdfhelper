@@ -120,7 +120,14 @@ const viewerSearchParams = new URLSearchParams(window.location.search);
 
 export const source = viewerSearchParams.get("src");
 export const requestedRecentEntryId = viewerSearchParams.get("recentEntryId");
-export const requestedSourcePage = Math.max(
-  1,
-  Number.parseInt(viewerSearchParams.get("page") || "1", 10) || 1,
-);
+/**
+ * 明确要求跳到的页码；`0` 表示「没有指定」。
+ *
+ * The default used to be 1, which made every open look like an explicit request for page 1 — and that request was
+ * honoured *over* the saved reading position, so 「继续上次阅读」 silently always started at the first page. Zero is the
+ * "no opinion" value: opening a tab without a `page` param must let the reader's own restore run.
+ */
+export const requestedSourcePage = (() => {
+  const parsed = Number.parseInt(viewerSearchParams.get("page") || "", 10);
+  return Number.isFinite(parsed) && parsed > 1 ? parsed : 0;
+})();

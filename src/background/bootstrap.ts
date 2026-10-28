@@ -10,6 +10,7 @@ import {
 import {
   AI_STREAM_PORT_NAME,
   isAiRuntimeRequest,
+  isCancelAiRequestMessage,
   type AiStreamToolResult,
 } from "../modules/ai/public";
 
@@ -26,6 +27,7 @@ import {
   isAiStreamToolResultsMessage,
   postAiStreamMessage,
   streamAiResponse,
+  cancelAiRequestsByPrefix,
 } from "./ai/ai-runtime";
 import { getSafeProviderErrorDetails as getSafeErrorDetails } from "../modules/ai/public";
 import { withAiRequestLifetime } from "./ai/request-lifetime";
@@ -72,6 +74,11 @@ export function bootstrapBackground(): void {
       }
       return undefined;
     }
+    // 取消：中止匹配前缀的进行中请求. Separate from the AI request funnel because it is *not* an AI request — it carries no
+    // config and spends nothing, and it has to reach the worker while the original call is still awaiting the provider.
+    if (isCancelAiRequestMessage(message)) {
+      return Promise.resolve({ ok: true, aborted: cancelAiRequestsByPrefix(message.requestIdPrefix) });
+    }
     if (!isAiRuntimeRequest(message)) return undefined;
     return withAiRequestLifetime(() => handleAiRequest(message, async (progress) => {
       if (message.type !== 'pdf-helper:ai-generate-document-overview') return;
@@ -101,7 +108,10 @@ export function bootstrapBackground(): void {
         const finish = (results: AiStreamToolResult[]): void => {
           if (settled) return;
           settled = true;
-          window.clearTimeout(timeoutId);
+          // 后台是 Service Worker：这里没有 `window`，`window.clearTimeout` 会直接抛 ReferenceError。
+          // 抛出点在工具结果回来的那一刻，于是 promise 永远不 resolve、`withAiRequestLifetime` 一直被 pin 住，
+          // 表现就是「工具已完成 → 正在思考…」永不结束。用全局 clearTimeout（SW 里同样可用）。
+          clearTimeout(timeoutId);
           signal.removeEventListener("abort", onAbort);
           if (pendingToolResults?.requestId === requestId) pendingToolResults = undefined;
           resolve(results);

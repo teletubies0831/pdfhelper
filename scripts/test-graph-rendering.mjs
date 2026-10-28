@@ -447,4 +447,131 @@ test('the PNG export draws the whole graph without disturbing the live canvas', 
   );
 });
 
+// ---------------------------------------------------------------------------
+// 布局缓存必须「重算一次、每次都套用」
+//
+// The models are rebuilt on every redraw (a click, a filter change, a reload) and `buildRenderModel` starts every node at
+// (0,0) — positions are only stamped on by `applyPositions`. Reusing the *signature* without re-applying the cached positions
+// therefore collapsed the whole graph into one blob at the origin, which is exactly what a click did.
+// ---------------------------------------------------------------------------
+test('一次点击重建模型后，节点仍然停在原位而不是全部叠到原点', async () => {
+  const layoutRunnerCode = await loadModule('src/viewer/features/knowledge-graph/graph-layout-runner.ts');
+  const viewportCode = await loadModule('src/viewer/features/knowledge-graph/graph-viewport.ts');
+  const forceLayoutCode = await loadModule('src/modules/knowledge-graph/domain/graph-force-layout.ts');
+  // 力导向布局按节点角色决定弹簧长度，角色表在 paper-degree.ts 里，是最小的真实依赖。
+  const paperDegreeCode = await loadModule('src/modules/knowledge-graph/domain/paper-degree.ts');
+
+  const outcome = await page.evaluate(async ([runnerSource, viewportSource, forceSource, paperDegreeSource]) => {
+    const modules = new Map([
+      ['src/viewer/features/knowledge-graph/graph-layout-runner.ts', runnerSource],
+      ['src/viewer/features/knowledge-graph/graph-viewport.ts', viewportSource],
+      ['src/modules/knowledge-graph/domain/graph-force-layout.ts', forceSource],
+      ['src/modules/knowledge-graph/domain/paper-degree.ts', paperDegreeSource],
+    ]);
+    const registry = new Map();
+    const resolve = (fromPath, spec) => {
+      if (spec.includes('knowledge-graph/public')) return 'barrel';
+      const stack = fromPath.split('/').slice(0, -1);
+      for (const part of spec.split('/')) {
+        if (part === '.' || part === '') continue;
+        if (part === '..') stack.pop();
+        else stack.push(part);
+      }
+      const joined = stack.join('/');
+      return [`${joined}.ts`, joined].find((candidate) => modules.has(candidate)) ?? null;
+    };
+    const instantiate = (path) => {
+      const cached = registry.get(path);
+      if (cached) return cached.exports;
+      const module = { exports: {} };
+      registry.set(path, module);
+      const require = (name) => {
+        if (name.includes('knowledge-graph/public')) {
+          const layout = instantiate('src/modules/knowledge-graph/domain/graph-force-layout.ts');
+          return { computeLayout: layout.computeLayout, DEFAULT_LAYOUT_OPTIONS: layout.DEFAULT_LAYOUT_OPTIONS };
+        }
+        const resolved = resolve(path, name);
+        if (!resolved) throw new Error(`Unresolvable dependency ${name} from ${path}`);
+        return instantiate(resolved);
+      };
+      new Function('require', 'exports', 'module', modules.get(path))(require, module.exports, module);
+      return module.exports;
+    };
+    const runnerModule = instantiate('src/viewer/features/knowledge-graph/graph-layout-runner.ts');
+
+    // A renderer that behaves like the real one: the model arrives with every node at (0,0), and only `applyPositions` moves
+    // them. `setModel` mimics `buildRenderModel` building a fresh model for the same content.
+    const renderer = {
+      model: null,
+      applied: [],
+      renderCount: 0,
+      getModel() { return this.model; },
+      setModel(content) {
+        this.model = {
+          nodes: content.nodes.map((node) => ({ ...node, x: 0, y: 0 })),
+          edges: content.edges,
+        };
+      },
+      applyPositions(positions) {
+        this.applied.push(positions.size);
+        for (const node of this.model.nodes) {
+          const point = positions.get(node.id);
+          if (point) { node.x = point.x; node.y = point.y; }
+        }
+      },
+      render() { this.renderCount += 1; },
+    };
+    const content = {
+      nodes: Array.from({ length: 12 }, (_, index) => ({
+        id: `n${index}`,
+        kind: index < 3 ? 'paper' : 'entity',
+        radius: index < 3 ? 16 : 8,
+        confidence: 0.9,
+      })),
+      edges: Array.from({ length: 11 }, (_, index) => ({
+        sourceId: `n${index}`,
+        targetId: `n${index + 1}`,
+        edge: { confidence: 0.8 },
+      })),
+    };
+    const runner = runnerModule.createGraphLayoutRunner({
+      getRenderer: () => renderer,
+      viewport: () => ({ get: () => ({ scale: 1, offsetX: 0, offsetY: 0 }), set() {}, fitOnce() { return false; }, fit() {}, invalidate() {} }),
+      canvasSize: () => ({ width: 900, height: 600 }),
+      previewNodeBudget: 320,
+    });
+    const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    const positions = () => renderer.model.nodes.map((node) => ({ id: node.id, x: node.x, y: node.y }));
+
+    renderer.setModel(content);
+    runner.schedule();
+    await frame();
+    const first = positions();
+
+    // The click: a brand-new model with the same ids, every node back at (0,0).
+    renderer.setModel(content);
+    const rebuiltAtOrigin = positions().every((node) => node.x === 0 && node.y === 0);
+    runner.schedule();
+    await frame();
+    const second = positions();
+
+    return {
+      firstDistinct: new Set(first.map((node) => `${node.x}:${node.y}`)).size,
+      rebuiltAtOrigin,
+      secondDistinct: new Set(second.map((node) => `${node.x}:${node.y}`)).size,
+      sameAsBefore: second.every((node, index) => node.x === first[index].x && node.y === first[index].y),
+      applied: renderer.applied,
+      rendered: renderer.renderCount,
+    };
+  }, [layoutRunnerCode, viewportCode, forceLayoutCode, paperDegreeCode]);
+
+  assert.equal(outcome.firstDistinct > 1, true, '第一次布局把节点拉开');
+  assert.equal(outcome.rebuiltAtOrigin, true, '重建的模型确实从原点开始（这就是点击后的状态）');
+  // 关键回归：签名没变，但坐标必须重新套用，否则整张图叠成一个点。
+  assert.equal(outcome.secondDistinct > 1, true, '点击之后节点不能全部叠到原点');
+  assert.equal(outcome.sameAsBefore, true, '同一份内容不该把节点挪到别处');
+  assert.deepEqual(outcome.applied, [outcome.applied[0], outcome.applied[0]], '两次都套用了同一份坐标');
+  assert.equal(outcome.rendered >= 2, true);
+});
+
 console.log('Graph rendering budget tests passed.');

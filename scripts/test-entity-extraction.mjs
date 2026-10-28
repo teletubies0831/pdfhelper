@@ -17,6 +17,11 @@ import {
   mergeGraphEntities,
 } from '../src/modules/knowledge-graph/application/entity-service.ts';
 import { buildPendingReview } from '../src/modules/knowledge-graph/application/entity-service.ts';
+import {
+  EXTRACTION_LEAD_CHUNKS,
+  MAX_EXTRACTION_CHUNKS_PER_PAPER,
+  selectExtractionChunks,
+} from '../src/modules/knowledge-graph/application/extraction-plan.ts';
 import { normalizeEntityName } from '../src/modules/knowledge-graph/domain/entity-normalization.ts';
 import { DEFAULT_KNOWLEDGE_GRAPH_SETTINGS } from '../src/modules/knowledge-graph/contracts.ts';
 
@@ -566,5 +571,53 @@ const stableInput = [
 ];
 assert.deepEqual(buildPendingReview(stableInput, { minConfidenceToAutoCheck: 0.5 }),
   buildPendingReview(stableInput, { minConfidenceToAutoCheck: 0.5 }));
+
+// ---------------------------------------------------------------------------
+// 长文档抽样：一本书不该变成几十次模型调用
+//
+// A 200+ page book produces 70+ chunks (3 per call), i.e. minutes of waiting and a matching bill for text whose entity
+// density is a fraction of a paper's. The budget keeps a paper fully covered and samples a book — deterministically, because
+// the job fingerprint is built from the selected chunk ids.
+// ---------------------------------------------------------------------------
+const chunk = (index) => ({
+  chunkId: `c${index}`,
+  text: 'x'.repeat(100),
+  startPage: index + 1,
+  endPage: index + 1,
+});
+
+{
+  const short = selectExtractionChunks(Array.from({ length: 20 }, (_, index) => chunk(index)));
+  assert.equal(short.sampled, false);
+  assert.equal(short.usedChunks, 20);
+  assert.equal(short.totalChunks, 20);
+  assert.deepEqual(short.chunks.map((item) => item.chunkId), Array.from({ length: 20 }, (_, i) => `c${i}`));
+
+  const long = selectExtractionChunks(Array.from({ length: 300 }, (_, index) => chunk(index)));
+  assert.equal(long.sampled, true);
+  assert.equal(long.totalChunks, 300);
+  assert.equal(long.usedChunks, MAX_EXTRACTION_CHUNKS_PER_PAPER);
+  // The opening chunks are always kept: that is where a paper states its contribution and method.
+  assert.deepEqual(
+    long.chunks.slice(0, EXTRACTION_LEAD_CHUNKS).map((item) => item.chunkId),
+    Array.from({ length: EXTRACTION_LEAD_CHUNKS }, (_, i) => `c${i}`),
+  );
+  // Strictly increasing and inside the document: a sample, not a reordering.
+  const indexes = long.chunks.map((item) => Number(item.chunkId.slice(1)));
+  assert.deepEqual([...indexes].sort((a, b) => a - b), indexes);
+  assert.equal(new Set(indexes).size, indexes.length);
+
+  // Deterministic: the fingerprint depends on the selection, so a different result on the second call would re-spend tokens
+  // on every run.
+  assert.deepEqual(
+    selectExtractionChunks(Array.from({ length: 300 }, (_, index) => chunk(index))).chunks.map((item) => item.chunkId),
+    long.chunks.map((item) => item.chunkId),
+  );
+
+  // A budget at or below the lead count still returns something usable.
+  const tiny = selectExtractionChunks(Array.from({ length: 50 }, (_, index) => chunk(index)), 5);
+  assert.equal(tiny.usedChunks, 5);
+  assert.deepEqual(tiny.chunks.map((item) => item.chunkId), ['c0', 'c1', 'c2', 'c3', 'c4']);
+}
 
 console.log('Entity extraction and confirmation contract tests passed.');

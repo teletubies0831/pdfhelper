@@ -217,3 +217,58 @@ export function buildExtractionUserMessage(input: ExtractionUserMessageInput): s
 
   return batches;
 }
+
+/**
+ * 单篇文献参与抽取的分块上限.
+ *
+ * A 200-page book produces ~70 chunks, i.e. ~23 provider calls for one document — minutes of waiting and a bill to match,
+ * for a text whose entity density per page is a fraction of a paper's (trade books, indexes, appendices, bibliographies).
+ * The budget keeps a paper (and a chapter-length report) fully covered while turning a book into a representative sample.
+ */
+export const MAX_EXTRACTION_CHUNKS_PER_PAPER = 96;
+
+/**
+ * 首尾保留的块数：开头一定是摘要/引言/方法，抽样不能把它们丢掉.
+ *
+ * The opening chunks are where a paper states its contribution and its method; sampling evenly across the whole document
+ * would leave the extraction with three mid-paper results discussions and no idea what the paper proposes.
+ */
+export const EXTRACTION_LEAD_CHUNKS = 12;
+
+export interface ExtractionChunkSelection {
+  /** 实际送去抽取的分块（顺序不变）。 */
+  chunks: AiEntityExtractionChunk[];
+  totalChunks: number;
+  usedChunks: number;
+  /** 是否发生了抽样（`usedChunks < totalChunks`）。 */
+  sampled: boolean;
+}
+
+/**
+ * 选出参与抽取的分块：先保开头，再在其余部分均匀取样.
+ *
+ * Deterministic on purpose (no randomness): the job fingerprint is built from the selected chunk ids, so the same document
+ * must always produce the same selection, or every run would look like a change and re-spend tokens.
+ */
+export function selectExtractionChunks(
+  chunks: readonly AiEntityExtractionChunk[],
+  budget = MAX_EXTRACTION_CHUNKS_PER_PAPER,
+): ExtractionChunkSelection {
+  const totalChunks = chunks.length;
+  if (budget <= 0 || totalChunks <= budget) {
+    return { chunks: [...chunks], totalChunks, usedChunks: totalChunks, sampled: false };
+  }
+  const lead = Math.min(EXTRACTION_LEAD_CHUNKS, budget, totalChunks);
+  const picked = new Set<number>();
+  for (let index = 0; index < lead; index += 1) picked.add(index);
+  const remaining = budget - lead;
+  const tail = chunks.length - lead;
+  for (let step = 0; step < remaining; step += 1) {
+    // 均匀落在 (lead, total) 的剩余区间上，四舍五入后去重；剩余量与容量相等时正好全部覆盖。
+    const ratio = (step + 0.5) / remaining;
+    const index = Math.min(chunks.length - 1, lead + Math.floor(ratio * tail));
+    picked.add(index);
+  }
+  const selected = [...picked].sort((left, right) => left - right).map((index) => chunks[index]!);
+  return { chunks: selected, totalChunks, usedChunks: selected.length, sampled: true };
+}

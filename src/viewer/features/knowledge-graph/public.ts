@@ -8,6 +8,7 @@ export {
   registerKnowledgeGraphCanvasEvents,
   renderKnowledgeGraph,
   rerenderKnowledgeGraph,
+  resizeKnowledgeGraphCanvas,
   resyncKnowledgeGraph,
   zoomKnowledgeGraph,
 } from './knowledge-graph-page';
