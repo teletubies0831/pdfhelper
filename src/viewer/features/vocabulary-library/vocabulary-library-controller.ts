@@ -440,14 +440,23 @@ export async function saveVocabularyEditor(): Promise<void> {
     markdown,
     tags: parseTags(vocabularyEditorTagsInput.value),
   };
-  if (editingCardId) {
-    await updateVocabularyCard(editingCardId, editable);
-  } else {
-    await createVocabularyCard({
-      ...editable,
-      sourceText: "",
-      documentName: "",
-    });
+  try {
+    if (editingCardId) {
+      const saved = await updateVocabularyCard(editingCardId, editable);
+      if (!saved) {
+        setStatus("这张卡已在另一个页面被删除，未保存本次编辑。", true);
+        return;
+      }
+    } else {
+      await createVocabularyCard({
+        ...editable,
+        sourceText: "",
+        documentName: "",
+      });
+    }
+  } catch (error) {
+    setStatus(`保存单词卡片失败：${error instanceof Error ? error.message : String(error)}`, true);
+    return;
   }
   closeVocabularyEditor();
   await renderVocabularyLibrary(true);
@@ -457,7 +466,12 @@ export async function removeVocabularyCard(id: string): Promise<void> {
   const card = cards.find((item) => item.id === id);
   if (!card) return;
   if (!window.confirm(`确定删除单词卡片“${card.term}”吗？`)) return;
-  await deleteVocabularyCard(id);
+  try {
+    await deleteVocabularyCard(id);
+  } catch (error) {
+    setStatus(`删除单词卡片失败：${error instanceof Error ? error.message : String(error)}`, true);
+    return;
+  }
   if (editingCardId === id) closeVocabularyEditor();
   await renderVocabularyLibrary(true);
 }
@@ -471,24 +485,29 @@ export async function saveCurrentTranslationToVocabulary(): Promise<void> {
   }
   const term = getVocabularyCardTerm(result);
   const sourceText = result.kind === "word" ? result.sentence : result.sourceText;
-  const existing = (await readVocabularyCards()).find((card) =>
-    card.term.toLocaleLowerCase() === term.toLocaleLowerCase() &&
-    card.sourceText === sourceText,
-  );
-  if (existing) {
-    setStatus(`“${term}”已经保存在单词库中。`);
+  try {
+    const existing = (await readVocabularyCards()).find((card) =>
+      card.term.toLocaleLowerCase() === term.toLocaleLowerCase() &&
+      card.sourceText === sourceText,
+    );
+    if (existing) {
+      setStatus(`“${term}”已经保存在单词库中。`);
+      return;
+    }
+    await createVocabularyCard({
+      term,
+      pronunciation: result.kind === "word" ? result.pronunciation : "",
+      partOfSpeech: getVocabularyCardPartOfSpeech(result),
+      markdown: formatLearningResultAsMarkdown(result),
+      tags: result.kind === "word" ? ["英语学习"] : ["英语学习", "句子"],
+      sourceText,
+      documentName: getDisplayFileName(sourceName.value),
+      pageNumber: Math.max(1, selectedTextPageNumber.value || 1),
+    });
+  } catch (error) {
+    setStatus(`保存到单词库失败：${error instanceof Error ? error.message : String(error)}`, true);
     return;
   }
-  await createVocabularyCard({
-    term,
-    pronunciation: result.kind === "word" ? result.pronunciation : "",
-    partOfSpeech: getVocabularyCardPartOfSpeech(result),
-    markdown: formatLearningResultAsMarkdown(result),
-    tags: result.kind === "word" ? ["英语学习"] : ["英语学习", "句子"],
-    sourceText,
-    documentName: getDisplayFileName(sourceName.value),
-    pageNumber: Math.max(1, selectedTextPageNumber.value || 1),
-  });
   cardsLoaded = false;
   vocabularyLibraryNeedsRender = true;
   setStatus(`已将“${term}”保存到单词库。`);

@@ -221,15 +221,18 @@ export async function persistCurrentReadingPosition() {
   const readingPosition = getCurrentReadingPosition();
   const recentEntryId = currentRecentEntryId.value;
   if (!readingPosition || !recentEntryId) return;
+  // Capture the document *before* the await. `snapshotActiveTab()` fires this without awaiting and then switches to the next
+  // tab, so by the time the write returns, `pdfDocument.value` may already be the *other* document — and reading it here wrote
+  // A's page number into B's library record.
+  const openDocumentId = pdfDocument.value ? getDocumentChatId(pdfDocument.value) : null;
 
   try {
     await writeCurrentEntryReadingPosition(recentEntryId, readingPosition);
     // Mirror onto the library record: 「最近打开」 keeps 12 entries, so a position stored only there disappears on its own.
     // `setDocumentReadingProgress` deliberately leaves `updatedAt` alone (this runs while the user scrolls) and writes
     // nothing when the page has not changed.
-    const openDocumentProxy = pdfDocument.value;
-    if (openDocumentProxy) {
-      setDocumentReadingProgress(getDocumentChatId(openDocumentProxy), {
+    if (openDocumentId) {
+      setDocumentReadingProgress(openDocumentId, {
         page: readingPosition.pageNumber,
         at: new Date(readingPosition.updatedAt).toISOString(),
       });

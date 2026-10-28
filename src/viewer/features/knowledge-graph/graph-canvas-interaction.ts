@@ -38,7 +38,11 @@ export function registerGraphCanvasInteraction(
   canvas: HTMLCanvasElement,
   ports: GraphCanvasInteractionPorts,
 ): void {
+  let activePointerId: number | null = null;
   canvas.addEventListener('pointerdown', (event) => {
+    // One canvas gesture owns the viewport at a time. A second finger must not install a second set of move/up handlers.
+    if (activePointerId !== null) return;
+    activePointerId = event.pointerId;
     canvas.setPointerCapture(event.pointerId);
     const startX = event.clientX;
     const startY = event.clientY;
@@ -58,18 +62,36 @@ export function registerGraphCanvasInteraction(
       });
     };
 
-    const onUp = (upEvent: PointerEvent): void => {
+    const cleanup = (): void => {
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
-      if (canvas.hasPointerCapture(upEvent.pointerId)) {
-        canvas.releasePointerCapture(upEvent.pointerId);
+      canvas.removeEventListener('pointercancel', onCancel);
+      canvas.removeEventListener('lostpointercapture', onLostPointerCapture);
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
       }
+      activePointerId = null;
+    };
+
+    const onUp = (upEvent: PointerEvent): void => {
+      if (upEvent.pointerId !== event.pointerId) return;
+      cleanup();
       if (dragged) return;
       handleClick(upEvent.clientX, upEvent.clientY);
     };
 
+    const onCancel = (cancelEvent: PointerEvent): void => {
+      if (cancelEvent.pointerId === event.pointerId) cleanup();
+    };
+
+    const onLostPointerCapture = (lostEvent: PointerEvent): void => {
+      if (lostEvent.pointerId === event.pointerId) cleanup();
+    };
+
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onCancel);
+    canvas.addEventListener('lostpointercapture', onLostPointerCapture);
   });
 
   canvas.addEventListener('pointermove', (event) => {

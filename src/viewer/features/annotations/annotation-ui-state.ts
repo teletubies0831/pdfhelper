@@ -39,3 +39,17 @@ export function confirmDiscardUnsavedChanges(): boolean {
     "当前 PDF 有未保存的批注或笔记。是否放弃这些更改并继续？",
   );
 }
+
+/**
+ * 关闭**后台**标签页前的确认.
+ *
+ * `confirmDiscardUnsavedChanges()` reads the *active* document's flag, so it cannot answer for a background tab. Background
+ * tabs do carry unsaved annotations (switching away snapshots them, it does not resolve them), which is why closing one used
+ * to discard the user's work without a word.
+ */
+export function confirmDiscardTabChanges(tabName: string, unsaved: boolean): boolean {
+  if (!unsaved) return true;
+  return window.confirm(
+    `「${tabName}」有未保存的批注或笔记。关闭这个标签页会丢弃这些更改，确定关闭吗？`,
+  );
+}

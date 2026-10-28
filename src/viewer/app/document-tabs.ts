@@ -29,6 +29,7 @@ import {
   sourcePdfBytes,
 } from "./viewer-state";
 import {
+  confirmDiscardTabChanges,
   confirmDiscardUnsavedChanges,
   getSerializableAnnotationEntries,
   markSavedChanges,
@@ -60,6 +61,7 @@ import {
   findDocumentTab,
   findDocumentTabByFingerprint,
   planTabClose,
+  planTabCloseGuard,
   type DocumentTab,
 } from "./document-tabs-model";
 import { documentTabsBar, documentTabsList, textStatus } from "./viewer-elements";
@@ -334,19 +336,27 @@ export async function activateDocumentTab(
 }
 
 /**
- * Closes a tab. The active tab prompts about unsaved annotations; background
- * tabs can never carry unsaved changes (switching away resolves them first).
+ * Closes a tab.
  *
- * Closing a background tab removes it and re-renders — and deliberately does **not**
- * activate anything: the reader keeps showing the document it was showing. Activating
- * the neighbour there made a background close silently switch the visible PDF, which
+ * **Both** cases confirm: the active tab through the live `hasUnsavedChanges` flag, a background tab through its snapshotted
+ * one. Background tabs absolutely can carry unsaved work — switching away runs `snapshotActiveTab()`, which copies the flag and
+ * the annotation state into the tab instead of saving or resolving it — so closing one used to throw that work away silently.
+ *
+ * Closing a background tab removes it and re-renders — and deliberately does **not** activate anything: the reader keeps showing
+ * the document it was showing. Activating the neighbour there made a background close silently switch the visible PDF, which
  * reads as "the × button does something else than close".
  */
 export async function closeDocumentTab(tabId: string): Promise<void> {
   const target = findDocumentTab(tabs, tabId);
   if (!target) return;
   const isActive = tabId === activeTabId;
-  if (isActive && pdfDocument.value && !confirmDiscardUnsavedChanges()) return;
+  const guard = planTabCloseGuard({
+    isActive,
+    hasActiveDocument: Boolean(pdfDocument.value),
+    tabHasUnsavedChanges: target.hasUnsavedChanges,
+  });
+  if (guard === "active" && !confirmDiscardUnsavedChanges()) return;
+  if (guard === "background" && !confirmDiscardTabChanges(target.name, true)) return;
   if (isActive) snapshotActiveTab();
 
   const plan = planTabClose(tabs, tabId, activeTabId);

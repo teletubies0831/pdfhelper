@@ -220,10 +220,12 @@ export async function extractEntitiesForCurrentPaper(): Promise<void> {
     cancelable: true,
     onCancel: () => {
       controller.abort();
-      void cancelExtractionRequests('extract:');
+      // A single-paper stop must not abort extraction requests belonging to another paper.
+      void cancelExtractionRequests(`extract:${paperId}:`);
       task.update({ detail: '正在停止…' });
     },
   });
+  let taskFinished = false;
   try {
     const result = await runEntityExtraction(createGraphExtractionPorts(), {
       paperId,
@@ -235,6 +237,7 @@ export async function extractEntitiesForCurrentPaper(): Promise<void> {
       result.status === 'failed' ? 'failed' : result.status === 'cancelled' ? 'cancelled' : 'done',
       result.status === 'skipped' ? '正文未变化，已跳过' : `候选 ${result.candidatesFound} 个 · 新增 ${result.newEntityCount} 个`,
     );
+    taskFinished = true;
     if (result.status === 'busy' || result.status === 'cancelled') {
       setStatus(result.reason ?? '抽取未能进行。', true);
       return;
@@ -250,6 +253,12 @@ export async function extractEntitiesForCurrentPaper(): Promise<void> {
       result.status === 'failed',
     );
     await afterExtraction();
+  } catch (error) {
+    const message = `抽取异常中断：${error instanceof Error ? error.message : String(error)}`;
+    // `afterExtraction` can fail after the extraction task has already correctly finished; do not turn that completed task red.
+    if (!taskFinished) task.finish('failed', message);
+    setStatus(message, true);
+    console.error('[graph] 单篇实体抽取异常', error);
   } finally {
     // Availability, not a bare `false`: the paper may still have no index, and
     // re-enabling the button would invite a click that can only fail.
@@ -340,6 +349,8 @@ export async function extractEntitiesForAllPapers(): Promise<void> {
   }
 
   knowledgeGraphBatchButton.disabled = true;
+  let batchTask: TaskHandle | null = null;
+  let batchTaskFinished = false;
   try {
     const indexed = new Set<string>();
     const unreadable: string[] = [];
@@ -364,17 +375,20 @@ export async function extractEntitiesForAllPapers(): Promise<void> {
     }
 
     const controller = new AbortController();
-    const batchTask = startTask({
+    let batchCancelling = false;
+    const activeBatchTask = startTask({
       title: '抽取候选实体：全部文献',
       detail: `0/${targets.length} 篇`,
       total: targets.length,
       cancelable: true,
       onCancel: () => {
+        batchCancelling = true;
         controller.abort();
         void cancelExtractionRequests('extract:');
-        batchTask.update({ detail: '正在停止…' });
+        activeBatchTask.update({ detail: '正在停止…' });
       },
     });
+    batchTask = activeBatchTask;
     let completedPapers = 0;
     const result = await runBatchExtraction(
       {
@@ -384,7 +398,7 @@ export async function extractEntitiesForAllPapers(): Promise<void> {
           onProgress: (progress) => setExtractionProgress({
             ...progress,
             message: `${titles.get(paperId) ?? paperId}：${progress.message}`,
-          }, batchTask),
+          }),
           onBatch: (batch) => recordExtractionBatch(paperId, batch),
         }),
       },
@@ -392,11 +406,13 @@ export async function extractEntitiesForAllPapers(): Promise<void> {
         papers: targets,
         signal: controller.signal,
         onProgress: (progress) => {
-          batchTask.update({
-            completed: progress.completedPapers,
-            total: progress.totalPapers,
-            detail: `${progress.completedPapers}/${progress.totalPapers} 篇 · ${progress.currentTitle}`,
-          });
+          if (!batchCancelling) {
+            activeBatchTask.update({
+              completed: progress.completedPapers,
+              total: progress.totalPapers,
+              detail: `${progress.completedPapers}/${progress.totalPapers} 篇 · ${progress.currentTitle}`,
+            });
+          }
           completedPapers = progress.completedPapers;
           setExtractionProgress({
             phase: 'extracting',
@@ -408,12 +424,13 @@ export async function extractEntitiesForAllPapers(): Promise<void> {
       },
     );
 
-    batchTask.finish(
+    activeBatchTask.finish(
       result.papersFailed > 0 ? 'failed' : result.cancelled ? 'cancelled' : 'done',
       result.cancelled
         ? `已停止：完成 ${completedPapers}/${targets.length} 篇`
         : `完成 ${result.papersProcessed} 篇 · 跳过 ${result.papersSkipped} 篇 · 候选 ${result.totalCandidatesFound} 个`,
     );
+    batchTaskFinished = true;
 
     setStatus(
       summarizeBatchResult(result)
@@ -421,6 +438,12 @@ export async function extractEntitiesForAllPapers(): Promise<void> {
       result.papersFailed > 0,
     );
     await afterExtraction();
+  } catch (error) {
+    const message = `批量抽取异常中断：${error instanceof Error ? error.message : String(error)}`;
+    // Do not rewrite a successfully completed task if only its post-run UI refresh failed.
+    if (batchTask && !batchTaskFinished) batchTask.finish('failed', message);
+    setStatus(message, true);
+    console.error('[graph] 批量实体抽取异常', error);
   } finally {
     await refreshExtractionAvailability();
   }

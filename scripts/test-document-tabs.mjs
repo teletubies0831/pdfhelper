@@ -7,7 +7,9 @@ import {
   findDocumentTabByFingerprint,
   neighborTabAfterRemoval,
   planTabClose,
+  planTabCloseGuard,
 } from '../src/viewer/app/document-tabs-model.ts';
+import { normalizePdfFileName, sourcePdfMatchesOpenDocument } from '../src/viewer/shared-ui/navigation/source-pdf-match.ts';
 import {
   describePdfBatch,
   describePdfBatchFailures,
@@ -160,5 +162,128 @@ assert.equal(allFailed.failures.length, 3);
 const empty = await runPdfBatch([], { open: async () => ({ id: 'x' }) });
 assert.deepEqual(empty, { requested: 0, opened: 0, failures: [] });
 assert.equal(describePdfBatch(empty), '没有选择任何文件。');
+
+// ---------------------------------------------------------------------------
+// 关闭标签页前的确认：后台标签页也可能带着未保存批注
+//
+// `snapshotActiveTab()` 在切走时把 hasUnsavedChanges 和批注状态复制进标签页，而不是保存或解决它，所以「后台标签页不可能有未保存
+// 改动」这个前提是错的：按旧规则关掉它，用户的批注会被无提示丢掉。
+// ---------------------------------------------------------------------------
+assert.equal(
+  planTabCloseGuard({ isActive: true, hasActiveDocument: true, tabHasUnsavedChanges: false }),
+  'active',
+  '活动标签页总是先问（确认函数自己在没有改动时直接返回 true）',
+);
+assert.equal(
+  planTabCloseGuard({ isActive: true, hasActiveDocument: false, tabHasUnsavedChanges: true }),
+  'none',
+  '工作区是空的时候没有可确认的内容',
+);
+assert.equal(
+  planTabCloseGuard({ isActive: false, hasActiveDocument: true, tabHasUnsavedChanges: true }),
+  'background',
+  '带未保存改动的后台标签页必须先确认',
+);
+assert.equal(
+  planTabCloseGuard({ isActive: false, hasActiveDocument: true, tabHasUnsavedChanges: false }),
+  'none',
+  '干净的后台标签页直接关，不打扰用户',
+);
+
+// ---------------------------------------------------------------------------
+// 源文件身份：给了条目 id 就只认 id，同一文件名不算同一份文件
+// ---------------------------------------------------------------------------
+assert.equal(
+  sourcePdfMatchesOpenDocument({
+    hasOpenDocument: true,
+    openEntryId: 'entry-b',
+    requestedEntryId: 'entry-a',
+    openName: '论文.pdf',
+    targetName: '论文.pdf',
+  }),
+  false,
+  '同名但不同条目：不是同一份文件，必须真的去打开目标文件',
+);
+assert.equal(
+  sourcePdfMatchesOpenDocument({
+    hasOpenDocument: true,
+    openEntryId: 'entry-a',
+    requestedEntryId: 'entry-a',
+    openName: '另一个名字.pdf',
+    targetName: '论文.pdf',
+  }),
+  true,
+  '同一个条目就是同一份文件，名字不同也无所谓',
+);
+assert.equal(
+  sourcePdfMatchesOpenDocument({
+    hasOpenDocument: true,
+    openEntryId: null,
+    requestedEntryId: 'entry-a',
+    openName: '论文.pdf',
+    targetName: '论文.pdf',
+  }),
+  false,
+  '当前文档没有条目 id 时不能靠重名蒙对',
+);
+assert.equal(
+  sourcePdfMatchesOpenDocument({
+    hasOpenDocument: true,
+    openEntryId: null,
+    openName: '论文.pdf',
+    targetName: '论文.PDF',
+  }),
+  true,
+  '调用方没有 id 可给时才退回文件名比较（大小写、扩展名无关）',
+);
+assert.equal(
+  sourcePdfMatchesOpenDocument({
+    hasOpenDocument: false,
+    openEntryId: 'entry-a',
+    requestedEntryId: 'entry-a',
+    openName: '',
+    targetName: '论文.pdf',
+  }),
+  false,
+  '没有打开的文档就谈不上「已经是这份文件」',
+);
+
+// ---------------------------------------------------------------------------
+// 远程 PDF：sourceName 是 URL，两侧都可能没有 entry id
+//
+// 上一轮把规则抽成纯函数时漏了「URL → 文件名」这一步：远程 PDF 的 sourceName 是完整 URL，与记录里的文件名永远不相等，
+// 于是已经打开的原文认不出来，「打开原文」转而去最近文件里重开（记录被清掉时就失败）。
+// ---------------------------------------------------------------------------
+assert.equal(
+  sourcePdfMatchesOpenDocument({
+    hasOpenDocument: true,
+    openEntryId: null,
+    openName: 'https://arxiv.org/pdf/2401.00001v2.pdf?download=1',
+    targetName: '2401.00001v2.pdf',
+  }),
+  true,
+  'URL 与同名显示文件（两侧都没有条目 id）应当认为是同一份',
+);
+assert.equal(
+  sourcePdfMatchesOpenDocument({
+    hasOpenDocument: true,
+    openEntryId: null,
+    openName: 'file:///C:/Users/me/Documents/%E8%AE%BA%E6%96%87.pdf',
+    targetName: '论文.pdf',
+  }),
+  true,
+  '本地文件 URL 要解码成文件名再比较',
+);
+assert.equal(
+  sourcePdfMatchesOpenDocument({
+    hasOpenDocument: true,
+    openEntryId: null,
+    openName: 'https://example.com/a/one.pdf',
+    targetName: 'two.pdf',
+  }),
+  false,
+  'URL 也要真的比较文件名，不是一律相等',
+);
+assert.equal(normalizePdfFileName('  Paper  Name.PDF '), 'paper name', '空白与大小写归一化');
 
 console.log('Document tab model and batch-open tests passed.');
