@@ -19,7 +19,9 @@
       <div class="toolbar-menu-section">
         <div class="toolbar-menu-heading">文件管理</div>
         <button id="recent-files-button" class="toolbar-menu-item" type="button" role="menuitem">
-          <span aria-hidden="true">◷</span>
+          <svg class="toolbar-icon toolbar-menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <use href="/resources/icons.svg#toolbar-icon-history" />
+          </svg>
           最近打开
         </button>
         <label
@@ -29,7 +31,7 @@
           role="menuitem"
           tabindex="0"
         >
-          <svg class="toolbar-icon open-pdf-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="toolbar-icon toolbar-menu-icon open-pdf-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M6.5 3.5h7l4 4v13h-11z" />
             <path d="M13.5 3.5v4h4" />
             <path d="M8.8 14.8h6.4" />
@@ -39,7 +41,11 @@
           打开 PDF
         </label>
         <button id="save-annotated-pdf" class="toolbar-menu-item primary-button" type="button" role="menuitem">
-          <span aria-hidden="true">↓</span>
+          <svg class="toolbar-icon toolbar-menu-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4v9" />
+            <path d="m8.5 9.5 3.5 3.5 3.5-3.5" />
+            <path d="M5 17.5h14" />
+          </svg>
           保存批注 PDF
         </button>
       </div>

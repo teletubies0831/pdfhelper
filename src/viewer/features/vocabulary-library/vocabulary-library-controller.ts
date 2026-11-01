@@ -38,6 +38,7 @@ import { getDisplayFileName } from "../../core/pdf-reader/public";
 import { setCurrentApplicationView } from "../assistant/public";
 import { setStatus } from "../recent-files/public";
 import { renderChatMarkdown } from "../../shared-ui/markdown/markdown-renderer";
+import { speakWord } from "../../shared-ui/speech/word-speech";
 import {
   dismissAnimatedDialog,
   showAnimatedDialog,
@@ -578,12 +579,9 @@ export function scheduleVocabularyPreview(): void {
 
 export function speakVocabularyEditorTerm(): void {
   const term = vocabularyEditorTermInput.value.trim();
-  if (!term || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(term);
-  utterance.lang = "en-US";
-  utterance.rate = 0.9;
-  window.speechSynthesis.speak(utterance);
+  if (!term) return;
+  // 与翻译卡片共用同一套朗读实现（音色选择、语速、取消上一遍），避免同一个词两处读法不同。
+  void speakWord(term);
 }
 
 export function getEditingVocabularyCardId(): string | null {

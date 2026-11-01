@@ -56,6 +56,10 @@ before(async () => {
       '../../core/pdf-reader/public': {},
       '../assistant/public': { setCurrentApplicationView() {} }, '../recent-files/public': { setStatus() {} },
       '../../shared-ui/markdown/markdown-renderer': {}, '../../shared-ui/dialog/dialog-motion': {},
+      // 朗读模块：这里不测语音，只给一个不做事的实现（编辑器按钮复用它的 speakWord）。
+      '../../shared-ui/speech/word-speech': {
+        isWordSpeechAvailable: () => false, speakWord: async () => false, stopWordSpeech() {},
+      },
       './learning-card-markdown': {}, './vocabulary-preference': { isVocabularyLibraryEnabled: () => true },
       './vocabulary-repository': { readVocabularyCards: () => holdReads ? new Promise(resolve => pendingReads.push(resolve)) : Promise.resolve(cards) },
     };
