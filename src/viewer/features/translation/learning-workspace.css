@@ -357,6 +357,97 @@
   font-size: 13px;
 }
 
+/*
+ * 词条朗读：一个喇叭按钮 + 一个「英 / 美」口音开关.
+ *
+ * 两个按钮都是**裸露**的：没有边框、没有底色，只有 hover 时一层很淡的圆角底色——它们紧挨着词条，画成两个小盒子会把「词条本身」压下去。
+ * 喇叭 = 用当前口音朗读；英/美 = 只切口音，不发声。斜杠只是分隔符，不是可点区域。
+ */
+.word-speak {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  margin-left: auto;
+  align-self: center;
+}
+
+.word-speak-play,
+.word-speak-accent {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #7b8aa1;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.word-speak-play {
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+
+.word-speak-play > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.word-speak-accent {
+  gap: 1px;
+  padding: 4px 6px;
+  border-radius: 7px;
+}
+
+.word-speak-play:hover,
+.word-speak-accent:hover {
+  background: #eef3fb;
+  color: #173f8a;
+}
+
+.word-speak-option {
+  color: #98a4b8;
+  font-size: 12px;
+  transition: color 120ms ease-out;
+}
+
+.word-speak-option.is-active {
+  color: #173f8a;
+  font-weight: 640;
+}
+
+.word-speak-slash {
+  margin: 0 1px;
+  color: #c2cddc;
+  font-size: 11px;
+}
+
+.word-speak.is-speaking .word-speak-play {
+  color: #173f8a;
+  animation: word-speak-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes word-speak-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .word-speak.is-speaking .word-speak-play {
+    animation: none;
+  }
+}
+
+.word-speak-play:focus-visible,
+.word-speak-accent:focus-visible {
+  outline: 2px solid #1468ee;
+  outline-offset: 2px;
+}
+
 .english-learning-meta,
 .english-form-list {
   display: flex;

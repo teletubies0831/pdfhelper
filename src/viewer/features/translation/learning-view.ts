@@ -21,6 +21,9 @@ import { normalizeCopiedText } from "../../core/pdf-reader/public";
 import { parseAiJson, renderChatMarkdown } from "../../shared-ui/markdown/markdown-renderer";
 import { prepareKnowledgeEditorMarkdown } from "../../shared-ui/markdown/knowledge-markdown";
 import { placeTranslationActionsBeforeResult } from "./translation-action-layout";
+import { createWordSpeakControl, stopWordSpeakControls } from "./word-speak-control";
+import { defaultAccentForPronunciation } from "../../shared-ui/speech/word-speech";
+import { setStatus } from "../recent-files/public";
 import { currentEnglishLearningResult, currentEnglishLearningSourceSentence, SentenceKeyword, SentenceLearningResult, VocabularyExample, VocabularyLearningResult, VocabularySense, VocabularyWordForm } from "../../app/public";
 
 
@@ -454,6 +457,8 @@ function readSentenceKeywords(value: Record<string, unknown>): SentenceKeyword[]
 
 
 export function renderVocabularyLearningResult(result: VocabularyLearningResult): void {
+  // 换卡片先把上一张的朗读停掉，否则上一个单词会在新内容上继续读。
+  stopWordSpeakControls();
   translationResultElement.closest("[data-ai-panel='translate']")
     ?.classList.add("word-learning-mode");
   const selectionTitle = document.querySelector<HTMLElement>(
@@ -488,6 +493,13 @@ export function renderVocabularyLearningResult(result: VocabularyLearningResult)
       createLearningElement("span", "english-learning-pronunciation", result.pronunciation),
     );
   }
+  // 朗读控件靠右：header 是 flex + wrap，音标短的时候按钮不会挤在它后面。
+  const speak = createWordSpeakControl({
+    text: result.word || displayWord,
+    accent: defaultAccentForPronunciation(result.pronunciation),
+    onError: () => setStatus("系统没有可用的英文朗读音色，朗读不可用。", true),
+  });
+  if (speak) header.append(speak);
   card.append(header);
 
   const meta = createLearningElement("div", "english-learning-meta");

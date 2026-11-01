@@ -294,6 +294,28 @@ input:disabled {
   color: #5e7393;
 }
 
+/*
+ * 下拉菜单里的图标统一占一个 18×18 的槽位.
+ *
+ * 三个菜单项原来混着用「文字符号」（◷、↓）和一个 18px 的 SVG：符号的大小随字号走，宽度也不一样，于是图标一大一小、三行文字起点还错开。
+ * 固定槽位 + 统一矢量图标之后，三行的图标和文字都对齐。
+ */
+.toolbar-menu-item > .toolbar-menu-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+/* 蓝色主按钮上的图标要跟着文字走成白色（`.toolbar-icon` 给了它自己的灰色）。 */
+.toolbar-menu-panel .primary-button > .toolbar-menu-icon {
+  color: #fff;
+}
+
 .toolbar-icon.open-pdf-icon {
   width: 18px;
   height: 18px;
